@@ -220,7 +220,10 @@ def main() -> None:
 
     install_trusted_worker_dispatcher(SubprocessDispatcher())
 
-    llmai.get_client = lambda config=None, logger=None, **_kw: FakeClient(config, logger)
+    # FAKE_LLM_CLIENTS=0 keeps the real provider clients, so the same harness
+    # (worker dispatcher and settings) runs a real-provider smoke test.
+    if os.environ.get("FAKE_LLM_CLIENTS", "1") != "0":
+        llmai.get_client = lambda config=None, logger=None, **_kw: FakeClient(config, logger)
     import uvicorn
 
     uvicorn.run("api.main:app", host="127.0.0.1", port=int(os.environ.get("PORT", "8000")), log_level="warning")

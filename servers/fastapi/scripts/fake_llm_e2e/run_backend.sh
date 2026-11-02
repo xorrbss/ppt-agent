@@ -23,9 +23,13 @@ export MIGRATE_DATABASE_ON_STARTUP=true DISABLE_IMAGE_GENERATION=true ENVIRONMEN
 
 # The fake replaces every client, so provider and key are placeholders. The
 # pricing gate still refuses an unpriced model, hence a zero-rate entry.
-export LLM=anthropic ANTHROPIC_API_KEY=fake-llm-harness-not-a-key ANTHROPIC_MODEL=claude-sonnet-4-20250514
-export PUBLIC_PROVIDER_PRICING_REVISION=fake-llm-harness
-export PUBLIC_PROVIDER_PRICING_CATALOG='{"schemaVersion":"public-provider-pricing-catalog/v1","revision":"fake-llm-harness","entries":[{"providerId":"anthropic","modelId":"claude-sonnet-4-20250514","inputMicrounitsPerMillionTokens":0,"outputMicrounitsPerMillionTokens":0,"currency":"USD"}]}'
+# With FAKE_LLM_CLIENTS=0 the caller supplies LLM, the provider key/model and
+# the pricing catalog for a real-provider run instead.
+if [ "${FAKE_LLM_CLIENTS:-1}" != "0" ]; then
+  export LLM=anthropic ANTHROPIC_API_KEY=fake-llm-harness-not-a-key ANTHROPIC_MODEL=claude-sonnet-4-20250514
+  export PUBLIC_PROVIDER_PRICING_REVISION=fake-llm-harness
+  export PUBLIC_PROVIDER_PRICING_CATALOG='{"schemaVersion":"public-provider-pricing-catalog/v1","revision":"fake-llm-harness","entries":[{"providerId":"anthropic","modelId":"claude-sonnet-4-20250514","inputMicrounitsPerMillionTokens":0,"outputMicrounitsPerMillionTokens":0,"currency":"USD"}]}'
+fi
 
 # Local artifact store and isolated workers (see README: "settings it needs").
 export PUBLIC_ARTIFACT_STORE_BACKEND=local-development

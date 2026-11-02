@@ -93,8 +93,14 @@ def candidate_schema(payload=None):
     box = _object({key: number for key in ("x", "y", "width", "height")})
     allowed_refs = payload.get("available_value_refs") if isinstance(payload, dict) else None
     value_ref = ({"type": "string", "enum": allowed_refs} if allowed_refs else text)
+    # Header fields are measured with the trusted embedded faces only
+    # (svg_common_header._font): Pretendard and Noto Sans KR, both at 400/700.
+    # An open string/integer let the model pick e.g. weight 600, which failed
+    # the whole deck with svg_template_font_unsupported after the design call.
+    font_family = {"type": "string", "enum": ["Noto Sans KR", "Pretendard"]}
+    font_weight = {"type": "integer", "enum": [400, 700]}
     field = _object({"node_id": text, "role": text, "value_ref": value_ref, "box": box,
-        "font_family": text, "font_weight": {"type": "integer"}, "font_size_px": number,
+        "font_family": font_family, "font_weight": font_weight, "font_size_px": number,
         "line_height_px": number, "baseline_offset_px": number,
         "max_lines": {"type": "integer", "minimum": 1, "maximum": 2},
         "alignment": {"type": "string", "enum": ["left", "center", "right"]},
