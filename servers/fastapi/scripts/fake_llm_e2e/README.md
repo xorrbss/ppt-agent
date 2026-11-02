@@ -26,11 +26,12 @@ density-expansion path.
   setup accounting see a complete call.
 - **Worker dispatcher**: `SubprocessDispatcher` runs the export/render worker
   command as a plain child process. The real trusted executor needs Windows
-  job objects (`windows-local`), Linux cgroup v2, or a container runtime.
+  job objects (`windows-local`), a Linux process session (`linux-local`,
+  development only), or a container runtime.
   **It has no sandbox; never point this harness at real data.**
-- **`WINDIR`**: the owned-local render binding fingerprints Windows font
-  directories, so off Windows the launcher points `WINDIR` at a directory
-  holding the bundled Pretendard faces.
+- **Render binding**: the launcher selects the owned local backend for the
+  host (`linux-local` or `windows-local`); the binding fingerprints that
+  host's font directories.
 - **Pricing**: the provider pricing gate refuses an unpriced model, so the
   launcher registers the placeholder model at a zero rate.
 
@@ -43,9 +44,9 @@ Found while building this harness; none of them is in `docker-compose.yml`:
 | `PUBLIC_PROVIDER_PRICING_CATALOG` + `_REVISION` naming the selected model | every provider call fails closed; the default catalog prices only codex models |
 | `PUBLIC_ARTIFACT_STORE_BACKEND` (`local-development` or `s3`) | `artifact.backend_required` during generation |
 | `PUBLIC_WORKER_OBJECT_STORE_ROOT`, `PUBLIC_LOCAL_ARTIFACT_DOWNLOAD_SIGNING_KEY`, `ENVIRONMENT=local` (local store) | `artifact.local_root_required` / `..._signing_key_required` |
-| `PUBLIC_TRUSTED_WORKER_SANDBOX_BACKEND=windows-local` + `PUBLIC_TRUSTED_WORKER_LOCAL_POLICY=development` (Windows), or `PUBLIC_RENDER_WORKER_IMAGE_DIGEST` + `PUBLIC_RENDER_WORKER_FONT_INVENTORY_DIGEST` (pinned deployment) | `public_render_worker_runtime_pins_required` |
+| `PUBLIC_TRUSTED_WORKER_SANDBOX_BACKEND=windows-local` (Windows) or `linux-local` (Linux) + `PUBLIC_TRUSTED_WORKER_LOCAL_POLICY=development`, or `PUBLIC_RENDER_WORKER_IMAGE_DIGEST` + `PUBLIC_RENDER_WORKER_FONT_INVENTORY_DIGEST` (pinned deployment) | `public_render_worker_runtime_pins_required` |
 | An installed trusted worker dispatcher: the embedded one starts only with `PUBLIC_V2_INTEGRATION_PROFILE=postgresql-strict` (PostgreSQL, per-process DB roles, and OS isolation) | `export.pptx` fails with `trusted worker dispatcher is unavailable` |
 
 `POST /presentation/generate` (synchronous) cannot run the svg driver, which
 needs a durable job; it now answers 422 `svg_generation_requires_async_route`.
-Use `/generate/async` (or `scripts/ppt-agent.mjs --async`).
+Use `/generate/async`; `scripts/ppt-agent.mjs` does so automatically for svg.

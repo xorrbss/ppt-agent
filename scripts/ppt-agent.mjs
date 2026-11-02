@@ -292,7 +292,7 @@ async function main() {
   const opts = {
     base,
     uiBase,
-    // The synchronous endpoint refuses svg (svg_generation_requires_durable_job).
+    // The synchronous endpoint refuses svg (422 svg_generation_requires_async_route).
     asyncMode: Boolean(args.async) || args.strategy !== "authored",
     exportAs,
     nSlides,

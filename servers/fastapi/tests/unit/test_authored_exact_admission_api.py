@@ -258,13 +258,7 @@ def test_sync_endpoint_refuses_svg_before_validation_or_provider_work(monkeypatc
     with pytest.raises(HTTPException) as exc:
         asyncio.run(endpoint.generate_presentation_sync(request_http, request, _RecordingSession()))
 
-    assert exc.value.status_code == 409
-    assert exc.value.detail["reasonCode"] == "svg_generation_requires_durable_job"
+    assert exc.value.status_code == 422
+    assert exc.value.detail == "svg_generation_requires_async_route"
     validate.assert_not_awaited()
     handler.assert_not_awaited()
-
-
-def test_sync_endpoint_svg_guard_leaves_explicit_authored_requests_alone():
-    endpoint._reject_sync_svg_generation(
-        GeneratePresentationRequest(content="Generate an authored deck", template="authored", strategy="authored")
-    )

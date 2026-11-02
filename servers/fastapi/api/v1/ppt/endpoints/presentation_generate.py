@@ -59,28 +59,6 @@ from services.workspace_legacy_write_gate import (
 )
 
 
-def _reject_sync_svg_generation(request: GeneratePresentationRequest) -> None:
-    """Refuse svg on the inline endpoint before validation or any provider call.
-
-    The svg driver is built on the durable generation job: header checkpoints,
-    attempt fencing, asset bindings and partial recovery all read it, and the
-    inline endpoint passes none, so an svg deck here could only crash midway
-    after paying for its outline. ``/generate/async`` runs the same request
-    through a job.
-    """
-    from services.authored_presentation_contracts import AUTHORED_TEMPLATE
-    from services.generation_core.admission.strategy import resolve_generation_strategy
-
-    if request.template == AUTHORED_TEMPLATE and resolve_generation_strategy(request) == "svg":
-        raise HTTPException(
-            status_code=409,
-            detail={
-                "reasonCode": "svg_generation_requires_durable_job",
-                "replacement": "/api/v1/ppt/presentation/generate/async",
-            },
-        )
-
-
 @PRESENTATION_GENERATE_ROUTER.post(
     "/generate", response_model=PresentationPathAndEditPath
 )
@@ -95,7 +73,6 @@ async def generate_presentation_sync(
     # runtimes receive a deprecation error before validation, provider calls,
     # rendering, or export can execute on the HTTP request lifetime.
     _require_local_sync_generation(sql_engine.url)
-    _reject_sync_svg_generation(request)
     request._request_id = getattr(request_http.state, "request_id", None)
     # The svg driver (the default strategy) needs a durable generation job for
     # its checkpoints, quality recovery and header design; this inline route
