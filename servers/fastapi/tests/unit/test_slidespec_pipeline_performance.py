@@ -101,7 +101,7 @@ def _dom() -> DomEvidence:
 
 def _rollout() -> SlideSpecRepairRolloutDecision:
     return SlideSpecRepairRolloutDecision(
-        "slidespec_active", False, False, True, True, False, 0, None
+        "slidespec_active", False, True, True, False, 0, None
     )
 
 

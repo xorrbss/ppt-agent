@@ -254,7 +254,6 @@ INTERNAL_ENV_NAMES: MappingProxyType[str, str] = MappingProxyType(
         "NEXT_INTERNAL_URL": "Internal base URL of the Next.js server for render callbacks.",
         "RASTER_STRICT_PAGE_ERRORS": "Fail raster page fallback on the first page error.",
         "SLIDESPEC_KILL_SWITCH": "Kill switch for all slidespec stages.",
-        "SLIDESPEC_IMPORT_SHADOW": "Run slidespec import in shadow mode.",
         "SLIDESPEC_REPAIR_SHADOW": "Run slidespec repair in shadow mode.",
         "SLIDESPEC_REPAIR_CANARY": "Slidespec repair canary rollout selector.",
         "SLIDESPEC_REPAIR_APPLY": "Apply slidespec repairs (not just propose).",

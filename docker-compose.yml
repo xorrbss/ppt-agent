@@ -105,7 +105,6 @@ x-presenton-env: &presenton-env
   NEXT_PUBLIC_CHAT_FIRST_WORKBENCH_ENABLED: ${NEXT_PUBLIC_CHAT_FIRST_WORKBENCH_ENABLED:-false}
   # SlideSpec is the default quality-repair path. Set SLIDESPEC_KILL_SWITCH=true
   # for an immediate legacy rollback; the other flags support diagnostics.
-  SLIDESPEC_IMPORT_SHADOW: ${SLIDESPEC_IMPORT_SHADOW:-false}
   SLIDESPEC_REPAIR_SHADOW: ${SLIDESPEC_REPAIR_SHADOW:-false}
   SLIDESPEC_REPAIR_CANARY: ${SLIDESPEC_REPAIR_CANARY:-100}
   SLIDESPEC_REPAIR_APPLY: ${SLIDESPEC_REPAIR_APPLY:-true}

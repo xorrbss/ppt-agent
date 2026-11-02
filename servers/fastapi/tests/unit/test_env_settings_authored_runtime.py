@@ -213,7 +213,6 @@ def test_slidespec_slide_concurrency(monkeypatch, raw, expected):
 def test_rollout_defaults():
     rollout = ar.get_slidespec_rollout_settings()
     assert rollout == ar.SlidespecRolloutSettings(
-        import_shadow=False,
         repair_shadow=False,
         repair_apply=True,
         repair_all_slides=True,
