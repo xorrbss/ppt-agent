@@ -397,6 +397,7 @@ async def author_source_svg_layout(
     from utils.llm_calls.author_prompt_split import author_messages
     from services.generation_core.authoring.author_slide import (
         _AUTHOR_EXECUTOR,
+        _apply_anthropic_authoring_reasoning,
         _authoring_extra_body,
         _authoring_output_profile,
         _wait_for_author_rate_slot,
@@ -492,6 +493,7 @@ template_digest=source_template.digest and layout_id=free-svg (an identity marke
     extra = _authoring_extra_body(effort, model=model)
     if extra:
         kwargs["extra_body"] = extra
+    _apply_anthropic_authoring_reasoning(kwargs, effort, model=model)
     await _wait_for_author_rate_slot()
     enforce_llm_egress_policy()
     timer, response, dispatched = ProviderCallTimer(), None, False

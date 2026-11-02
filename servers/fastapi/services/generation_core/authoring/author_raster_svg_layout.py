@@ -12,7 +12,8 @@ from services.generation_core.authoring.author_slide_svg import (
 )
 from services.generation_core.drivers.svg.visual_intent import VISUAL_INTENT_RULES, visual_intent_receipt
 from services.generation_core.authoring.author_slide import (
-    _AUTHOR_EXECUTOR, _authoring_extra_body, _authoring_output_profile, _wait_for_author_rate_slot,
+    _AUTHOR_EXECUTOR, _apply_anthropic_authoring_reasoning, _authoring_extra_body,
+    _authoring_output_profile, _wait_for_author_rate_slot,
 )
 from services.source_content.raster_free_composition import (
     assemble_free_raster_svg, raster_composition_context, raster_ledger_receipt,
@@ -72,6 +73,7 @@ template_digest=source_template.digest and layout_id=free-svg (an identity marke
     extra = _authoring_extra_body(effort, model=model)
     if extra:
         kwargs["extra_body"] = extra
+    _apply_anthropic_authoring_reasoning(kwargs, effort, model=model)
     await _wait_for_author_rate_slot()
     enforce_llm_egress_policy()
     timer, response, dispatched = ProviderCallTimer(), None, False

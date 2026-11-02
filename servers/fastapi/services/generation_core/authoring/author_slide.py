@@ -705,6 +705,39 @@ def _authoring_extra_body(
     return None if level is None else {"reasoning": {"effort": level}}
 
 
+def _apply_anthropic_authoring_reasoning(
+    kwargs: dict, effort: Optional[str] = None, *, model: object = None
+) -> dict:
+    """Bound Anthropic thinking for one authoring call, in place.
+
+    Claude models that think by default (claude-sonnet-5 does when ``thinking``
+    is omitted) can spend an entire 16k authoring budget on hidden reasoning
+    and return no text: a live 5-page svg deck lost two pages to
+    ``public_provider_empty_output`` this way, and the pages that succeeded
+    used ~15k output tokens for ~4k characters of SVG. The authored effort the
+    Codex path already sends as ``extra_body.reasoning`` is passed to Anthropic
+    as llmai's provider-neutral ``reasoning`` (adaptive thinking at that
+    effort). Other providers are left unchanged.
+    """
+    from enums.llm_provider import LLMProvider
+    from llmai.shared.reasoning import ReasoningConfig
+
+    try:
+        provider = get_llm_provider()
+    except Exception:
+        # Offline and unit contexts may have no resolvable provider.
+        return kwargs
+    if provider != LLMProvider.ANTHROPIC:
+        return kwargs
+    level = author_slide_effort.resolve_authoring_reasoning_level(effort, model)
+    if level is None:
+        return kwargs
+    kwargs["reasoning"] = (
+        ReasoningConfig(enabled=False) if level == "none" else ReasoningConfig(effort=level)
+    )
+    return kwargs
+
+
 def _authoring_output_profile(
     *,
     role: str,
@@ -909,6 +942,9 @@ async def author_slide_html(
         # codex-only; get_extra_body() populates extra_body only for the (mutually
         # exclusive) CUSTOM provider, so this reasoning dict is the sole source here.
         kwargs["extra_body"] = reasoning
+    _apply_anthropic_authoring_reasoning(
+        kwargs, reasoning_effort or default_reasoning_effort, model=model
+    )
     apply_prompt_cache_key(kwargs)
     if not isinstance(allow_provider_fallback, bool):
         raise ValueError("allow_provider_fallback must be a boolean")

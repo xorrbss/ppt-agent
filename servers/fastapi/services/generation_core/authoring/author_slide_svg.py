@@ -37,7 +37,8 @@ from utils.llm_calls.author_prompt_profile import authoring_model
 from utils.llm_calls.author_prompt_split import author_messages
 from utils.llm_calls.author_slide_effort import svg_author_call_timeout_seconds
 from services.generation_core.authoring.author_slide import (
-    _AUTHOR_EXECUTOR, _authoring_extra_body, _authoring_output_profile, _wait_for_author_rate_slot,
+    _AUTHOR_EXECUTOR, _apply_anthropic_authoring_reasoning, _authoring_extra_body,
+    _authoring_output_profile, _wait_for_author_rate_slot,
 )
 from services.generation_core.authoring.author_slide_images import REFERENCE_IMAGE_MAX_BYTES, reference_parts
 from utils.llm_config import enforce_llm_egress_policy, get_client, get_llm_config
@@ -832,7 +833,9 @@ def svg_author_input_receipt(style_snapshot: dict, messages: Sequence, *, provid
             else:
                 summarized.append({"text": part.text})
         assembled.append({"role": type(message).__name__, "content": summarized})
-    settings = {key: value for key, value in kwargs.items() if key != "messages"}
+    settings = {key: (value.model_dump(mode="json", exclude_unset=True)
+                      if hasattr(value, "model_dump") else value)
+                for key, value in kwargs.items() if key != "messages"}
     payload = {"version": "svg-author-input/v1", "messages": assembled,
                "settings": {"provider": provider, "model": model, "max_tokens": budget, **settings}}
     # author_messages hoists invariant parts into the system message when
@@ -1181,6 +1184,7 @@ async def author_slide_svg(content: str, style_snapshot: dict, role: str, index:
     extra = _authoring_extra_body(reasoning_effort or effort, model=model)
     if extra:
         kwargs["extra_body"] = extra
+    _apply_anthropic_authoring_reasoning(kwargs, reasoning_effort or effort, model=model)
     # The deck's prompt-cache lane, when the SVG page loop bound one; the
     # receipt below hashes the request as actually sent, key included.
     apply_prompt_cache_key(kwargs)

@@ -53,6 +53,7 @@ from services.generation_core.authoring.author_slide import (
     Brand,
     _AUTHOR_EXECUTOR,
     _author_prompt,
+    _apply_anthropic_authoring_reasoning,
     _authoring_extra_body,
     _bind_offered_source_image_slots,
     _rejected_html_context,
@@ -417,6 +418,7 @@ async def author_slides_html(
     reasoning = _authoring_extra_body(reasoning_effort, model=model)
     if reasoning:
         kwargs["extra_body"] = reasoning
+    _apply_anthropic_authoring_reasoning(kwargs, reasoning_effort, model=model)
     apply_prompt_cache_key(kwargs)
 
     try:
