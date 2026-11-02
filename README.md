@@ -273,7 +273,7 @@ Other optional variables exist in code (for example advanced Mem0 paths, LitePar
 - **TOGETHER_MODEL**: Required if **LLM** is **together** (example: `openai/gpt-oss-20b`).
 - **TOGETHER_BASE_URL**: Optional if **LLM** is **together** (default: `https://api.together.ai/v1`).
 - **ANTHROPIC_API_KEY**: Required if **LLM** is **anthropic**.
-- **ANTHROPIC_MODEL**: Required if **LLM** is **anthropic** (default: `claude-sonnet-4-20250514`).
+- **ANTHROPIC_MODEL**: Required if **LLM** is **anthropic** (default: `claude-sonnet-5-5`).
 - **CODEX_MODEL**: Required if **LLM** is **codex** (Codex OAuth flow; compose maps host port **1455** for the callback).
 - **CUSTOM_LLM_URL**: OpenAI-compatible base URL if **LLM** is **custom**.
 - **CUSTOM_LLM_API_KEY**: API key if **LLM** is **custom**.
