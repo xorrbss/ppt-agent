@@ -444,3 +444,177 @@ def test_native_literal_offer_requires_complete_data_and_explicit_source_absence
         snapshot["design_pack_template"] = {"version": "v1"}
     assert asset_slots._native_literal_pages(request, outline, style_snapshot=snapshot,
                                              has_source_assets=has_source_assets) is None
+
+
+# --- no image provider: the library-icon-only offer ---------------------------------------------
+
+def _icons_only_plan():
+    # page 1 is a scene (demoted without a picture source), page 2 a process, pages 0 and 3 carry no figure
+    return AuthoredInfographicPlan(slides=(
+        AuthoredSlideInfographic(index=0),
+        AuthoredSlideInfographic(index=1, archetype="scene", weight="hero", takeaway="현장 점검",
+                                 nodes=_nodes("신경망", "센서", "현장")),
+        AuthoredSlideInfographic(index=2, archetype="process", weight="hero",
+                                 nodes=_nodes("신경망", "로봇비서", "생성형")),
+        AuthoredSlideInfographic(index=3),
+    ))
+
+
+_LIBRARY_PLACEMENT = [(1, "신경망"), (1, "센서"), (2, "신경망"), (2, "로봇비서")]
+
+
+def _four_page_outline():
+    return SimpleNamespace(slides=[SimpleNamespace(content=f"# {i}") for i in range(4)])
+
+
+@pytest.fixture
+def library_only(monkeypatch, tmp_path):
+    """Real icon resolver and library; every image-provider entry point fails the test."""
+    from services.generation_core.assets.icon_pack import service
+
+    seen = {"plan": 0, "context": 0}
+
+    async def plan(*_args, **_kwargs):
+        seen["plan"] += 1
+        return _icons_only_plan()
+
+    async def forbidden(*_args, **_kwargs):
+        raise AssertionError("an image provider was reached")
+
+    def no_context(**_kwargs):
+        seen["context"] += 1
+        raise AssertionError("no asset context may be built without an image provider")
+
+    monkeypatch.setenv("APP_DATA_DIRECTORY", str(tmp_path))
+    monkeypatch.setattr(infographic_plan, "resolve_infographic_plan", plan)
+    monkeypatch.setattr(infographic_assets, "build_infographic_asset_context", no_context)
+    monkeypatch.setattr(icon_pack, "generate_scene_cutout", forbidden)
+    monkeypatch.setattr(service, "_generate_sheet", forbidden)
+    return seen
+
+
+def _icons_only(**overrides):
+    overrides.setdefault("outline", _four_page_outline())
+    overrides.setdefault("roles", ["cover", "content", "content", "content"])
+    return _build(icons_only=True, **overrides)
+
+
+def test_icons_only_offer_places_library_vectors_without_any_image_call(library_only, tmp_path):
+    offer = _icons_only(budget=4, image_service=None)
+    receipt = offer.receipt
+    assert receipt["status"] == "library_icons_only" and receipt["iconsOnly"] is True
+    assert receipt["reason"] == "image_generation_unavailable" and receipt["planLlmCalls"] == 1
+    assert receipt["providerCalls"] == 0 and receipt["budget"] == 0 and receipt["budgetAllocatedCalls"] == 0
+    assert receipt["illustrations"] == 0 and receipt["scenesPlanned"] == 0
+    assert receipt["transparentProvider"] is False
+    assert receipt["icon"]["sheetsAllocated"] == receipt["icon"]["sheetsAttempted"] == 0
+    assert receipt["icon"]["providerCalls"] == 0 and receipt["icon"]["origins"] == ["library"]
+    # the demoted scene page and the process page get icons; "현장" and "생성형" have no library icon
+    placed = [(slot.page_index, slot.concept) for slot in offer.slots]
+    assert placed == _LIBRARY_PLACEMENT
+    assert receipt["icons"] == 4 and receipt["icon"]["requested"] == 5 and receipt["icon"]["resolved"] == 3
+    assert all(slot.kind == "icon" and slot.is_vector and slot.origin == "library" for slot in offer.slots)
+    assert {slot.page_index for slot in offer.slots}.isdisjoint({0, 3})  # the plan said no figure there
+    for slot in offer.slots:
+        assert slot.verify()
+    assert library_only["plan"] == 1 and library_only["context"] == 0
+    # the persisted form round-trips like any offer
+    again = offer_mod.AssetOffer.from_json(offer.to_json(root=tmp_path), root=tmp_path)
+    assert again == offer
+
+
+def test_icons_only_offer_ignores_cached_raster_icons(library_only, monkeypatch, tmp_path):
+    from services.generation_core.assets.icon_pack import service
+
+    cached = _png(tmp_path / "cached.png", (96, 96))
+    real = service.resolve_icons
+
+    async def resolve(labels, **kwargs):
+        result = await real(labels, **kwargs)
+        result.icons[concept_key("센서")] = ResolvedIcon("센서", str(cached), 96, 96, "cached")
+        return result
+
+    monkeypatch.setattr(icon_pack, "resolve_icons", resolve)
+    offer = _icons_only()
+    assert "센서" not in {slot.concept for slot in offer.slots}
+    assert all(slot.is_vector for slot in offer.slots)
+
+
+def test_icons_only_offer_keeps_instruction_refusals(library_only):
+    offer = _icons_only(instructions="이미지와 아이콘 없이 텍스트로만 작성")
+    assert offer.slots == () and offer.receipt["status"] == "prohibited_by_instructions"
+    assert library_only["plan"] == 0
+
+
+def test_icons_only_offer_reports_plan_failure_without_icons(library_only, monkeypatch):
+    async def none(*_args, **_kwargs):
+        return None
+
+    monkeypatch.setattr(infographic_plan, "resolve_infographic_plan", none)
+    offer = _icons_only()
+    assert offer.slots == () and offer.receipt["status"] == "plan_unavailable" and offer.receipt["iconsOnly"] is True
+
+
+def test_image_enabled_offer_is_unchanged_by_the_icons_only_mode(fakes):
+    offer = _build()
+    assert offer.receipt["status"] == "resolved" and "iconsOnly" not in offer.receipt
+    assert "planLlmCalls" not in offer.receipt and offer.receipt["providerCalls"] == 2
+    assert offer.receipt["budget"] == 4 and offer.receipt["illustrations"] == 1
+
+
+class _ImageService:
+    def __init__(self, *, disabled, func=None):
+        self.is_image_generation_disabled, self.image_gen_func = disabled, func
+
+
+@pytest.mark.parametrize("service", [_ImageService(disabled=True), _ImageService(disabled=False, func=None)])
+def test_resolve_offer_without_image_provider_builds_icons_only_persists_and_replays(
+        service, library_only, monkeypatch, tmp_path):
+    import services.image_generation_service as image_module
+    from utils import asset_directory_utils
+
+    stored, built = {}, []
+    outline = _four_page_outline()
+
+    async def checkpoint(_job, _index, *, payload=None):
+        if payload is not None:
+            stored.update(payload)
+        return dict(stored)
+
+    real_build = offer_mod.build_asset_offer
+
+    async def spy(**kwargs):
+        built.append(kwargs)
+        return await real_build(**kwargs)
+
+    monkeypatch.setattr(image_module, "ImageGenerationService", lambda *_a, **_k: service)
+    monkeypatch.setattr(asset_directory_utils, "get_images_directory", lambda: str(tmp_path / "images"))
+    monkeypatch.setattr(asset_slots, "get_app_data_directory_env", lambda: str(tmp_path))
+    monkeypatch.setattr(offer_mod, "build_asset_offer", spy)
+    monkeypatch.setattr("services.generation_core.style.build.resolve_brand",
+                        lambda *_a, **_k: SimpleNamespace(primary="#123456"))
+    job = SimpleNamespace(id=uuid.uuid4(), attempt_number=1)
+    profile = SimpleNamespace(illustration_budget=4, illustration_timeout_seconds=5)
+    request = SimpleNamespace(authored_style=None, instructions=None, strategy="svg", language="Korean")
+    roles = ["cover", "content", "content", "content"]
+    args = dict(profile=profile, checkpoint=checkpoint, durable=True)
+    offer = asyncio.run(asset_slots.resolve_offer(request, outline, roles, job, **args))
+    assert len(built) == 1 and built[0]["icons_only"] is True and built[0]["image_service"] is None
+    assert offer.receipt["status"] == "library_icons_only" and offer.receipt["providerCalls"] == 0
+    assert [(slot.page_index, slot.concept) for slot in offer.slots] == _LIBRARY_PLACEMENT
+    assert asset_slots.SEED_KEY in stored
+
+    async def never(**_kwargs):
+        raise AssertionError("a resumed attempt must replay the persisted offer")
+
+    monkeypatch.setattr(offer_mod, "build_asset_offer", never)
+    replay = asyncio.run(asset_slots.resolve_offer(request, outline, roles, job, **args))
+    assert replay == offer
+    # the sealed-manifest contract holds even if image generation is enabled by the time of the resume
+    monkeypatch.setattr(image_module, "ImageGenerationService",
+                        lambda *_a, **_k: _ImageService(disabled=False, func=object()))
+    assert asyncio.run(asset_slots.resolve_offer(request, outline, roles, job, **args)) == offer
+    # and the replayed library vectors project and flatten like any icon slot
+    projected = asyncio.run(asset_slots.project_offer(_Session(), replay, presentation_id=uuid.uuid4(), count=4))
+    assert [len(page) for page in projected.vector] == [0, 2, 2, 0]
+    assert projected.receipt["iconsFlattened"] == 4 and not any(projected.raster)
