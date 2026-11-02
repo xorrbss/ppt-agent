@@ -705,22 +705,30 @@ def _authoring_extra_body(
     return None if level is None else {"reasoning": {"effort": level}}
 
 
+_ANTHROPIC_EFFORTS = {"minimal": "low", "low": "low", "medium": "medium", "high": "high", "xhigh": "max"}
+
+
 def _apply_anthropic_authoring_reasoning(
     kwargs: dict, effort: Optional[str] = None, *, model: object = None
 ) -> dict:
-    """Bound Anthropic thinking for one authoring call, in place.
+    """Pass the authored effort to Anthropic as ``output_config.effort`` only.
 
-    Claude models that think by default (claude-sonnet-5 does when ``thinking``
-    is omitted) can spend an entire 16k authoring budget on hidden reasoning
-    and return no text: a live 5-page svg deck lost two pages to
-    ``public_provider_empty_output`` this way, and the pages that succeeded
-    used ~15k output tokens for ~4k characters of SVG. The authored effort the
-    Codex path already sends as ``extra_body.reasoning`` is passed to Anthropic
-    as llmai's provider-neutral ``reasoning`` (adaptive thinking at that
-    effort). Other providers are left unchanged.
+    Claude models differ in their default. claude-sonnet-5 thinks when
+    ``thinking`` is omitted and spent whole 16k authoring budgets on hidden
+    reasoning (pages returned no text: ``public_provider_empty_output``);
+    claude-sonnet-4-6 does not think by default, and *enabling* adaptive
+    thinking there consumed the budget the same way. Measured on one SVG
+    prompt (16k budget): ``output_config.effort`` alone bounded sonnet-5
+    (omitted: max_tokens with truncated text; medium: 5.8k tokens, complete)
+    and left sonnet-4-6 / opus-4-8 without thinking, whereas adaptive thinking
+    at medium made sonnet-4-6 return 16k thinking tokens and no text. So
+    ``thinking`` is never enabled here; ``none`` disables it.
+
+    An operator who sets AUTHORED_REASONING_EFFORT (or CODEX_REASONING_EFFORT)
+    to a disable word turns the override off, whatever effort the call site
+    passes. Other providers are left unchanged.
     """
     from enums.llm_provider import LLMProvider
-    from llmai.shared.reasoning import ReasoningConfig
 
     try:
         provider = get_llm_provider()
@@ -729,12 +737,18 @@ def _apply_anthropic_authoring_reasoning(
         return kwargs
     if provider != LLMProvider.ANTHROPIC:
         return kwargs
+    if author_slide_effort.resolve_authoring_reasoning_level(None, model) is None:
+        return kwargs
     level = author_slide_effort.resolve_authoring_reasoning_level(effort, model)
     if level is None:
         return kwargs
-    kwargs["reasoning"] = (
-        ReasoningConfig(enabled=False) if level == "none" else ReasoningConfig(effort=level)
-    )
+    extra = kwargs.get("extra_body")
+    extra = dict(extra) if isinstance(extra, dict) else {}
+    if level == "none":
+        extra["thinking"] = {"type": "disabled"}
+    else:
+        extra["output_config"] = {"effort": _ANTHROPIC_EFFORTS.get(level, "medium")}
+    kwargs["extra_body"] = extra
     return kwargs
 
 

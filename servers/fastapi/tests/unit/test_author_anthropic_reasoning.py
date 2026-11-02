@@ -1,4 +1,4 @@
-"""Anthropic authoring calls carry an explicit, bounded thinking effort."""
+"""Anthropic authoring calls carry the authored effort without enabling thinking."""
 
 from __future__ import annotations
 
@@ -13,20 +13,34 @@ def _provider(monkeypatch, provider: LLMProvider) -> None:
     monkeypatch.setattr(author_slide, "get_llm_provider", lambda *a, **k: provider)
 
 
-def test_anthropic_receives_the_authored_effort_as_reasoning(monkeypatch):
-    # claude-sonnet-5 thinks by default when thinking is omitted; a live svg run
-    # spent whole 16k author budgets on it and returned empty pages.
+@pytest.mark.parametrize(("effort", "expected"), [("low", "low"), ("medium", "medium"), ("minimal", "low"), ("xhigh", "max")])
+def test_anthropic_receives_the_effort_without_enabling_thinking(monkeypatch, effort, expected):
+    # Enabling adaptive thinking made claude-sonnet-4-6 (no thinking by default)
+    # spend 16k tokens thinking with no text; output_config.effort alone bounds
+    # claude-sonnet-5 (thinks by default) and leaves 4.x models non-thinking.
     _provider(monkeypatch, LLMProvider.ANTHROPIC)
-    kwargs = author_slide._apply_anthropic_authoring_reasoning({"model": "m"}, "low", model="claude-sonnet-5")
-    assert isinstance(kwargs["reasoning"], ReasoningConfig)
-    assert kwargs["reasoning"].effort.value == "low"
-    assert "extra_body" not in kwargs
+    kwargs = author_slide._apply_anthropic_authoring_reasoning({"model": "m"}, effort, model="claude-sonnet-5")
+    assert kwargs["extra_body"] == {"output_config": {"effort": expected}}
+    assert "reasoning" not in kwargs and "thinking" not in kwargs["extra_body"]
 
 
 def test_none_effort_disables_anthropic_thinking(monkeypatch):
     _provider(monkeypatch, LLMProvider.ANTHROPIC)
     kwargs = author_slide._apply_anthropic_authoring_reasoning({}, "none", model="claude-sonnet-5")
-    assert kwargs["reasoning"].enabled is False
+    assert kwargs["extra_body"] == {"thinking": {"type": "disabled"}}
+
+
+def test_operator_disable_word_turns_the_override_off(monkeypatch):
+    _provider(monkeypatch, LLMProvider.ANTHROPIC)
+    monkeypatch.setenv("AUTHORED_REASONING_EFFORT", "off")
+    monkeypatch.delenv("CODEX_REASONING_EFFORT", raising=False)
+    assert author_slide._apply_anthropic_authoring_reasoning({"model": "m"}, "medium") == {"model": "m"}
+
+
+def test_existing_extra_body_is_preserved(monkeypatch):
+    _provider(monkeypatch, LLMProvider.ANTHROPIC)
+    kwargs = author_slide._apply_anthropic_authoring_reasoning({"extra_body": {"k": 1}}, "low")
+    assert kwargs["extra_body"] == {"k": 1, "output_config": {"effort": "low"}}
 
 
 @pytest.mark.parametrize("provider", [LLMProvider.CODEX, LLMProvider.OPENAI, LLMProvider.GOOGLE])
