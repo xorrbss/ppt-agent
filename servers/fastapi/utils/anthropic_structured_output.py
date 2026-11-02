@@ -28,8 +28,11 @@ schema keeps enforcing it. ``pattern`` is handled the same way: llmai never
 sent it as an enforced constraint either (non-strict tools treat the schema as
 a hint and strict tools drop it), and only simple regexes compile. A schema the
 API cannot express at all (a free-form or map-typed object, tuple ``items``)
-keeps llmai's previous forced-tool path, with a warning, rather than being
-narrowed silently.
+or one over the documented limits (24 optional properties, 16 union-typed
+schemas) keeps llmai's previous forced-tool path, with a warning, rather than
+being narrowed silently: models that accept forced tools keep working, and the
+5.5 / Fable 5.1 models fail with the API's tool_choice error until the schema
+is changed.
 """
 
 from __future__ import annotations
@@ -73,6 +76,11 @@ SUPPORTED_STRING_FORMATS = frozenset(
     }
 )
 
+#: Documented per-request structured-output limits (optional properties
+#: across strict tools and output schemas; anyOf / type-array schemas).
+MAX_OPTIONAL_PARAMETERS = 24
+MAX_UNION_PARAMETERS = 16
+
 #: Keywords sent unchanged (their subschemas, if any, are transformed).
 _PASSTHROUGH_KEYWORDS = frozenset(
     {"type", "required", "enum", "const", "title", "default", "$ref"}
@@ -95,7 +103,53 @@ def native_output_schema(schema: Mapping[str, Any]) -> dict[str, Any]:
 
     if not isinstance(schema, Mapping):
         raise NativeSchemaUnsupported("$: the schema root is not an object")
-    return _transform_schema(schema, "$")
+    transformed = _transform_schema(schema, "$")
+    optional, unions = _count_optional_and_unions(transformed)
+    if optional > MAX_OPTIONAL_PARAMETERS:
+        raise NativeSchemaUnsupported(
+            f"$: {optional} optional properties exceed the structured-output "
+            f"limit of {MAX_OPTIONAL_PARAMETERS}"
+        )
+    if unions > MAX_UNION_PARAMETERS:
+        raise NativeSchemaUnsupported(
+            f"$: {unions} union-typed schemas exceed the structured-output "
+            f"limit of {MAX_UNION_PARAMETERS}"
+        )
+    return transformed
+
+
+def _count_optional_and_unions(node: object) -> tuple[int, int]:
+    """Count properties outside ``required`` and anyOf / type-array schemas.
+
+    Each property is counted where it is defined (a ``$defs`` entry once, not
+    per reference), so this is a lower bound of what the API counts: a schema
+    over it is certain to be rejected, one under it may still be.
+    """
+
+    if not isinstance(node, Mapping):
+        return 0, 0
+    optional = unions = 0
+    children: list[object] = []
+    properties = node.get("properties")
+    if isinstance(properties, Mapping):
+        required = set(node.get("required") or [])
+        optional += sum(1 for name in properties if name not in required)
+        children.extend(properties.values())
+    for key in ("$defs", "definitions"):
+        if isinstance(node.get(key), Mapping):
+            children.extend(node[key].values())
+    for key in ("anyOf", "allOf"):
+        if isinstance(node.get(key), list):
+            children.extend(node[key])
+    if "anyOf" in node or isinstance(node.get("type"), list):
+        unions += 1
+    if isinstance(node.get("items"), Mapping):
+        children.append(node["items"])
+    for child in children:
+        child_optional, child_unions = _count_optional_and_unions(child)
+        optional += child_optional
+        unions += child_unions
+    return optional, unions
 
 
 def _schema_types(node: Mapping[str, Any]) -> set[str]:

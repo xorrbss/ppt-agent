@@ -346,3 +346,44 @@ def test_vision_advisory_schemas_transform_without_length_or_range_keywords():
 def test_merge_output_config_rejects_a_conflicting_format():
     with pytest.raises(ValueError):
         merge_output_config({"output_config": {"format": {"type": "json_schema", "schema": {}}}}, None, {"type": "json_schema", "schema": WIRE_SCHEMA})
+
+
+def _object_with_optional(count: int) -> dict:
+    return {"type": "object", "properties": {f"p{i}": {"type": "string"} for i in range(count)}, "required": []}
+
+
+def test_schema_at_the_documented_limits_is_sent_natively():
+    native_output_schema(_object_with_optional(24))
+    unions = {f"u{i}": {"anyOf": [{"type": "string"}, {"type": "null"}]} for i in range(16)}
+    native_output_schema({"type": "object", "properties": unions, "required": list(unions)})
+
+
+def test_schema_over_the_documented_limits_is_refused():
+    with pytest.raises(NativeSchemaUnsupported, match="optional"):
+        native_output_schema(_object_with_optional(25))
+    unions = {f"u{i}": {"type": ["string", "null"]} for i in range(17)}
+    with pytest.raises(NativeSchemaUnsupported, match="union"):
+        native_output_schema({"type": "object", "properties": unions, "required": list(unions)})
+
+
+@pytest.mark.parametrize(
+    ("module_name", "model_name", "reason"),
+    [
+        # 66 optional properties (pydantic fields with defaults) > 24.
+        ("models.authored_header_contract", "AuthoredHeaderContract", "optional"),
+        # SetStyleAction.styles is a free-form map.
+        ("utils.authored_patch_engine", "AuthoredPatchPlan", "additionalProperties"),
+    ],
+)
+def test_known_app_schemas_that_keep_the_forced_tool_path(module_name, model_name, reason):
+    # These two call sites cannot use native structured output as written, so
+    # they still fail on models that reject forced tool_choice. Pinned here so
+    # a schema change that fixes them is noticed and this list shrinks.
+    import importlib
+
+    from utils.schema_utils import prepare_schema_for_validation
+
+    model = getattr(importlib.import_module(module_name), model_name)
+    schema = prepare_schema_for_validation(model.model_json_schema(), strict=False)
+    with pytest.raises(NativeSchemaUnsupported, match=reason):
+        native_output_schema(schema)
