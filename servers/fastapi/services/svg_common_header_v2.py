@@ -52,7 +52,15 @@ def _field(raw, canvas):
     if not isinstance(raw, dict) or not all(isinstance(raw.get(key), str) and raw[key]
                                           for key in ("node_id", "role", "value_ref")):
         raise ValueError("svg_common_header_field_invalid")
-    font = _font(raw.get("font_family"), raw.get("font_weight"), _number(raw.get("font_size_px")))
+    # Models copy the style's CSS stack ("Noto Sans KR, Malgun Gothic, ...");
+    # resolve it to the bundled face it names, as the v1 header and the page
+    # body already do, instead of failing the deck on the stack string.
+    family = raw.get("font_family")
+    if isinstance(family, str) and "," in family:
+        from services.svg_trusted_fonts import bundled_svg_font_family
+
+        family = bundled_svg_font_family(family)
+    font = _font(family, raw.get("font_weight"), _number(raw.get("font_size_px")))
     if raw["role"] == "title" and font["size_px"] < 20:
         raise ValueError("svg_common_header_physical_readability_invalid")
     physical = canvas.get("physical_size", {})
