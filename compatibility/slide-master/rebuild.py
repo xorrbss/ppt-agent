@@ -22,6 +22,8 @@ PATCHES = (
      "document-canvas.2: invocation-local physical units and bounded source-canvas rounding"),
     (HERE / "patches/text-advance-1.patch", "text-advance.1",
      "text-advance.1: single-line text frames never narrower than the caller's exact font advance"),
+    (HERE / "patches/xfrm-bounds-1.patch", "xfrm-bounds.1",
+     "xfrm-bounds.1: axis-aligned xfrm shapes trace the exact off+ext frame their xfrm declares"),
 )
 
 

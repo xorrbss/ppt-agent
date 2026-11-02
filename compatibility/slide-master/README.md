@@ -41,6 +41,22 @@ paragraph (`wrap="square"`) frames are unchanged. The worker supplies
 `services.svg_text_advance.text_advance`, which answers only for the bundled
 families and returns `None` (estimate kept) for anything else.
 
+`xfrm-bounds.1` (applied after `text-advance-1.patch`) makes an axis-aligned
+shape trace exactly the frame its `a:xfrm` declares. `rect_to_dml_xfrm` rounded
+each corner of the transformed box on its own for the trace bounds, while the
+xfrm stores `round(center - w/2)` and `round(w)`; the two could differ by one
+EMU, and the worker's native-OOXML verifier requires the trace bounds to equal
+`off + ext` (`svg_native_ooxml_trace_geometry_mismatch`). Any shape inside a
+`translate` group takes this full-transform path, so a flattened vector icon
+(circles at fractional scaled coordinates) failed the whole export in roughly
+60% of the library icons. When neither a rotation nor a flip is emitted the
+bounds are now `(off_x, off_y, off_x + ext_cx, off_y + ext_cy)`; rotated and
+flipped shapes keep their per-corner visual bounds. The vendor manifest carries
+the `xfrm-bounds.1` suffix and the new `utils.py` hash, which changes
+`converter_digest()`, so old export bundles are rejected with
+`svg_export_version_mismatch`. `CONVERTER_VERSION` is not extended: it feeds a
+160-character identity field that the longer string would overflow.
+
 Bundle producers import the worker's converter version and current manifest
 digest. Old bundles are rejected with `svg_export_version_mismatch`; reconstruct
 an export request under the current producer rather than silently executing an

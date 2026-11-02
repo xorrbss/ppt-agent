@@ -432,6 +432,11 @@ def rect_to_dml_xfrm(
         px_to_emu(max(ys)),
     )
 
+    if not flip_attr and not rot_attr:
+        # An axis-aligned shape traces exactly the frame its xfrm declares. Rounding
+        # each corner on its own can land one EMU away from off + ext.
+        bounds = (off_x, off_y, off_x + ext_cx, off_y + ext_cy)
+
     return f'{flip_attr}{rot_attr}', off_x, off_y, ext_cx, ext_cy, bounds
 
 
