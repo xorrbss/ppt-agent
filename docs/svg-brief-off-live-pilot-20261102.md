@@ -75,7 +75,10 @@ Means: baseline 435 s / $1.55 / 544 chars, brief_off 230 s / $1.25 / 478 chars.
    does not think unless asked, the same change turns thinking on, and the
    SVG author calls ran out of output budget. There is no switch to turn it
    off: the effort comes from the role profile, and `AUTHORED_REASONING_EFFORT`
-   only applies when no per-call effort is given.
+   only applies when no per-call effort is given. Fixed the same day in
+   `98c0051a`: Anthropic authoring calls now send only
+   `output_config.effort` and never enable thinking, and an operator disable
+   word turns the override off.
 
 ## Reading
 
