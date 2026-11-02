@@ -244,3 +244,27 @@ def test_worker_revalidation_sets_safe_exact_error_status(monkeypatch):
     assert status.error["status_code"] == 403
     assert status.error["detail"] == "authored_exact_reconstruction_unavailable"
     assert "private-exact" not in str(status.error)
+
+
+def test_sync_endpoint_refuses_svg_before_validation_or_provider_work(monkeypatch):
+    # The svg driver needs the durable generation job the inline endpoint lacks.
+    validate = AsyncMock()
+    handler = AsyncMock()
+    monkeypatch.setattr(generation_pipeline, "check_if_api_request_is_valid", validate)
+    monkeypatch.setattr(generation_pipeline, "generate_presentation_handler", handler)
+    request_http = SimpleNamespace(state=SimpleNamespace(request_id=None), headers={}, cookies={})
+    request = GeneratePresentationRequest(content="Generate an svg deck", template="authored", strategy="svg")
+
+    with pytest.raises(HTTPException) as exc:
+        asyncio.run(endpoint.generate_presentation_sync(request_http, request, _RecordingSession()))
+
+    assert exc.value.status_code == 409
+    assert exc.value.detail["reasonCode"] == "svg_generation_requires_durable_job"
+    validate.assert_not_awaited()
+    handler.assert_not_awaited()
+
+
+def test_sync_endpoint_svg_guard_leaves_explicit_authored_requests_alone():
+    endpoint._reject_sync_svg_generation(
+        GeneratePresentationRequest(content="Generate an authored deck", template="authored", strategy="authored")
+    )

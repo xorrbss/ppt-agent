@@ -13,6 +13,9 @@ const cli = fileURLToPath(new URL("./ppt-agent.mjs", import.meta.url));
 const PRESENTATION_ID = "11111111-1111-4111-8111-111111111111";
 const OPERATION_ID = "44444444-4444-4444-8444-444444444444";
 const ARTIFACT_ID = "66666666-6666-4666-8666-666666666666";
+const TASK_ID = "77777777-7777-4777-8777-777777777777";
+const SYNC_URL = "/api/v1/ppt/presentation/generate";
+const ASYNC_URL = "/api/v1/ppt/presentation/generate/async";
 
 function runCli(args) {
   return new Promise((resolve, reject) => {
@@ -36,6 +39,19 @@ function generateResponse(overrides = {}) {
     export_operation_id: OPERATION_ID,
     export_error: null,
     ...overrides,
+  };
+}
+
+/**
+ * The svg strategy (the server default) needs a durable job, so the CLI admits
+ * it through the async endpoint and polls status. Keys are matched by prefix,
+ * so the async route must be listed before any bare SYNC_URL handler.
+ */
+function asyncGeneration(response = generateResponse()) {
+  return {
+    [ASYNC_URL]: (res) => json(res, { id: TASK_ID, status: "pending" }, 202),
+    "/api/v1/ppt/presentation/status/": (res) =>
+      json(res, { id: TASK_ID, status: "completed", data: response }),
   };
 }
 
@@ -89,9 +105,7 @@ function json(res, payload, status = 200) {
 }
 
 test("forwards --style to the local generation API", async (t) => {
-  const mock = await startMockServer({
-    "/api/v1/ppt/presentation/generate": (res) => json(res, generateResponse()),
-  });
+  const mock = await startMockServer(asyncGeneration());
   t.after(() => mock.server.close());
 
   const result = await runCli([
@@ -102,10 +116,11 @@ test("forwards --style to the local generation API", async (t) => {
   ]);
 
   assert.equal(result.code, 0, result.stderr);
-  assert.equal(mock.requests.length, 1);
+  assert.equal(mock.requests.length, 2);
+  assert.equal(mock.requests[1].url, `/api/v1/ppt/presentation/status/${TASK_ID}`);
   assert.deepEqual(mock.requests[0], {
     method: "POST",
-    url: "/api/v1/ppt/presentation/generate",
+    url: ASYNC_URL,
     body: {
       content: "authored deck",
       n_slides: 8,
@@ -119,16 +134,37 @@ test("forwards --style to the local generation API", async (t) => {
 });
 
 test("omits strategy from the request body by default (server default is svg)", async (t) => {
-  const mock = await startMockServer({
-    "/api/v1/ppt/presentation/generate": (res) => json(res, generateResponse()),
-  });
+  const mock = await startMockServer(asyncGeneration());
   t.after(() => mock.server.close());
 
   const result = await runCli(["--content", "default strategy deck", "--base", mock.base]);
 
   assert.equal(result.code, 0, result.stderr);
-  assert.equal(mock.requests.length, 1);
+  // svg cannot run on the inline endpoint, so the default goes through the job.
+  assert.equal(mock.requests[0].url, ASYNC_URL);
   assert.ok(!("strategy" in mock.requests[0].body));
+  assert.ok(!("common_header_mode" in mock.requests[0].body));
+});
+
+test("--common-header forwards the svg header mode", async (t) => {
+  const mock = await startMockServer(asyncGeneration());
+  t.after(() => mock.server.close());
+
+  const result = await runCli([
+    "--content", "free header deck", "--common-header", "free", "--base", mock.base,
+  ]);
+
+  assert.equal(result.code, 0, result.stderr);
+  assert.equal(mock.requests[0].body.common_header_mode, "free");
+});
+
+test("--common-header rejects an unknown value and authored strategy", async () => {
+  let result = await runCli(["--content", "x", "--common-header", "fixed"]);
+  assert.equal(result.code, 1);
+  assert.match(result.stderr, /--common-header must be one of uniform, free/);
+  result = await runCli(["--content", "x", "--common-header", "free", "--strategy", "authored"]);
+  assert.equal(result.code, 1);
+  assert.match(result.stderr, /--common-header applies only to the svg strategy/);
 });
 
 test("--strategy authored sends an explicit strategy override", async (t) => {
@@ -144,6 +180,7 @@ test("--strategy authored sends an explicit strategy override", async (t) => {
   ]);
 
   assert.equal(result.code, 0, result.stderr);
+  assert.equal(mock.requests[0].url, SYNC_URL);
   assert.equal(mock.requests[0].body.strategy, "authored");
 });
 
@@ -156,7 +193,7 @@ test("--strategy rejects an unknown value", async (t) => {
 test("--out follows the chained export operation to its artifact", async (t) => {
   let polls = 0;
   const mock = await startMockServer({
-    "/api/v1/ppt/presentation/generate": (res) => json(res, generateResponse()),
+    ...asyncGeneration(),
     [`/api/v1/ppt/workspace/presentations/${PRESENTATION_ID}/timeline`]: (res) => {
       polls += 1;
       json(
@@ -187,7 +224,7 @@ test("--out follows the chained export operation to its artifact", async (t) => 
 
   assert.equal(result.code, 0, result.stderr);
   const urls = mock.requests.map((request) => request.url);
-  assert.equal(urls[0], "/api/v1/ppt/presentation/generate");
+  assert.equal(urls[0], ASYNC_URL);
   // No /app_data/exports/... read survives: the artifact is reached through the
   // operation, not through a server-side path.
   assert.ok(!urls.some((url) => url.includes("/app_data/")));
@@ -201,7 +238,7 @@ test("--out follows the chained export operation to its artifact", async (t) => 
 
 test("--out reports a failed export operation instead of a silent success", async (t) => {
   const mock = await startMockServer({
-    "/api/v1/ppt/presentation/generate": (res) => json(res, generateResponse()),
+    ...asyncGeneration(),
     [`/api/v1/ppt/workspace/presentations/${PRESENTATION_ID}/timeline`]: (res) =>
       json(res, operationTimeline("failed", { failure_code: "public_export_deadline_exceeded" })),
   });
@@ -221,16 +258,14 @@ test("--out reports a failed export operation instead of a silent success", asyn
 });
 
 test("--out reports a generation whose export was never chained", async (t) => {
-  const mock = await startMockServer({
-    "/api/v1/ppt/presentation/generate": (res) =>
-      json(
-        res,
-        generateResponse({
-          export_operation_id: null,
-          export_error: "public_admission_export_quota",
-        })
-      ),
-  });
+  const mock = await startMockServer(
+    asyncGeneration(
+      generateResponse({
+        export_operation_id: null,
+        export_error: "public_admission_export_quota",
+      })
+    )
+  );
   t.after(() => mock.server.close());
   const outDir = await mkdtemp(path.join(os.tmpdir(), "ppt-agent-export-"));
 

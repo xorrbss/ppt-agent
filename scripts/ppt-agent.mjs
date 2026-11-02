@@ -7,7 +7,9 @@
 // `export.pptx`/`export.pdf` workspace command; --out follows that operation to
 // completion and downloads its artifact.
 //
-// With --async it instead POSTs to .../generate/async and polls
+// The svg strategy (the server default) always takes the async route below,
+// because the inline endpoint cannot run svg (it has no durable job).
+// With --async (or svg) it instead POSTs to .../generate/async and polls
 // GET <base>/api/v1/ppt/presentation/status/<task-id> until the task completes
 // (or fails), respecting --timeout and the progress heartbeat.
 //
@@ -24,6 +26,8 @@
 //   --language <str>         language (default "Korean (한국어)")
 //   --template <name>        retained template id (default "authored")
 //   --strategy <svg|authored> generation strategy (default svg, matches the server default)
+//   --common-header <uniform|free>
+//                            svg common-header mode (server default uniform: one designed header)
 //   --style <id>             authored-mode style preset id (sent as authored_style)
 //   --export <pptx|pdf>      export_as (default pptx)
 //   --aspect-ratio <r>       deck canvas aspect_ratio: 16:9|9:16|9:13|1:1|21:9 (server default 16:9)
@@ -41,6 +45,7 @@
 //   --user <u> --password <p>  HTTP Basic creds for web/Docker (omit for DISABLE_AUTH)
 //   --out <dir>              follow the chained export operation and save its file into <dir>
 //   --async                  use the async generate endpoint and poll status to completion
+//                            (always on for svg, which the synchronous endpoint refuses)
 //   --timeout <sec>          per-request / overall poll timeout in seconds (default 600)
 //   -h, --help               show this help
 //
@@ -65,6 +70,7 @@ const TONES = ["default", "casual", "professional", "funny", "educational", "sal
 const VERBOSITIES = ["concise", "standard", "text-heavy"];
 const EXPORTS = ["pptx", "pdf"];
 const STRATEGIES = ["svg", "authored"];
+const COMMON_HEADER_MODES = ["uniform", "free"];
 // Mirror of GeneratePresentationRequest.aspect_ratio / page_size / orientation.
 const ASPECT_RATIOS = ["16:9", "9:16", "9:13", "1:1", "21:9"];
 const PAGE_SIZES = ["A4"];
@@ -140,6 +146,7 @@ function printHelpAndExit() {
       '  --language <str>        default "Korean (한국어)"',
       "  --template <name>       default authored",
       "  --strategy <svg|authored>  generation strategy, default svg (server default)",
+      "  --common-header <uniform|free>  svg header mode (server default uniform)",
       "  --mode authored         model-authored bespoke-HTML deck (image PPTX/PDF)",
       "  --style <id>            authored mode: style preset id",
       "  --vision-qa             authored mode: self-correct flagged slides (slower)",
@@ -159,7 +166,7 @@ function printHelpAndExit() {
       "  --ui-base <url>         UI origin for edit URL (default: --base origin)",
       "  --user <u> --password <p>  HTTP Basic (omit for DISABLE_AUTH)",
       "  --out <dir>             save the chained export's file into <dir>",
-      "  --async                 use async endpoint + poll status",
+      "  --async                 use async endpoint + poll status (always on for svg)",
       "  --timeout <sec>         per-request / overall poll timeout, default 600",
       "  -h, --help              this help",
     ].join("\n")
@@ -239,6 +246,14 @@ async function main() {
     die(`--strategy must be one of ${STRATEGIES.join(", ")} (got "${args.strategy}")`);
   }
 
+  const commonHeader = args["common-header"];
+  if (commonHeader !== undefined && !COMMON_HEADER_MODES.includes(commonHeader)) {
+    die(`--common-header must be one of ${COMMON_HEADER_MODES.join(", ")} (got "${commonHeader}")`);
+  }
+  if (commonHeader !== undefined && args.strategy === "authored") {
+    die(`--common-header applies only to the svg strategy`);
+  }
+
   const canvas = resolveCanvas(args);
 
   // slides: default 8; "auto" (or empty) => omit n_slides so the model decides.
@@ -277,7 +292,8 @@ async function main() {
   const opts = {
     base,
     uiBase,
-    asyncMode: Boolean(args.async),
+    // The synchronous endpoint refuses svg (svg_generation_requires_durable_job).
+    asyncMode: Boolean(args.async) || args.strategy !== "authored",
     exportAs,
     nSlides,
     slidesProvided,
@@ -286,6 +302,7 @@ async function main() {
     // pipeline. A supplied template is retained for explicit supported templates.
     template: args.mode === "authored" ? "authored" : args.template || "authored",
     strategy: args.strategy || null,
+    commonHeader: commonHeader || null,
     aspectRatio: canvas.aspectRatio,
     pageSize: canvas.pageSize,
     orientation: canvas.orientation,
