@@ -51,24 +51,37 @@ def _is_sqlite_lock(error: OperationalError, dialect_name: str) -> bool:
     return "database is locked" in message or "database table is locked" in message
 
 
-def _retry_sqlite_write(method: Callable[..., Any]) -> Callable[..., Any]:
-    """Bound SQLite lock recovery without consuming an export job attempt."""
+def sqlite_write_retry(
+    engine_of: Callable[[Any], Engine],
+) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
+    """Build a method decorator that retries only transient SQLite writer locks.
 
-    @wraps(method)
-    def wrapped(self: "AuthoredVNextSqlRepository", *args: Any, **kwargs: Any) -> Any:
-        for attempt in range(len(SQLITE_LOCK_RETRY_DELAYS) + 1):
-            try:
-                return method(self, *args, **kwargs)
-            except OperationalError as error:
-                if (
-                    not _is_sqlite_lock(error, self.engine.dialect.name)
-                    or attempt == len(SQLITE_LOCK_RETRY_DELAYS)
-                ):
-                    raise
-                time.sleep(SQLITE_LOCK_RETRY_DELAYS[attempt])
-        raise AssertionError("unreachable sqlite retry state")
+    ``engine_of(self)`` returns the engine whose dialect decides whether an
+    ``OperationalError`` is a lock. Lock recovery is bounded and never consumes
+    an export job or API attempt; any other error, or the last lock, re-raises.
+    """
 
-    return wrapped
+    def decorator(method: Callable[..., Any]) -> Callable[..., Any]:
+        @wraps(method)
+        def wrapped(self: Any, *args: Any, **kwargs: Any) -> Any:
+            for attempt in range(len(SQLITE_LOCK_RETRY_DELAYS) + 1):
+                try:
+                    return method(self, *args, **kwargs)
+                except OperationalError as error:
+                    if (
+                        not _is_sqlite_lock(error, engine_of(self).dialect.name)
+                        or attempt == len(SQLITE_LOCK_RETRY_DELAYS)
+                    ):
+                        raise
+                    time.sleep(SQLITE_LOCK_RETRY_DELAYS[attempt])
+            raise AssertionError("unreachable sqlite retry state")
+
+        return wrapped
+
+    return decorator
+
+
+_retry_sqlite_write = sqlite_write_retry(lambda repository: repository.engine)
 
 
 class AuthoredVNextSqlRepository(
