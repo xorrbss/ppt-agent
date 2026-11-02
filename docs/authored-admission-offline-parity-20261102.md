@@ -48,6 +48,22 @@ still occurs elsewhere in those slides, so both paths find it.
   (`scripts/authored_admission_shadow_report.py`).
 - Ordinary prompt generation: every fixture is a source restyle.
 
+## Live series (same day)
+
+One live authored deck (5 slides, Claude Sonnet 4.6, `shadow` default) recorded
+54 producer calls: 52 identical verdicts and 2 `terminal_flag_only` rows where
+the legacy column reads `flag_only` and the gate `admitted`. That column
+reports the slide's flag from another stage (the caller's composition-safety
+flag), not an admission failure, and the slide publishes flagged under either
+mode, so the difference is explained.
+
+Switching the default to `enforce` was tried and reverted: 17 tests in
+`test_authored_admission.py`, `test_authored_terminal_slide_fallback.py` and
+`test_authored_workspace_sqlite_publication.py` exercise flows that assume the
+shadow default (for example terminal fallback without admission receipts).
+Flipping the default needs those flows and tests revisited first, not only the
+knob.
+
 ## Recommendation
 
 Run one short live authored series (a few decks, prompt-only and source
