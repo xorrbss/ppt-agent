@@ -82,7 +82,7 @@ class VisionJsonClient:
     def _generate(self, system: str, parts: Sequence[str | bytes], schema: dict[str, Any], name: str) -> Any:
         """One provider response; called while holding the concurrency gate."""
 
-        from llmai import get_client
+        from utils.llm_config import get_client
         from llmai.shared import ImageContentPart, JSONSchemaResponse, SystemMessage, TextContentPart, UserMessage
 
         from utils.llm_config import enforce_llm_egress_policy, get_llm_config

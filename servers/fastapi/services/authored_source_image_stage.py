@@ -70,7 +70,7 @@ async def prepare_source_image_stage(
     """
     if not candidates:
         return ({"decisions": []}, [{} for _ in contents], [[] for _ in contents])
-    from llmai import get_client
+    from utils.llm_config import get_client
     from services.provider_usage_instrumentation import provider_usage_scope
     from services.source_images.analysis import analyze_source_images
     from utils.llm_config import enforce_llm_egress_policy, get_llm_config

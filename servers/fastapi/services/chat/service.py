@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from typing import Any, Literal
 
 from fastapi import HTTPException
-from llmai import get_client  # type: ignore[import-not-found]
+from utils.llm_config import get_client
 from llmai.shared import (  # type: ignore[import-not-found]
     AssistantMessage,
     Message,

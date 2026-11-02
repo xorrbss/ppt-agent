@@ -52,7 +52,7 @@ from services.generation_core.authoring.author_slide_stream import (
     stream_author_call,
 )
 
-from llmai import get_client
+from utils.llm_config import get_client
 
 from models.authored_header_contract import AuthoredHeaderContract
 from models.authored_infographic_plan import AuthoredSlideInfographic

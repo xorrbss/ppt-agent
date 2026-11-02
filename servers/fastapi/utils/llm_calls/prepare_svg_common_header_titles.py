@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from copy import copy
 
-from llmai import get_client
+from utils.llm_config import get_client
 from llmai.shared import JSONSchemaResponse, SystemMessage, UserMessage
 
 from utils.ppt_writing_prompt import writing_policy_prompt

@@ -1,7 +1,7 @@
 import asyncio
 from typing import Optional
 from fastapi import HTTPException
-from llmai import get_client
+from utils.llm_config import get_client
 from llmai.shared import SystemMessage, UserMessage
 from utils.llm_config import get_llm_config
 from utils.llm_client_error_handler import handle_llm_client_exceptions

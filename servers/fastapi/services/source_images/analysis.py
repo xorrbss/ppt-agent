@@ -42,7 +42,7 @@ class SourceImageAnalysis(BaseModel):
 
 async def _analyze(candidate: SourceImageCandidate, *, attempt_number: int = 0) -> SourceImageAnalysis:
     # Lazy imports keep deterministic registration and strict manifest reuse independent.
-    from llmai import get_client
+    from utils.llm_config import get_client
     from llmai.shared import ImageContentPart, JSONSchemaResponse, SystemMessage, TextContentPart, UserMessage
     from utils.llm_config import enforce_llm_egress_policy, get_llm_config
     from utils.llm_provider import get_model

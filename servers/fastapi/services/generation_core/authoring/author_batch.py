@@ -15,7 +15,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Mapping, Sequence
 
-from llmai import get_client
+from utils.llm_config import get_client
 from llmai.shared import SystemMessage, TextContentPart, UserMessage
 
 from models.authored_infographic_plan import AuthoredSlideInfographic

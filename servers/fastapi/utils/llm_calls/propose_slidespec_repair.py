@@ -10,7 +10,7 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
 
-from llmai import get_client
+from utils.llm_config import get_client
 from llmai.shared import JSONSchemaResponse, SystemMessage, UserMessage
 
 from models.slidespec_v1 import REPAIR_PLAN_SCHEMA, RepairPlan

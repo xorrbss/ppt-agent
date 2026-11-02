@@ -241,7 +241,7 @@ async def expand_thin_outline(
         if not indices:
             return outline
 
-        from llmai import get_client
+        from utils.llm_config import get_client
         from llmai.shared import JSONSchemaResponse, SystemMessage, UserMessage
 
         from utils.llm_config import enforce_llm_egress_policy, get_llm_config

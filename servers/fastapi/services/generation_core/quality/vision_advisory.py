@@ -315,7 +315,7 @@ async def _request_advisory(sheet: bytes, *, slide_count: int, required: bool = 
     """One multimodal call, through the same admission/idempotency wrappers
     every other authored provider call uses."""
 
-    from llmai import get_client
+    from utils.llm_config import get_client
     from llmai.shared import JSONSchemaResponse
 
     from services.provider_usage_instrumentation import (

@@ -7,7 +7,7 @@ caller can act on it deterministically."""
 
 from typing import List, Literal, Optional
 
-from llmai import get_client
+from utils.llm_config import get_client
 from llmai.shared import (
     ImageContentPart,
     JSONSchemaResponse,
