@@ -1378,6 +1378,9 @@ async def generate_presentation_handler(
               and str(e).startswith(("svg_common_header_", "svg_header_design_"))):
             # Bounded header failures retain their precise safe reason. A new
             # operation attempt cannot repair exhausted/unknown provider work.
+            # The reason alone does not say which check raised it; keep the
+            # stack in the log (content-free: these are code paths, not data).
+            logger.warning("Bounded header failure %s", e, exc_info=True)
             safe_error = AuthoredStageError(slide_index=None, stage="author",
                 code=str(e), retryable=False).as_safe_dict(
                     request_id=request._request_id, attempt_number=authored_attempt_number)

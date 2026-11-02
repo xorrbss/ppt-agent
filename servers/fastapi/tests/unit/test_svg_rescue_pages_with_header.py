@@ -47,3 +47,26 @@ def test_fallback_page_keeps_the_header_and_starts_below_it():
                             width=1280, height=720, style_snapshot=snapshot, header_page=bindings[0])
     _found, body = _texts(svg)
     assert body and all(float(node.get("y")) > header["content_top_px"] for node in body)
+
+
+def test_a_page_failing_its_applied_header_is_not_kept_flag_only(monkeypatch):
+    """Publication rejects an applied page whose header measurement did not pass."""
+    import asyncio
+    from types import SimpleNamespace
+
+    from services.generation_core.drivers.svg import terminal
+    from utils.hashing import sha256_hex
+
+    monkeypatch.setattr(terminal, "quality_keeps_content", lambda quality: True)
+    svg = '<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720"/>'
+    payload = {"svg_content": svg, "source_digest": sha256_hex(svg.encode()), "png_sha256": "x",
+               "quality": {"common_header": {"passed": False}}}
+    ctx = SimpleNamespace(header_pages=[{"applied": True}], source_reflow=False)
+    error = SimpleNamespace(code="svg_common_header_body_intrusion")
+
+    async def checkpoint(*_args, **_kwargs):
+        raise AssertionError("a rejected keep must not be checkpointed")
+
+    kept = asyncio.run(terminal._flag_only(ctx=ctx, index=0, payload=payload, error=error, job=None,
+                                           checkpoint=checkpoint, read_png=lambda _payload: b""))
+    assert kept is None

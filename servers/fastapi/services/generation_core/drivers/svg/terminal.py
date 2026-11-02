@@ -156,6 +156,14 @@ async def _flag_only(*, ctx, index, payload, error, job, checkpoint, read_png):
         return None  # no rendered page to keep
     if not quality_keeps_content(quality):
         return None  # the kept page would lose content: the fallback holds all of it
+    header_pages = getattr(ctx, "header_pages", None)
+    header_page = header_pages[index] if header_pages else None
+    if (isinstance(header_page, dict) and header_page.get("applied")
+            and (quality.get("common_header") or {}).get("passed") is not True):
+        # Publication requires a passed header measurement on every applied
+        # page (refresh_svg_page_numbers), so keeping this page would fail the
+        # whole deck later; the fallback page renders the header itself.
+        return None
     png = None
     if ctx.source_reflow:
         from services.svg_source_layout import verify_source_receipt
