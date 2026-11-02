@@ -196,9 +196,11 @@ async def _fallback(*, ctx, request, index, content, payload, error, job, checkp
     from services.svg_renderer import render_svg_with_metrics
 
     try:
+        header_pages = getattr(ctx, "header_pages", None)
         svg = fallback_page_svg(content=content, role=ctx.roles[index], index=index, count=ctx.count,
                                 width=ctx.canvas.width_px, height=ctx.canvas.height_px,
-                                style_snapshot=ctx.snapshot)
+                                style_snapshot=ctx.snapshot,
+                                header_page=header_pages[index] if header_pages else None)
         async with ctx.render_semaphore:
             rendered = await render_svg_with_metrics(
                 svg, width=ctx.canvas.width_px, height=ctx.canvas.height_px,
@@ -323,8 +325,10 @@ async def _placeholder(*, ctx, request, index, content, payload, error, job, che
         else:
             from services.svg_trusted_fonts import DEFAULT_FONT_FAMILY
 
+            header_pages = getattr(ctx, "header_pages", None)
             svg = placeholder_page_svg(title=str(content or ""), width=width, height=height,
-                font_family=DEFAULT_FONT_FAMILY, index=index, count=ctx.count, style_snapshot=ctx.snapshot)
+                font_family=DEFAULT_FONT_FAMILY, index=index, count=ctx.count, style_snapshot=ctx.snapshot,
+                header_page=header_pages[index] if header_pages else None)
             render_kwargs = {"instructions": request.instructions}
         async with ctx.render_semaphore:
             rendered = await render_svg_with_metrics(svg, width=width, height=height, **render_kwargs,
