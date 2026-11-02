@@ -196,6 +196,23 @@ def test_defects_in_a_model_candidate_reject_only_that_candidate(reason):
     assert policy.known_header_design_rejection(plan, ValueError(reason))
 
 
+@pytest.mark.parametrize("reason", ["svg_common_header_field_dependency_invalid",
+    "svg_common_header_canvas_mismatch", "svg_common_header_value_missing",
+    "svg_common_header_page_number_owned_by_master"])
+def test_more_candidate_content_rejections_retire_the_candidate(reason):
+    # A live Anthropic run failed a whole deck on field_dependency_invalid.
+    _, plan, _, _, _ = _inputs()
+    assert policy.known_header_design_rejection(plan, ValueError(reason))
+    assert not policy.permits_header_fallback(plan, reason, {"steps": {}})
+
+
+def test_design_rules_state_the_admitted_field_fonts():
+    from services.svg_common_header_design_calls import DESIGN_RULES
+    assert 'exactly "Noto Sans KR" or "Pretendard"' in DESIGN_RULES
+    assert "font_weight\n400 or 700" in DESIGN_RULES
+    assert "contains no field" in DESIGN_RULES
+
+
 @pytest.mark.parametrize("mode", ["reduced", "free"])
 def test_capacity_fallback_real_cas_replays_without_provider_spend(tmp_path, monkeypatch, mode):
     from test_authored_checkpoint_service import _checkpoint_database, _running_authored_job

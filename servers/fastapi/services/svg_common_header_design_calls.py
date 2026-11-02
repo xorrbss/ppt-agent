@@ -155,7 +155,10 @@ The title value_ref must use role="title" and optional=false; metadata roles rem
 Every meaningful text node in the SVG
 must be an empty text field with its node_id in fields: the server binds actual exact values,
 measures glyph ink and wraps at most two lines. Fonts and sizes are uniform within each field.
-Dependent decoration is named explicitly and omitted with an absent optional field. Return a
+Dependent decoration is named explicitly and omitted with an absent optional field: each
+dependent_node_ids entry is the id of an existing non-text element that contains no field.
+Each field's font_family is exactly "Noto Sans KR" or "Pretendard" and its font_weight
+400 or 700; any other family or weight rejects the candidate. Return a
 full-canvas SVG template containing only header elements and transparent remaining body; never
 author body content here. Give each candidate its own body_box with a physically readable
 body area and no overlap with header or existing furniture. No CSS, gradients, defs, clipping,
