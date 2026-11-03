@@ -25,7 +25,40 @@ read when a deck's asset offer is built; a resumed deck replays its persisted of
 
 ## Live measurement
 
-See the table appended below (filled from the measurement run).
+Six 8-slide decks, one prompt (사내 업무 자동화 도입 계획 …), `claude-sonnet-5-5`, no
+image provider, two backends started before the vision-review fix
+(`2c9a857f6`): `SVG_ILLUSTRATION_MODE=off` and `vector`. Each backend ran its
+three decks one after another, so per-deck time is the gap between completions.
+
+| mode | style | quality pages passed | page flags |
+|---|---|---|---|
+| off | exec-report | 6/8 | source quality 1, attempts exhausted 1 |
+| off | strategic-navy | 8/8 | — |
+| off | flat-infographic | 0/8 | design review / deck flow unreviewed 8 (review-side) |
+| vector | exec-report | 6/8 | attempts exhausted 2 |
+| vector | strategic-navy | 5/8 | attempts exhausted 1, source quality 1, information structure 1 |
+| vector | flat-infographic | 5/8 | attempts exhausted 2, source quality 1 |
+
+| | off (3 decks) | vector (3 decks) |
+|---|---|---|
+| total provider cost | $5.63 | $6.63 |
+| illustration stage (plan, icon pick, drawings) | $0.30, 6 calls | $1.20, 21 calls |
+| time per deck (completion gaps) | about 260-310 s | about 300-340 s |
+| drawings requested / accepted | — | 42 / 42 (5 calls per deck, no retry, mean fill 0.76) |
+
+Reading:
+
+* Every drawing passed validation; covers, step pictures and before/after pairs
+  rendered in the deck's own colours (the navy deck's pair, the flat deck's scene).
+* Pages that ended as fallback or flagged by the author's own checks went from 2
+  of 24 (off) to 8 of 24 (vector): pictures take room and add elements the author
+  must lay out. The flat-infographic off deck's 8 flags are the vision review's
+  truncated answers (fixed by `2c9a857f6`), not page failures.
+* Three decks per arm is a small sample, but by the rule set before measuring
+  (default on only if the quality gate does not get worse) the default stays
+  **off**. Next steps before turning it on: give pictures a reserved area in the
+  page composition (or skip drawings on text-dense pages), and re-measure with
+  the vision-review fix in place.
 
 ## Open
 
