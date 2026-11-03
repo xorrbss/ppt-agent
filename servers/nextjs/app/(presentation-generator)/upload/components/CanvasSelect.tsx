@@ -79,6 +79,8 @@ export function CanvasSelect({
     const [customHeight, setCustomHeight] = useState(String(config.svgCanvas?.height_mm ?? 180));
     const [customError, setCustomError] = useState(false);
     const svgMode = generationStrategy === "svg";
+    // Template redesign keeps the template's own canvas (set by the template picker).
+    const templateLocked = svgMode && config.svgTemplateMode === "template-redesign" && Boolean(config.svgTemplatePin);
     const presetOrder = svgMode ? SVG_PRESET_ROW_ORDER : PRESET_ROW_ORDER;
     const [isAutoCanvas, setIsAutoCanvas] = useState(false);
     const [supportedAspectRatios, setSupportedAspectRatios] = useState<PresentationConfig["aspectRatio"][]>(["16:9"]);
@@ -90,6 +92,10 @@ export function CanvasSelect({
     const sourceCanvasLabel = sourceDocumentCanvas
         ? `${Math.round(sourceDocumentCanvas.physicalSize.widthEmu / 36000)} × ${Math.round(sourceDocumentCanvas.physicalSize.heightEmu / 36000)} mm · 원본`
         : "원본 크기 · 분석 후 유지";
+
+    useEffect(() => {
+        if (templateLocked) { setIsAutoCanvas(false); setOpen(false); }
+    }, [templateLocked]);
 
     useEffect(() => {
         if (svgMode) return;
@@ -244,7 +250,7 @@ export function CanvasSelect({
 
     return (
         <div className="flex flex-col gap-1">
-            <Popover open={open} onOpenChange={setOpen}>
+            <Popover open={open && !templateLocked} onOpenChange={next => setOpen(next && !templateLocked)}>
                 <PopoverTrigger asChild>
                     <button
                         type="button"
@@ -254,6 +260,8 @@ export function CanvasSelect({
                         aria-label={tA2b("canvasSelectTriggerLabel")}
                         aria-busy={a4RowBusy}
                         data-testid="canvas-select"
+                        disabled={templateLocked}
+                        title={templateLocked ? tA2b("canvasTemplateLocked") : undefined}
                         className="shrink-0 min-w-[160px] max-w-full whitespace-nowrap font-syne font-medium text-slate-600 focus-visible:ring-violet-300 flex justify-between items-center gap-2 h-9 rounded-xl bg-slate-50 px-3 ring-1 ring-inset ring-slate-200/80 shadow-none hover:bg-slate-100"
                     >
                         <span className="flex flex-1 items-center gap-2">
@@ -316,6 +324,7 @@ export function CanvasSelect({
                     ) : null}
                 </PopoverContent>
             </Popover>
+            {templateLocked ? <p className="w-full text-xs text-slate-500" role="note" data-testid="canvas-template-locked">{tA2b("canvasTemplateLocked")}</p> : null}
             {!svgMode && a4Enabled === true && appliedRowId.startsWith("a4-") && !a4SelectionAllowed ? (
                 <p className="w-full text-xs text-amber-700" role="status">{tA2b("a4SupportForTheSelectedGenerationMode")}</p>
             ) : null}

@@ -124,6 +124,23 @@ async def list_templates(session) -> list[dict]:
     return cards
 
 
+#: Half the custom canvas input quantum (0.01 mm): a request canvas this close
+#: to the source slide size is the source canvas at the precision a request
+#: can express (a source of 302.992 mm is requested as 302.99 mm).
+_SOURCE_CANVAS_TOLERANCE_EMU = 180
+
+
+def require_source_canvas(package: dict, canvas_json: dict) -> None:
+    """A ``template-redesign`` deck is generated only at the template's own
+    canvas (design D-4, docs/svg-template-real-deck-registration-design-20261103.md)."""
+    source = DocumentCanvasMetadata.model_validate(package.get("source_canvas"))
+    target = DocumentCanvasMetadata.model_validate(canvas_json)
+    if (source.logical_size != target.logical_size
+            or abs(source.physical_size.width_emu - target.physical_size.width_emu) > _SOURCE_CANVAS_TOLERANCE_EMU
+            or abs(source.physical_size.height_emu - target.physical_size.height_emu) > _SOURCE_CANVAS_TOLERANCE_EMU):
+        raise HTTPException(422, "svg_template_canvas_locked")
+
+
 async def resolve_template_selection(session, *, pin: dict, mode: str, canvas,
                                      source_mode: str | None = None, has_company_master=False,
                                      has_common_title_design=False, frame_map: dict | None = None,
@@ -217,6 +234,8 @@ async def capability(session, *, template_pin: dict, mode: str, canvas, source_m
     try:
         selection = await resolve_template_selection(session, pin=template_pin, mode=mode, canvas=canvas,
             source_mode=source_mode, has_company_master=has_company_master, has_common_title_design=has_common_title_design)
+        if mode == "template-redesign":
+            require_source_canvas(selection["package"], identity["canvas"])
         if mode == "template-redesign" and any(frame["frame_id"] not in selection["adaptations"] for frame in selection["package"].get("frames", [])):
             state, reason, action = "preparation-required", "svg_template_canvas_preparation_required", "prepare-canvas"
     except (HTTPException, ReferenceProviderError, ValueError) as error:

@@ -2791,7 +2791,8 @@
     "svgReferenceRegistrationRequired": "Register the design reference",
     "svgReferenceRegistrationRequiredBody": "Register or clear the selected design reference file.",
     "svgReferenceSelectionConflict": "Check the design reference selection",
-    "svgReferenceSelectionConflictBody": "Select only one of a design reference file, registered design, or company standard."
+    "svgReferenceSelectionConflictBody": "Select only one of a design reference file, registered design, or company standard.",
+    "canvasTemplateLocked": "Template-based redesign generates only at the template's own slide size."
   },
   "authoredStyleSamples": {
     "allSlides": "All slides · {count}",

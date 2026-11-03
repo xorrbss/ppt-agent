@@ -14,6 +14,7 @@ import { templateReason, templateIssueText, templateFontText, templateRoleText, 
 import SvgTemplateReview from "./SvgTemplateReview";
 import SvgTemplateFontSubstitutions from "./SvgTemplateFontSubstitutions";
 import type { PresentationConfig } from "../type";
+import { templateSourceCanvasSelector } from "../../services/api/svg-template-canvas";
 
 const stateLabels = { analyzing: "분석 중", "review-required": "확인 필요", ready: "사용 가능", failed: "분석 실패", archived: "보관됨" };
 const modeLabels = { "template-redesign": "양식 기반 재디자인", "free-design": "자유 디자인" };
@@ -87,6 +88,17 @@ export default function SvgTemplatePicker({ config, onConfigChange, sourceConten
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selection?.pin.templateId, selection?.pin.revision, selection?.pin.digest, catalogSelection, refresh]);
   const hasCommonTitleDesign = config.commonHeaderMode !== "free";
+  // A template-redesign deck is generated only at the template's own canvas.
+  const lockedCanvas = selection?.mode === "template-redesign" && selected?.sourceCanvas ? templateSourceCanvasSelector(selected.sourceCanvas) : null;
+  const lockedCanvasKey = JSON.stringify(lockedCanvas);
+  useEffect(() => {
+    if (!lockedCanvas) return;
+    for (const [key, value] of Object.entries(lockedCanvas) as Array<[keyof PresentationConfig, unknown]>) {
+      if (JSON.stringify(config[key]) !== JSON.stringify(value)) onConfigChange(key, value);
+    }
+  // The lock and the current request canvas are the only inputs.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lockedCanvasKey, canvasKey]);
 
   useEffect(() => {
     let cancelled = false;

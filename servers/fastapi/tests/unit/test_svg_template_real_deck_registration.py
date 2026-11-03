@@ -259,3 +259,24 @@ def test_a_revision_replaces_or_keeps_the_substitution_map():
         "expectedHeadRevision": 0, "fontSubstitutions": [{"sourceFamily": "B", "targetFamily": "Pretendard",
                                                           "targetWeight": 700}]})
     assert request.frame_reviews == [] and request.font_substitutions[0].source_family == "B"
+
+
+# --- canvas lock (D-4) ---------------------------------------------------------------
+
+def test_template_redesign_is_locked_to_the_source_canvas_at_request_precision():
+    from fastapi import HTTPException
+
+    from services.document_canvas import document_canvas_from_source_slide_size
+    from services.svg_canvas import custom_svg_canvas, svg_canvas_for_aspect_ratio
+    from services.svg_templates.catalog import require_source_canvas
+
+    source = document_canvas_from_source_slide_size(width_emu=10907713, height_emu=7775575)
+    package = {"source_canvas": source.model_dump(mode="json", by_alias=True)}
+    # 302.992 x 215.988 mm can only be requested to 0.01 mm.
+    require_source_canvas(package, custom_svg_canvas({"widthMm": "302.99", "heightMm": "215.99"})
+                          .model_dump(mode="json", by_alias=True))
+    for other in (custom_svg_canvas({"widthMm": "303.01", "heightMm": "215.99"}),
+                  custom_svg_canvas({"widthMm": "297", "heightMm": "210"}), svg_canvas_for_aspect_ratio("16:9")):
+        with pytest.raises(HTTPException) as error:
+            require_source_canvas(package, other.model_dump(mode="json", by_alias=True))
+        assert error.value.detail == "svg_template_canvas_locked"

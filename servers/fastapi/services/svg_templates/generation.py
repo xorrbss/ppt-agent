@@ -57,6 +57,10 @@ async def prepare_template_request(request, session) -> None:
     if any(not isinstance(key, str) or not re.fullmatch(r"[1-9][0-9]*", key)
            or (count is not None and int(key) > count) for key in frame_map):
         raise HTTPException(422, "svg_template_frame_map_invalid")
+    if mode == "template-redesign" and frozen is None:
+        # Admission only: a deck admitted before the lock keeps replaying.
+        from services.svg_templates.catalog import require_source_canvas
+        require_source_canvas(selection["package"], canvas.model_dump(mode="json", by_alias=True))
     selection.update(schema_version=SELECTION_SCHEMA, frame_map=frame_map,
                      canvas=canvas.model_dump(mode="json", by_alias=True))
     if mode == "template-redesign":

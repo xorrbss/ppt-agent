@@ -50,3 +50,12 @@ test("font substitution starts from applied choices, then one suggestion per fam
   ]);
   assert.deepEqual(initialFontSubstitutions(null), []);
 });
+
+test("a template source canvas becomes the request selector at request precision", async () => {
+  const { templateSourceCanvasSelector } = await import("./svg-template-canvas");
+  const canvas = { contractVersion: "document-canvas/v1", logicalSize: { width: 1280, height: 912 },
+    physicalSize: { widthEmu: 10907713, heightEmu: 7775575 }, safeArea: { x: 64, y: 64, width: 1152, height: 784 } };
+  assert.deepEqual(templateSourceCanvasSelector(canvas as never).svgCanvas, { width_mm: 302.99, height_mm: 215.99 });
+  const wide = { ...canvas, logicalSize: { width: 1280, height: 720 }, physicalSize: { widthEmu: 12192000, heightEmu: 6858000 }, safeArea: { x: 64, y: 64, width: 1152, height: 592 } };
+  assert.equal(templateSourceCanvasSelector(wide as never).aspectRatio, "16:9");
+});

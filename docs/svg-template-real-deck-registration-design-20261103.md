@@ -183,6 +183,16 @@ default frames compile with no blocked issue in about 70 s; the package is
   and disables the selector, with a one-line explanation. The source-canvas
   adaptation is identity, so no preparation step is shown.
 * `free-design`: unchanged.
+* As built: `catalog.require_source_canvas` admits a request canvas whose
+  logical size equals the source's and whose physical size is within 180 EMU
+  (half the 0.01 mm input step) per axis; a source of 302.992 × 215.988 mm is
+  requested as 302.99 × 215.99 mm, so its export is 73 EMU (0.002 mm) narrower
+  than the source. The check runs in `capability` and at new admission
+  (`prepare_template_request` without a frozen snapshot); decks admitted
+  before the lock keep replaying and exporting. The upload screen derives the
+  selector from `sourceCanvas` (`templateSourceCanvasSelector`) and disables
+  the canvas picker. Because the request canvas is not byte-identical to the
+  source canvas, the existing canvas preparation step still runs once.
 
 ## 4. Verification
 
