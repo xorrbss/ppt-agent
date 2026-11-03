@@ -53,6 +53,7 @@ LOGGER = logging.getLogger(__name__)
 #: The authored author-stage placeholder's reason; ``author:`` marks a substitute.
 FALLBACK_REASON = "author:attempts_exhausted"
 FALLBACK_OUTCOME = "svg_fallback_page"
+TEMPLATE_FALLBACK_OUTCOME = "svg_template_fallback_page"
 FLAG_ONLY_OUTCOME = "verbatim_flag_only"
 SOURCE_FALLBACK_REASON = "author:source_verbatim_fallback"
 SOURCE_FALLBACK_OUTCOME = "svg_source_fallback_page"
@@ -121,8 +122,11 @@ async def rescue_terminal_page(*, ctx, request, index, content, payload, error, 
     if kept is not None:
         return kept
     if template_redesign:
-        # Generic substitutes have no framed body/furniture preservation proof.
-        return None
+        # A generic substitute has no framed body/furniture preservation proof;
+        # the template fallback earns one through the same template checks.
+        return await _template_fallback(ctx=ctx, request=request, index=index, content=content,
+                                        payload=payload, error=error, job=job, checkpoint=checkpoint,
+                                        write_png=write_png)
     if ctx.source_reflow:
         rescued = await _source_fallback(ctx=ctx, request=request, presentation_id=presentation_id,
             index=index, content=content, payload=payload, error=error, job=job, checkpoint=checkpoint,
@@ -243,8 +247,63 @@ def _apply_substitute_header_quality(ctx, index, svg, quality):
     _apply_common_header_quality(quality, svg, contract, header_page, furniture)
 
 
+async def _template_fallback(*, ctx, request, index, content, payload, error, job, checkpoint, write_png):
+    """Rescue a template-redesign page with a deterministic body inside the frame.
+
+    The body keeps every outline line (``fallback.template_fallback_body_svg``)
+    within the frame's body region and uses the frame's own faces; it is then
+    composed, measured and proven with exactly the checks an authored template
+    page passes (``compose_template_page``, ``master_furniture_receipt``,
+    ``apply_template_body_quality``), so publication accepts it like any other
+    page. ``None`` -- the deck keeps failing -- when that proof does not hold.
+    """
+
+    from services.generation_core.drivers.svg.fallback import template_fallback_body_svg
+    from services.svg_master_furniture import master_furniture_receipt
+    from services.svg_presentation_checkpoint import _required_numeric_claims
+    from services.svg_renderer import render_svg_with_metrics
+    from services.svg_templates.generation import (
+        apply_template_body_quality, compose_template_page, page_frame, template_page_context,
+    )
+
+    try:
+        context = template_page_context(ctx.snapshot, index, ctx.count, content)
+        frame = page_frame(ctx.snapshot, index, ctx.count)
+        if frame.schema_version == "svg-template-frame/v3":
+            # A fixed glyph preview binds the published PNG to a capture this
+            # substitute cannot reproduce.
+            return None
+        faces = sorted(context["font_faces"], key=lambda face: face["weight"])
+        body_face = min(faces, key=lambda face: abs(face["weight"] - 400))
+        title_face = min(faces, key=lambda face: abs(face["weight"] - 700))
+        body = template_fallback_body_svg(content=content, width=ctx.canvas.width_px, height=ctx.canvas.height_px,
+            body_region=context["body_region"], title_in_frame="title" in context["dynamic_fields"],
+            title_face=title_face, body_face=body_face, style_snapshot=ctx.snapshot)
+        svg = compose_template_page(ctx.snapshot, body, context)
+        furniture = master_furniture_receipt(svg, ctx.snapshot, index=index, n=ctx.count,
+            width=ctx.canvas.width_px, height=ctx.canvas.height_px, template_page_context=context)
+        async with ctx.render_semaphore:
+            rendered = await render_svg_with_metrics(
+                svg, width=ctx.canvas.width_px, height=ctx.canvas.height_px,
+                instructions=request.instructions, required_text=_required_numeric_claims(content),
+                font_manifest=ctx.snapshot["svg_template"]["package"]["font_manifest"],
+                **({"system_furniture": furniture} if furniture is not None else {}), **ctx.physical_kwargs)
+        apply_template_body_quality(rendered.quality, svg, ctx.snapshot, context)
+    except (ValueError, TypeError, KeyError, IndexError):
+        LOGGER.warning("[svg] template fallback page failed slide=%d", index + 1, exc_info=True)
+        return None
+    proof = rendered.quality.get("template_preservation") or {}
+    if proof.get("body_paint_measured") is not True or rendered.quality.get("measurement_complete") is not True:
+        LOGGER.warning("[svg] template fallback page unproven slide=%d", index + 1)
+        return None
+    return await _publish_substitute(ctx=ctx, svg=svg, rendered=rendered, index=index, payload=payload,
+        error=error, job=job, checkpoint=checkpoint, write_png=write_png, reason=FALLBACK_REASON,
+        outcome=TEMPLATE_FALLBACK_OUTCOME, png_returned=True,
+        extra={"svg_template_page": context, **({"system_furniture": furniture} if furniture is not None else {})})
+
+
 async def _publish_substitute(*, ctx, svg, rendered, index, payload, error, job, checkpoint, write_png,
-                              reason, outcome, png_returned):
+                              reason, outcome, png_returned, extra=None):
     if not getattr(ctx, "source_reflow", False):
         try:
             _apply_substitute_header_quality(ctx, index, svg, rendered.quality)
@@ -268,7 +327,7 @@ async def _publish_substitute(*, ctx, svg, rendered, index, payload, error, job,
     rescued.update(svg_content=fields["svg_content"], source_digest=sha256_hex(fields["svg_content"].encode()),
                    **write_png(rendered.png),
                    terminal=flagged_entry(index=index, reason=reason, attempted=False, outcome=outcome),
-                   terminal_error=error.code)
+                   terminal_error=error.code, **(extra or {}))
     _bind_recovery_evidence(ctx, rescued)
     await checkpoint(job, index, payload=rescued)
     LOGGER.warning("[svg] terminal page replaced slide=%d outcome=%s code=%s", index + 1, outcome, error.code)
@@ -383,7 +442,7 @@ async def _placeholder(*, ctx, request, index, content, payload, error, job, che
 
 
 __all__ = [
-    "FALLBACK_OUTCOME", "FALLBACK_REASON", "FLAG_ONLY_OUTCOME",
+    "FALLBACK_OUTCOME", "FALLBACK_REASON", "FLAG_ONLY_OUTCOME", "TEMPLATE_FALLBACK_OUTCOME",
     "PLACEHOLDER_OUTCOME", "PLACEHOLDER_REASON", "SOURCE_FALLBACK_OUTCOME", "SOURCE_FALLBACK_REASON",
     "is_exhausted_page", "rescue_terminal_page", "terminal_policy_of",
 ]

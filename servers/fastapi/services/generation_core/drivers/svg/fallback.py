@@ -386,6 +386,66 @@ def fallback_page_svg(*, content: str, role: str, index: int, count: int,
                         style_snapshot=style_snapshot, header_page=header_page)
 
 
+#: Inset from the template's body region so stroke and glyph ink stay inside it.
+_TEMPLATE_BODY_INSET_PX = 8
+
+
+def template_fallback_body_svg(*, content: str, width: int, height: int, body_region: Mapping,
+                               title_in_frame: bool, title_face: Mapping, body_face: Mapping,
+                               style_snapshot: dict | None) -> str:
+    """Deterministic body for a template-redesign page whose authored body failed.
+
+    A full-canvas, transparent SVG whose only paint lies inside ``body_region``
+    (the template frame owns everything outside it). Every outline line is
+    kept, like :func:`fallback_page_svg`; the title is left to the frame when
+    the frame shows it. ``title_face``/``body_face`` are faces of the frame's
+    own font manifest (``family`` and ``weight``), so the composed page keeps
+    the template's fonts. Element IDs start with ``body-`` as authored bodies do.
+    """
+
+    tokens = (style_snapshot or {}).get("tokens", {})
+    _background, text_color, accent = _page_colors(tokens)
+    inset = _TEMPLATE_BODY_INSET_PX
+    left = float(body_region["x"]) + inset
+    top = float(body_region["y"]) + inset
+    available_width = max(1.0, float(body_region["width"]) - 2 * inset)
+    bottom = float(body_region["y"]) + float(body_region["height"]) - inset
+    title_px = min(_TITLE_FONT_PX, max(16, int(float(body_region["height"]) / 8)))
+    title_budget = _title_budget(available_width_px=available_width, font_px=title_px)
+    title, bullets = _complete_split(content, title_budget=title_budget)
+    root = ET.Element(f"{{{SVG_NS}}}svg", {
+        "width": str(width), "height": str(height), "viewBox": f"0 0 {width} {height}",
+    })
+    group = ET.SubElement(root, f"{{{SVG_NS}}}g", {"id": "body-fallback"})
+    cursor = top
+    if not title_in_frame and title:
+        ET.SubElement(group, f"{{{SVG_NS}}}rect", {
+            "id": "body-fallback-accent", "x": _fmt_px(left), "y": _fmt_px(cursor),
+            "width": str(_ACCENT_BAR_WIDTH), "height": str(_ACCENT_BAR_HEIGHT), "fill": accent,
+        })
+        cursor += _ACCENT_BAR_HEIGHT + _GAP_EYEBROW_TO_TITLE_PX
+        _text_node(group, x=left, y=cursor + title_px, text=title, font_px=title_px,
+                   font_family=str(title_face["family"]), fill=text_color, weight=str(title_face["weight"]))
+        cursor += title_px + _GAP_TITLE_TO_BODY_PX
+    if bullets:
+        font_px, columns, split = _body_layout(
+            bullets, available_width=available_width, available_height=max(1.0, bottom - cursor))
+        column_width = (available_width - (columns - 1) * _COLUMN_GAP_PX) / columns
+        prefix_width_px = _text_em(_BULLET_PREFIX) * font_px
+        for column, lines in enumerate(split):
+            column_left = left + column * (column_width + _COLUMN_GAP_PX)
+            y = cursor + font_px
+            for first, line in lines:
+                _text_node(group, x=column_left if first else column_left + prefix_width_px, y=y,
+                           text=(_BULLET_PREFIX if first else "") + line, font_px=font_px,
+                           font_family=str(body_face["family"]), fill=text_color,
+                           weight=str(body_face["weight"]))
+                y += font_px * _BODY_LINE_HEIGHT
+    for number, node in enumerate(node for node in group.iter() if node.tag.endswith("}text")):
+        node.set("id", f"body-fallback-text-{number}")
+    return ET.tostring(root, encoding="unicode")
+
+
 def _cover_body(group: ET.Element, *, title: str, bullets: Sequence[str], top: int, width: int, height: int,
                 title_font: str, body_font: str, text_color: str, accent: str) -> None:
     """A cover-shaped fallback: a large title in the middle band, the first lines as subtitle.
