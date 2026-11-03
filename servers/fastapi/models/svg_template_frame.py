@@ -73,6 +73,24 @@ class SvgTemplateNativeFixedText(FrameModel):
     digest: str
 
 
+class SvgTemplateFontSubstitution(FrameModel):
+    """A source font replaced by a server font the person chose at registration."""
+    source_family: str = Field(min_length=1, max_length=128)
+    target_family: str = Field(min_length=1, max_length=128)
+    target_weight: int = Field(ge=100, le=900)
+
+
+class SvgTemplateRasterPreservation(FrameModel):
+    """Fixed decoration kept as an image cut from a source render (never text)."""
+    schema_version: Literal["svg-template-raster-preservation/v1"] = "svg-template-raster-preservation/v1"
+    renderer: str
+    renderer_version: str
+    scale: float = Field(gt=0)
+    approximate: bool
+    shape_refs: tuple[str, ...] = Field(min_length=1)
+    reasons: tuple[str, ...] = Field(min_length=1)
+
+
 class SvgTemplateFrameElement(FrameModel):
     element_id: str
     source_part: str
@@ -90,12 +108,16 @@ class SvgTemplateFrameElement(FrameModel):
     text_region: FrameRect | None = None
     text_align: Literal["l", "ctr", "r"] = "l"
     native_fixed_text: SvgTemplateNativeFixedText | None = None
+    raster_preservation: SvgTemplateRasterPreservation | None = None
 
     @model_serializer(mode="wrap")
     def serialize_native_layout(self, handler):
         value = handler(self)
+        # Optional evidence is omitted when absent, so earlier digests hold.
         if self.native_fixed_text is None:
             value.pop("native_fixed_text", None)
+        if self.raster_preservation is None:
+            value.pop("raster_preservation", None)
         return value
 
 
@@ -159,6 +181,7 @@ class SvgTemplatePackage(FrameModel):
     font_manifest: SvgTemplateFontManifest
     issues: tuple[FrameIssue, ...] = ()
     registration_state: Literal["review-required", "failed"] = "review-required"
+    font_substitutions: tuple[SvgTemplateFontSubstitution, ...] = ()
     digest: str
 
     @model_validator(mode="after")
@@ -182,6 +205,8 @@ class SvgTemplatePackage(FrameModel):
     def serialize_font_references(self, handler):
         from models.svg_template_codec import pack_package_fonts
         value = handler(self)
+        if not self.font_substitutions:
+            value.pop("font_substitutions", None)
         if "frames" in value and "font_manifest" in value:
             return pack_package_fonts(value)
         return value

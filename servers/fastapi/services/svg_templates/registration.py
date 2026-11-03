@@ -64,7 +64,8 @@ async def new_operation(session, *, kind: str, payload: dict, name: str, convers
 
 async def register_template(session, *, name, snapshot_id, registration_mode,
                             template_id=None, expected_head_revision=0, conversation_id=None,
-                            native_fixed_text_layout=False, fixed_glyph_preview=False):
+                            native_fixed_text_layout=False, fixed_glyph_preview=False,
+                            source_pages=None, font_substitutions=None):
     if type(native_fixed_text_layout) is not bool or (native_fixed_text_layout and registration_mode != "framed"):
         raise ValueError("svg_template_native_layout_selector_invalid")
     if type(fixed_glyph_preview) is not bool or (fixed_glyph_preview and
@@ -128,6 +129,10 @@ async def register_template(session, *, name, snapshot_id, registration_mode,
             payload["native_fixed_text_layout"] = True
         if fixed_glyph_preview:
             payload["fixed_glyph_preview"] = True
+        if source_pages is not None:
+            payload["source_pages"] = list(source_pages)
+        if font_substitutions:
+            payload["font_substitutions"] = [dict(item) for item in font_substitutions]
         conversation, operation = await new_operation(session, kind="svg.template.analyze", payload=payload,
             name=name, conversation_id=conversation_id)
         changed = (await session.execute(update(SvgTemplate).where(SvgTemplate.id == template.id,
@@ -364,7 +369,9 @@ class SvgTemplateOperationHandler:
                 from services.svg_templates.frame import extract_template_package
                 package_model = await asyncio.to_thread(extract_template_package, source_path,
                     frame_reviews=payload.get("frame_reviews"),
-                    native_fixed_text_layout=payload.get("native_fixed_text_layout", False))
+                    native_fixed_text_layout=payload.get("native_fixed_text_layout", False),
+                    source_pages=payload.get("source_pages"),
+                    font_substitutions=payload.get("font_substitutions"))
                 captured_pdf = capture_receipt = None
                 if payload.get("fixed_glyph_preview"):
                     if payload.get("fixed_glyph_preview") is not True or payload.get("native_fixed_text_layout") is not True:

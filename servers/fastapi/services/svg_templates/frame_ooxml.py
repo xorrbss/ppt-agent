@@ -60,6 +60,16 @@ class OoxmlFrameContext:
         self.required_families: set[str] = set()
         self.native_fixed_text_layout = False
         self.source_digest = ""
+        self.font_substitutions = {}
+        self.substituted_families: set[str] = set()
+
+    def resolve_face(self, family: str, bold: bool) -> tuple[str, int]:
+        """The face fixed text is drawn with: the explicit substitute, if any."""
+        record = self.font_substitutions.get(family.casefold())
+        if record is not None:
+            self.substituted_families.add(family.casefold())
+            return record.target_family, record.target_weight
+        return family, 700 if bold else 400
 
     def root(self, part):
         return secure_xml(self.package.read(part), part_name=part)
@@ -198,11 +208,11 @@ class OoxmlFrameContext:
                     raise ValueError("svg_template_text_decoration_unsupported")
                 style = context.run_style(run, paragraph)
                 family = style.get("fontFamily")
-                if family:
-                    self.required_families.add(family)
                 if not family or not style.get("sizePt") or style.get("italic"):
                     raise ValueError("svg_template_font_style_unresolved")
-                asset = font_asset_for(self.font_manifest, family, 700 if style.get("bold") else 400)
+                family, weight = self.resolve_face(family, bool(style.get("bold")))
+                self.required_families.add(family)
+                asset = font_asset_for(self.font_manifest, family, weight)
                 text = "".join(run.itertext()) if run.find("a:t", NS) is None else run.find("a:t", NS).text or ""
                 size = float(style["sizePt"]) * 12700 / self.scale
                 width, ascent, descent = measure_text(asset, text, size)

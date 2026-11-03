@@ -27,6 +27,9 @@ from services.svg_templates.frame_ooxml import (
 )
 
 MAX_TEMPLATE_PAGES = 100
+#: Pages analysed when the request names none: page 1 and the first page of
+#: every other slide layout. A template is its furniture, not every page.
+DEFAULT_REPRESENTATIVE_PAGES = 12
 MAX_TEMPLATE_ASSET_BYTES = 80 * 1024 * 1024
 MAX_TEMPLATE_PACKAGE_BYTES = 64 * 1024 * 1024
 _DYNAMIC = {"title": "title", "ctrTitle": "title", "sldNum": "page_number"}
@@ -135,20 +138,68 @@ def _background(context, ancestry, frame_id):
         size_policy="span-between-anchors")
 
 
+def representative_pages(context, slides) -> tuple[int, ...]:
+    """0-based default selection: page 1, then the first page of each other layout."""
+    chosen, layouts = [], set()
+    for index, part in enumerate(slides):
+        layout = context.related(part, "/slideLayout")
+        if index == 0 or layout not in layouts:
+            chosen.append(index)
+            layouts.add(layout)
+        if len(chosen) >= DEFAULT_REPRESENTATIVE_PAGES:
+            break
+    return tuple(chosen)
+
+
+def _font_substitutions(raw) -> dict:
+    """``{casefolded source family: SvgTemplateFontSubstitution}`` from the request."""
+    from models.svg_template_frame import SvgTemplateFontSubstitution
+    result = {}
+    for item in raw or ():
+        record = SvgTemplateFontSubstitution.model_validate(item)
+        key = record.source_family.casefold()
+        if key in result or key == record.target_family.casefold():
+            raise ValueError("svg_template_font_substitution_invalid")
+        result[key] = record
+    return result
+
+
+def _selected_pages(source_pages, slide_count) -> tuple[int, ...] | None:
+    if source_pages is None:
+        return None
+    pages = tuple(source_pages)
+    if (not pages or len(pages) > MAX_TEMPLATE_PAGES or len(set(pages)) != len(pages)
+            or any(type(page) is not int or not 1 <= page <= slide_count for page in pages)):
+        raise ValueError("svg_template_source_pages_invalid")
+    return tuple(sorted(page - 1 for page in pages))
+
+
 @font_validation_scope()
 def extract_template_package(pptx_path: str | Path, *, font_assets=None,
                              frame_reviews: dict[str, dict] | None = None,
-                             native_fixed_text_layout: bool = False) -> SvgTemplatePackage:
+                             native_fixed_text_layout: bool = False,
+                             source_pages: list[int] | tuple[int, ...] | None = None,
+                             font_substitutions: list[dict] | None = None) -> SvgTemplatePackage:
+    """Compile frames from selected source pages (1-based ``source_pages``).
+
+    Without ``source_pages`` a deck of at most ``DEFAULT_REPRESENTATIVE_PAGES``
+    pages is analysed whole; a longer deck is analysed through its
+    representative pages. Frame ids and ``source_page`` keep the original
+    page numbers either way.
+
+    ``font_substitutions`` are the person's explicit replacements for source
+    fonts the server cannot use (``source_family`` -> ``target_family`` at
+    ``target_weight``). They are applied to fixed text and the frame font
+    manifests and recorded on the package; nothing is substituted otherwise.
+    """
     if type(native_fixed_text_layout) is not bool:
         raise ValueError("svg_template_native_layout_selector_invalid")
     path = Path(pptx_path)
     report = admit_pptx_package(path)
-    if report.slide_count > MAX_TEMPLATE_PAGES:
-        raise ValueError("svg_template_page_limit_exceeded")
     source_digest = bytes_digest(path.read_bytes())
     frames, evidence, package_issues = [], [], []
     with ZipFile(path) as package:
-        slides = _ordered_slide_parts(package, report)
+        all_slides = _ordered_slide_parts(package, report)
         typography = PptxTypographyResolver(package, relationship_map=_relationship_map)
         size = typography.slide_size()
         if size is None:
@@ -159,6 +210,16 @@ def extract_template_package(pptx_path: str | Path, *, font_assets=None,
         context = OoxmlFrameContext(package, typography, canvas, font_manifest)
         context.native_fixed_text_layout = native_fixed_text_layout
         context.source_digest = source_digest
+        substitutions = _font_substitutions(font_substitutions)
+        context.font_substitutions = substitutions
+        selection = _selected_pages(source_pages, len(all_slides))
+        if selection is None:
+            selection = (tuple(range(len(all_slides))) if len(all_slides) <= DEFAULT_REPRESENTATIVE_PAGES
+                         else representative_pages(context, all_slides))
+        if len(selection) > MAX_TEMPLATE_PAGES:
+            raise ValueError("svg_template_page_limit_exceeded")
+        slides = [all_slides[index] for index in selection]
+        page_numbers = dict(zip(slides, selection, strict=True))
         observed = {}
         for part in slides:
             faces = set()
@@ -182,7 +243,7 @@ def extract_template_package(pptx_path: str | Path, *, font_assets=None,
                                 continue
                             style = text_context.run_style(run, paragraph)
                             if style.get("fontFamily"):
-                                faces.add((style["fontFamily"], 700 if style.get("bold") else 400))
+                                faces.add(context.resolve_face(style["fontFamily"], bool(style.get("bold"))))
             observed[part] = faces
         required_faces = set().union(*observed.values()) if observed else set()
         # Explicit supplied bytes have priority, then already verified server
@@ -201,8 +262,10 @@ def extract_template_package(pptx_path: str | Path, *, font_assets=None,
                 unique.setdefault((asset.family.casefold(), asset.weight), asset)
         font_manifest = build_font_manifest(tuple(unique.values()))
         context.font_manifest = font_manifest
-        repeats = Counter(key for part in slides for key in {_repeat_key(shape, package, part) for shape in _children(context.root(part))})
-        for page_index, slide_part in enumerate(slides):
+        # Repetition is judged over the whole deck: more pages, better evidence.
+        repeats = Counter(key for part in all_slides for key in {_repeat_key(shape, package, part) for shape in _children(context.root(part))})
+        for slide_part in slides:
+            page_index = page_numbers[slide_part]
             frame_id = f"frame-{page_index + 1}"
             ancestry = context.ancestry(slide_part)
             review = (frame_reviews or {}).get(frame_id, {})
@@ -275,7 +338,7 @@ def extract_template_package(pptx_path: str | Path, *, font_assets=None,
                         page_background = (preset is not None and preset.get("prst") == "rect"
                             and abs(bounds.x) <= .01 and abs(bounds.y) <= .01
                             and abs(bounds.width - canvas.width_px) <= .01 and abs(bounds.height - canvas.height_px) <= .01)
-                        fixed = page_background or (edge and (repeats[_repeat_key(shape, package, part)] >= 2 or len(slides) == 1))
+                        fixed = page_background or (edge and (repeats[_repeat_key(shape, package, part)] >= 2 or len(all_slides) == 1))
                     if selected is not None:
                         fixed = part + "#" + shape_id(shape) in selected
                     if not fixed:
@@ -356,7 +419,9 @@ def extract_template_package(pptx_path: str | Path, *, font_assets=None,
         raise ValueError("svg_template_frames_missing")
     if set(frame_reviews or {}) - {frame.frame_id for frame in frames}:
         raise ValueError("svg_template_frame_review_unknown")
+    applied = tuple(record for key, record in substitutions.items() if key in context.substituted_families)
     result = SvgTemplatePackage(schema_version="svg-template-package/v2" if native_fixed_text_layout else "svg-template-package/v1",
+        font_substitutions=applied,
         compiler_version="ooxml-frame/2" if native_fixed_text_layout else "ooxml-frame/1",
         source_digest=source_digest, source_canvas=canvas, frames=tuple(frames),
         body_evidence=tuple(evidence), assets=assets, font_manifest=font_manifest,

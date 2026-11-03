@@ -35,6 +35,13 @@ class TemplatePin(Wire):
     digest: str = Field(pattern=r"^sha256:[a-f0-9]{64}$")
 
 
+class FontSubstitution(Wire):
+    """An explicit, recorded replacement for a source font the server cannot use."""
+    source_family: str = Field(alias="sourceFamily", min_length=1, max_length=128)
+    target_family: str = Field(alias="targetFamily", min_length=1, max_length=128)
+    target_weight: int = Field(alias="targetWeight", ge=100, le=900)
+
+
 class RegistrationRequest(Wire):
     name: str = Field(min_length=1, max_length=160)
     reference_snapshot_id: uuid.UUID = Field(alias="referenceSnapshotId")
@@ -44,6 +51,10 @@ class RegistrationRequest(Wire):
     conversation_id: uuid.UUID | None = Field(default=None, alias="conversationId")
     native_fixed_text_layout: bool = Field(default=False, alias="nativeFixedTextLayout", strict=True)
     fixed_glyph_preview: bool = Field(default=False, alias="fixedGlyphPreview", strict=True)
+    # 1-based source pages to analyse; omitted: page 1 plus the first page of each layout.
+    source_pages: list[int] | None = Field(default=None, alias="sourcePages", min_length=1, max_length=100)
+    font_substitutions: list[FontSubstitution] | None = Field(default=None, alias="fontSubstitutions",
+                                                              max_length=32)
 
     @model_validator(mode="after")
     def validate_fixed_glyph_selector(self):
@@ -123,7 +134,10 @@ async def register(request: RegistrationRequest, session=Depends(get_async_sessi
         return await register_template(session, name=request.name.strip(), snapshot_id=request.reference_snapshot_id,
             registration_mode=request.registration_mode, template_id=request.template_id,
             expected_head_revision=request.expected_head_revision, conversation_id=request.conversation_id,
-            native_fixed_text_layout=request.native_fixed_text_layout, fixed_glyph_preview=request.fixed_glyph_preview)
+            native_fixed_text_layout=request.native_fixed_text_layout, fixed_glyph_preview=request.fixed_glyph_preview,
+            source_pages=request.source_pages,
+            font_substitutions=[item.model_dump() for item in request.font_substitutions]
+                if request.font_substitutions is not None else None)
     except (ReferenceProviderError, AssetGatewayError, WorkspaceServiceError, ValueError) as error:
         raise public_error(error) from error
 
