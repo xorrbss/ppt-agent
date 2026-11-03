@@ -157,3 +157,27 @@ def test_selection_returns_the_parsed_picks(monkeypatch):
 
 def test_selection_prompt_version_is_named():
     assert re.fullmatch(r"deck-icon-selection-v\d+", selection.DECK_ICON_SELECTION_PROMPT_VERSION)
+
+
+def test_every_bundled_style_names_a_vendored_icon_family():
+    from utils.authored_styles import load_authored_styles
+
+    styles = load_authored_styles()
+    assert styles
+    available = set(families.available_families())
+    assert {style.icon_family for style in styles} <= available
+    by_id = {style.id: style for style in styles}
+    assert by_id["exec-report"].icon_family == "tabler-outline"
+    assert by_id["cyber-ai"].icon_family == "lucide"
+
+
+def test_a_style_yaml_can_name_its_icon_family(tmp_path):
+    from utils.authored_styles import _parse_style
+
+    base = {"id": "x", "name": "X", "description": "d", "brief": "b", "category": "creative",
+            "preview": {"bg": "#FFFFFF", "accent": "#000000"}}
+    assert _parse_style(tmp_path / "x.yaml", tmp_path, data=base).icon_family == "lucide"
+    named = _parse_style(tmp_path / "x.yaml", tmp_path, data={**base, "icon_family": "tabler-outline"})
+    assert named.icon_family == "tabler-outline"
+    with pytest.raises(ValueError, match="icon_family"):
+        _parse_style(tmp_path / "x.yaml", tmp_path, data={**base, "icon_family": "../lucide"})

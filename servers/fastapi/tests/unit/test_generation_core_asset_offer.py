@@ -666,3 +666,18 @@ def test_icons_only_mode_still_uses_lucide_picks_without_any_provider(fakes, mon
     icons = [slot for slot in offer.slots if slot.kind == "icon"]
     assert icons and all(slot.origin == "lucide" for slot in icons)
     assert offer.receipt["providerCalls"] == 0 and not fakes["generate"]
+
+
+def test_the_style_icon_family_supplies_the_vocabulary_and_the_origin(fakes, monkeypatch):
+    async def picks(labels, names):
+        assert "building-bank" in names and "brand-github" not in names
+        return {"분석": ("report-analytics", None)}
+
+    monkeypatch.setattr(icon_selection, "select_deck_icons", picks)
+    style = SimpleNamespace(id="s", illustration_prompt="", reference_mode="style_reference",
+                            icon_family="tabler-outline")
+    offer = _build(style=style)
+    icon = next(slot for slot in offer.slots if slot.concept == "분석")
+    assert icon.origin == "tabler-outline"
+    assert (offer.receipt["iconSelection"]["family"], offer.receipt["iconSelection"]["version"]) == \
+        ("tabler-outline", "3.50.0")

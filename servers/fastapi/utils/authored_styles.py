@@ -35,6 +35,12 @@ AUTHORED_STYLES_DIRECTORY = Path(__file__).resolve().parent.parent / "authored_s
 AUTHORED_STYLE_ASSETS_DIRECTORY = Path(__file__).resolve().parent.parent / "authored_style_assets"
 DEFAULT_AUTHORED_STYLE_CATEGORY = "general"
 AUTHORED_STYLE_CATEGORIES = frozenset({"general", "business", "technology", "research", "editorial", "creative"})
+#: Vendored icon family (``assets/icon_families/<id>``) a style's figure icons
+#: are picked from when its YAML names none. Business decks get Tabler's
+#: outline set, which is the more specific of the two for documents, public
+#: sector, finance and infrastructure labels; every other category Lucide.
+DEFAULT_ICON_FAMILY = "lucide"
+DEFAULT_ICON_FAMILY_BY_CATEGORY = {"business": "tabler-outline"}
 _ENGLISH_IDENTIFIER_PATTERN = re.compile(r"^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$")
 _HEX_COLOR_PATTERN = re.compile(r"^#[0-9A-Fa-f]{6}$")
 _REFERENCE_ROLES = frozenset(
@@ -107,6 +113,7 @@ class AuthoredStyle:
     body_font: Optional[str] = None
     mono_font: Optional[str] = None
     illustration_prompt: Optional[str] = None
+    icon_family: str = DEFAULT_ICON_FAMILY
     reference_images: Mapping[str, tuple[Path, ...]] = field(default_factory=dict)
     # Ordered, private source-slide mapping for exact reconstruction.  Unlike the
     # role references above, these are zipped to deck positions one-to-one and are
@@ -451,6 +458,10 @@ def _parse_style(
     if not isinstance(illustration, Mapping):
         raise ValueError(f"{source.name}: 'illustration' must be a mapping")
 
+    icon_family = data.get("icon_family", DEFAULT_ICON_FAMILY_BY_CATEGORY.get(category, DEFAULT_ICON_FAMILY))
+    if not isinstance(icon_family, str) or not _ENGLISH_IDENTIFIER_PATTERN.fullmatch(icon_family):
+        raise ValueError(f"{source.name}: 'icon_family' must be a lowercase identifier")
+
     preview_image = None
     if "image" in preview:
         preview_image = _asset_path(preview["image"], source, assets_directory)
@@ -492,6 +503,7 @@ def _parse_style(
         preview_accent=_color(preview, "accent", source),
         brief=_required_string(data, "brief", source),
         category=category,
+        icon_family=icon_family,
         tags=_string_list(data, "tags", source),
         use_cases=_string_list(data, "use_cases", source),
         preview_palette=_optional_color_list(preview, "palette", source),
