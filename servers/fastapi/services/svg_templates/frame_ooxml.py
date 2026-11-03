@@ -388,7 +388,9 @@ class OoxmlFrameContext:
                            width=max(0, bounds.width - left - right), height=max(0, available_height))
         return group, tuple(sorted(used)), region, lines[0][1]
 
-    def emit(self, shape, part, *, element_id, dynamic_key=None, bounds=None):
+    def emit(self, shape, part, *, element_id, dynamic_key=None, bounds=None, text_only=False):
+        """One fixed shape as an SVG element; ``text_only`` draws only the text of
+        a shape whose paint is preserved separately (as an image)."""
         if bounds is None:
             bounds = shape_bounds(shape, self.typography, part, self.scale)
         if dynamic_key is None and slide_number_field(shape):
@@ -439,10 +441,14 @@ class OoxmlFrameContext:
             preset = geometry.get("prst") if geometry is not None else None
             has_text = shape.find("p:txBody", NS) is not None
             if has_text and shape.find(".//a:t", NS) is not None:
-                fill, _ = self.fill(shape, part)
-                stroke, _ = self.fill(shape, part, "line")
-                if fill != "none" or stroke != "none":
-                    raise ValueError("svg_template_text_shape_paint_unsupported")
+                if not text_only:
+                    try:
+                        fill, _ = self.fill(shape, part)
+                        stroke, _ = self.fill(shape, part, "line")
+                    except ValueError as error:
+                        raise ValueError("svg_template_text_shape_paint_unsupported") from error
+                    if fill != "none" or stroke != "none":
+                        raise ValueError("svg_template_text_shape_paint_unsupported")
                 node, used, text_region, text_align = self.text_svg(shape, part, bounds, dynamic_key)
                 output_kind = "text"
             elif preset in {"rect", "roundRect", "line"} or kind == "cxnSp":

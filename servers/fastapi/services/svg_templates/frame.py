@@ -138,6 +138,165 @@ def _background(context, ancestry, frame_id):
         size_policy="span-between-anchors")
 
 
+#: Conversion failures about how decoration is drawn, not what it says: such a
+#: fixed shape may be preserved as an image (design D-1). Text never is.
+RASTERIZABLE = frozenset({
+    "svg_template_paint_unsupported", "svg_template_effect_unsupported",
+    "svg_template_image_crop_unsupported", "svg_template_image_effect_unsupported",
+    "svg_template_image_format_unsupported", "svg_template_image_stretch_unsupported",
+    "svg_template_primitive_unsupported", "svg_template_geometry_missing",
+    "svg_template_transform_unsupported", "svg_template_line_style_unsupported",
+    "svg_template_color_transform_unsupported", "svg_template_color_unsupported",
+    "svg_template_color_unresolved", "svg_template_style_unresolved",
+    "svg_template_background_unsupported", "svg_template_background_style_unsupported",
+    "svg_template_image_bytes_exceeded", "svg_template_image_pixels_exceeded",
+})
+
+
+def _emu(bounds, context):
+    if bounds is None:
+        return None
+    return tuple(round(value * context.scale) for value in (bounds.x, bounds.y, bounds.width, bounds.height))
+
+
+class _RasterRuns:
+    """Consecutive raster candidates of one frame, in paint order."""
+
+    def __init__(self, *, enabled: bool):
+        self.enabled = enabled
+        self.runs: list[dict] = []
+        self.open: dict | None = None
+
+    def close(self):
+        self.open = None
+
+    def background(self, elements, part, reason) -> bool:
+        if not self.enabled or reason not in RASTERIZABLE:
+            return False
+        self.runs.append({"position": len(elements), "shapes": [], "reasons": {reason},
+                          "background_part": part, "layer": "background", "refs": [part + "#background"]})
+        self.open = None
+        return True
+
+    def add(self, elements, part, shape, reason, *, bounds=None, emu=None, hide_text=False,
+            background=False) -> bool:
+        from services.svg_templates.raster_preservation import RasterShape
+        if not self.enabled or reason not in RASTERIZABLE:
+            return False
+        layer = "background" if background else "foreground"
+        if self.open is None or self.open["layer"] != layer:
+            self.open = {"position": len(elements), "shapes": [], "reasons": set(), "background_part": None,
+                         "layer": layer, "refs": []}
+            self.runs.append(self.open)
+        self.open["shapes"].append(RasterShape(part=part, element=shape, emu_rect=emu, hide_text=hide_text))
+        self.open["reasons"].add(reason)
+        self.open["refs"].append(part + "#" + shape_id(shape))
+        return True
+
+
+def _emit_fixed(context, runs, elements, issues, frame_id, part, shape, bounds, *, emu, dynamic_key=None):
+    """Convert one fixed shape. With a renderer, paint the converter cannot draw
+    becomes an image and any text the shape carries stays vector text above it."""
+    try:
+        elements.append(context.emit(shape, part, bounds=bounds, dynamic_key=dynamic_key,
+                                     element_id=f"svg-system-template-{frame_id}-fixed-{len(elements)}"))
+        runs.close()
+        return
+    except ValueError as error:
+        reason = str(error)
+    if reason == "svg_template_text_shape_paint_unsupported" and runs.enabled:
+        from copy import deepcopy
+        paint = deepcopy(shape)
+        body = paint.find("p:txBody", NS)
+        if body is not None:
+            paint.remove(body)
+        try:
+            elements.append(context.emit(paint, part, bounds=bounds,
+                                         element_id=f"svg-system-template-{frame_id}-fixed-{len(elements)}"))
+            runs.close()
+        except ValueError as paint_error:
+            if not runs.add(elements, part, shape, str(paint_error), bounds=bounds, emu=emu, hide_text=True):
+                issues.append(FrameIssue(reason_code=str(paint_error), severity="blocked",
+                                         source_part=part, shape_id=shape_id(shape)))
+                return
+        try:
+            elements.append(context.emit(shape, part, bounds=bounds, dynamic_key=dynamic_key, text_only=True,
+                                         element_id=f"svg-system-template-{frame_id}-fixed-{len(elements)}"))
+            runs.close()
+        except ValueError as text_error:
+            issues.append(FrameIssue(reason_code=str(text_error), severity="blocked",
+                                     source_part=part, shape_id=shape_id(shape)))
+        return
+    if not runs.add(elements, part, shape, reason, bounds=bounds, emu=emu):
+        issues.append(FrameIssue(reason_code=reason, severity="blocked", source_part=part, shape_id=shape_id(shape)))
+
+
+def _apply_raster_runs(renderer, path, canvas, context, pending) -> None:
+    """Render every frame's runs at once and insert the images in paint order."""
+    import base64
+    from io import BytesIO
+
+    from PIL import Image
+
+    from models.svg_template_frame import SvgTemplateAsset, SvgTemplateRasterPreservation
+    from services.svg_templates.raster_preservation import RASTER_SCALE, RasterRequest
+
+    requests = [RasterRequest(key=f"{state['frame_id']}:{index}", shapes=tuple(run["shapes"]),
+                              background_part=run["background_part"])
+                for state in pending for index, run in enumerate(state["runs"].runs)]
+    if not requests:
+        return
+    try:
+        results = renderer(path, canvas, requests)
+    except ValueError as error:
+        for state in pending:
+            for run in state["runs"].runs:
+                for ref in run["refs"]:
+                    part, shape = ref.split("#", 1)
+                    state["issues"].append(FrameIssue(reason_code=str(error), severity="blocked",
+                                                      source_part=part, shape_id=shape))
+        return
+    for state in pending:
+        frame_id, elements = state["frame_id"], state["elements"]
+        # Insert from the last run back, so earlier positions stay valid.
+        for index, run in reversed(list(enumerate(state["runs"].runs))):
+            result = results.get(f"{frame_id}:{index}")
+            if result is None:
+                continue
+            digest = bytes_digest(result.data)
+            with Image.open(BytesIO(result.data)) as image:
+                width, height = image.size
+            asset = SvgTemplateAsset(asset_id="image-" + digest[7:23], digest=digest, media_type=result.media_type,
+                                     data_base64=base64.b64encode(result.data).decode("ascii"),
+                                     width=width, height=height)
+            context.assets[asset.asset_id] = asset
+            bounds = FrameRect(x=result.x, y=result.y, width=result.width, height=result.height)
+            element_id = f"svg-system-template-{frame_id}-raster-{index}"
+            node = svg_node("image", id=element_id, x=bounds.x, y=bounds.y, width=round(bounds.width),
+                            height=round(bounds.height), href=f"data:{result.media_type};base64,{asset.data_base64}",
+                            preserveAspectRatio="xMidYMid meet")
+            background = run["layer"] == "background"
+            element = SvgTemplateFrameElement(element_id=element_id, source_part=run["refs"][0].split("#")[0],
+                source_shape_id=",".join(ref.split("#", 1)[1] for ref in run["refs"])[:200],
+                source_xml_digest=artifact_digest({"refs": run["refs"], "image": digest}), kind="image",
+                layer=run["layer"], bounds=bounds, svg=etree.tostring(node, encoding="unicode"),
+                anchor_x="right" if bounds.x > canvas.width_px * .65 else "left",
+                anchor_y="bottom" if bounds.y >= canvas.height_px * .7 else "top",
+                size_policy="aspect-locked",
+                raster_preservation=SvgTemplateRasterPreservation(renderer=result.renderer,
+                    renderer_version=result.renderer_version, scale=float(RASTER_SCALE),
+                    approximate=result.approximate, shape_refs=tuple(run["refs"]),
+                    reasons=tuple(sorted(run["reasons"]))))
+            if background and run["background_part"] is not None:
+                # The slide background run replaces the implicit white background.
+                elements[:] = [item for item in elements if item.source_shape_id != "implicit-background"]
+                elements.insert(0, element)
+                continue
+            elements.insert(run["position"], element)
+            if not background:
+                state["fixed_bounds"].append(bounds)
+
+
 def representative_pages(context, slides) -> tuple[int, ...]:
     """0-based default selection: page 1, then the first page of each other layout."""
     chosen, layouts = [], set()
@@ -179,7 +338,8 @@ def extract_template_package(pptx_path: str | Path, *, font_assets=None,
                              frame_reviews: dict[str, dict] | None = None,
                              native_fixed_text_layout: bool = False,
                              source_pages: list[int] | tuple[int, ...] | None = None,
-                             font_substitutions: list[dict] | None = None) -> SvgTemplatePackage:
+                             font_substitutions: list[dict] | None = None,
+                             raster_renderer=None) -> SvgTemplatePackage:
     """Compile frames from selected source pages (1-based ``source_pages``).
 
     Without ``source_pages`` a deck of at most ``DEFAULT_REPRESENTATIVE_PAGES``
@@ -191,6 +351,10 @@ def extract_template_package(pptx_path: str | Path, *, font_assets=None,
     fonts the server cannot use (``source_family`` -> ``target_family`` at
     ``target_weight``). They are applied to fixed text and the frame font
     manifests and recorded on the package; nothing is substituted otherwise.
+
+    ``raster_renderer`` (``raster_preservation.render_raster_requests``)
+    preserves unsupported fixed decoration as images cut from a source
+    render; without it such decoration blocks the frame as before.
     """
     if type(native_fixed_text_layout) is not bool:
         raise ValueError("svg_template_native_layout_selector_invalid")
@@ -264,6 +428,7 @@ def extract_template_package(pptx_path: str | Path, *, font_assets=None,
         context.font_manifest = font_manifest
         # Repetition is judged over the whole deck: more pages, better evidence.
         repeats = Counter(key for part in all_slides for key in {_repeat_key(shape, package, part) for shape in _children(context.root(part))})
+        pending = []
         for slide_part in slides:
             page_index = page_numbers[slide_part]
             frame_id = f"frame-{page_index + 1}"
@@ -274,6 +439,16 @@ def extract_template_package(pptx_path: str | Path, *, font_assets=None,
             selected = review.get("fixed_shape_ids")
             selected = {key if "#" in key else slide_part + "#" + key for key in selected} if selected is not None else None
             available = {part + "#" + shape_id(shape) for part in ancestry for shape in _children(context.root(part))}
+            if selected is not None:
+                # Review lists what the frame shows: a group's leaves (groups
+                # are flattened) and the shapes of a raster run. Each counts
+                # as its top-level shape. The slide background is always kept.
+                owners = {part + "#" + leaf.get("id"): part + "#" + shape_id(shape)
+                          for part in ancestry for shape in _children(context.root(part))
+                          if etree.QName(shape).localname == "grpSp"
+                          for leaf in shape.iterfind(".//p:cNvPr", NS) if leaf.get("id")}
+                selected = {owners.get(key, key) for key in selected
+                            if key.rsplit("#", 1)[1] not in {"background", "implicit-background"}}
             if selected is not None and not selected <= available:
                 raise ValueError("svg_template_fixed_shape_unknown")
             issues = []
@@ -286,10 +461,14 @@ def extract_template_package(pptx_path: str | Path, *, font_assets=None,
                     issues.append(FrameIssue(reason_code=font_discovery_diagnostics.get((family, weight),
                         "svg_template_font_unavailable"), severity="blocked", source_part=slide_part))
             elements, fixed_bounds, body_ids, body_bounds, body_kinds = [], [], [], [], []
+            runs = _RasterRuns(enabled=raster_renderer is not None)
             try:
                 elements.append(_background(context, ancestry, "svg-system-template-" + frame_id))
             except ValueError as error:
-                issues.append(FrameIssue(reason_code=str(error), severity="blocked", source_part=slide_part))
+                background_part = next((part for part in ancestry
+                                        if context.root(part).find("p:cSld/p:bg", NS) is not None), None)
+                if not (background_part and runs.background(elements, background_part, str(error))):
+                    issues.append(FrameIssue(reason_code=str(error), severity="blocked", source_part=slide_part))
             # Placeholder inheritance is instantiated once, at the nearest
             # slide/layout occurrence. Non-placeholder master/layout furniture
             # retains its actual paint order behind the slide.
@@ -338,6 +517,12 @@ def extract_template_package(pptx_path: str | Path, *, font_assets=None,
                         page_background = (preset is not None and preset.get("prst") == "rect"
                             and abs(bounds.x) <= .01 and abs(bounds.y) <= .01
                             and abs(bounds.width - canvas.width_px) <= .01 and abs(bounds.height - canvas.height_px) <= .01)
+                        # A picture covering the slide at the bottom of the
+                        # slide's own paint order is its background (a cover or
+                        # divider photo), not body content (design D-2).
+                        page_background = page_background or (
+                            runs.enabled and kind == "pic" and shape is _children(root)[0]
+                            and bounds.width * bounds.height >= canvas.width_px * canvas.height_px * .7)
                         fixed = page_background or (edge and (repeats[_repeat_key(shape, package, part)] >= 2 or len(all_slides) == 1))
                     if selected is not None:
                         fixed = part + "#" + shape_id(shape) in selected
@@ -348,12 +533,28 @@ def extract_template_package(pptx_path: str | Path, *, font_assets=None,
                             if bounds is not None:
                                 body_bounds.append(bounds)
                         continue
-                    if bounds is not None:
+                    full_slide_picture = (kind == "pic" and bounds is not None
+                                          and bounds.width * bounds.height >= canvas.width_px * canvas.height_px * .7)
+                    if bounds is not None and not full_slide_picture:
                         fixed_bounds.append(bounds)
-                        if (kind == "pic" and bounds.width * bounds.height >= canvas.width_px * canvas.height_px * .7):
+                    if full_slide_picture:
+                        # A text-free picture covering the slide is a background
+                        # layer under the body (D-2), never furniture over it.
+                        if runs.enabled and not any(element.layer == "foreground" for element in elements):
+                            try:
+                                element = context.emit(shape, part, element_id=f"svg-system-template-{frame_id}-fixed-{len(elements)}")
+                                elements.append(element.model_copy(update={"layer": "background",
+                                                                           "size_policy": "span-between-anchors"}))
+                                runs.close()
+                            except ValueError as error:
+                                if not runs.add(elements, part, shape, str(error), bounds=bounds,
+                                                emu=_emu(bounds, context), background=True):
+                                    issues.append(FrameIssue(reason_code=str(error), severity="blocked",
+                                                             source_part=part, shape_id=shape_id(shape)))
+                        else:
                             issues.append(FrameIssue(reason_code="svg_template_fullslide_raster_forbidden", severity="blocked",
                                                      source_part=part, shape_id=shape_id(shape)))
-                            continue
+                        continue
                     if kind == "grpSp":
                         # A group is flattened: each leaf is converted at its
                         # slide position, so text inside it stays text.
@@ -361,15 +562,13 @@ def extract_template_package(pptx_path: str | Path, *, font_assets=None,
                             if leaf_bounds is not None:
                                 fixed_bounds.append(leaf_bounds)
                             if failure is not None:
-                                issues.append(FrameIssue(reason_code=failure, severity="blocked",
-                                                         source_part=part, shape_id=shape_id(leaf)))
+                                if not runs.add(elements, part, leaf, failure, bounds=leaf_bounds,
+                                                emu=_emu(leaf_bounds, context)):
+                                    issues.append(FrameIssue(reason_code=failure, severity="blocked",
+                                                             source_part=part, shape_id=shape_id(leaf)))
                                 continue
-                            try:
-                                elements.append(context.emit(leaf, part, bounds=leaf_bounds,
-                                    element_id=f"svg-system-template-{frame_id}-fixed-{len(elements)}"))
-                            except ValueError as error:
-                                issues.append(FrameIssue(reason_code=str(error), severity="blocked",
-                                                         source_part=part, shape_id=shape_id(leaf)))
+                            _emit_fixed(context, runs, elements, issues, frame_id, part, leaf, leaf_bounds,
+                                        emu=_emu(leaf_bounds, context))
                         continue
                     try:
                         element = context.emit(shape, part, element_id=f"svg-system-template-{frame_id}-fixed-{len(elements)}",
@@ -383,8 +582,27 @@ def extract_template_package(pptx_path: str | Path, *, font_assets=None,
                             element = element.model_copy(update={"layer": "background", "size_policy": "span-between-anchors"})
                             fixed_bounds.pop()
                         elements.append(element)
+                        runs.close()
                     except ValueError as error:
-                        issues.append(FrameIssue(reason_code=str(error), severity="blocked", source_part=part, shape_id=shape_id(shape)))
+                        own_transform = shape.find("p:spPr/a:xfrm", NS) is not None or kind == "grpSp"
+                        if str(error) == "svg_template_text_shape_paint_unsupported" and runs.enabled:
+                            _emit_fixed(context, runs, elements, issues, frame_id, part, shape, bounds,
+                                        emu=None if own_transform else _emu(bounds, context),
+                                        dynamic_key=_DYNAMIC.get(ph.type) if ph else None)
+                        elif not runs.add(elements, part, shape, str(error), bounds=bounds,
+                                          emu=None if own_transform else _emu(bounds, context)):
+                            issues.append(FrameIssue(reason_code=str(error), severity="blocked", source_part=part, shape_id=shape_id(shape)))
+            pending.append(dict(slide_part=slide_part, page_index=page_index, frame_id=frame_id, review=review,
+                                issues=issues, elements=elements, fixed_bounds=fixed_bounds, body_ids=body_ids,
+                                body_bounds=body_bounds, body_kinds=body_kinds, runs=runs,
+                                required_families=required_families))
+        _apply_raster_runs(raster_renderer, path, canvas, context, pending)
+        for state in pending:
+            slide_part, page_index, frame_id, review = (state["slide_part"], state["page_index"],
+                                                        state["frame_id"], state["review"])
+            issues, elements, fixed_bounds = state["issues"], state["elements"], state["fixed_bounds"]
+            body_ids, body_bounds, body_kinds = state["body_ids"], state["body_bounds"], state["body_kinds"]
+            required_families = state["required_families"]
             margin = canvas.safe_area.x
             top, bottom = canvas.safe_area.y, canvas.safe_area.y + canvas.safe_area.height
             forbidden = []
@@ -407,8 +625,12 @@ def extract_template_package(pptx_path: str | Path, *, font_assets=None,
                     and box.y < body_region.y + body_region.height and body_region.y < box.y + box.height]
             if body_region.height < canvas.height_px * .15:
                 issues.append(FrameIssue(reason_code="svg_template_body_space_insufficient", severity="blocked"))
-            if not any(element.layer == "foreground" for element in elements):
+            # A background picture is furniture too (a cover, a chapter divider).
+            if not any(element.layer == "foreground" or element.kind == "image" for element in elements):
                 issues.append(FrameIssue(reason_code="svg_template_fixed_furniture_missing", severity="blocked"))
+            if any(element.raster_preservation is not None for element in elements):
+                issues.append(FrameIssue(reason_code="svg_template_raster_preservation_review_required",
+                                         source_part=slide_part))
             issues.extend((FrameIssue(reason_code="source_render_review_required", source_part=slide_part),
                            FrameIssue(reason_code="classification_review_required", source_part=slide_part)))
             frame = SvgTemplateFrame(schema_version="svg-template-frame/v2" if native_fixed_text_layout else "svg-template-frame/v1",

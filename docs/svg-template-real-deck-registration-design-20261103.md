@@ -116,9 +116,28 @@ requires the existing explicit confirmation.
 
 **Renderer.** LibreOffice on every platform in this version (it is already
 required for the uploaded design reference). Without it, raster candidates
-keep blocking with `svg_template_raster_renderer_unavailable`. A PowerPoint
+keep blocking with their original conversion reason, exactly as before this
+change; `svg_template_raster_renderer_unavailable` is raised only when a
+renderer was chosen but LibreOffice vanished before rendering. A PowerPoint
 renderer for Windows is follow-up work; LibreOffice output is marked
 `approximate`.
+
+**As built (2026-11-03).** `services/svg_templates/raster_preservation.py`
+(render deck, dual render, alpha recovery, crop) and the run collector in
+`frame.py` (`_RasterRuns`, `_emit_fixed`, `_apply_raster_runs`). The
+registration worker passes `libreoffice_raster_renderer()`. Rather than
+hiding shapes in a copy of each page, the render deck carries one new slide
+per run with `showMasterSp="0"` and copies of only the run's shapes
+(relationships re-pointed), so all runs of all frames render in one
+LibreOffice pass per background colour. A full-slide picture becomes a
+background layer only when no foreground furniture is painted before it (a
+layout band under a slide photo would otherwise be hidden by it); it keeps
+`svg_template_fullslide_raster_forbidden` otherwise. Review lists the source
+shapes a run stands for (`raster_preservation.shape_refs`), and a saved
+review maps a group leaf to its group and ignores the slide background, so
+saving a review unchanged reproduces the frame. On the real deck the nine
+default frames compile with no blocked issue in about 70 s; the package is
+12 MB (limit 64 MB).
 
 ### 3.3 Fixed text the deck needs
 

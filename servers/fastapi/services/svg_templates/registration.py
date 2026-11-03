@@ -367,11 +367,15 @@ class SvgTemplateOperationHandler:
             package = None
             if payload["registration_mode"] == "framed":
                 from services.svg_templates.frame import extract_template_package
+                from services.svg_templates.raster_preservation import libreoffice_raster_renderer
+                # Unsupported fixed decoration becomes a reviewed image when a
+                # source renderer is installed; otherwise it keeps blocking.
                 package_model = await asyncio.to_thread(extract_template_package, source_path,
                     frame_reviews=payload.get("frame_reviews"),
                     native_fixed_text_layout=payload.get("native_fixed_text_layout", False),
                     source_pages=payload.get("source_pages"),
-                    font_substitutions=payload.get("font_substitutions"))
+                    font_substitutions=payload.get("font_substitutions"),
+                    raster_renderer=libreoffice_raster_renderer())
                 captured_pdf = capture_receipt = None
                 if payload.get("fixed_glyph_preview"):
                     if payload.get("fixed_glyph_preview") is not True or payload.get("native_fixed_text_layout") is not True:

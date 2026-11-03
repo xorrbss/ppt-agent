@@ -24,13 +24,15 @@ export interface SvgTemplateCapability {
   state: "available" | "preparation-required" | "blocked";
   reasonCode: string | null; nextAction: string | null; contractDigest?: string;
 }
+/** Fixed decoration the converter cannot draw, kept as an image cut from a source render. */
+export interface SvgTemplateRasterPreservation { renderer: string; renderer_version?: string; approximate: boolean; reasons: string[]; shape_refs: string[] }
 export interface SvgTemplateFrameReview {
   frameId: string; fixedShapeIds: string[]; bodyRegion: { x: number; y: number; width: number; height: number }; role: "cover" | "section" | "body";
 }
 export interface SvgTemplateFrame {
   issues?: SvgTemplateIssue[];
   frame_id: string; source_page?: number; role?: "cover" | "section" | "body";
-  elements?: Array<{ element_id: string; source_part: string; source_shape_id: string; kind: string; layer: string; bounds: { x: number; y: number; width: number; height: number } }>;
+  elements?: Array<{ element_id: string; source_part: string; source_shape_id: string; kind: string; layer: string; bounds: { x: number; y: number; width: number; height: number }; raster_preservation?: SvgTemplateRasterPreservation }>;
   source_canvas?: import("@/lib/document-canvas").DocumentCanvas;
   preview_url?: string; body_region?: { x: number; y: number; width: number; height: number };
 }

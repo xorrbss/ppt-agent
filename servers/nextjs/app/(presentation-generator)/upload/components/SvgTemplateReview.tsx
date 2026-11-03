@@ -3,6 +3,7 @@ import { useState } from "react";
 import { resolveBackendAssetUrl } from "@/utils/api";
 import { Button } from "@/components/ui/button";
 import type { SvgTemplateDraft, SvgTemplateFrameReview } from "../../services/api/svg-templates";
+import { frameElementShapeRefs } from "../../services/api/svg-template-status";
 
 export default function SvgTemplateReview({ draft, busy, onSave, onDirtyChange }: {
   draft: SvgTemplateDraft; busy: boolean;
@@ -11,7 +12,7 @@ export default function SvgTemplateReview({ draft, busy, onSave, onDirtyChange }
 }) {
   const [reviews, setReviews] = useState<SvgTemplateFrameReview[]>(() => (draft.package?.frames ?? []).map(frame => ({
     frameId: frame.frame_id,
-    fixedShapeIds: [...new Set((frame.elements ?? []).map(element => `${element.source_part}#${element.source_shape_id}`))],
+    fixedShapeIds: [...new Set((frame.elements ?? []).flatMap(frameElementShapeRefs))],
     bodyRegion: frame.body_region ?? { x: 0, y: 0, width: 0, height: 0 },
     role: frame.role ?? "body",
   })));
@@ -27,8 +28,8 @@ export default function SvgTemplateReview({ draft, busy, onSave, onDirtyChange }
       const bodyIds = bodyEvidence?.body_shape_ids ?? [];
       const preview = draft.source_previews?.[String(frame?.source_page)];
       const source = frame?.source_canvas?.logicalSize;
-      const candidates = [...new Set([...(frame?.elements ?? []).map(item => `${item.source_part}#${item.source_shape_id}`), ...bodyIds])];
-      const boundsFor = (id: string) => frame?.elements?.find(item => `${item.source_part}#${item.source_shape_id}` === id)?.bounds ?? bodyEvidence?.body_bounds?.[bodyIds.indexOf(id)];
+      const candidates = [...new Set([...(frame?.elements ?? []).flatMap(frameElementShapeRefs), ...bodyIds])];
+      const boundsFor = (id: string) => frame?.elements?.find(item => frameElementShapeRefs(item).includes(id))?.bounds ?? bodyEvidence?.body_bounds?.[bodyIds.indexOf(id)];
       return <fieldset key={review.frameId} className="mt-3 space-y-2 rounded border p-3"><legend className="px-1 text-xs">원본 {(frame?.source_page ?? 0) + 1}장</legend>
         <label className="flex gap-2 text-xs"><input type="radio" name="template-representative" checked={representative === review.frameId} onChange={() => { setRepresentative(review.frameId); setChanged(true); onDirtyChange(true); }} />대표 장표</label>
         <label className="block text-xs">양식 역할<select className="ml-2 rounded border p-1" value={review.role} onChange={event => update(review.frameId, { role: event.target.value as SvgTemplateFrameReview["role"] })}><option value="cover">표지</option><option value="section">구분 장표</option><option value="body">본문</option></select></label>
