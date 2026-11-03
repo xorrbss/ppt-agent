@@ -105,7 +105,7 @@ def adapt_frame(frame: SvgTemplateFrame, target_canvas: DocumentCanvasMetadata |
             for key in ("y", "y1", "y2", "cy"):
                 if key in child.attrib:
                     child.set(key, str(float(child.get(key)) * scale + dy))
-            for key in ("width", "height", "rx", "ry", "r", "font-size", "stroke-width"):
+            for key in ("width", "height", "rx", "ry", "r", "font-size", "stroke-width", "letter-spacing"):
                 if key in child.attrib:
                     child.set(key, str(float(child.get(key)) * scale))
             if etree.QName(child).localname == "image":
@@ -131,6 +131,7 @@ def adapt_frame(frame: SvgTemplateFrame, target_canvas: DocumentCanvasMetadata |
             for text in node.iter(f"{{{SVG_NS}}}text"):
                 asset = font_asset_for(frame.font_manifest, text.get("font-family"), int(text.get("font-weight", "400")))
                 run_width, ascent, descent = measure_text(asset, text.text or "", float(text.get("font-size")))
+                run_width += float(text.get("letter-spacing", "0")) * len(text.text or "")
                 paint = FrameRect(x=float(text.get("x")), y=float(text.get("y")) - ascent,
                                   width=run_width, height=ascent + descent)
                 if not _inside(paint, text_region or adapted_bounds, tolerance=.5):

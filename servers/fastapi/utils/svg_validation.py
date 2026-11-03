@@ -47,7 +47,10 @@ _COMMON = {"id", "fill", "stroke", "stroke-width", "opacity", "fill-opacity", "s
 # a stroke by at least half its width on every side, which covers a round cap
 # or join. Square caps and bevel joins stay out: nothing measures them yet.
 _STROKE_LINE_VALUES = {"stroke-linecap": {"butt", "round"}, "stroke-linejoin": {"miter", "round"}}
-_TEXT = {"x", "y", "font-family", "font-size", "font-weight", "text-anchor"}
+_TEXT = {"x", "y", "font-family", "font-size", "font-weight", "text-anchor", "letter-spacing"}
+#: Letter spacing in px, as PowerPoint's run spacing (``spc``) maps to it. The
+#: renderer measures the spaced glyphs and PPTX export writes ``rPr@spc``.
+_LETTER_SPACING_RANGE = (-20.0, 20.0)
 ELEMENT_ATTRIBUTES = {
     "svg": {"width", "height", "viewBox"},
     "g": set(),
@@ -206,6 +209,10 @@ def validate_svg(
                 raise ValueError("svg_contract_invalid_weight")
             elif key == "text-anchor" and value not in {"start", "middle", "end"}:
                 raise ValueError("svg_contract_invalid_anchor")
+            elif key == "letter-spacing":
+                if not re.fullmatch(r"-?\d+(?:\.\d+)?", value) or not (
+                        _LETTER_SPACING_RANGE[0] <= float(value) <= _LETTER_SPACING_RANGE[1]):
+                    raise ValueError("svg_contract_invalid_letter_spacing")
             elif key == "id":
                 if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_.-]{0,100}", value) or value in ids:
                     raise ValueError("svg_contract_invalid_id")

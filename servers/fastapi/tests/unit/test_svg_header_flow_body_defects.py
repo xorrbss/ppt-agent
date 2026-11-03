@@ -13,7 +13,6 @@ from copy import deepcopy
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
-import pytest
 
 from services import svg_common_header_design_plan as policy
 from services import svg_common_header_generation as generation

@@ -23,7 +23,7 @@ from services.svg_templates.frame_fonts import (
     font_validation_scope,
 )
 from services.svg_templates.frame_ooxml import (
-    OoxmlFrameContext, shape_bounds, shape_id, svg_node, xml_digest,
+    OoxmlFrameContext, group_leaves, shape_bounds, shape_id, svg_node, xml_digest,
 )
 
 MAX_TEMPLATE_PAGES = 100
@@ -354,6 +354,23 @@ def extract_template_package(pptx_path: str | Path, *, font_assets=None,
                             issues.append(FrameIssue(reason_code="svg_template_fullslide_raster_forbidden", severity="blocked",
                                                      source_part=part, shape_id=shape_id(shape)))
                             continue
+                    if kind == "grpSp":
+                        # A group is flattened: each leaf is converted at its
+                        # slide position, so text inside it stays text.
+                        for leaf, leaf_bounds, failure in group_leaves(shape, context.scale):
+                            if leaf_bounds is not None:
+                                fixed_bounds.append(leaf_bounds)
+                            if failure is not None:
+                                issues.append(FrameIssue(reason_code=failure, severity="blocked",
+                                                         source_part=part, shape_id=shape_id(leaf)))
+                                continue
+                            try:
+                                elements.append(context.emit(leaf, part, bounds=leaf_bounds,
+                                    element_id=f"svg-system-template-{frame_id}-fixed-{len(elements)}"))
+                            except ValueError as error:
+                                issues.append(FrameIssue(reason_code=str(error), severity="blocked",
+                                                         source_part=part, shape_id=shape_id(leaf)))
+                        continue
                     try:
                         element = context.emit(shape, part, element_id=f"svg-system-template-{frame_id}-fixed-{len(elements)}",
                                                dynamic_key=_DYNAMIC.get(ph.type) if ph else None)

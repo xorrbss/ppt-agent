@@ -49,6 +49,100 @@ def shape_bounds(shape, typography, part, scale):
                      width=geometry["cx"] / scale, height=geometry["cy"] / scale)
 
 
+def _preset_color(name: str) -> str:
+    """DrawingML preset colour (``dkBlue``, ``ltGray``, ``white``...) as RRGGBB.
+
+    The preset names are the CSS colour names with ``dk``/``lt``/``med``
+    abbreviating ``dark``/``light``/``medium``; an unknown name is unresolved.
+    """
+    from PIL import ImageColor
+    css = name
+    for short, full in (("dk", "dark"), ("lt", "light"), ("med", "medium")):
+        if css.startswith(short) and len(css) > len(short) and css[len(short)].isupper():
+            css = full + css[len(short):]
+            break
+    try:
+        red, green, blue = ImageColor.getrgb(css.lower())[:3]
+    except ValueError as error:
+        raise ValueError("svg_template_color_unresolved") from error
+    return f"{red:02X}{green:02X}{blue:02X}"
+
+
+def _xfrm(properties):
+    xfrm = properties.find("a:xfrm", NS) if properties is not None else None
+    if xfrm is None:
+        return None
+    if int(xfrm.get("rot", "0")) or xfrm.get("flipH") in {"1", "true"} or xfrm.get("flipV") in {"1", "true"}:
+        raise ValueError("svg_template_transform_unsupported")
+    return xfrm
+
+
+def group_leaves(group, scale: float):
+    """``[(leaf, FrameRect | None, error | None)]`` of a group, in paint order.
+
+    Child coordinates are mapped through every enclosing group transform
+    (``chOff``/``chExt`` to ``off``/``ext``: offset and scale only). A rotated
+    or flipped group, or a leaf without a box, yields an error for the leaf
+    so the caller can report or preserve it; nothing is guessed.
+    """
+
+    def mapping(node, outer):
+        xfrm = _xfrm(node.find("p:grpSpPr", NS))
+        if xfrm is None:
+            raise ValueError("svg_template_geometry_missing")
+        off, ext = xfrm.find("a:off", NS), xfrm.find("a:ext", NS)
+        child_off, child_ext = xfrm.find("a:chOff", NS), xfrm.find("a:chExt", NS)
+        if any(item is None for item in (off, ext, child_off, child_ext)):
+            raise ValueError("svg_template_geometry_missing")
+        sx = int(ext.get("cx")) / max(1, int(child_ext.get("cx")))
+        sy = int(ext.get("cy")) / max(1, int(child_ext.get("cy")))
+        inner = (int(off.get("x")) - int(child_off.get("x")) * sx, int(off.get("y")) - int(child_off.get("y")) * sy, sx, sy)
+        ox, oy, osx, osy = outer
+        return (ox + inner[0] * osx, oy + inner[1] * osy, inner[2] * osx, inner[3] * osy)
+
+    leaves = []
+
+    def walk(node, outer):
+        try:
+            transform = mapping(node, outer)
+        except ValueError as error:
+            leaves.append((node, None, str(error)))
+            return
+        for child in node:
+            local = etree.QName(child).localname
+            if local in {"nvGrpSpPr", "grpSpPr", "extLst"}:
+                continue
+            if local == "grpSp":
+                walk(child, transform)
+                continue
+            try:
+                xfrm = _xfrm(child.find("p:spPr", NS))
+            except ValueError as error:
+                leaves.append((child, None, str(error)))
+                continue
+            off, ext = (xfrm.find("a:off", NS), xfrm.find("a:ext", NS)) if xfrm is not None else (None, None)
+            if off is None or ext is None:
+                leaves.append((child, None, "svg_template_geometry_missing"))
+                continue
+            x, y, sx, sy = transform
+            leaves.append((child, FrameRect(x=(x + int(off.get("x")) * sx) / scale, y=(y + int(off.get("y")) * sy) / scale,
+                                            width=int(ext.get("cx")) * sx / scale, height=int(ext.get("cy")) * sy / scale),
+                           None))
+
+    walk(group, (0.0, 0.0, 1.0, 1.0))
+    return leaves
+
+
+def slide_number_field(shape) -> bool:
+    """A plain shape whose only text is a slide-number field: the page number."""
+    paragraphs = [p for p in shape.findall("p:txBody/a:p", NS) if p.find("a:r", NS) is not None
+                  or p.find("a:fld", NS) is not None]
+    if len(paragraphs) != 1:
+        return False
+    runs = [child for child in paragraphs[0] if etree.QName(child).localname in {"r", "fld"}]
+    return len(runs) == 1 and etree.QName(runs[0]).localname == "fld" and runs[0].get("type") == "slidenum"
+
+
 class OoxmlFrameContext:
     def __init__(self, package: ZipFile, typography: PptxTypographyResolver, canvas, font_manifest):
         self.package = package
@@ -105,6 +199,8 @@ class OoxmlFrameContext:
             raw = node.get("val", "")
         elif local == "sysClr":
             raw = node.get("lastClr", "")
+        elif local == "prstClr":
+            raw = _preset_color(node.get("val", ""))
         elif local == "schemeClr":
             token = node.get("val", "")
             if token == "phClr" and placeholder is not None:
@@ -184,7 +280,16 @@ class OoxmlFrameContext:
         body_layout = context.text_body_layout(shape)
         if body_layout["vertical"] != "horz" or body_layout["rotationDegrees"] not in {None, 0}:
             raise ValueError("svg_template_text_direction_unsupported")
-        if body_layout["autoFit"] not in {None, "none"}:
+        # PowerPoint stores what auto-fit produced: a shape-fit box already has
+        # the fitted size, and a shrink-on-overflow body records its font
+        # scale and line-spacing reduction. Both are drawn as PowerPoint shows them.
+        font_scale, line_scale = 1.0, 1.0
+        if body_layout["autoFit"] == "normal":
+            font_scale = (body_layout.get("fontScalePct") or 100.0) / 100
+            line_scale = 1 - (body_layout.get("lineSpaceReductionPct") or 0.0) / 100
+            if not (0 < font_scale <= 1 and 0 < line_scale <= 1):
+                raise ValueError("svg_template_text_autofit_unsupported")
+        elif body_layout["autoFit"] not in {None, "none", "shape"}:
             raise ValueError("svg_template_text_autofit_unsupported")
         left, right = body_layout["marginLeftEmu"] / self.scale, body_layout["marginRightEmu"] / self.scale
         top, bottom = body_layout["marginTopEmu"] / self.scale, body_layout["marginBottomEmu"] / self.scale
@@ -192,9 +297,14 @@ class OoxmlFrameContext:
         used = set()
         for paragraph in paragraphs:
             ppr = paragraph.find("a:pPr", NS)
-            if ppr is not None and (any(etree.QName(c).localname.startswith("bu") and etree.QName(c).localname != "buNone" for c in ppr)
-                    or ppr.find("a:tabLst", NS) is not None):
-                raise ValueError("svg_template_text_paragraph_unsupported")
+            # Bullet formatting (buClrTx, buSzTx, buFontTx) only matters when a
+            # bullet is drawn; an empty tab list sets no stop.
+            if ppr is not None:
+                bullet = ppr.find("a:buNone", NS) is None and any(
+                    ppr.find("a:" + name, NS) is not None for name in ("buChar", "buAutoNum", "buBlip"))
+                tabs = ppr.find("a:tabLst", NS)
+                if bullet or (tabs is not None and len(tabs)):
+                    raise ValueError("svg_template_text_paragraph_unsupported")
             runs = []
             for run in paragraph:
                 if etree.QName(run).localname not in {"r", "fld", "br"}:
@@ -203,8 +313,12 @@ class OoxmlFrameContext:
                     raise ValueError("svg_template_text_soft_break_unsupported")
                 run_props = run.find("a:rPr", NS)
                 if run_props is not None and any(run_props.get(key, default) != default
-                        for key, default in (("spc", "0"), ("baseline", "0"), ("cap", "none"),
+                        for key, default in (("baseline", "0"), ("cap", "none"),
                                              ("u", "none"), ("strike", "noStrike"))):
+                    raise ValueError("svg_template_text_decoration_unsupported")
+                # Character spacing (hundredths of a point) becomes letter-spacing.
+                spacing = int(run_props.get("spc", "0")) / 100 * 12700 / self.scale if run_props is not None else 0.0
+                if not -20 <= spacing <= 20:
                     raise ValueError("svg_template_text_decoration_unsupported")
                 style = context.run_style(run, paragraph)
                 family = style.get("fontFamily")
@@ -214,8 +328,9 @@ class OoxmlFrameContext:
                 self.required_families.add(family)
                 asset = font_asset_for(self.font_manifest, family, weight)
                 text = "".join(run.itertext()) if run.find("a:t", NS) is None else run.find("a:t", NS).text or ""
-                size = float(style["sizePt"]) * 12700 / self.scale
+                size = float(style["sizePt"]) * font_scale * 12700 / self.scale
                 width, ascent, descent = measure_text(asset, text, size)
+                width += spacing * len(text)
                 used.add(asset.asset_id)
                 # Resolve inherited run paint, rather than changing scheme colors to black.
                 color = style.get("color")
@@ -227,7 +342,7 @@ class OoxmlFrameContext:
                     raise ValueError("svg_template_text_color_unresolved")
                 if not color.startswith("#"):
                     color = "#" + color
-                runs.append((text, size, asset, width, ascent, descent, color))
+                runs.append((text, size, asset, width, ascent, descent, color, spacing))
             if not runs:
                 continue
             if dynamic_key and (len(paragraphs) != 1 or len(runs) != 1):
@@ -240,10 +355,13 @@ class OoxmlFrameContext:
             lines.append((runs, layout.get("alignment") or "l"))
         if not lines:
             raise ValueError("svg_template_text_empty")
-        line_heights = [max(run[4] + run[5] for run in runs) for runs, _ in lines]
+        line_heights = [max(run[4] + run[5] for run in runs) * (line_scale if index else 1)
+                        for index, (runs, _) in enumerate(lines)]
         total_height = sum(line_heights)
         available_height = bounds.height - top - bottom
-        if total_height > available_height + .1:
+        # A shape-fit box grows to its text in PowerPoint; a taller line box
+        # (a substituted face's metrics) is centred on the anchor instead.
+        if total_height > available_height + .1 and body_layout["autoFit"] != "shape":
             raise ValueError("svg_template_text_overflow")
         anchor = body_layout["anchor"]
         if anchor not in {"t", "ctr", "b"}:
@@ -257,9 +375,11 @@ class OoxmlFrameContext:
                 raise ValueError("svg_template_text_overflow")
             x = bounds.x + left + {"l": 0, "ctr": .5, "r": 1}[align] * (available_width - width)
             baseline = y + max(run[4] for run in runs)
-            for text, size, asset, run_width, _, _, color in runs:
+            for text, size, asset, run_width, _, _, color, spacing in runs:
                 node = svg_node("text", x=x, y=baseline, font_family=asset.family,
                                 font_weight=asset.weight, font_size=size, fill=color)
+                if spacing:
+                    node.set("letter-spacing", f"{spacing:.3f}".rstrip("0").rstrip("."))
                 node.text = text
                 group.append(node)
                 x += run_width
@@ -268,8 +388,11 @@ class OoxmlFrameContext:
                            width=max(0, bounds.width - left - right), height=max(0, available_height))
         return group, tuple(sorted(used)), region, lines[0][1]
 
-    def emit(self, shape, part, *, element_id, dynamic_key=None):
-        bounds = shape_bounds(shape, self.typography, part, self.scale)
+    def emit(self, shape, part, *, element_id, dynamic_key=None, bounds=None):
+        if bounds is None:
+            bounds = shape_bounds(shape, self.typography, part, self.scale)
+        if dynamic_key is None and slide_number_field(shape):
+            dynamic_key = "page_number"
         kind = etree.QName(shape).localname
         for name in ("effectLst", "effectDag", "scene3d", "sp3d", "custGeom"):
             if shape.find(".//a:" + name, NS) is not None:
@@ -322,8 +445,8 @@ class OoxmlFrameContext:
                     raise ValueError("svg_template_text_shape_paint_unsupported")
                 node, used, text_region, text_align = self.text_svg(shape, part, bounds, dynamic_key)
                 output_kind = "text"
-            elif preset in {"rect", "line"} or kind == "cxnSp":
-                if preset not in {"rect", "line", None}:
+            elif preset in {"rect", "roundRect", "line"} or kind == "cxnSp":
+                if preset not in {"rect", "roundRect", "line", None}:
                     raise ValueError("svg_template_primitive_unsupported")
                 fill, _ = self.fill(shape, part)
                 stroke, line = self.fill(shape, part, "line")
@@ -334,9 +457,18 @@ class OoxmlFrameContext:
                                for n in ("headEnd", "tailEnd"))):
                     raise ValueError("svg_template_line_style_unsupported")
                 stroke_width = float(line.get("w", "12700")) / self.scale if line is not None else 0
-                if preset == "rect":
+                if preset in {"rect", "roundRect"}:
                     node = svg_node("rect", x=bounds.x, y=bounds.y, width=bounds.width, height=bounds.height,
                                     fill=fill, stroke=stroke, stroke_width=stroke_width)
+                    if preset == "roundRect":
+                        # adj is the corner radius as 1/100000 of the shorter side (default 16667).
+                        guide = geometry.find("a:avLst/a:gd[@name='adj']", NS)
+                        formula = guide.get("fmla", "val 16667") if guide is not None else "val 16667"
+                        if not formula.startswith("val "):
+                            raise ValueError("svg_template_primitive_unsupported")
+                        radius = min(bounds.width, bounds.height) * min(50000, max(0, int(formula[4:]))) / 100000
+                        node.set("rx", str(radius))
+                        node.set("ry", str(radius))
                     output_kind = "rect"
                 else:
                     node = svg_node("line", x1=bounds.x, y1=bounds.y, x2=bounds.x + bounds.width,

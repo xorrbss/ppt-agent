@@ -75,3 +75,152 @@ def test_unavailable_fonts_block_until_explicitly_substituted(tmp_path):
         extract_template_package(path, font_substitutions=[
             {"source_family": "A", "target_family": "Pretendard", "target_weight": 400},
             {"source_family": "a", "target_family": "Pretendard", "target_weight": 700}])
+
+
+# --- fixed text the real deck needs ------------------------------------------------
+
+from copy import deepcopy  # noqa: E402
+
+from lxml import etree  # noqa: E402
+
+_A = "http://schemas.openxmlformats.org/drawingml/2006/main"
+_P = "http://schemas.openxmlformats.org/presentationml/2006/main"
+
+
+class _LayoutShapes:
+    """Adds shapes on the slide (python-pptx cannot) and moves them to the layout."""
+
+    def __init__(self, slide, layout):
+        self.slide, self.layout = slide, layout
+
+    def _move(self, shape):
+        element = shape._element
+        element.getparent().remove(element)
+        self.layout.shapes._spTree.append(element)
+        return shape
+
+    def add_textbox(self, *args):
+        return self._move(self.slide.shapes.add_textbox(*args))
+
+    def add_shape(self, *args):
+        return self._move(self.slide.shapes.add_shape(*args))
+
+    def add_group_shape(self):
+        return self._move(self.slide.shapes.add_group_shape())
+
+
+def _layout_deck(path, mutate):
+    """One-slide deck whose layout carries a header text box the test mutates."""
+    deck = Presentation()
+    deck.slide_width, deck.slide_height = Emu(12192000), Emu(6858000)
+    layout = deck.slide_layouts[6]
+    slide = deck.slides.add_slide(layout)
+    for placeholder in list(slide.placeholders):
+        placeholder._element.getparent().remove(placeholder._element)
+    shapes = _LayoutShapes(slide, layout)
+    box = shapes.add_textbox(Emu(457200), Emu(100000), Emu(6000000), Emu(500000))
+    box.text_frame.auto_size = MSO_AUTO_SIZE.NONE
+    run = box.text_frame.paragraphs[0].add_run()
+    run.text, run.font.size, run.font.name = "Header text", Pt(12), "Pretendard"
+    run.font.color.rgb = RGBColor(20, 20, 20)
+    mutate(shapes, box)
+    deck.save(path)
+    return path
+
+
+def _texts(package):
+    return [element for element in package.frames[0].elements if element.kind == "text"]
+
+
+def test_shrink_on_overflow_text_is_drawn_at_its_stored_scale(tmp_path):
+    def mutate(layout, box):
+        body = box.text_frame._txBody.bodyPr
+        for child in list(body):
+            body.remove(child)
+        etree.SubElement(body, f"{{{_A}}}normAutofit", fontScale="50000")
+    package = extract_template_package(_layout_deck(tmp_path / "deck.pptx", mutate))
+    text = _texts(package)[0]
+    size = float(etree.fromstring(text.svg.encode()).find(".//{http://www.w3.org/2000/svg}text").get("font-size"))
+    assert abs(size - 12 * 0.5 * 12700 / package.source_canvas.emu_per_unit) < 1e-6
+
+
+def test_empty_bullet_formatting_and_tab_list_do_not_block(tmp_path):
+    def mutate(layout, box):
+        paragraph = box.text_frame.paragraphs[0]._p
+        ppr = paragraph.get_or_add_pPr()
+        for name in ("buClrTx", "buSzTx", "buFontTx", "buNone", "tabLst"):
+            etree.SubElement(ppr, f"{{{_A}}}{name}")
+    package = extract_template_package(_layout_deck(tmp_path / "deck.pptx", mutate))
+    assert _texts(package) and not any(issue.severity == "blocked" and "text" in issue.reason_code
+                                       for issue in package.frames[0].issues)
+
+
+def test_a_slide_number_field_is_the_page_number_and_spacing_is_kept(tmp_path):
+    def mutate(layout, box):
+        paragraph = box.text_frame.paragraphs[0]._p
+        run = paragraph.find(f"{{{_A}}}r")
+        field = etree.SubElement(paragraph, f"{{{_A}}}fld", id="{25011FFF-28D7-4E6D-888C-DFA47697978A}", type="slidenum")
+        field.append(deepcopy(run.find(f"{{{_A}}}rPr")))
+        etree.SubElement(field, f"{{{_A}}}t").text = "‹#›"
+        paragraph.remove(run)
+        field.find(f"{{{_A}}}rPr").set("spc", "-150")
+        body = box.text_frame._txBody.bodyPr
+        for child in list(body):
+            body.remove(child)
+        etree.SubElement(body, f"{{{_A}}}spAutoFit")
+    package = extract_template_package(_layout_deck(tmp_path / "deck.pptx", mutate))
+    assert package.frames[0].dynamic_fields == ("page_number",)
+    node = etree.fromstring(_texts(package)[0].svg.encode()).find(".//{http://www.w3.org/2000/svg}text")
+    assert float(node.get("letter-spacing")) == pytest.approx(-1.5 * 12700 / package.source_canvas.emu_per_unit, abs=1e-3)
+
+
+def test_text_inside_a_group_stays_text_at_its_slide_position(tmp_path):
+    def mutate(layout, box):
+        group = layout.add_group_shape()
+        moved = box._element
+        moved.getparent().remove(moved)
+        group._element.append(moved)
+        xfrm = group._element.find(f"{{{_P}}}grpSpPr/{{{_A}}}xfrm")
+        for child in list(xfrm):
+            xfrm.remove(child)
+        # Child space 0..1000 maps to slide EMU 457200.. at scale x2.
+        etree.SubElement(xfrm, f"{{{_A}}}off", x="457200", y="100000")
+        etree.SubElement(xfrm, f"{{{_A}}}ext", cx="12000000", cy="1000000")
+        etree.SubElement(xfrm, f"{{{_A}}}chOff", x="457200", y="100000")
+        etree.SubElement(xfrm, f"{{{_A}}}chExt", cx="6000000", cy="500000")
+        box_xfrm = moved.find(f"{{{_P}}}spPr/{{{_A}}}xfrm")
+        box_xfrm.find(f"{{{_A}}}off").set("x", "457200")
+        box_xfrm.find(f"{{{_A}}}off").set("y", "100000")
+    package = extract_template_package(_layout_deck(tmp_path / "deck.pptx", mutate))
+    text = _texts(package)[0]
+    scale = package.source_canvas.emu_per_unit
+    assert text.bounds.x == pytest.approx(457200 / scale) and text.bounds.width == pytest.approx(12000000 / scale)
+
+
+def test_preset_colours_and_rounded_rectangles_are_native(tmp_path):
+    def mutate(layout, box):
+        shape = layout.add_shape(MSO_SHAPE.ROUNDED_RECTANGLE, Emu(0), Emu(6300000), Emu(2000000), Emu(400000))
+        fill = shape._element.find(f"{{{_P}}}spPr")
+        for child in list(fill):
+            if etree.QName(child).localname in {"solidFill", "noFill"}:
+                fill.remove(child)
+        solid = etree.Element(f"{{{_A}}}solidFill")
+        etree.SubElement(solid, f"{{{_A}}}prstClr", val="dkBlue")
+        fill.insert(2, solid)
+        shape.line.fill.background()
+        style = shape._element.find(f"{{{_P}}}style")
+        if style is not None:
+            shape._element.remove(style)
+    package = extract_template_package(_layout_deck(tmp_path / "deck.pptx", mutate))
+    rects = [element for element in package.frames[0].elements if element.kind == "rect" and 'rx="' in element.svg]
+    assert rects and 'fill="#00008B"' in rects[0].svg
+
+
+def test_the_slide_contract_admits_bounded_letter_spacing():
+    from utils.svg_validation import validate_svg
+    page = ('<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 100 100">'
+            '<text x="1" y="20" font-family="Pretendard" font-size="12" fill="#111111" letter-spacing="{}">a</text></svg>')
+    validate_svg(page.format("-1.5"), width=100, height=100)
+    for value in ("-21", "1em", "normal"):
+        with pytest.raises(ValueError, match="svg_contract_invalid_letter_spacing"):
+            validate_svg(page.format(value), width=100, height=100)
