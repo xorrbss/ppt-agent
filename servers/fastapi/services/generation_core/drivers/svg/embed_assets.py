@@ -57,6 +57,12 @@ def _child_attributes(primitive: dict, scale: float) -> dict[str, str]:
         if len(points) < 2:
             points.append(points[0])
         attrs = {"points": " ".join(points)}
+    elif tag == "path":
+        rings = []
+        for ring in primitive["subpaths"]:
+            pairs = [f"{_fmt(px * scale)},{_fmt(py * scale)}" for px, py in ring]
+            rings.append(f"M{pairs[0]} L" + " ".join(pairs[1:]) + " Z")
+        attrs = {"d": " ".join(rings)}
     elif tag == "line":
         attrs = {key: _fmt(primitive[key] * scale) for key in ("x1", "y1", "x2", "y2")}
     elif tag == "circle":
@@ -76,8 +82,14 @@ def _child_attributes(primitive: dict, scale: float) -> dict[str, str]:
         attrs["fill"] = primitive["fill"]
     if primitive.get("stroke") == "none":
         attrs["stroke"] = "none"
-    elif "stroke-width" in primitive:
-        attrs["stroke-width"] = _fmt(max(_MIN_STROKE_WIDTH, primitive["stroke-width"] * scale))
+    else:
+        if primitive.get("stroke", "").startswith("#"):
+            attrs["stroke"] = primitive["stroke"]
+        if "stroke-width" in primitive:
+            attrs["stroke-width"] = _fmt(max(_MIN_STROKE_WIDTH, primitive["stroke-width"] * scale))
+    for name in ("opacity", "fill-opacity", "stroke-opacity"):
+        if name in primitive:
+            attrs[name] = _fmt(primitive[name])
     return attrs
 
 
@@ -101,43 +113,54 @@ def icon_group(icon: FlattenedIcon, *, x: float, y: float, width: float, height:
 
 
 def rasterize_icon(icon: FlattenedIcon, *, size: int = 256) -> bytes:
-    """Antialiased RGBA PNG of ``icon`` contain-fit into ``size`` x ``size``."""
-    from PIL import Image, ImageDraw
+    """Antialiased RGBA PNG of ``icon`` contain-fit into ``size`` x ``size``.
+
+    A monochrome icon is drawn as one coverage mask in its colour, so the
+    colour stays exact and never fringes at antialiased edges. A multi-colour
+    drawing, or any shape with opacity, is painted shape by shape in order.
+    A compound path is filled even-odd, which keeps its holes.
+    """
+    from PIL import Image, ImageChops, ImageDraw
 
     if size <= 0:
         raise ValueError("icon_raster_size_invalid")
     canvas = size * _SUPERSAMPLE
     scale, offset_x, offset_y = _fit(icon, 0.0, 0.0, float(canvas), float(canvas))
-    rgb = tuple(int(icon.color[i:i + 2], 16) for i in (1, 3, 5))
-    # Draw coverage only and resample that: the icon is monochrome, so the
-    # colour stays exact and never fringes or overshoots at antialiased edges.
-    ink = 255
-    mask = Image.new("L", (canvas, canvas), 0)
-    draw = ImageDraw.Draw(mask)
 
     def point(px: float, py: float) -> tuple[float, float]:
         return offset_x + px * scale, offset_y + py * scale
 
-    def dot(center: tuple[float, float], radius: float) -> None:
-        draw.ellipse((center[0] - radius, center[1] - radius, center[0] + radius, center[1] + radius), fill=ink)
-
-    for primitive in icon.primitives:
+    def coverage(primitive: dict, mask) -> None:
+        """Draw one primitive's fill and stroke coverage (255) into ``mask``."""
+        draw = ImageDraw.Draw(mask)
         tag, filled = primitive["tag"], primitive.get("fill", "none") != "none"
         stroke = 0.0 if primitive.get("stroke") == "none" else \
             primitive.get("stroke-width", icon.stroke_width) * scale
         pixels = max(1, round(stroke))
+
+        def dot(center: tuple[float, float], radius: float) -> None:
+            draw.ellipse((center[0] - radius, center[1] - radius, center[0] + radius, center[1] + radius), fill=255)
+
+        if tag == "path":
+            hole_aware = Image.new("L", mask.size, 0)
+            for ring in primitive["subpaths"]:
+                layer = Image.new("L", mask.size, 0)
+                ImageDraw.Draw(layer).polygon([point(px, py) for px, py in ring], fill=255)
+                hole_aware = ImageChops.difference(hole_aware, layer)
+            mask.paste(ImageChops.lighter(mask, hole_aware))
+            return
         if tag in {"polyline", "polygon", "line"}:
             if tag == "line":
                 points = [point(primitive["x1"], primitive["y1"]), point(primitive["x2"], primitive["y2"])]
             else:
                 points = [point(px, py) for px, py in primitive["points"]]
             if filled and len(points) >= 3:
-                draw.polygon(points, fill=ink)
+                draw.polygon(points, fill=255)
             if stroke > 0:
-                draw.line(points + points[:1] if tag == "polygon" else points, fill=ink, width=pixels)
+                draw.line(points + points[:1] if tag == "polygon" else points, fill=255, width=pixels)
                 for vertex in points:  # round joins and caps
                     dot(vertex, stroke / 2)
-            continue
+            return
         if tag == "rect":
             (x0, y0) = point(primitive["x"], primitive["y"])
             box = (x0, y0, x0 + primitive["width"] * scale, y0 + primitive["height"] * scale)
@@ -148,12 +171,43 @@ def rasterize_icon(icon: FlattenedIcon, *, size: int = 256) -> bytes:
             box = (cx - rx, cy - ry, cx + rx, cy + ry)
         shape = draw.rectangle if tag == "rect" else draw.ellipse
         if filled:
-            shape(box, fill=ink)
+            shape(box, fill=255)
         if stroke > 0:
             half = stroke / 2
-            shape((box[0] - half, box[1] - half, box[2] + half, box[3] + half), outline=ink, width=pixels)
-    image = Image.new("RGBA", (size, size), (*rgb, 255))
-    image.putalpha(mask.resize((size, size), Image.LANCZOS))
+            shape((box[0] - half, box[1] - half, box[2] + half, box[3] + half), outline=255, width=pixels)
+
+    def rgb(color: str) -> tuple[int, int, int]:
+        return tuple(int(color[i:i + 2], 16) for i in (1, 3, 5))
+
+    layered = icon.multicolor or any(
+        name in primitive for primitive in icon.primitives for name in ("opacity", "fill-opacity", "stroke-opacity"))
+    if not layered:
+        mask = Image.new("L", (canvas, canvas), 0)
+        for primitive in icon.primitives:
+            coverage(primitive, mask)
+        image = Image.new("RGBA", (size, size), (*rgb(icon.color), 255))
+        image.putalpha(mask.resize((size, size), Image.LANCZOS))
+    else:
+        image = Image.new("RGBA", (canvas, canvas), (0, 0, 0, 0))
+        for primitive in icon.primitives:
+            opacity = primitive.get("opacity", 1.0)
+            parts = []
+            if primitive.get("fill", "none") != "none":
+                parts.append(({**primitive, "stroke": "none"}, primitive["fill"],
+                              opacity * primitive.get("fill-opacity", 1.0)))
+            if primitive.get("stroke") != "none" and primitive["tag"] != "path":
+                stroke_color = primitive.get("stroke")
+                stroke_color = stroke_color if isinstance(stroke_color, str) and stroke_color.startswith("#") \
+                    else icon.color
+                parts.append(({**primitive, "fill": "none"}, stroke_color,
+                              opacity * primitive.get("stroke-opacity", 1.0)))
+            for part, color, alpha in parts:
+                mask = Image.new("L", (canvas, canvas), 0)
+                coverage(part, mask)
+                layer = Image.new("RGBA", (canvas, canvas), (*rgb(color), 0))
+                layer.putalpha(mask.point(lambda value, alpha=alpha: round(value * alpha)))
+                image = Image.alpha_composite(image, layer)
+        image = image.resize((size, size), Image.LANCZOS)
     buffer = io.BytesIO()
     image.save(buffer, format="PNG")
     return buffer.getvalue()

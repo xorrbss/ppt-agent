@@ -2,6 +2,7 @@ id: flat-infographic
 name: 플랫 인포그래픽
 description: 틸+코랄 플랫 벡터 일러스트로 프로세스·조직·개념을 정리하는 비즈니스 인포그래픽 스타일
 category: business
+icon_family: phosphor-duotone
 tags:
   - 인포그래픽
   - 플랫

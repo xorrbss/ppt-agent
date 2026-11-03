@@ -1,0 +1,18 @@
+{
+  "schemaVersion": "icon-family/v1",
+  "id": "phosphor-duotone",
+  "title": "Phosphor Icons (duotone)",
+  "style": "duotone",
+  "package": "@phosphor-icons/core",
+  "version": "2.1.1",
+  "source": "https://registry.npmjs.org/@phosphor-icons/core/-/core-2.1.1.tgz",
+  "integrity": "sha512-v4ARvrip4qBCImOE5rmPUylOEK4iiED9ZyKjcvzuezqMaiRASCHKcRIuvvxL/twvLpkfnEODCOJp5dM4eZilxQ==",
+  "file": "nodes.json",
+  "derivation": "package/assets/duotone/*.svg parsed to [tag, attributes] nodes; the -duotone name suffix dropped",
+  "sha256": "0d3b4ea4b74b6113914b103f07732fc8d2a688564057793f8a46a639a6a45c42",
+  "icons": 1477,
+  "license": "MIT (LICENSE)",
+  "grid": 256,
+  "strokeWidth": null,
+  "excluded": "35 icons whose composed geometry exceeds the icon point budget (192): brain, butterfly, circles-four, clover, cow, drone, fediverse-logo, film-reel, fingerprint, flower, flower-lotus, footprints, gear, guitar, hand-eye, hand-peace, hands-clapping, island, paw-print, rabbit, reddit-logo, seal, seal-check, seal-percent, seal-question, seal-warning, skull, slack-logo, snapchat-logo, spinner-ball, swimming-pool, tire, user-circle-gear, users-four, youtube-logo"
+}

@@ -20,6 +20,9 @@ from utils.llm_calls import select_deck_icons as selection
 @pytest.mark.parametrize(("family_id", "version", "count", "licence"), [
     ("lucide", "1.67.0", 2019, "ISC License"),
     ("tabler-outline", "3.50.0", 4825, "MIT License"),
+    ("phosphor-regular", "2.1.1", 1509, "MIT License"),
+    ("phosphor-fill", "2.1.1", 1512, "MIT License"),
+    ("phosphor-duotone", "2.1.1", 1477, "MIT License"),
 ])
 def test_vendored_families_match_their_manifests(family_id, version, count, licence):
     directory = families.FAMILIES_DIRECTORY / family_id
@@ -64,7 +67,8 @@ def test_unknown_names_are_refused():
         families.compose_icon_svg("database", "not-an-icon")
 
 
-@pytest.mark.parametrize("family_id", ["lucide", "tabler-outline"])
+@pytest.mark.parametrize("family_id", ["lucide", "tabler-outline", "phosphor-regular", "phosphor-fill",
+                                       "phosphor-duotone"])
 def test_every_vendored_icon_flattens_within_budget_and_places_on_a_valid_page(family_id):
     worst = 0
     for name in families.load_family(family_id).names:
@@ -72,8 +76,9 @@ def test_every_vendored_icon_flattens_within_budget_and_places_on_a_valid_page(f
         worst = max(worst, flatten_icon_svg(svg, color="#112233").point_count)
     assert worst <= ICON_POINT_BUDGET
     icon = flatten_icon_svg(families.compose_icon_svg("users", "shield-check", color="#112233",
-                                                      family_id=family_id), color="#112233")
-    assert (icon.line_cap, icon.line_join) == ("round", "round")
+                                                      family_id=family_id), color="#112233", point_budget=None)
+    outline = families.load_family(family_id).stroke_width is not None
+    assert (icon.line_cap, icon.line_join) == (("round", "round") if outline else ("butt", "miter"))
     group = ET.tostring(icon_group(icon, x=100, y=100, width=64, height=64), encoding="unicode")
     validate_svg('<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720" viewBox="0 0 1280 720">'
                  '<text x="80" y="80" font-family="Noto Sans KR" font-size="32" fill="#112233">T</text>'
@@ -169,6 +174,7 @@ def test_every_bundled_style_names_a_vendored_icon_family():
     by_id = {style.id: style for style in styles}
     assert by_id["exec-report"].icon_family == "tabler-outline"
     assert by_id["cyber-ai"].icon_family == "lucide"
+    assert by_id["flat-infographic"].icon_family == "phosphor-duotone"
 
 
 def test_a_style_yaml_can_name_its_icon_family(tmp_path):

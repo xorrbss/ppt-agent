@@ -26,7 +26,7 @@ FAMILIES_DIRECTORY = Path(__file__).resolve().parents[4] / "assets" / "icon_fami
 DEFAULT_FAMILY = "lucide"
 _ELEMENTS = frozenset({"path", "circle", "ellipse", "rect", "line", "polyline", "polygon"})
 _ATTRIBUTES = frozenset({"d", "cx", "cy", "r", "rx", "ry", "x", "y", "width", "height",
-                         "x1", "y1", "x2", "y2", "points", "fill", "stroke"})
+                         "x1", "y1", "x2", "y2", "points", "fill", "stroke", "opacity"})
 _PAINT = frozenset({"currentColor", "none"})
 #: The library's 128-unit layout for a 24-unit symbol: (offset, scale).
 _SINGLE = (12.0, 104.0 / 24)
@@ -68,7 +68,8 @@ def load_family(family_id: str = DEFAULT_FAMILY) -> IconFamily:
         children = []
         for tag, attributes in elements:
             if (tag not in _ELEMENTS or not set(attributes) <= _ATTRIBUTES
-                    or any(attributes.get(key, "none") not in _PAINT for key in ("fill", "stroke"))):
+                    or any(attributes.get(key, "none") not in _PAINT for key in ("fill", "stroke"))
+                    or not _opacity_ok(attributes.get("opacity", "1"))):
                 raise ValueError("icon_family_node_unsupported:" + name)
             children.append((tag, dict(attributes)))
         nodes[name] = tuple(children)
@@ -78,6 +79,13 @@ def load_family(family_id: str = DEFAULT_FAMILY) -> IconFamily:
     return IconFamily(id=family_id, title=str(manifest["title"]), style=str(manifest["style"]),
                       version=str(manifest["version"]), grid=float(manifest["grid"]),
                       stroke_width=float(stroke) if stroke is not None else None, nodes=nodes)
+
+
+def _opacity_ok(value: str) -> bool:
+    try:
+        return 0.0 <= float(value) <= 1.0
+    except ValueError:
+        return False
 
 
 def has_icon(name: object, family_id: str = DEFAULT_FAMILY) -> bool:

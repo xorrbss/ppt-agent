@@ -1,0 +1,18 @@
+{
+  "schemaVersion": "icon-family/v1",
+  "id": "phosphor-regular",
+  "title": "Phosphor Icons (regular)",
+  "style": "outline",
+  "package": "@phosphor-icons/core",
+  "version": "2.1.1",
+  "source": "https://registry.npmjs.org/@phosphor-icons/core/-/core-2.1.1.tgz",
+  "integrity": "sha512-v4ARvrip4qBCImOE5rmPUylOEK4iiED9ZyKjcvzuezqMaiRASCHKcRIuvvxL/twvLpkfnEODCOJp5dM4eZilxQ==",
+  "file": "nodes.json",
+  "derivation": "package/assets/regular/*.svg parsed to [tag, attributes] nodes",
+  "sha256": "319b11eb6daca53fcff928af4b73c206f6dd375765824156b8c5e0dc2debd05e",
+  "icons": 1509,
+  "license": "MIT (LICENSE)",
+  "grid": 256,
+  "strokeWidth": null,
+  "excluded": "3 icons whose composed geometry exceeds the icon point budget (192): seal-percent, seal-question, seal-warning"
+}

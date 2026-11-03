@@ -12,7 +12,7 @@ from __future__ import annotations
 import math
 import re
 import xml.etree.ElementTree as ET
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from services.generation_core.drivers.svg.icon_geometry import (
     apply, ellipse_points, is_axis_aligned, is_similarity, mul, numbers,
@@ -51,6 +51,10 @@ class FlattenedIcon:
     # anything else falls back to the SVG defaults the contract always had.
     line_cap: str = "butt"
     line_join: str = "miter"
+    # Multi-colour drawings carry each shape's own paint; monochrome icons
+    # inherit the single ``color`` from the placed group.
+    multicolor: bool = False
+    snapped_paints: int = field(default=0, compare=False)
 
     def to_json(self) -> dict:
         value = {"view_width": self.view_width, "view_height": self.view_height,
@@ -60,6 +64,8 @@ class FlattenedIcon:
             value["line_cap"] = self.line_cap
         if self.line_join != "miter":
             value["line_join"] = self.line_join
+        if self.multicolor:
+            value["multicolor"] = True
         return value
 
     @classmethod
@@ -69,11 +75,14 @@ class FlattenedIcon:
             item = dict(item)
             if "points" in item:
                 item["points"] = [[float(x), float(y)] for x, y in item["points"]]
+            if "subpaths" in item:
+                item["subpaths"] = [[[float(x), float(y)] for x, y in ring] for ring in item["subpaths"]]
             primitives.append(item)
         return cls(float(value["view_width"]), float(value["view_height"]), float(value["stroke_width"]),
                    normalize_color(value["color"]), tuple(primitives), int(value["point_count"]),
                    line_cap=_line_value(value.get("line_cap"), "butt"),
-                   line_join=_line_value(value.get("line_join"), "miter"))
+                   line_join=_line_value(value.get("line_join"), "miter"),
+                   multicolor=value.get("multicolor") is True)
 
 
 def _line_value(value, default: str) -> str:
@@ -92,6 +101,8 @@ def normalize_color(value: str) -> str:
 def primitive_points(primitive: dict) -> int:
     if "points" in primitive:
         return len(primitive["points"])
+    if "subpaths" in primitive:
+        return sum(len(subpath) for subpath in primitive["subpaths"])
     return 2 if primitive["tag"] == "line" else 4
 
 
@@ -103,13 +114,42 @@ def _local(tag) -> str:
     return tag.rsplit("}", 1)[-1] if isinstance(tag, str) else ""
 
 
-def _paint(value: str, ink: str) -> str | None:
+def _paint(value: str, ink: str, palette: "_Palette | None" = None) -> str | None:
     value = value.strip()
     if value in {"none", "transparent"}:
         return None
+    if palette is not None:
+        # Multi-colour: currentColor is the ink, a hex colour keeps its palette
+        # colour (the nearest one when it is off the palette); nothing else.
+        if value == "currentColor":
+            return ink
+        if re.fullmatch(r"#[0-9a-fA-F]{3}|#[0-9a-fA-F]{6}", value):
+            return palette.snap(normalize_color(value))
+        raise ValueError("icon_paint_unsupported")
     if re.fullmatch(r"#[0-9a-fA-F]{3,8}|currentColor|[a-zA-Z]+|rgba?\([0-9.,%\s]*\)", value):
         return ink  # monochrome: every solid paint becomes the ink colour
     raise ValueError("icon_paint_unsupported")
+
+
+class _Palette:
+    """The colours a multi-colour drawing may use, and how many paints were moved onto them."""
+
+    def __init__(self, colors):
+        self.colors = tuple(dict.fromkeys(normalize_color(color) for color in colors))
+        if not self.colors:
+            raise ValueError("icon_palette_empty")
+        self.snapped = 0
+
+    @staticmethod
+    def _rgb(color: str) -> tuple[int, int, int]:
+        return tuple(int(color[i:i + 2], 16) for i in (1, 3, 5))
+
+    def snap(self, color: str) -> str:
+        if color in self.colors:
+            return color
+        self.snapped += 1
+        rgb = self._rgb(color)
+        return min(self.colors, key=lambda item: math.dist(self._rgb(item), rgb))
 
 
 def _scalar(node, name: str, default: float | None = 0.0) -> float | None:
@@ -122,26 +162,41 @@ def _scalar(node, name: str, default: float | None = 0.0) -> float | None:
     return values[0]
 
 
-def _style(node, inherited: dict, ink: str) -> dict:
-    for key, value in node.attrib.items():
+_OPACITY = ("opacity", "fill-opacity", "stroke-opacity")
+
+
+def _style(node, inherited: dict, ink: str, palette: "_Palette | None" = None) -> dict:
+    for key in node.attrib:
         name = _local(key)
         if name in _FORBIDDEN_ATTRIBUTES:
             raise ValueError("icon_attribute_unsupported:" + name)
-        if name in {"opacity", "fill-opacity", "stroke-opacity"} and numbers(value) != [1.0]:
-            raise ValueError("icon_opacity_unsupported")
     style = dict(inherited)
+    for name in _OPACITY:
+        if node.get(name) is not None:
+            value = _scalar(node, name)
+            if not 0.0 <= value <= 1.0:
+                raise ValueError("icon_opacity_invalid")
+            # Group opacity composites; multiplying it into each shape is the
+            # flattened approximation, exact for shapes that do not overlap.
+            style[name] = style.get(name, 1.0) * value
     if node.get("fill") is not None:
-        style["fill"] = _paint(node.get("fill"), ink)
+        style["fill"] = _paint(node.get("fill"), ink, palette)
     if node.get("stroke") is not None:
-        style["stroke"] = _paint(node.get("stroke"), ink)
+        style["stroke"] = _paint(node.get("stroke"), ink, palette)
     if node.get("stroke-width") is not None:
         style["width"] = max(0.0, _scalar(node, "stroke-width"))
     return style
 
 
+#: A compound path (one filled shape with holes) stays one element only up to
+#: this many points; beyond it the contract's per-element limits come close.
+_MAX_COMPOUND_POINTS = 1000
+
+
 class _Walker:
-    def __init__(self, ink: str, tolerance: float):
-        self.ink, self.tolerance, self.items = ink, tolerance, []
+    def __init__(self, ink: str, tolerance: float, palette: "_Palette | None" = None):
+        self.ink, self.tolerance, self.items, self.palette = ink, tolerance, [], palette
+        self._current: dict = {}
 
     def visit(self, node, matrix, style, *, root: bool = False) -> None:
         name = _local(node.tag)
@@ -149,7 +204,7 @@ class _Walker:
             return
         if name not in _SHAPES and not (name == "g" or (name == "svg" and root)):
             raise ValueError("icon_element_unsupported:" + name[:40])
-        style = _style(node, style, self.ink)
+        style = _style(node, style, self.ink, self.palette)
         if node.get("transform"):
             matrix = mul(matrix, parse_transform(node.get("transform")))
         if name in {"svg", "g"}:
@@ -162,12 +217,19 @@ class _Walker:
         stroke = width if style["stroke"] and width > 0 else None
         if style["fill"] is None and stroke is None:
             return
+        self._current = style
         getattr(self, "_" + name)(node, matrix, style["fill"], stroke)
 
     def _emit(self, tag: str, fill, stroke, **attrs) -> None:
         primitive = {"tag": tag, **attrs, "fill": fill or "none"}
         if stroke is None:
             primitive["stroke"] = "none"
+        elif self.palette is not None:
+            primitive["stroke"] = self._current.get("stroke") or self.ink
+        for name in _OPACITY:
+            value = self._current.get(name, 1.0)
+            if value < 1.0 - 1e-6:
+                primitive[name] = round(value, 4)
         self.items.append((primitive, stroke))
 
     def _points(self, points, closed: bool, fill, stroke) -> None:
@@ -182,7 +244,8 @@ class _Walker:
             if stroke:  # a dot: a filled circle draws it whatever the cap
                 cx = sum(p[0] for p in clean) / len(clean)
                 cy = sum(p[1] for p in clean) / len(clean)
-                self._emit("circle", self.ink, None, cx=_r(cx), cy=_r(cy), r=_r(stroke / 2))
+                ink = (self._current.get("stroke") if self.palette is not None else None) or self.ink
+                self._emit("circle", ink, None, cx=_r(cx), cy=_r(cy), r=_r(stroke / 2))
             return
         if closed and fill and len(clean) >= 3:
             tag = "polygon"
@@ -200,8 +263,32 @@ class _Walker:
                 break
 
     def _path(self, node, matrix, fill, stroke) -> None:
-        for points, closed in path_subpaths(node.get("d", ""), matrix, self.tolerance):
+        subpaths = path_subpaths(node.get("d", ""), matrix, self.tolerance)
+        if fill and stroke is None and len(subpaths) > 1 and self._compound(subpaths, fill):
+            return
+        for points, closed in subpaths:
             self._points(points, closed, fill, stroke)
+
+    def _compound(self, subpaths, fill) -> bool:
+        """A filled path of several subpaths as ONE element, so its holes stay holes.
+
+        Drawn separately, each subpath would be filled on its own and a hole
+        (the check cut out of a solid shield) would be painted over.
+        """
+        rings = []
+        for points, _closed in subpaths:
+            ring = []
+            for point in points:
+                if not ring or math.dist(ring[-1], point) > 1e-6:
+                    ring.append(point)
+            if len(ring) > 1 and math.dist(ring[0], ring[-1]) <= 1e-6:
+                ring.pop()
+            if len(ring) >= 3:
+                rings.append([[_r(x), _r(y)] for x, y in ring])
+        if len(rings) < 2 or sum(len(ring) for ring in rings) > _MAX_COMPOUND_POINTS:
+            return False
+        self._emit("path", fill, None, subpaths=rings)
+        return True
 
     def _line(self, node, matrix, fill, stroke) -> None:
         if stroke is None:
@@ -264,9 +351,16 @@ class _Walker:
 
 
 def flatten_icon_svg(svg_text: str, *, color: str, point_budget: int | None = ICON_POINT_BUDGET,
-                     tolerance: float = DEFAULT_TOLERANCE) -> FlattenedIcon:
-    """Bake and sample a monochrome SVG icon into contract-safe primitives."""
+                     tolerance: float = DEFAULT_TOLERANCE, palette=None) -> FlattenedIcon:
+    """Bake and sample an SVG icon or drawing into contract-safe primitives.
+
+    Monochrome by default: every paint becomes ``color``. With ``palette`` the
+    drawing keeps each shape's own colour, moved onto the nearest palette
+    colour when it is off the palette (``FlattenedIcon.snapped_paints``).
+    Opacity is kept in both modes.
+    """
     ink = normalize_color(color)
+    palette = _Palette(palette) if palette is not None else None
     if not isinstance(svg_text, str) or re.search(r"<!|<\?xml-stylesheet", svg_text):
         raise ValueError("icon_declaration_forbidden")
     if not tolerance > 0:
@@ -283,7 +377,7 @@ def flatten_icon_svg(svg_text: str, *, color: str, point_budget: int | None = IC
         view = [0.0, 0.0, _scalar(root, "width", 0.0), _scalar(root, "height", 0.0)]
     if len(view) != 4 or view[2] <= 0 or view[3] <= 0:
         raise ValueError("icon_viewbox_invalid")
-    walker = _Walker(ink, tolerance)
+    walker = _Walker(ink, tolerance, palette)
     origin = (1.0, 0.0, 0.0, 1.0, -view[0], -view[1])
     walker.visit(root, origin, {"fill": ink, "stroke": None, "width": 1.0}, root=True)
     widths = [stroke for _, stroke in walker.items if stroke is not None]
@@ -300,4 +394,6 @@ def flatten_icon_svg(svg_text: str, *, color: str, point_budget: int | None = IC
         raise ValueError("icon_empty")
     return FlattenedIcon(float(view[2]), float(view[3]), _r(icon_width), ink, tuple(primitives), count,
                          line_cap=_line_value(root.get("stroke-linecap"), "butt"),
-                         line_join=_line_value(root.get("stroke-linejoin"), "miter"))
+                         line_join=_line_value(root.get("stroke-linejoin"), "miter"),
+                         multicolor=palette is not None,
+                         snapped_paints=palette.snapped if palette is not None else 0)

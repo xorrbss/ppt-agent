@@ -1,0 +1,18 @@
+{
+  "schemaVersion": "icon-family/v1",
+  "id": "phosphor-fill",
+  "title": "Phosphor Icons (fill)",
+  "style": "solid",
+  "package": "@phosphor-icons/core",
+  "version": "2.1.1",
+  "source": "https://registry.npmjs.org/@phosphor-icons/core/-/core-2.1.1.tgz",
+  "integrity": "sha512-v4ARvrip4qBCImOE5rmPUylOEK4iiED9ZyKjcvzuezqMaiRASCHKcRIuvvxL/twvLpkfnEODCOJp5dM4eZilxQ==",
+  "file": "nodes.json",
+  "derivation": "package/assets/fill/*.svg parsed to [tag, attributes] nodes; the -fill name suffix dropped",
+  "sha256": "92ba15bed48a43112d593465eff97f2397f43b7893154206a910a8fb8bb3f0c2",
+  "icons": 1512,
+  "license": "MIT (LICENSE)",
+  "grid": 256,
+  "strokeWidth": null,
+  "excluded": "0 icons whose composed geometry exceeds the icon point budget (192): "
+}
