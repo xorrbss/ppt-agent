@@ -22,6 +22,7 @@ from services.generation_core.assets.icon_pack.service import IconResolution, Re
 from services.generation_core.assets.icon_pack.store import concept_key
 from services.generation_core.drivers.svg import asset_slots
 from services.image_generation_service import _metered_image_provider_call
+from utils.llm_calls import select_deck_icons as icon_selection
 
 LIBRARY = Path(infographic_assets.__file__).resolve().parents[5] / "assets" / "infographics" / "monochrome-v1"
 ICON_SVG = LIBRARY / "originals" / "ai-01-neural-network.svg"
@@ -85,11 +86,17 @@ def fakes(monkeypatch, tmp_path):
                 result.missing.append(label)
         return result
 
+    async def no_picks(labels, names):
+        calls.setdefault("selection", []).append(list(labels))
+        return {}
+
     context = infographic_assets.InfographicAssetContext(pack_key="p", output_directory=str(tmp_path))
     monkeypatch.setattr(infographic_plan, "resolve_infographic_plan", plan)
     monkeypatch.setattr(icon_pack, "generate_scene_cutout", cutout)
     monkeypatch.setattr(icon_pack, "resolve_icons", resolve)
     monkeypatch.setattr(infographic_assets, "build_infographic_asset_context", lambda **_: context)
+    monkeypatch.setattr(icon_selection, "select_deck_icons", no_picks)
+    monkeypatch.setattr("utils.asset_directory_utils.get_images_directory", lambda: str(tmp_path / "images"))
     return calls
 
 
@@ -618,3 +625,43 @@ def test_resolve_offer_without_image_provider_builds_icons_only_persists_and_rep
     projected = asyncio.run(asset_slots.project_offer(_Session(), replay, presentation_id=uuid.uuid4(), count=4))
     assert [len(page) for page in projected.vector] == [0, 2, 2, 0]
     assert projected.receipt["iconsFlattened"] == 4 and not any(projected.raster)
+
+
+def test_lucide_picks_serve_their_labels_and_only_the_rest_reach_the_icon_pack(fakes, monkeypatch):
+    async def picks(labels, names):
+        assert "shield-check" in names and labels == ["수집", "분석", "대응"]
+        return {"분석": ("chart-line", None), "대응": ("siren", "shield-check")}
+
+    monkeypatch.setattr(icon_selection, "select_deck_icons", picks)
+    offer = _build()
+    icons = {slot.concept: slot for slot in offer.slots if slot.kind == "icon"}
+    assert icons["분석"].origin == icons["대응"].origin == "lucide"
+    assert icons["분석"].media_type == "image/svg+xml" and icons["수집"].origin == "library"
+    assert fakes["generate"][0] == (["수집"], False)
+    assert '#123456' in Path(icons["대응"].path).read_text(encoding="utf-8")
+    selection = offer.receipt["iconSelection"]
+    assert (selection["status"], selection["requested"], selection["selected"], selection["badges"]) == \
+        ("selected", 3, 2, 1)
+    assert offer.receipt["icon"]["lucide"] == 2 and "lucide" in offer.receipt["icon"]["origins"]
+
+
+def test_a_failed_selection_leaves_every_label_to_the_icon_pack(fakes, monkeypatch):
+    async def failed(labels, names):
+        return None
+
+    monkeypatch.setattr(icon_selection, "select_deck_icons", failed)
+    offer = _build()
+    assert offer.receipt["iconSelection"]["status"] == "selection_failed"
+    assert fakes["generate"][0] == (["수집", "분석", "대응"], False)
+    assert all(slot.origin != "lucide" for slot in offer.slots)
+
+
+def test_icons_only_mode_still_uses_lucide_picks_without_any_provider(fakes, monkeypatch):
+    async def picks(labels, names):
+        return {label: ("circle-check", None) for label in labels}
+
+    monkeypatch.setattr(icon_selection, "select_deck_icons", picks)
+    offer = _build(icons_only=True)
+    icons = [slot for slot in offer.slots if slot.kind == "icon"]
+    assert icons and all(slot.origin == "lucide" for slot in icons)
+    assert offer.receipt["providerCalls"] == 0 and not fakes["generate"]
