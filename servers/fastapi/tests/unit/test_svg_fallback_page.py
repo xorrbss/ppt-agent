@@ -215,3 +215,43 @@ def test_long_title_is_still_repeated_once_in_full_when_it_duplicates_the_first_
     svg = fallback_page_svg(content=f"## {title}\n{title}\n- 본문", role="", index=0, count=1,
                             width=WIDTH, height=HEIGHT, style_snapshot=None)
     assert "".join(_body_words(svg).split()).count("".join(title.split())) == 1
+
+
+def _navy_snapshot():
+    return {"tokens": {"primary": "#00A3E0", "background": "#051C2C", "body_font": "Noto Sans KR",
+                       "palette": ["#051C2C", "#FFFFFF", "#2E3338", "#00A3E0", "#A7B0B7"]}}
+
+
+def test_fallback_page_takes_the_deck_background_and_a_legible_text_colour():
+    from services.generation_core.drivers.svg.fallback import _contrast
+
+    svg = fallback_page_svg(content=_KOREAN_CONTENT, role="content", index=1, count=4,
+                            width=1280, height=720, style_snapshot=_navy_snapshot())
+    root = ET.fromstring(svg)
+    background = next(node for node in root.iter() if node.tag.endswith("rect"))
+    assert background.get("fill") == "#051C2C"
+    fills = {node.get("fill") for node in root.iter() if node.tag.endswith("text")
+             and node.get("id") != "svg-system-page-number"}
+    assert fills and all(_contrast(fill, "#051C2C") >= 7 for fill in fills)
+    assert "CONTENT" not in svg  # the page type is not shown as an eyebrow
+
+
+def test_a_low_contrast_accent_falls_back_to_the_text_colour():
+    from services.generation_core.drivers.svg.fallback import _page_colors
+
+    assert _page_colors({"background": "#FFFFFF", "primary": "#F4F4F4"})[2] == _page_colors(
+        {"background": "#FFFFFF"})[1]
+    assert _page_colors({})[0] == "#FFFFFF"
+
+
+def test_a_cover_fallback_is_cover_shaped_and_keeps_every_line():
+    content = "# 사내 업무 자동화 도입 계획\n- 경영지원본부\n- 2026년 11월\n- 추가 1\n- 추가 2"
+    svg = fallback_page_svg(content=content, role="cover", index=0, count=4, width=1280, height=720,
+                            style_snapshot=_navy_snapshot())
+    texts = [node for node in ET.fromstring(svg).iter() if node.tag.endswith("text")
+             and node.get("id") != "svg-system-page-number"]
+    joined = " ".join("".join(node.itertext()) for node in texts)
+    for line in ("사내 업무 자동화 도입 계획", "경영지원본부", "2026년 11월", "추가 1", "추가 2"):
+        assert line in joined
+    title = next(node for node in texts if "자동화" in "".join(node.itertext()))
+    assert title.get("font-size") == "44" and int(title.get("y")) > 200

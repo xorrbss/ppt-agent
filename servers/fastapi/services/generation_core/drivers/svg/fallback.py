@@ -270,6 +270,47 @@ def _body_top(style_snapshot: dict | None, header_page: dict | None) -> int:
     return _TOP_MARGIN
 
 
+_HEX = re.compile(r"#[0-9A-Fa-f]{6}")
+#: Minimum contrast for the accent colour to carry text or the accent bar.
+_ACCENT_CONTRAST = 3.0
+_COVER_TITLE_FONT_PX = 44
+_COVER_SUBTITLE_FONT_PX = 22
+_COVER_SUBTITLE_LINES = 3
+
+
+def _luminance(color: str) -> float:
+    """WCAG relative luminance of ``#RRGGBB``."""
+    channels = []
+    for i in (1, 3, 5):
+        value = int(color[i:i + 2], 16) / 255
+        channels.append(value / 12.92 if value <= 0.03928 else ((value + 0.055) / 1.055) ** 2.4)
+    red, green, blue = channels
+    return 0.2126 * red + 0.7152 * green + 0.0722 * blue
+
+
+def _contrast(first: str, second: str) -> float:
+    high, low = sorted((_luminance(first), _luminance(second)), reverse=True)
+    return (high + 0.05) / (low + 0.05)
+
+
+def _page_colors(tokens: Mapping) -> tuple[str, str, str]:
+    """(background, text, accent) for a fallback page in the deck's own colours.
+
+    The background is the style's canvas colour; text takes the deck palette
+    colour (or near-black / white) with the strongest contrast against it; the
+    accent is the style's primary when it is legible there, else the text colour.
+    """
+    background = tokens.get("background")
+    background = background.upper() if isinstance(background, str) and _HEX.fullmatch(background) else "#FFFFFF"
+    palette = [color.upper() for color in tokens.get("palette") or () if isinstance(color, str) and _HEX.fullmatch(color)]
+    text = max([*palette, _BODY_COLOR, "#FFFFFF"], key=lambda color: (_contrast(color, background), color))
+    accent = tokens.get("primary")
+    accent = accent.upper() if isinstance(accent, str) and _HEX.fullmatch(accent) else text
+    if _contrast(accent, background) < _ACCENT_CONTRAST:
+        accent = text
+    return background, text, accent
+
+
 def fallback_page_svg(*, content: str, role: str, index: int, count: int,
                        width: int, height: int, style_snapshot: dict | None,
                        header_page: dict | None = None) -> str:
@@ -283,7 +324,7 @@ def fallback_page_svg(*, content: str, role: str, index: int, count: int,
     """
 
     tokens = (style_snapshot or {}).get("tokens", {})
-    accent = tokens.get("primary") or "#2563EB"
+    background, text_color, accent = _page_colors(tokens)
     from services.svg_trusted_fonts import DEFAULT_FONT_FAMILY
     body_font = tokens.get("body_font") or DEFAULT_FONT_FAMILY
     title_font = tokens.get("heading_font") or body_font
@@ -299,9 +340,15 @@ def fallback_page_svg(*, content: str, role: str, index: int, count: int,
     })
     group = ET.SubElement(root, f"{{{SVG_NS}}}g", {"id": FALLBACK_GROUP_ID})
     ET.SubElement(group, f"{{{SVG_NS}}}rect", {
-        "x": "0", "y": "0", "width": str(width), "height": str(height), "fill": "#FFFFFF",
+        "x": "0", "y": "0", "width": str(width), "height": str(height), "fill": background,
     })
     top = _body_top(style_snapshot, header_page)
+    if str(role or "").strip().lower() == "cover":
+        _cover_body(group, title=title, bullets=bullets, top=top, width=width, height=height,
+                    title_font=title_font, body_font=body_font, text_color=text_color, accent=accent)
+        raw = ET.tostring(root, encoding="unicode")
+        return finalize_svg(raw, index=index, n=count, width=width, height=height,
+                            style_snapshot=style_snapshot, header_page=header_page)
     ET.SubElement(group, f"{{{SVG_NS}}}rect", {
         "x": str(_MARGIN_X), "y": str(top),
         "width": str(_ACCENT_BAR_WIDTH), "height": str(_ACCENT_BAR_HEIGHT), "fill": accent,
@@ -309,13 +356,14 @@ def fallback_page_svg(*, content: str, role: str, index: int, count: int,
 
     cursor = top + _ACCENT_BAR_HEIGHT + _GAP_BAR_TO_LABEL_PX
     eyebrow = str(role or "").strip().upper()[:_EYEBROW_MAX_CHARS]
-    if eyebrow:
+    # "content" names the page type, not anything a reader needs.
+    if eyebrow and eyebrow != "CONTENT":
         _text_node(group, x=_MARGIN_X, y=cursor + _EYEBROW_FONT_PX, text=eyebrow,
                    font_px=_EYEBROW_FONT_PX, font_family=body_font, fill=accent)
         cursor += _EYEBROW_FONT_PX + _GAP_EYEBROW_TO_TITLE_PX
 
     _text_node(group, x=_MARGIN_X, y=cursor + _TITLE_FONT_PX, text=title,
-               font_px=_TITLE_FONT_PX, font_family=title_font, fill=_BODY_COLOR, weight="700")
+               font_px=_TITLE_FONT_PX, font_family=title_font, fill=text_color, weight="700")
     cursor += _TITLE_FONT_PX + _GAP_TITLE_TO_BODY_PX
 
     if bullets:
@@ -330,12 +378,59 @@ def fallback_page_svg(*, content: str, role: str, index: int, count: int,
             for first, line in lines:
                 _text_node(group, x=left if first else left + prefix_width_px, y=y,
                            text=(_BULLET_PREFIX if first else "") + line, font_px=font_px,
-                           font_family=body_font, fill=_BODY_COLOR)
+                           font_family=body_font, fill=text_color)
                 y += font_px * _BODY_LINE_HEIGHT
 
     raw = ET.tostring(root, encoding="unicode")
     return finalize_svg(raw, index=index, n=count, width=width, height=height,
                         style_snapshot=style_snapshot, header_page=header_page)
+
+
+def _cover_body(group: ET.Element, *, title: str, bullets: Sequence[str], top: int, width: int, height: int,
+                title_font: str, body_font: str, text_color: str, accent: str) -> None:
+    """A cover-shaped fallback: a large title in the middle band, the first lines as subtitle.
+
+    Every outline line still appears: lines past the subtitle allowance are set
+    smaller below it, so the page never drops content.
+    """
+    available_width = max(1, width - 2 * _MARGIN_X)
+    title_lines = _wrap(title, max_em=max(1.0, available_width / _COVER_TITLE_FONT_PX))
+    subtitle = list(bullets[:_COVER_SUBTITLE_LINES])
+    rest = list(bullets[_COVER_SUBTITLE_LINES:])
+    block = (len(title_lines) * _COVER_TITLE_FONT_PX * 1.25 + _ACCENT_BAR_HEIGHT + _GAP_BAR_TO_LABEL_PX
+             + len(subtitle) * _COVER_SUBTITLE_FONT_PX * 1.5)
+    cursor = max(top, (height - block) / 2 - _COVER_TITLE_FONT_PX)
+    for line in title_lines:
+        cursor += _COVER_TITLE_FONT_PX * 1.25
+        _text_node(group, x=_MARGIN_X, y=cursor, text=line, font_px=_COVER_TITLE_FONT_PX,
+                   font_family=title_font, fill=text_color, weight="700")
+    cursor += _GAP_BAR_TO_LABEL_PX
+    ET.SubElement(group, f"{{{SVG_NS}}}rect", {
+        "x": str(_MARGIN_X), "y": _fmt_px(cursor), "width": str(_ACCENT_BAR_WIDTH * 2),
+        "height": str(_ACCENT_BAR_HEIGHT), "fill": accent,
+    })
+    cursor += _ACCENT_BAR_HEIGHT
+    for line in subtitle:
+        for part in _wrap(line, max_em=max(1.0, available_width / _COVER_SUBTITLE_FONT_PX)):
+            cursor += _COVER_SUBTITLE_FONT_PX * 1.5
+            _text_node(group, x=_MARGIN_X, y=cursor, text=part, font_px=_COVER_SUBTITLE_FONT_PX,
+                       font_family=body_font, fill=text_color)
+    if rest:
+        max_y = height - _BOTTOM_LIMIT_PX
+        font_px, columns, split = _body_layout(rest, available_width=available_width,
+                                               available_height=max(1, max_y - cursor - _GAP_TITLE_TO_BODY_PX))
+        column_width = (available_width - (columns - 1) * _COLUMN_GAP_PX) / columns
+        start = cursor + _GAP_TITLE_TO_BODY_PX
+        for column, lines in enumerate(split):
+            left = _MARGIN_X + column * (column_width + _COLUMN_GAP_PX)
+            y = start + font_px
+            for first, line in lines:
+                _text_node(group, x=left, y=y, text=line, font_px=font_px, font_family=body_font, fill=text_color)
+                y += font_px * _BODY_LINE_HEIGHT
+
+
+def _fmt_px(value: float) -> str:
+    return f"{value:.2f}".rstrip("0").rstrip(".")
 
 
 def placeholder_page_svg(*, title: str, width: int, height: int, font_family: str,
