@@ -92,7 +92,7 @@ INTERNAL_ENV_NAMES: MappingProxyType[str, str] = MappingProxyType(
         "SVG_RENDER_CONCURRENCY_SOURCE_REFLOW": "SVG page-render concurrency for source-reflow decks.",
         "SVG_ILLUSTRATION_BUDGET": "Per-deck illustration budget for the SVG asset stage.",
         "SVG_ILLUSTRATION_MODE": "SVG asset stage pictures: off, vector (model-drawn SVG) or hybrid.",
-        "SVG_ILLUSTRATION_PARTS": "Model-drawn picture kinds in vector mode: cover,scene,spots,pairs.",
+        "SVG_ILLUSTRATION_PARTS": "Model-drawn picture kinds in vector mode: cover,scene,spots,pairs,pictograph.",
         "SVG_ILLUSTRATION_TIMEOUT_SECONDS": "Per-illustration timeout for the SVG asset stage.",
         "SVG_SOURCE_OUTPUT_VIEW": "Source-restyle author output view pinned at admission (off, v1, stage list).",
         # --- document decomposition / liteparse / external tools ---------------------------

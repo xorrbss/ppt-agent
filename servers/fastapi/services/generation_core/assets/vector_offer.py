@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import re
 from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
@@ -35,7 +36,12 @@ MAX_CALLS = 12
 #: (cover and scene pictures). Step pictures and before/after pairs crowd
 #: text-dense pages: 4 of 8 step-picture pages and 1 of 3 pair pages failed
 #: the author's own checks in the 2026-11-03 measurement.
-ALL_PARTS = ("cover", "scene", "spots", "pairs")
+ALL_PARTS = ("cover", "scene", "spots", "pairs", "pictograph")
+#: A pictograph shows one percentage of a gauge or KPI page as ten people,
+#: some highlighted; it is composed from the deck's icon family, not drawn.
+PICTOGRAPH_ARCHETYPES = frozenset({"gauge", "kpi"})
+PICTOGRAPH_TOTAL = 10
+_PERCENT = re.compile(r"(\d+(?:\.\d+)?)\s*%")
 DEFAULT_PARTS = ("cover", "scene")
 MAX_COVER_PAGES = 3
 COVER_ROLES = frozenset({"COVER", "SECTION", "CLOSING"})
@@ -197,6 +203,45 @@ async def _run(job: _Job, *, palette: Sequence[str], ink: str, call_seconds: flo
     return slots
 
 
+def pictograph_slots(plan, *, accent: str, family_id: Optional[str]) -> list[AssetSlot]:
+    """One pictograph per gauge/KPI page whose figure states a percentage (no model call).
+
+    The emphasised node is preferred, then the nodes in order; ``70%`` becomes
+    seven of ten people at full ink. The picture goes through the same
+    validation as a drawn one and replaces that node's icon (kind ``spot``).
+    """
+    from services.generation_core.assets.icon_pack import families
+    from services.generation_core.assets.vector_illustration import validate_drawing
+
+    slots = []
+    for slide in plan.slides:
+        if slide.archetype not in PICTOGRAPH_ARCHETYPES:
+            continue
+        order = list(slide.nodes)
+        if slide.emphasis is not None:
+            order.insert(0, order.pop(slide.emphasis))
+        for node in order:
+            match = _PERCENT.search(node.figure or "")
+            value = float(match[1]) if match else 0.0
+            highlighted = round(value / 100 * PICTOGRAPH_TOTAL) if 0 < value <= 100 else 0
+            if not highlighted:
+                continue
+            svg = families.compose_pictograph_svg(total=PICTOGRAPH_TOTAL, highlighted=highlighted, color=accent,
+                                                  family_id=family_id or families.DEFAULT_FAMILY)
+            width = 5 * families.PICTOGRAPH_CELL
+            height = -(-PICTOGRAPH_TOTAL // 5) * families.PICTOGRAPH_CELL
+            drawing = validate_drawing(svg, width=width, height=height, palette=[accent], ink=accent)
+            path = _store(drawing.svg)
+            slots.append(AssetSlot(
+                page_index=slide.index, role="pictograph", kind="spot",
+                alt=(f"pictograph for '{node.label} {node.figure}': {highlighted} of {PICTOGRAPH_TOTAL} people "
+                     "highlighted; place it beside that figure"),
+                path=str(path), media_type="image/svg+xml", sha256=sha256_hex(path.read_bytes()),
+                width=width, height=height, concept=node.label, origin="pictograph"))
+            break
+    return slots
+
+
 async def build_vector_drawings(plan, *, outline, roles: Sequence[str], brand, style, timeout_seconds: float,
                                 vector_scene_pages: set[int],
                                 parts: Sequence[str] = DEFAULT_PARTS) -> tuple[list[AssetSlot], dict]:
@@ -230,11 +275,21 @@ async def build_vector_drawings(plan, *, outline, roles: Sequence[str], brand, s
 
     results = await asyncio.gather(*(run(job) for job in jobs))
     slots = [slot for group in results for slot in group]
+    if "pictograph" in set(parts):
+        try:
+            pictographs = await asyncio.to_thread(pictograph_slots, plan, accent=palette["ACCENT"],
+                                                  family_id=getattr(style, "icon_family", None))
+        except (ValueError, OSError) as error:
+            LOGGER.warning("[svg] pictograph failed: %s", type(error).__name__)
+            receipt["rejected"]["pictograph_" + type(error).__name__] += 1
+            pictographs = []
+        slots.extend(pictographs)
+        receipt["pictographs"] = len(pictographs)
     ratios = receipt.pop("fillRatios")
     receipt.update(status="drawn", rejected=dict(receipt["rejected"]),
                    meanFillRatio=round(sum(ratios) / len(ratios), 3) if ratios else None)
     return slots, receipt
 
 
-__all__ = ["ALL_PARTS", "COVER_ROLES", "DEFAULT_PARTS", "MAX_CALLS", "PAIR_ARCHETYPES", "SPOT_ARCHETYPES", "build_vector_drawings",
+__all__ = ["ALL_PARTS", "COVER_ROLES", "DEFAULT_PARTS", "MAX_CALLS", "pictograph_slots", "PAIR_ARCHETYPES", "SPOT_ARCHETYPES", "build_vector_drawings",
            "deck_palette", "plan_jobs"]

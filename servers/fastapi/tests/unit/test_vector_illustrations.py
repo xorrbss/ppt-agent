@@ -272,3 +272,36 @@ def test_the_parts_knob(monkeypatch, raw, parts):
     else:
         monkeypatch.setenv("SVG_ILLUSTRATION_PARTS", raw)
     assert get_svg_illustration_parts_env() == parts
+
+
+def test_a_kpi_percentage_becomes_an_exact_pictograph_in_the_deck_family(vector_fakes, monkeypatch):
+    kpi = _plan().model_copy(update={"slides": _plan().slides[:3] + (AuthoredSlideInfographic(
+        index=3, archetype="kpi", weight="standard", emphasis=1,
+        nodes=(InfographicNode(label="보안", figure="12건"), InfographicNode(label="비용", figure="70%"),
+               InfographicNode(label="속도", figure="2배"))),)})
+
+    async def plan(*_args, **_kwargs):
+        return kpi
+
+    monkeypatch.setattr(infographic_plan, "resolve_infographic_plan", plan)
+    offer = _build(illustration_parts=("pictograph",))
+    assert vector_fakes["draw"] == []  # composed, not drawn
+    (slot,) = [slot for slot in offer.slots if slot.role == "pictograph"]
+    assert (slot.page_index, slot.kind, slot.concept, slot.origin) == (3, "spot", "비용", "pictograph")
+    assert "7 of 10" in slot.alt
+    svg = Path(slot.path).read_text(encoding="utf-8")
+    # lucide user-round is two shapes per person: 3 muted people -> 6 muted shapes
+    assert svg.count('opacity="0.25"') == 6
+    assert offer.receipt["vectorDrawings"]["pictographs"] == 1
+    # the node with the pictograph gets no icon; its neighbours keep theirs
+    assert {slot.concept for slot in offer.slots if slot.kind == "icon" and slot.page_index == 3} == {"보안", "속도"}
+
+
+@pytest.mark.parametrize("family_id", ["lucide", "tabler-outline", "phosphor-regular", "phosphor-fill",
+                                       "phosphor-duotone"])
+def test_every_family_can_compose_a_pictograph(family_id):
+    from services.generation_core.assets.icon_pack.families import compose_pictograph_svg
+
+    svg = compose_pictograph_svg(total=10, highlighted=4, color="#0E7C7B", family_id=family_id)
+    drawing = validate_drawing(svg, width=640, height=256, palette=["#0E7C7B"], ink="#0E7C7B")
+    assert drawing.elements >= 10

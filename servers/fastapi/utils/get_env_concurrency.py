@@ -128,14 +128,15 @@ def get_svg_illustration_mode_env(settings: RuntimeSettings | None = None) -> st
     return value if value in SVG_ILLUSTRATION_MODES else "off"
 
 
-SVG_ILLUSTRATION_PARTS = ("cover", "scene", "spots", "pairs")
+SVG_ILLUSTRATION_PARTS = ("cover", "scene", "spots", "pairs", "pictograph")
 DEFAULT_SVG_ILLUSTRATION_PARTS = ("cover", "scene")
 
 
 def get_svg_illustration_parts_env(settings: RuntimeSettings | None = None) -> tuple[str, ...]:
     """Which model-drawn picture kinds a vector-mode deck gets (comma list).
 
-    ``cover``, ``scene``, ``spots`` (step pictures) and ``pairs`` (before/after).
+    ``cover``, ``scene``, ``spots`` (step pictures), ``pairs`` (before/after) and
+    ``pictograph`` (a percentage as ten people, composed, not drawn).
     Unset, empty or naming nothing known: ``cover,scene``. Unknown names are ignored.
     """
     from utils.get_env import get_setting_env

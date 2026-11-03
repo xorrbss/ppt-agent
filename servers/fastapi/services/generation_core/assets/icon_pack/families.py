@@ -129,6 +129,45 @@ def compose_icon_svg(main: str, badge: Optional[str] = None, *, color: str = "#0
             f"{_group(family, badge, color, _BADGE)}</svg>")
 
 
+#: Person icons a pictograph repeats, first present in the family wins.
+PICTOGRAPH_PERSON = ("user-round", "user", "person")
+PICTOGRAPH_CELL = 128
+PICTOGRAPH_MUTED_OPACITY = 0.25
+
+
+def compose_pictograph_svg(*, total: int, highlighted: int, color: str, family_id: str = DEFAULT_FAMILY,
+                           columns: int = 5) -> str:
+    """``total`` person icons in rows of ``columns``; the first ``highlighted`` at full ink, the rest muted.
+
+    Built from the family's own person icon in the library's 128-unit cell, so
+    a pictograph matches the deck's icons. The count is exact: nothing here is
+    drawn by a model.
+    """
+    family = load_family(family_id)
+    name = next((candidate for candidate in PICTOGRAPH_PERSON if candidate in family.nodes), None)
+    if name is None:
+        raise ValueError("icon_family_has_no_person_icon")
+    if not (1 <= total <= 20 and 0 <= highlighted <= total and 1 <= columns <= total):
+        raise ValueError("pictograph_counts_invalid")
+    rows = -(-total // columns)
+    width, height = columns * PICTOGRAPH_CELL, rows * PICTOGRAPH_CELL
+    if family.stroke_width is not None:
+        paint = (f'fill="none" stroke="{color}" stroke-width="{_number(family.stroke_width * family.grid / 24)}" '
+                 'stroke-linecap="round" stroke-linejoin="round"')
+    else:
+        paint = f'fill="{color}" stroke="none"'
+    offset, scale = _SINGLE
+    cells = []
+    for index in range(total):
+        x = (index % columns) * PICTOGRAPH_CELL + offset
+        y = (index // columns) * PICTOGRAPH_CELL + offset
+        muted = "" if index < highlighted else f' opacity="{PICTOGRAPH_MUTED_OPACITY}"'
+        cells.append(f'<g transform="translate({_number(x)} {_number(y)}) scale({_number(scale * 24 / family.grid)})"'
+                     f'{muted}>{_symbol(family, name, color)}</g>')
+    return (f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" '
+            f'viewBox="0 0 {width} {height}" {paint}>' + "".join(cells) + "</svg>")
+
+
 def write_icon(main: str, badge: Optional[str], *, color: str, directory: Path,
                family_id: str = DEFAULT_FAMILY) -> Path:
     """Write the composed icon to a content-addressed file under ``directory``."""
@@ -141,4 +180,5 @@ def write_icon(main: str, badge: Optional[str], *, color: str, directory: Path,
 
 
 __all__ = ["DEFAULT_FAMILY", "FAMILIES_DIRECTORY", "IconFamily", "available_families", "compose_icon_svg",
+           "compose_pictograph_svg",
            "has_icon", "load_family", "write_icon"]
