@@ -30,7 +30,7 @@ from utils.hashing import sha256_hex
 LOGGER = logging.getLogger(__name__)
 
 OFFER_SCHEMA_VERSION = "asset-offer/v1"
-SlotKind = Literal["source", "illustration", "icon"]
+SlotKind = Literal["source", "illustration", "icon", "spot"]
 #: Normalized (x, y, width, height) placement hint on the page canvas.
 SCENE_BBOX_HINT = (0.55, 0.18, 0.4, 0.64)
 ICON_EDGE_HINT = 0.06
@@ -41,7 +41,7 @@ class AssetSlot:
     """One planned picture for one page. ``path`` is the file the slot shows."""
 
     page_index: int
-    role: str  # "scene" | "figure-icon"
+    role: str  # "scene" | "cover" | "figure-icon" | "figure-spot" | "comparison-before" | "comparison-after"
     kind: SlotKind
     alt: str
     path: str
@@ -51,7 +51,7 @@ class AssetSlot:
     height: int
     bbox_hint: Optional[tuple[float, float, float, float]] = None
     concept: Optional[str] = None
-    origin: str = ""  # cutout | illustration | library | cached | generated
+    origin: str = ""  # cutout | illustration | library | cached | generated | <icon family> | model-vector
 
     @property
     def is_vector(self) -> bool:
@@ -276,7 +276,8 @@ async def _icon_slots(pages, *, pack_key, context, color, spend, receipt, librar
 
 async def build_asset_offer(*, outline, brand, style, roles: Sequence[str], instructions: Optional[str],
                             budget: int, timeout_seconds: float, image_service=None,
-                            settings=None, icons_only: bool = False) -> AssetOffer:
+                            settings=None, icons_only: bool = False,
+                            illustration_mode: str = "off") -> AssetOffer:
     """Plan and produce one deck's illustrations and icons; never raises for a provider.
 
     ``icons_only`` is the no-image-provider mode: the same deck plan decides
@@ -288,6 +289,13 @@ async def build_asset_offer(*, outline, brand, style, roles: Sequence[str], inst
     In every mode the figure labels first get the deck's family picks (one more
     LLM call, run while the scenes are made, ``iconSelection`` in the receipt);
     only the labels it leaves uncovered go through the icon pack.
+
+    ``illustration_mode`` ``vector`` or ``hybrid`` has the model draw the deck's
+    pictures as vector SVG (``vector_offer.py``): scenes (no image provider
+    needed, no scene ceiling), cover/section/closing pictures, step pictures
+    and before/after pairs. In ``hybrid`` a scene marked as a photograph still
+    takes the image-provider path when a provider is configured. A node that
+    got a step picture gets no icon.
     """
     from models.authored_illustration_plan import illustrations_are_prohibited
     from models.authored_infographic_plan import without_scenes
@@ -305,12 +313,19 @@ async def build_asset_offer(*, outline, brand, style, roles: Sequence[str], inst
         return AssetOffer(receipt={**receipt, "status": "prohibited_by_instructions"})
     if normalize_reference_mode(getattr(style, "reference_mode", None)) == EXACT_RECONSTRUCTION:
         return AssetOffer(receipt={**receipt, "status": "exact_reconstruction"})
+    vector = illustration_mode in {"vector", "hybrid"}
+    if vector:
+        receipt["illustrationMode"] = illustration_mode
     with svg_outline_spans.span("plan_llm"):
         plan = await resolve_infographic_plan(outline, brand, style, roles=list(roles),
-                                              instructions=instructions)
+                                              instructions=instructions, vector_illustrations=vector)
     if plan is None:
         return AssetOffer(receipt={**receipt, "status": "plan_unavailable"})
-    if icons_only:
+    if icons_only and vector:
+        # No image provider: every picture is drawn as vector SVG instead.
+        context = None
+        spend = _Spend(0, timeout_seconds)
+    elif icons_only:
         # No picture can be made: a scene page is drawn as its HTML figure
         # instead, and nothing below may reach an image provider.
         plan = without_scenes(plan)
@@ -321,7 +336,12 @@ async def build_asset_offer(*, outline, brand, style, roles: Sequence[str], inst
                                                   image_service=image_service, settings=settings)
         spend = _Spend(budget, timeout_seconds)
     contents = [slide.content for slide in outline.slides]
-    scenes = [slide for slide in plan.slides if slide.archetype == "scene"]
+    all_scenes = [slide for slide in plan.slides if slide.archetype == "scene"]
+    # In vector mode a scene is drawn unless hybrid mode sends a photograph to the provider.
+    provider_scenes = (all_scenes if not vector else [
+        slide for slide in all_scenes
+        if illustration_mode == "hybrid" and context is not None and slide.depiction == "photo"])
+    scenes = provider_scenes
     figures = [(slide.index, [node.label for node in slide.nodes]) for slide in plan.slides
                if slide.has_figure and slide.archetype != "scene" and slide.nodes]
     failures: list[dict] = []
@@ -342,8 +362,23 @@ async def build_asset_offer(*, outline, brand, style, roles: Sequence[str], inst
     family_task = asyncio.ensure_future(_family_icons(
         figure_labels, color=getattr(brand, "primary", None) or "#1E5EFF", receipt=family_receipt,
         family_id=family_id if isinstance(family_id, str) and family_id else None))
+    vector_slots: list[AssetSlot] = []
+    vector_receipt: dict = {}
+    vector_task = None
+    if vector:
+        from services.generation_core.assets.vector_offer import build_vector_drawings
+
+        vector_task = asyncio.ensure_future(build_vector_drawings(
+            plan, outline=outline, roles=roles, brand=brand, style=style, timeout_seconds=timeout_seconds,
+            vector_scene_pages={slide.index for slide in all_scenes} - {slide.index for slide in scenes}))
     with observe_image_provider_calls() as scene_calls, svg_outline_spans.span("scenes"):
         scene_slots = await asyncio.gather(*(scene(slide) for slide in scenes))
+        if vector_task is not None:
+            try:
+                vector_slots, vector_receipt = await vector_task
+            except Exception as error:  # noqa: BLE001 - pictures are optional
+                LOGGER.warning("[svg] vector drawings failed: %s", type(error).__name__)
+                vector_receipt = {"status": "error", "reason": type(error).__name__}
     icon_receipt: dict = {}
     style_id = (getattr(style, "id", None) or "").strip() or DEFAULT_PACK_KEY
     try:
@@ -366,12 +401,18 @@ async def build_asset_offer(*, outline, brand, style, roles: Sequence[str], inst
     if icon_receipt:
         icon_receipt.update(sheetsSpent=icon_calls.entered, providerCalls=icon_calls.entered)
     failures.extend({"kind": "icon_sheet", **failure} for failure in icon_receipt.get("failures", []))
-    slots = tuple(slot for slot in scene_slots if slot is not None) + tuple(icon_slots)
-    receipt.update(status="library_icons_only" if icons_only else "resolved",
-                   scenesPlanned=len(scenes), figurePages=len(figures),
+    # A node that got its own step picture keeps that picture instead of an icon.
+    spotted = {(slot.page_index, slot.concept) for slot in vector_slots if slot.kind == "spot" and slot.concept}
+    icon_slots = [slot for slot in icon_slots if (slot.page_index, slot.concept) not in spotted]
+    slots = (tuple(slot for slot in scene_slots if slot is not None) + tuple(vector_slots)
+             + tuple(icon_slots))
+    receipt.update(status="library_icons_only" if icons_only and not vector else "resolved",
+                   scenesPlanned=len(all_scenes), figurePages=len(figures),
                    illustrations=sum(slot.kind == "illustration" for slot in slots),
                    icons=sum(slot.kind == "icon" for slot in slots), icon=icon_receipt,
                    iconSelection=family_receipt,
+                   **({"vectorDrawings": vector_receipt,
+                       "spots": sum(slot.kind == "spot" for slot in slots)} if vector else {}),
                    providerCalls=scene_calls.entered + icon_calls.entered,
                    budgetAllocatedCalls=spend.calls, timeouts=spend.timeouts, failures=failures,
                    transparentProvider=context is not None)

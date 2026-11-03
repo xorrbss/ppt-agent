@@ -54,8 +54,13 @@ async def resolve_infographic_plan(
     *,
     roles: list[str],
     instructions: Optional[str] = None,
+    vector_illustrations: bool = False,
 ) -> Optional[AuthoredInfographicPlan]:
     """Decide this deck's figures once, from its own pages.
+
+    With ``vector_illustrations`` the deck's scenes are drawn as vector SVG by
+    the model, so a scene needs no image provider or style prompt; only a
+    request that refuses pictures still demotes them.
 
     Returns None only when the planning call failed; the caller then authors
     the deck it already had. Unlike the illustration plan this replaced, it
@@ -75,10 +80,14 @@ async def resolve_infographic_plan(
         roles=list(roles),
         style_brief=brief.strip() if isinstance(brief, str) and brief.strip() else None,
         instructions=instructions,
+        vector_illustrations=vector_illustrations,
     )
     if plan is None:
         return None
-    if not deck_can_illustrate(style, instructions):
+    if vector_illustrations:
+        if illustrations_are_prohibited(instructions):
+            plan = without_scenes(plan)
+    elif not deck_can_illustrate(style, instructions):
         plan = without_scenes(plan)
     LOGGER.info(
         "[authored] infographic plan resolved: figures=%d scenes=%d slides=%d "

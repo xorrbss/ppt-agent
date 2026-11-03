@@ -110,6 +110,24 @@ def get_svg_illustration_budget_env(settings: RuntimeSettings | None = None) -> 
     return _optional_positive_int_setting("SVG_ILLUSTRATION_BUDGET", settings)
 
 
+SVG_ILLUSTRATION_MODES = ("off", "vector", "hybrid")
+
+
+def get_svg_illustration_mode_env(settings: RuntimeSettings | None = None) -> str:
+    """How the SVG driver's asset stage makes the deck's pictures.
+
+    ``off`` keeps the image-provider scenes only; ``vector`` has the model draw
+    scenes, cover/section pictures, step pictures and before/after pairs as
+    vector SVG; ``hybrid`` does the same but leaves a scene the plan marked as
+    a photograph to the image provider when one is configured. Read when a
+    deck's asset offer is built; a resumed deck replays its persisted offer.
+    """
+    from utils.get_env import get_setting_env
+
+    value = (get_setting_env("SVG_ILLUSTRATION_MODE", settings) or "").strip().lower()
+    return value if value in SVG_ILLUSTRATION_MODES else "off"
+
+
 def get_svg_source_output_view_env(settings: RuntimeSettings | None = None) -> str | None:
     """Raw ``SVG_SOURCE_OUTPUT_VIEW`` text (unset = v1; explicit off disables it).
 

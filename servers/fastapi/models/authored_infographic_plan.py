@@ -181,6 +181,9 @@ class AuthoredSlideInfographic(_Spec):
     #: Which node the figure singles out, as an index into ``nodes``.
     emphasis: Optional[int] = Field(default=None, ge=0)
     density: Density = "medium"
+    #: For a scene: whether its picture is best a photograph of a real thing
+    #: (``photo``) or a drawn concept (``concept``); None for every other figure.
+    depiction: Optional[Literal["photo", "concept"]] = None
 
     @model_validator(mode="after")
     def _figure_is_consistent(self) -> "AuthoredSlideInfographic":
@@ -249,6 +252,7 @@ class AuthoredSlideInfographicDraft(_Spec):
     nodes: tuple[InfographicNode, ...] = ()
     emphasis: Optional[int] = None
     density: str = "medium"
+    depiction: Optional[str] = None
 
 
 class AuthoredInfographicPlanDraft(_Spec):
@@ -343,6 +347,8 @@ def _repair_slide(
         nodes=nodes,
         emphasis=emphasis,
         density=draft.density if draft.density in ("low", "medium", "high") else "medium",  # type: ignore[arg-type]
+        depiction=(draft.depiction if draft.archetype == "scene" and draft.depiction in ("photo", "concept")
+                   else None),  # type: ignore[arg-type]
     )
 
 
@@ -351,6 +357,7 @@ def _demote_scene(slide: AuthoredSlideInfographic) -> AuthoredSlideInfographic:
         update={
             "archetype": SCENE_FALLBACK_ARCHETYPE,
             "weight": "standard" if slide.weight == "hero" else slide.weight,
+            "depiction": None,
         }
     )
 
@@ -375,6 +382,7 @@ def coerce_infographic_plan(
     *,
     slide_contents: Sequence[str],
     roles: Sequence[str],
+    scene_ceiling: bool = True,
 ) -> AuthoredInfographicPlan:
     """Validate a raw plan payload and repair it into one entry per slide.
 
@@ -399,7 +407,10 @@ def coerce_infographic_plan(
         )
         for index, content in enumerate(slide_contents)
     ]
-    slides = _enforce_scene_ceiling(slides)
+    if scene_ceiling:
+        # The ceiling guards the image-provider spend of a scene; a deck whose
+        # scenes are drawn as vector SVG passes scene_ceiling=False.
+        slides = _enforce_scene_ceiling(slides)
     return AuthoredInfographicPlan(
         art_direction=_clip(draft.art_direction, MAX_ART_DIRECTION_CHARS),
         slides=tuple(slides),

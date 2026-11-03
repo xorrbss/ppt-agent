@@ -62,7 +62,9 @@ For offered image slots only, use image href="source-slot-ID" with explicit inte
 preserveAspectRatio="xMidYMid meet". Never invent a slot or data URL.
 Place every offered image slot exactly once. A slot with kind "illustration" is a planned picture for \
 the slide's main point: give it a clear area that no text overlaps. A slot with kind "icon" names its \
-concept in the description: place it 32-64px square directly beside the text of that item.
+concept in the description: place it 32-64px square directly beside the text of that item. \
+A slot with kind "spot" is a small picture for the one item its description names (a step, or one \
+side of a before/after comparison): place it 96-200px wide directly above or beside that item's text.
 Apart from offered slots, do not invent images or copy reference-image text. References show art direction only.
 Use tokens.primary as the dominant accent colour, tokens.background for the canvas background, and \
 tokens.heading_font/tokens.body_font as the font-family of every heading/body text element.
@@ -96,7 +98,7 @@ SVG_NEW_COPY_AUTHOR_RULES = SVG_AUTHOR_RULES.replace(
     "Place every offered image slot exactly once.",
     "Place each original source image group and every offered slot with kind=source, "
     "required=true or allowOmit=false exactly once. An offered slot with kind "
-    "illustration or icon, required=false and allowOmit=true is optional generated "
+    "illustration, spot or icon, required=false and allowOmit=true is optional generated "
     "visual support: use it at most once only when source-supported, and omit it "
     "when review finds it unsupported or distracting. Never omit a required "
     "source image or source image group."

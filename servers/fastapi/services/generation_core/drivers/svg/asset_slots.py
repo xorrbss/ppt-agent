@@ -25,7 +25,7 @@ import asyncio
 import base64
 import re
 import uuid
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 
 from services.generation_core.assets.offer import AssetOffer, AssetSlot
@@ -38,6 +38,9 @@ from utils.hashing import sha256_hex
 SEED_KEY = "assetOfferPlan"
 _OFFER_NAMESPACE = uuid.UUID("5b0c7e1a-3f4d-5a2e-9c61-7d8e2f4a1b30")
 _PREVIEW_EDGE = 128
+#: Model-drawn pictures are larger than icons; the author sees a larger preview.
+_DRAWING_PREVIEW_EDGE = 256
+_DRAWING_KINDS = frozenset({"illustration", "spot"})
 
 
 @dataclass
@@ -100,12 +103,32 @@ async def project_offer(session, offer: AssetOffer, *, presentation_id, count: i
 
     result = SvgAssetOffer(raster=[{} for _ in range(count)], vector=[{} for _ in range(count)],
                            slots=[{} for _ in range(count)], receipt=dict(offer.receipt))
-    flattened = rasterized = 0
+    flattened = rasterized = drawings = 0
     for slot in offer.slots:
         if not 0 <= slot.page_index < count:
             raise ValueError("svg_asset_offer_page_out_of_range")
         payload = await asyncio.to_thread(slot.verify)
         meta = {"kind": slot.kind, "role": slot.role, "origin": slot.origin}
+        if slot.is_vector and slot.kind in _DRAWING_KINDS:
+            # A model-drawn picture, already validated and normalised into
+            # contract shapes in its own palette: keep its colours.
+            from services.generation_core.assets.vector_illustration import palette_of
+
+            text = payload.decode("utf-8")
+            colors = palette_of(text) or ["#000000"]
+            drawing = flatten_icon_svg(text, color=colors[0], point_budget=None, palette=colors)
+            drawing = replace(drawing, line_cap="round", line_join="round")
+            # Two step pictures of one page may be byte-identical; the slot id names the item too.
+            slot_id = source_slot_id_for_asset(
+                f"vector:{presentation_id}:{slot.page_index}:{slot.role}:{slot.concept or ''}:{slot.sha256}")
+            result.vector[slot.page_index][slot_id] = {
+                "data_url": _data_url(rasterize_icon(drawing, size=_DRAWING_PREVIEW_EDGE)),
+                "description": slot.alt, "required": False, "allowOmit": True,
+                "kind": slot.kind, "vector": drawing}
+            result.slots[slot.page_index][slot_id] = {**meta, "mode": "drawing",
+                                                      "points": drawing.point_count}
+            drawings += 1
+            continue
         if slot.is_vector:
             text = payload.decode("utf-8")
             try:
@@ -132,7 +155,8 @@ async def project_offer(session, offer: AssetOffer, *, presentation_id, count: i
         result.raster[slot.page_index][slot_id] = candidate
         result.slots[slot.page_index][slot_id] = {**meta, "mode": "raster"}
     await session.flush()
-    result.receipt.update(iconsFlattened=flattened, iconsRasterized=rasterized)
+    result.receipt.update(iconsFlattened=flattened, iconsRasterized=rasterized,
+                          **({"drawingsPlaced": drawings} if drawings else {}))
     return result
 
 
@@ -251,11 +275,18 @@ async def resolve_offer(request, outline, roles, job, *, profile, checkpoint, du
     from services.image_generation_service import ImageGenerationService
     from utils.asset_directory_utils import get_images_directory
 
+    from utils.get_env import get_svg_illustration_mode_env
+
     literal_pages = _native_literal_pages(request, outline, style_snapshot=style_snapshot,
                                           has_source_assets=has_source_assets)
     image_service = ImageGenerationService(get_images_directory()) if literal_pages is None else None
+    mode = get_svg_illustration_mode_env()
     if literal_pages is not None:
         offer = await _native_literal_offer(literal_pages, request)
+    elif mode != "off":
+        provider = not (image_service.is_image_generation_disabled or image_service.image_gen_func is None)
+        offer = await _build(request, outline, roles, job, profile, image_service if provider else None,
+                             icons_only=not provider, illustration_mode=mode)
     elif image_service.is_image_generation_disabled or image_service.image_gen_func is None:
         # No picture can be made, but the bundled vector library needs no
         # provider: the plan still places icons, with no illustration or sprite
@@ -271,7 +302,8 @@ async def resolve_offer(request, outline, roles, job, *, profile, checkpoint, du
     return offer
 
 
-async def _build(request, outline, roles, job, profile, image_service, *, icons_only: bool = False) -> AssetOffer:
+async def _build(request, outline, roles, job, profile, image_service, *, icons_only: bool = False,
+                 illustration_mode: str = "off") -> AssetOffer:
     from services.generation_core.assets.offer import build_asset_offer
     from services.generation_core.style.build import resolve_brand
     from services.provider_usage_instrumentation import provider_usage_scope
@@ -285,7 +317,7 @@ async def _build(request, outline, roles, job, profile, image_service, *, icons_
             outline=outline, brand=brand, style=style, roles=roles,
             instructions=request.instructions, budget=profile.illustration_budget,
             timeout_seconds=profile.illustration_timeout_seconds, image_service=image_service,
-            icons_only=icons_only)
+            icons_only=icons_only, illustration_mode=illustration_mode)
     return offer
 
 
