@@ -62,12 +62,12 @@ Reading:
 
 ## Open
 
-1. **Group font attributes.** A model sometimes writes `font-family` on a `<g>`;
-   the contract rejects it and, on a header representative page, the whole deck
-   fails (`svg_common_header_representative_pages_ineligible`). Pushing those
-   attributes down to the texts is a one-function change, but the tests pin the
-   rule that without a pinned output view a response is parsed as written and
-   the compact form is rejected; changing that is a design decision, not done.
+1. **Group font attributes — decided 2026-11-03.** A model sometimes writes
+   `font-family` on a `<g>`; the contract rejected it and, on a header
+   representative page, the whole deck failed. Decision: font-family/size/weight
+   and text-anchor written on `svg`/`g` are pushed onto the texts (never `fill`),
+   in the producer and in `parse_author_response` alike (`97200520f`). Still open:
+   a deck should not fail outright when every representative page fails.
 2. **Pictographs** (counts drawn as rows of icons) are not implemented.
 3. **Icons the author does not place** still fail their page (`asset_icon_omitted`);
    seen on two pages of the first live vector deck.
