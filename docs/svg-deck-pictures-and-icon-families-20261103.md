@@ -124,18 +124,57 @@ Re-measurement with this code, same prompt and styles (cover and scene pictures)
   default stays **off**; turning it on is now a product decision rather than a
   stability blocker.
 
+### Integrated measurement with every picture kind (r4)
+
+Code at `c7104777a` (icons optional under the new-copy policy `5f65a482f`,
+header-scoped candidate admission, template fixes). Same prompt, three styles
+per arm, 8 slides each, `claude-sonnet-5-5`, no image provider (hybrid photo
+scenes would become placeholders; none were planned in this run, so hybrid
+drew the same kinds as vector).
+
+| arm | exec-report | strategic-navy | flat-infographic | pages passed | cost |
+|---|---|---|---|---|---|
+| off | 8/8 | 8/8 | 8/8 | 24/24 | $4.50 |
+| vector, all parts | 6/8 | 6/8 | 0/8 (review-side) | 12/24 | $5.56 |
+| hybrid, all parts | 8/8 | 8/8 | 6/8 | 22/24 | $6.03 |
+
+* No deck failed; every deck published a designed header.
+* The vector flat-infographic 0/8 is the review, not the pages: one page in
+  a review group came back unevaluated (`mandatory_evidence_invalid`), the
+  group was marked `local_review_coverage_incomplete`, and all eight pages
+  were flagged `design:unreviewed` / `design:deck_flow_unreviewed`. One page
+  of that deck was a real attempts-exhausted page.
+* Real page failures with pictures on: vector 3 attempts-exhausted pages (none
+  of them carried a picture) and 2 density/structure flags (one on a
+  pictograph page); hybrid 2 `information_structure` flags, both on step
+  picture pages.
+* Step pictures and before/after pairs no longer fail pages: 14 spot pages and
+  5 pair pages, none ended terminal (first measurement: 4 of 8 spot pages and
+  1 of 3 pair pages failed). 43 drawings requested over the vector arm, 43
+  accepted; 40 over hybrid, 40 accepted.
+* Icons the author left out (now recorded, not failed): off 5 of 86 offered
+  vector slots, vector 11 of 75, hybrid 11 of 96.
+* Decision: by the rule set before measuring (on only if the quality gate does
+  not get worse) the default stays **off**: off was 24/24 this round, both
+  picture arms were below it. Three decks per arm is a small sample and the
+  variance between rounds is large (off was 20/24 in the previous round).
+
 ## Open
 
-1. **Group font attributes — decided 2026-11-03.** A model sometimes writes
-   `font-family` on a `<g>`; the contract rejected it and, on a header
-   representative page, the whole deck failed. Decision: font-family/size/weight
-   and text-anchor written on `svg`/`g` are pushed onto the texts (never `fill`),
-   in the producer and in `parse_author_response` alike (`97200520f`). A deck no
-   longer fails outright when every representative page fails (`871053c58`).
-2. **Pictographs** (counts drawn as rows of icons) are not implemented.
-3. **Icons the author does not place** still fail their page (`asset_icon_omitted`);
-   seen on two pages of the first live vector deck.
-4. The bundled 300-icon library under the repository root `assets/` is not copied
-   into the Docker image; the icon families live under `servers/fastapi/assets/`.
-5. Pre-existing red gates, unchanged by this work: `ruff check .` (25 findings in
-   `svg_templates` and others), and the long-standing svg unit-test failures.
+1. **Default** stays `SVG_ILLUSTRATION_MODE=off`; `SVG_ILLUSTRATION_PARTS`
+   defaults to `cover,scene`. Turning pictures on is now a quality-preference
+   decision, not a stability blocker: no picture kind fails decks or pages
+   systematically any more.
+2. **Review coverage**: one unevaluated page discards its whole local review
+   group (`local_review_coverage_incomplete`), so every page of the group is
+   flagged unreviewed. Seen in the r1 off and r4 vector flat-infographic decks.
+3. **Hybrid with a real image provider** is unmeasured: no provider key was
+   available.
+4. Pre-existing red gates, unchanged by this work: `ruff check .` (25 findings)
+   and the long-standing svg unit-test failures.
+
+Closed since the first version of this note: group font attributes
+(`97200520f`), deck failure when every header representative page fails
+(`871053c58`, proven on the checkpoint store by `c7104777a`), pictographs
+(`d268f1fd4`, opt-in part), icons the author leaves out (`5f65a482f`), the
+bundled icon library in the Docker image (`411e47488`).
