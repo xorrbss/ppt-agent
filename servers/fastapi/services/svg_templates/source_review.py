@@ -314,9 +314,13 @@ def _compare_fixed_regions(source: bytes, rendered: bytes, frame):
         raise ValueError("svg_template_review_image_size_mismatch")
     width, height = source_image.size
     results = []
-    for element in frame.elements:
-        if element.layer != "foreground":
-            continue
+    regions = [element for element in frame.elements if element.layer == "foreground"]
+    if not regions:
+        # A cover or divider whose only furniture is its background picture
+        # (design D-2) is compared on that picture. Body content the source
+        # page draws over it shows up in the number, which is evidence only.
+        regions = [element for element in frame.elements if element.kind == "image"]
+    for element in regions:
         rect = element.bounds
         left = max(0, int(rect.x))
         top = max(0, int(rect.y))

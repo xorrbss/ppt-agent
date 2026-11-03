@@ -37,16 +37,18 @@ def _png(width=8, height=4):
 
 
 class _FakeRenderer:
-    """Records the requests and answers each with a small translucent image."""
+    """Records the requests and answers each with a small translucent image
+    (or at ``bounds`` when given)."""
 
-    def __init__(self, *, error=None):
-        self.requests, self.error = [], error
+    def __init__(self, *, error=None, bounds=(10, 12, 40, 20)):
+        self.requests, self.error, self.bounds = [], error, bounds
 
     def __call__(self, path, canvas, requests):
         self.requests.extend(requests)
         if self.error:
             raise ValueError(self.error)
-        return {request.key: RasterResult(data=_png(), media_type="image/png", x=10, y=12, width=40, height=20,
+        x, y, width, height = self.bounds
+        return {request.key: RasterResult(data=_png(), media_type="image/png", x=x, y=y, width=width, height=height,
                                           renderer="fake", renderer_version="1", approximate=True)
                 for request in requests}
 
@@ -285,3 +287,61 @@ def test_a_reviewed_group_leaf_keeps_its_group(tmp_path):
     assert len([element for element in again.frames[0].elements if element.layer == "foreground"]) == 2
     with pytest.raises(ValueError, match="svg_template_fixed_shape_unknown"):
         extract_template_package(path, frame_reviews={frame.frame_id: {"fixed_shape_ids": [leaves[0].source_part + "#999"]}})
+
+
+def test_raster_pixels_map_to_the_logical_canvas_per_axis():
+    from types import SimpleNamespace
+
+    from services.svg_templates.raster_preservation import _logical_bounds
+    # 303 x 216 mm: logical 1280 x 912 (912.46 rounded), rendered 2560 x 1825.
+    canvas = SimpleNamespace(width_px=1280, height_px=912)
+    bounds = _logical_bounds((0, 0, 2560, 1825), 2560, 1825, canvas)
+    assert bounds == {"x": 0.0, "y": 0.0, "width": 1280.0, "height": 912.0}
+
+
+def test_a_large_early_decoration_run_is_a_background_layer(tmp_path):
+    from services.svg_templates.frame import adapt_template_frame
+
+    def build(slide, add, deck):
+        # A picture-filled divider shape: not a p:pic, yet text-free and under everything.
+        _gradient(add(slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, 0, Emu(800000), Emu(_WIDTH), Emu(_HEIGHT - 800000))))
+        _solid(add(slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, 0, 0, Emu(_WIDTH), Emu(300000))))
+
+    package = extract_template_package(_deck(tmp_path / "deck.pptx", build),
+                                       raster_renderer=_FakeRenderer(bounds=(0, 84, 1280, 636)))
+    frame = package.frames[0]
+    raster = next(element for element in frame.elements if element.raster_preservation)
+    assert raster.layer == "background" and not frame.forbidden_regions
+    adapt_template_frame(frame, frame.source_canvas)
+
+
+def test_a_mid_page_decoration_reserves_its_image_bounds(tmp_path):
+    from services.svg_templates.frame import adapt_template_frame
+
+    def build(slide, add, deck):
+        _solid(add(slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, 0, 0, Emu(_WIDTH), Emu(300000))))
+        _gradient(add(slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, Emu(10000000), Emu(3000000), Emu(1500000), Emu(600000))))
+
+    package = extract_template_package(_deck(tmp_path / "deck.pptx", build),
+                                       raster_renderer=_FakeRenderer(bounds=(1050, 316, 156, 62)))
+    frame = package.frames[0]
+    raster = next(element for element in frame.elements if element.raster_preservation)
+    # The reserved region is the image itself, not the source shape's box.
+    assert frame.forbidden_regions == (raster.bounds,)
+    adapt_template_frame(frame, frame.source_canvas)
+
+
+def test_a_frame_with_only_a_background_picture_is_compared_on_it(tmp_path):
+    from services.svg_templates.source_review import _compare_fixed_regions
+
+    def build(slide, add, deck):
+        _gradient(add(slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, 0, 0, Emu(_WIDTH), Emu(_HEIGHT))))
+
+    package = extract_template_package(_deck(tmp_path / "deck.pptx", build),
+                                       raster_renderer=_FakeRenderer(bounds=(0, 0, 1280, 720)))
+    frame = package.frames[0]
+    assert not any(element.layer == "foreground" for element in frame.elements)
+    image = BytesIO()
+    Image.new("RGB", (1280, 720), (0, 0, 0)).save(image, format="PNG")
+    comparison = _compare_fixed_regions(image.getvalue(), image.getvalue(), frame)
+    assert [region["mean_absolute_channel_error"] for region in comparison["regions"]] == [0]

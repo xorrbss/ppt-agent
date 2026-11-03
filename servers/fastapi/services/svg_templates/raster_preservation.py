@@ -290,6 +290,15 @@ def _encode(rgba) -> tuple[bytes, str, tuple[int, int, int, int]] | None:
     return output.getvalue(), media_type, (int(left), int(top), int(right - left), int(bottom - top))
 
 
+def _logical_bounds(pixels, page_width: int, page_height: int, canvas) -> dict:
+    """Pixel crop to logical canvas units, per axis: the logical height is
+    rounded from the slide ratio (912 for 912.46), so the rendered page is not
+    exactly ``RASTER_SCALE`` times it in both directions."""
+    left, top, width, height = pixels
+    sx, sy = canvas.width_px / page_width, canvas.height_px / page_height
+    return {"x": left * sx, "y": top * sy, "width": width * sx, "height": height * sy}
+
+
 def render_raster_requests(source_path, canvas, requests: list[RasterRequest]) -> dict[str, RasterResult | None]:
     """Render every request; ``None`` for a request that shows nothing."""
     import numpy as np
@@ -319,9 +328,9 @@ def render_raster_requests(source_path, canvas, requests: list[RasterRequest]) -
         if encoded is None:
             results[request.key] = None
             continue
-        data, media_type, (left, top, width, height) = encoded
-        results[request.key] = RasterResult(data=data, media_type=media_type, x=left / RASTER_SCALE,
-            y=top / RASTER_SCALE, width=width / RASTER_SCALE, height=height / RASTER_SCALE,
+        data, media_type, pixels = encoded
+        results[request.key] = RasterResult(data=data, media_type=media_type,
+            **_logical_bounds(pixels, on_white.shape[1], on_white.shape[0], canvas),
             renderer="libreoffice", renderer_version=version, approximate=True)
     return results
 

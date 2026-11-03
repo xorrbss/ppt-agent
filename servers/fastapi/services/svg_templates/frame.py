@@ -189,6 +189,10 @@ class _RasterRuns:
                          "layer": layer, "refs": []}
             self.runs.append(self.open)
         self.open["shapes"].append(RasterShape(part=part, element=shape, emu_rect=emu, hide_text=hide_text))
+        if bounds is not None and not hide_text:
+            # Replaced by the run image's own bounds once it is rendered. A
+            # shape whose text stays vector keeps its bounds for that text.
+            self.open.setdefault("source_bounds", []).append(bounds)
         self.open["reasons"].add(reason)
         self.open["refs"].append(part + "#" + shape_id(shape))
         return True
@@ -256,8 +260,26 @@ def _apply_raster_runs(renderer, path, canvas, context, pending) -> None:
                     state["issues"].append(FrameIssue(reason_code=str(error), severity="blocked",
                                                       source_part=part, shape_id=shape))
         return
+    page_area = canvas.width_px * canvas.height_px
     for state in pending:
         frame_id, elements = state["frame_id"], state["elements"]
+        # A foreground run painted before every foreground element and covering
+        # most of the page (a picture-filled divider shape) is a background
+        # layer under the body (design D-2), decided in paint order.
+        foreground_before, cursor = False, 0
+        for index, run in enumerate(state["runs"].runs):
+            result = results.get(f"{frame_id}:{index}")
+            foreground_before = foreground_before or any(
+                item.layer == "foreground" for item in elements[cursor:run["position"]])
+            cursor = run["position"]
+            if (run["layer"] == "foreground" and result is not None and not foreground_before
+                    and result.width * result.height >= page_area * .7):
+                run["layer"] = "background"
+            foreground_before = foreground_before or (run["layer"] == "foreground" and result is not None)
+        for run in state["runs"].runs:
+            for box in run.get("source_bounds", ()):
+                if box in state["fixed_bounds"]:
+                    state["fixed_bounds"].remove(box)
         # Insert from the last run back, so earlier positions stay valid.
         for index, run in reversed(list(enumerate(state["runs"].runs))):
             result = results.get(f"{frame_id}:{index}")
