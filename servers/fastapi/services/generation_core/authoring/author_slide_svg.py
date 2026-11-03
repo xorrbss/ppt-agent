@@ -1235,9 +1235,16 @@ async def author_slide_svg(content: str, style_snapshot: dict, role: str, index:
     declarations = None
     coverage_receipt = {}
     output_view_inbound = None
+    fonts_pushed = 0
     if not re.search(r"<!|<\?", svg):
         try:
             root = ET.fromstring(svg)
+            if view_plan is None or view_plan.text_props is None:
+                # A font attribute written on svg/g goes onto its texts; replayed
+                # identically by svg_author_output_view.parse_author_response.
+                from services.svg_text_defaults import push_down_container_font_attributes
+
+                fonts_pushed = push_down_container_font_attributes(root)
             if view_plan is not None:
                 # Canonical ids -> source table rows -> text defaults, before anything
                 # (declarations, icons, classification coverage) reads the tree. The same
@@ -1297,5 +1304,6 @@ async def author_slide_svg(content: str, style_snapshot: dict, role: str, index:
             **({"vector_icons_used": sorted(vector_used)} if any(v.get("vector") is not None
                                                                  for v in manifest.values()) else {}),
             **({"output_view": output_view_receipt(view_plan, output_view_inbound)}
-               if view_plan is not None else {})},
+               if view_plan is not None else {}),
+            **({"container_font_attributes_pushed": fonts_pushed} if fonts_pushed else {})},
             native_declarations=declarations)

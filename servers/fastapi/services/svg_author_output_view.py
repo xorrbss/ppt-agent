@@ -222,15 +222,21 @@ def output_view_receipt(plan: OutputViewPlan, inbound: dict | None) -> dict:
 def parse_author_response(raw, *, view, source_facts):
     """Re-derive the author tree from a stored raw response exactly as the producer did.
 
-    ``normalize_svg_response`` -> ``ET.fromstring`` -> :func:`apply_inbound`. Returns
+    ``normalize_svg_response`` -> ``ET.fromstring`` -> container font attributes onto texts
+    (unless a text-defaults stage owns them) -> :func:`apply_inbound`. Returns
     ``(root, receipt)`` where ``receipt`` is the ``output_view`` receipt entry, or ``None`` when no
     view is pinned (then the tree is today's ``ET.fromstring(normalize_svg_response(raw))``).
     ``ET.ParseError`` propagates, as it does at every caller today.
     """
     from services.svg_contract import normalize_svg_response
 
+    from services.svg_text_defaults import push_down_container_font_attributes
+
     plan = output_view_plan(view, source_facts)
     root = ET.fromstring(normalize_svg_response(raw))
+    if plan is None or plan.text_props is None:
+        # The producer restores container font attributes the same way.
+        push_down_container_font_attributes(root)
     if plan is None:
         return root, None
     return root, output_view_receipt(plan, apply_plan(root, plan))

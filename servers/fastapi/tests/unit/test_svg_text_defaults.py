@@ -475,3 +475,36 @@ def test_published_constants():
     assert TEXT_DEFAULT_PROPS_T1 == ("font-family", "font-size")
     assert TEXT_DEFAULTS_REPAIR_SENTENCE == (
         "previous_svg declares its shared text style on the root svg; keep that convention")
+
+
+def test_container_font_attributes_are_pushed_onto_texts_without_touching_fill():
+    from services.svg_text_defaults import push_down_container_font_attributes
+
+    svg = ('<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720" viewBox="0 0 1280 720">'
+           '<g font-family="Noto Sans KR" font-size="18" fill="#112233">'
+           '<rect x="0" y="0" width="10" height="10"/>'
+           '<text x="10" y="20" fill="#112233">a</text>'
+           '<text x="10" y="40" font-size="24" fill="#112233">b</text></g></svg>')
+    root = ET.fromstring(svg)
+    assert push_down_container_font_attributes(root) == 2
+    group = next(node for node in root.iter() if node.tag.endswith("}g"))
+    assert "font-family" not in group.attrib and group.get("fill") == "#112233"
+    texts = [node for node in root.iter() if node.tag.endswith("}text")]
+    assert [(t.get("font-family"), t.get("font-size")) for t in texts] == [("Noto Sans KR", "18"),
+                                                                          ("Noto Sans KR", "24")]
+    assert verdict(ET.tostring(root, encoding="unicode")) == "ok"
+
+
+def test_an_explicit_page_is_a_no_op_and_a_grouped_one_replays_into_a_valid_page():
+    from services.svg_author_output_view import parse_author_response
+    from services.svg_text_defaults import push_down_container_font_attributes
+
+    explicit = page('<text x="1" y="2" font-family="F" font-size="14" fill="#111111">a</text>')
+    root = ET.fromstring(explicit)
+    assert push_down_container_font_attributes(root) == 0
+    assert ET.tostring(root, encoding="unicode") == ET.tostring(ET.fromstring(explicit), encoding="unicode")
+    grouped = explicit.replace('<text x="1" y="2" font-family="F" font-size="14"',
+                               '<g font-family="F" font-size="14"><text x="1" y="2"').replace("</text>", "</text></g>")
+    assert verdict(grouped) == "svg_contract_unsupported_attribute"
+    replayed, receipt = parse_author_response(grouped, view=None, source_facts=None)
+    assert receipt is None and verdict(ET.tostring(replayed, encoding="unicode")) == "ok"

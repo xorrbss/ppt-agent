@@ -138,6 +138,43 @@ def expand_text_defaults(root) -> dict[str, int]:
     return {"texts_filled": texts_filled, "containers_stripped": containers_stripped}
 
 
+def push_down_container_font_attributes(root) -> int:
+    """Move font attributes an author wrote on ``svg``/``g`` onto the texts they govern (in place).
+
+    The contract admits ``font-family``, ``font-size``, ``font-weight`` and
+    ``text-anchor`` only on ``<text>``/``<tspan>``. A model occasionally writes
+    them once on a container, which SVG inheritance gives exactly one meaning;
+    the page used to be rejected for it, and on a common-header representative
+    page that rejection failed the whole deck. Those four attributes are
+    materialised on every ``<text>`` below that does not set its own and are
+    stripped from the containers. ``fill`` is never touched (it is legal on
+    containers and also paints shapes). Every page accepted before this
+    existed is a byte-for-byte no-op, and a stored raw response replays
+    identically because the producer and ``parse_author_response`` both call
+    this. Returns how many ``<text>`` elements received an attribute.
+    """
+    filled = 0
+    stack = [(root, {})]
+    while stack:
+        node, inherited = stack.pop()
+        name = _tag(node)
+        if name in ("svg", "g"):
+            current = dict(inherited)
+            for prop in _TEXT_ONLY:
+                value = node.attrib.pop(prop, None)
+                if value is not None:
+                    current[prop] = value
+            stack.extend((child, current) for child in reversed(list(node)))
+        elif name == "text":
+            changed = False
+            for prop in _TEXT_ONLY:
+                if prop not in node.attrib and prop in inherited:
+                    _set_ordered(node, prop, inherited[prop])
+                    changed = True
+            filled += changed
+    return filled
+
+
 def _length(name: str, value: str) -> int:
     return 1 + len(name) + 2 + len(value) + 1
 

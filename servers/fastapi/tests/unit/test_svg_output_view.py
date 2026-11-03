@@ -166,12 +166,19 @@ def test_design_text_never_carries_the_pin():
 
 # --- inbound --------------------------------------------------------------------------------------
 
-def test_no_view_is_todays_parse_byte_for_byte():
+def test_no_view_parses_as_written_except_container_font_attributes():
     canonical, compact, facts = page_responses(source_page())
-    for raw in (canonical, compact, "```svg\n" + canonical + "\n```"):
+    for raw in (canonical, "```svg\n" + canonical + "\n```"):
         root, receipt = parse_author_response(raw, view=None, source_facts=None)
         assert receipt is None
         assert ET.tostring(root, encoding="unicode") == _tree(raw)
+    # Without a view only container font attributes are restored onto the texts
+    # (the producer does the same); the root fill and everything else stay as written.
+    root, receipt = parse_author_response(compact, view=None, source_facts=None)
+    assert receipt is None and root.get("font-family") is None
+    assert all(text.get("font-family") == "Inter" for text in root.iter() if text.tag.endswith("}text"))
+    for raw in (canonical, compact, "```svg\n" + canonical + "\n```"):
+        root, receipt = parse_author_response(raw, view=None, source_facts=None)
         before = ET.tostring(root, encoding="unicode")
         assert apply_inbound(root, view=None, source_facts=facts) == {}
         assert ET.tostring(root, encoding="unicode") == before
@@ -247,7 +254,9 @@ def test_partial_stage_lists_apply_only_their_stages():
     assert receipt["stages"] == ["id_alias"]
     group = next(node for node in root.iter() if node.get("id") == facts[1]["element_id"])
     assert group.get("data-native-table") == '{"headerRows":1}'
-    assert root.get("font-family") == "Inter"
+    # id_alias alone owns no text defaults: container fonts went onto the texts.
+    assert root.get("font-family") is None
+    assert all(text.get("font-family") == "Inter" for text in root.iter() if text.tag.endswith("}text"))
     tables_and_text = {"version": OUTPUT_VIEW_VERSION, "stages": ["native_table_rows", "text_defaults:family"]}
     plan = output_view_plan(tables_and_text, facts)
     assert plan.alias_map is None and plan.text_props == ("font-family",)
