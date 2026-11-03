@@ -169,3 +169,49 @@ def test_various_canvas_sizes_are_contract_valid(width, height):
         width=width, height=height, style_snapshot=None,
     )
     validate_svg(svg, width=width, height=height)
+
+
+def _page_texts(svg: str) -> list[str]:
+    root = ET.fromstring(svg)
+    return [node.text or "" for node in root.iter(f"{{{SVG_NS}}}text") if node.get("id") != PAGE_NUMBER_ID]
+
+
+def test_markdown_syntax_is_shown_as_plain_text_and_title_is_not_repeated():
+    title = "예산 배분, 국내 시장 특성, 2027년 실행 로드맵"
+    content = (
+        f"## {title}\n"
+        f"# {title}\n"
+        "### **핵심** 요약\n"
+        "- 매출 *12%* 성장\n"
+        "* 비용은 `절감` 방향\n"
+        "> 인용 문장\n"
+        "---\n"
+        "자세한 내용은 [보고서](https://example.com/a)\n"
+    )
+    svg = fallback_page_svg(content=content, role="content", index=0, count=1,
+                            width=WIDTH, height=HEIGHT, style_snapshot=None)
+    validate_svg(svg, width=WIDTH, height=HEIGHT)
+    texts = _page_texts(svg)
+    joined = " ".join(texts)
+    for literal in ("#", "**", "`", "[", "](", "---"):
+        assert literal not in joined
+    assert [t for t in texts if title in t] == [title]  # title once, no body copy
+    body = "".join(joined.split())
+    for words in ("핵심요약", "매출12%성장", "비용은절감방향", "인용문장", "보고서(https://example.com/a)"):
+        assert words in body
+    assert any(t == "• 매출 12% 성장" for t in texts)
+
+
+def test_markers_keep_numbers_and_emphasis_inside_words():
+    svg = fallback_page_svg(content="제목\n- -5% 변동\n- snake_case_name 와 2*3=6", role="", index=0, count=1,
+                            width=WIDTH, height=HEIGHT, style_snapshot=None)
+    body = _body_words(svg)
+    assert "-5% 변동" in body
+    assert "snake_case_name" in body and "2*3=6" in body
+
+
+def test_long_title_is_still_repeated_once_in_full_when_it_duplicates_the_first_body_line():
+    title = "제목 " * 40 + "끝"
+    svg = fallback_page_svg(content=f"## {title}\n{title}\n- 본문", role="", index=0, count=1,
+                            width=WIDTH, height=HEIGHT, style_snapshot=None)
+    assert "".join(_body_words(svg).split()).count("".join(title.split())) == 1
