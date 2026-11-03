@@ -3,6 +3,10 @@ import type { SvgTemplateDraft, SvgTemplateFrame, SvgTemplateIssue } from "./svg
 export function templateReason(value: string | null | undefined): string {
   const code = value ?? "";
   if (code === "svg_template_powerpoint_busy") return "서버의 PowerPoint가 사용 중입니다. 잠시 후 분석을 다시 확인해 주세요.";
+  // Review-required states before approval: the person's next step, not a failure.
+  if (code === "source_render_review_required") return "원본과 보존할 양식의 미리보기를 비교해 확인해 주세요.";
+  if (code === "classification_review_required") return "보존 요소와 본문 영역의 구분이 맞는지 확인해 주세요.";
+  if (code.includes("libreoffice")) return "원본 미리보기를 만들 LibreOffice를 사용할 수 없습니다. 서버 준비 상태를 확인해 주세요.";
   if (code.includes("embedding")) return "이 글꼴은 파일에 포함할 수 없어 원본 글꼴 보존을 확인할 수 없습니다.";
   if (code.includes("font") && code.includes("unsupported")) return "원본 글꼴의 서식이 현재 지원 범위에 포함되지 않습니다.";
   if (code.includes("font")) return "원본 글꼴을 준비하거나 정확히 표시할 수 없습니다. 글꼴 준비 상태를 확인해 주세요.";

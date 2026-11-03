@@ -1,5 +1,7 @@
 # 사용자 SVG 템플릿 구현 및 검증 기록
 
+> Update 2026-11-03: Linux/Docker registration, the live end-to-end run and the fixes it needed are in `svg-user-templates-linux-20261103.md`.
+
 작업 브랜치: `codex/svg-user-templates-20261029`.
 기준 커밋: `5b1de620d04ac3f0d0ed73426cbf2ead20a23439`.
 요구사항 기준: [설계 revision 3](svg-user-template-layout-design-20261029.md).
