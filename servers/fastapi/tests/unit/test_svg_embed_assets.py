@@ -219,3 +219,22 @@ def test_rounded_rect_becomes_polygon_outline():
     assert outline["tag"] == "polyline" and outline["points"][0] == outline["points"][-1]
     xs = [x for x, _ in outline["points"]]
     assert min(xs) == pytest.approx(2) and max(xs) == pytest.approx(22)
+
+
+def test_template_redesign_icons_get_body_ids(library_icons, monkeypatch):
+    # A template-redesign body may only carry body- IDs; a live template deck
+    # failed every icon page with svg_template_body_namespace_required.
+    from services.generation_core.drivers.svg import embed_assets
+    from services.svg_templates import generation
+
+    icon = library_icons["finance-01-coin-stack.svg"]
+    root = _canvas(ET.Element(f"{{{SVG_NS}}}image", {"x": "10", "y": "10", "width": "48", "height": "48",
+                                                     "href": "icon-1", "preserveAspectRatio": "xMidYMid meet"}))
+    replace_vector_icon_images(root, {"icon-1": icon}, id_prefix="body-asset-")
+    assert [node.get("id") for node in root.iter(f"{{{SVG_NS}}}g") if node.get("transform")] == ["body-asset-icon-1"]
+
+    monkeypatch.setattr(generation, "template_selection", lambda snapshot: snapshot.get("selection"))
+    assert embed_assets.vector_icon_id_prefix({"selection": {"mode": "template-redesign"}}) == "body-asset-"
+    assert embed_assets.vector_icon_id_prefix({"selection": {"mode": "free-design"}}) == "asset-"
+    assert embed_assets.vector_icon_id_prefix({}) == "asset-"
+    assert embed_assets.vector_icon_id_prefix(None) == "asset-"

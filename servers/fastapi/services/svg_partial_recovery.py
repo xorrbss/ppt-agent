@@ -2294,9 +2294,9 @@ def _author_render_chain(payload, raw, receipt, *, request, job, asset, index,
     declarations = extract_native_declarations(root)
     if declaration_receipt(declarations).get("native_declarations") != receipt.get("native_declarations"):
         reject("svg_partial_recovery_author_declarations_changed")
-    from services.generation_core.drivers.svg.embed_assets import replace_vector_icon_images
+    from services.generation_core.drivers.svg.embed_assets import replace_vector_icon_images, vector_icon_id_prefix
 
-    used = replace_vector_icon_images(root, vectors) if vectors else set()
+    used = replace_vector_icon_images(root, vectors, id_prefix=vector_icon_id_prefix(job.svg_style_snapshot)) if vectors else set()
     if (not isinstance(recorded_used, list) or len(recorded_used) != len(set(recorded_used))
             or used != set(recorded_used)
             or (vectors or recorded_used or vector_offer) and (
@@ -2395,8 +2395,8 @@ def _author_render_chain(payload, raw, receipt, *, request, job, asset, index,
             try:
                 prior_root, _ = parse_author_response(previous_raw, view=view, source_facts=view_facts)
                 if vectors:
-                    from services.generation_core.drivers.svg.embed_assets import replace_vector_icon_images
-                    replace_vector_icon_images(prior_root, vectors)
+                    from services.generation_core.drivers.svg.embed_assets import replace_vector_icon_images, vector_icon_id_prefix
+                    replace_vector_icon_images(prior_root, vectors, id_prefix=vector_icon_id_prefix(job.svg_style_snapshot))
                 prior_author = ET.tostring(prior_root, encoding="unicode")
                 _, prior_advisories = normalize_model_font_families(prior_author)
                 historical = {**payload, "svg_content": prior_svg,
@@ -2634,8 +2634,8 @@ def _replay_sealed_author_transform(payload, raw, *, request, job, asset, index,
     except ET.ParseError as error:
         raise PartialRecoveryRejected('svg_partial_recovery_author_transform_unproven') from error
     declarations = extract_native_declarations(root)
-    from services.generation_core.drivers.svg.embed_assets import replace_vector_icon_images
-    used = replace_vector_icon_images(root, vectors) if vectors else set()
+    from services.generation_core.drivers.svg.embed_assets import replace_vector_icon_images, vector_icon_id_prefix
+    used = replace_vector_icon_images(root, vectors, id_prefix=vector_icon_id_prefix(job.svg_style_snapshot)) if vectors else set()
     for node in root.iter():
         if node.tag.rsplit('}', 1)[-1] == 'image' and node.get('href') not in slots:
             reject('svg_partial_recovery_author_asset_unproven')
@@ -3668,8 +3668,8 @@ async def _completed_invalid_source_output(payload, row, *, completed, job, oper
     try:
         root, _ = parse_author_response(raw, view=view, source_facts=view_facts)
         declarations = extract_native_declarations(root)
-        from services.generation_core.drivers.svg.embed_assets import replace_vector_icon_images
-        used = replace_vector_icon_images(root, vectors) if vectors else set()
+        from services.generation_core.drivers.svg.embed_assets import replace_vector_icon_images, vector_icon_id_prefix
+        used = replace_vector_icon_images(root, vectors, id_prefix=vector_icon_id_prefix(job.svg_style_snapshot)) if vectors else set()
         if sorted(used) != sorted(receipt.get("vector_icons_used") or []):
             reject(code)
         if declaration_receipt(declarations).get("native_declarations") != receipt.get("native_declarations"):

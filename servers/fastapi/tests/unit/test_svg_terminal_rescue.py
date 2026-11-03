@@ -186,7 +186,7 @@ def test_a_a_page_whose_png_is_gone_is_not_kept(monkeypatch):
     assert rescued["terminal"]["remakeOutcome"] == "svg_fallback_page"
 
 
-def test_framed_template_rescue_keeps_only_an_existing_intact_page(monkeypatch):
+def test_framed_template_rescue_keeps_an_intact_page_and_otherwise_tries_the_template_fallback(monkeypatch):
     from models.svg_template_frame import FrameRect, SvgTemplateFrame, SvgTemplateFrameElement, SvgTemplateFontAsset
     from services.svg_canvas import svg_canvas_for_aspect_ratio
     from services.svg_master_furniture import master_furniture_receipt
@@ -247,6 +247,10 @@ def test_framed_template_rescue_keeps_only_an_existing_intact_page(monkeypatch):
     assert rescued["quality"]["template_preservation"] == quality["template_preservation"]
     renderer.assert_not_awaited()
 
+    # A page without an intact, proven render is not kept: it goes to the
+    # template fallback, which composes a deterministic body into the frame
+    # and must earn the same body-paint proof. The fake renderer reports no
+    # body measurements, so here every fallback is refused (the deck fails).
     for key in ("svg_template_page", "system_furniture", "quality"):
         invalid = deepcopy(payload)
         invalid.pop(key)
@@ -255,13 +259,15 @@ def test_framed_template_rescue_keeps_only_an_existing_intact_page(monkeypatch):
     invalid["svg_template_page"]["page_count"] = 4
     assert _rescue(ctx, stores, invalid, content=content) is None
     assert _rescue(ctx, stores, {"attempts": []}, content=content) is None
-    renderer.assert_not_awaited()
+    assert renderer.await_count == 5
+    rendered_fallback = renderer.await_args.args[0]
+    assert 'id="svg-system-template-header"' in rendered_fallback and 'id="body-fallback"' in rendered_fallback
     with pytest.raises(ValueError):
         validate_template_publication(snapshot, [], SimpleNamespace(slides=[]))
 
     ordinary, _png = _rescue(_ctx(), stores, {"attempts": []}, content=content)
     assert ordinary["terminal"]["remakeOutcome"] == "svg_fallback_page"
-    assert renderer.await_count == 1
+    assert renderer.await_count == 6  # five template fallbacks above, then this one
 
 
 @pytest.mark.parametrize("payload_kind", ["content_failure", "never_rendered", "unbound_digest"])

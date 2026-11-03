@@ -96,14 +96,21 @@ async def rescue_terminal_page(*, ctx, request, index, content, payload, error, 
     selection = template_selection(getattr(ctx, "snapshot", {}) or {})
     template_redesign = bool(selection and selection["mode"] == "template-redesign")
     if template_redesign:
+        # Keep the last render only when it carries the template's own
+        # preservation proof; otherwise (no valid render, or a body outside
+        # the frame) the template fallback below replaces it.
         svg = _last_rendered_svg(payload)
-        if svg is None:
-            return None
-        try:
-            validate_template_publication_page(ctx.snapshot, {**payload, "svg_content": svg},
-                                               index=index, count=ctx.count, content=content)
-        except (ValueError, TypeError, KeyError, IndexError):
-            return None
+        intact = svg is not None
+        if intact:
+            try:
+                validate_template_publication_page(ctx.snapshot, {**payload, "svg_content": svg},
+                                                   index=index, count=ctx.count, content=content)
+            except (ValueError, TypeError, KeyError, IndexError):
+                intact = False
+        if not intact:
+            return await _template_fallback(ctx=ctx, request=request, index=index, content=content,
+                                            payload=payload, error=error, job=job, checkpoint=checkpoint,
+                                            write_png=write_png)
     from services.svg_authoring_profile import read_quality_recovery_policy
     if read_quality_recovery_policy(getattr(ctx, "snapshot", {}) or {}):
         # Evidence only: the validated adaptation (reserved by collect in page

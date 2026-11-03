@@ -242,7 +242,23 @@ def _sanitize_id(value: str) -> str:
     return re.sub(r"[^A-Za-z0-9_.-]", "-", value)[:101]
 
 
-def replace_vector_icon_images(root: ET.Element, vector_icons: dict[str, FlattenedIcon]) -> set[str]:
+def vector_icon_id_prefix(style_snapshot: dict | None) -> str:
+    """ID prefix of the icon groups a page's placeholders become.
+
+    A template-redesign page may only carry ``body-`` IDs inside its body
+    (``svg_templates.frame_composition.compose_frame_svg``), so its icon groups
+    are named ``body-asset-...``; every other deck keeps ``asset-...``, which
+    its stored responses replay to byte for byte.
+    """
+
+    from services.svg_templates.generation import template_selection
+
+    selection = template_selection(style_snapshot or {})
+    return "body-asset-" if selection and selection.get("mode") == "template-redesign" else "asset-"
+
+
+def replace_vector_icon_images(root: ET.Element, vector_icons: dict[str, FlattenedIcon], *,
+                               id_prefix: str = "asset-") -> set[str]:
     """Replace ``<image href=slot>`` placeholders by vector icon groups in place."""
     targets = []
     for parent in root.iter():
@@ -261,7 +277,7 @@ def replace_vector_icon_images(root: ET.Element, vector_icons: dict[str, Flatten
         shift = _translation(child.get("transform"))
         if None in (x, y, width, height) or shift is None or width <= 0 or height <= 0:
             continue  # not a well-formed placeholder: leave it for the validator
-        base = _sanitize_id(f"asset-{slot}")
+        base = _sanitize_id(f"{id_prefix}{slot}")
         element_id, suffix = base, 2
         while element_id in used_ids:
             element_id, suffix = f"{base[:95]}-{suffix}", suffix + 1

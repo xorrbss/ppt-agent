@@ -1257,8 +1257,11 @@ async def author_slide_svg(content: str, style_snapshot: dict, role: str, index:
             used = set()
             if vectors:
                 # Planned icons are flattened into contract primitives in place.
-                from services.generation_core.drivers.svg.embed_assets import replace_vector_icon_images
-                vector_used = replace_vector_icon_images(root, vectors)
+                from services.generation_core.drivers.svg.embed_assets import (
+                    replace_vector_icon_images, vector_icon_id_prefix,
+                )
+                vector_used = replace_vector_icon_images(root, vectors,
+                                                         id_prefix=vector_icon_id_prefix(style_snapshot))
                 used |= vector_used
             for node in root.iter():
                 if node.tag == "{http://www.w3.org/2000/svg}image":
