@@ -26,6 +26,7 @@ from services.generation_core.drivers.svg.attempt_cause import cause, dispatch_c
 from services.generation_core.drivers.svg.native_declarations import bind_native_declarations
 from services.provider_usage_instrumentation import provider_usage_scope
 from services.svg_presentation_checkpoint import _provider_attempt_count
+from utils.ppt_writing_prompt import WRITING_POLICY_ID
 from utils.provider_overload import ProviderOutcomeError, is_page_recoverable_overload
 
 _LOCAL_ESCALATION_REASONS = {
@@ -54,6 +55,22 @@ def free_raster_redesign(ctx, index):
     """New snapshots compose approved redesign pages; historical replay stays local."""
     return bool(ctx.raster_reconstruction and ctx.snapshot.get("composition_mode") == "free-svg"
                 and ctx.raster_analysis.pages[index].render_mode == "redesign")
+
+
+def optional_vector_kinds(request, ctx) -> frozenset:
+    """Offered vector slot kinds a page may leave out without failing quality.
+
+    A model-drawn picture (``illustration``, ``spot``) is always optional page
+    support. An icon is optional on the same terms exactly when the author's
+    rules say so: the new-copy writing policy calls every illustration, spot
+    and icon slot optional generated support to omit when unsupported or
+    distracting. A deck without that policy (or a source page) was told to
+    place every offered slot, so an unused icon still fails its page there.
+    """
+
+    if getattr(request, "writing_policy", None) == WRITING_POLICY_ID and not getattr(ctx, "source_reflow", False):
+        return frozenset({"illustration", "spot", "icon"})
+    return frozenset({"illustration", "spot"})
 
 
 @dataclass
@@ -593,10 +610,9 @@ async def attempt_author(*, ctx, request, index, content, role, count, payload, 
     if offer is not None and offer.slots[index]:
         # Per-page AssetOffer receipt; raster slots are also accounted for by
         # the render step's sourceImages check, vector icons only here.
-        # A model-drawn picture is optional page support: leaving it out is
-        # recorded, not a quality failure (an offered icon still must be used).
+        optional_kinds = optional_vector_kinds(request, ctx)
         drawings = sorted(slot for slot, meta in offer.slots[index].items()
-                          if slot in vector_icons and meta.get("kind") in {"illustration", "spot"})
+                          if slot in vector_icons and meta.get("kind") in optional_kinds)
         payload["assetOffer"] = {"slots": offer.slots[index], "vectorIcons": {
             "offered": sorted(vector_icons), "used": authored.receipt.get("vector_icons_used", []),
             **({"optional": drawings} if drawings else {})}}

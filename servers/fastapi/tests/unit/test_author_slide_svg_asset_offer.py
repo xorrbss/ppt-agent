@@ -1844,3 +1844,23 @@ def test_svg_driver_builds_the_binding_hint_through_the_jobs_pinned_view(monkeyp
     else:
         # A job without a pin reads the raw literally, exactly as before.
         assert detail["total_counts"]["missing"] == 6
+
+
+def test_icons_are_optional_exactly_when_the_author_rules_say_so():
+    # The new-copy rules tell the author an icon slot is optional support to
+    # omit when distracting; quality must not then fail the page for it.
+    from services.generation_core.drivers.svg.author import optional_vector_kinds
+    from utils.ppt_writing_prompt import WRITING_POLICY_ID
+
+    fresh = SimpleNamespace(source_reflow=False)
+    assert optional_vector_kinds(SimpleNamespace(writing_policy=WRITING_POLICY_ID), fresh) == {
+        "illustration", "spot", "icon"}
+    assert optional_vector_kinds(SimpleNamespace(writing_policy=None), fresh) == {"illustration", "spot"}
+    assert optional_vector_kinds(SimpleNamespace(writing_policy=WRITING_POLICY_ID),
+                                 SimpleNamespace(source_reflow=True)) == {"illustration", "spot"}
+
+    quality = {"passed": True}
+    apply_vector_icon_quality(quality, {"assetOffer": {"vectorIcons": {
+        "offered": ["a", "b"], "used": ["a"], "optional": ["b"]}}})
+    assert quality == {"passed": True, "assetOffer": {"offered": ["a", "b"], "used": ["a"], "omitted": [],
+                                                      "omittedOptional": ["b"]}}
