@@ -133,6 +133,61 @@ def _snapshot(base, contract):
     return result
 
 
+HEADER_SCOPED = "header"
+_HEADER_FAILURE_PREFIX = "svg_common_header_"
+
+
+def header_scoped_eligible(result):
+    """Whether a representative page proves its header although its body failed.
+
+    A candidate is normally eligible only when its whole representative page
+    passed. The header design, though, only owns the header: once a candidate
+    is chosen its author's body is promoted as evidence and the regular page
+    loop measures it again, repairs it within the page's own budget, and
+    rescues it (keep-and-flag or complete-content fallback) like any other page.
+    So a page whose header measured clean -- no ``svg_common_header_*``
+    failure, a passed header measurement, a valid last drawing, and the
+    author's body kept for promotion -- is still a fair test of that header.
+    A failure placeholder shows no body to judge harmony by.
+    """
+
+    quality = result.get("quality") if isinstance(result, dict) else None
+    if not isinstance(quality, dict) or not isinstance(quality.get("failures", []), list):
+        return False
+    if not isinstance(result.get("author_body_svg"), str) or not result["author_body_svg"]:
+        return False
+    if result.get("inflight"):
+        return False
+    attempts = result.get("attempts") or [{}]
+    if not isinstance(attempts[-1], dict) or (attempts[-1].get("receipt") or {}).get("validation_error"):
+        return False
+    from services.generation_core.drivers.svg.terminal import PLACEHOLDER_OUTCOME
+    terminal = result.get("terminal")
+    if terminal and (not isinstance(terminal, dict) or terminal.get("remakeOutcome") == PLACEHOLDER_OUTCOME):
+        return False
+    header = quality.get("common_header")
+    if not isinstance(header, dict) or header.get("passed") is not True:
+        return False
+    return all(isinstance(failure, dict) and isinstance(failure.get("kind"), str)
+               and not failure["kind"].startswith(_HEADER_FAILURE_PREFIX)
+               for failure in quality.get("failures", []))
+
+
+def admit_header_scoped_candidates(pages):
+    """Admit header-clean candidates only when no candidate passed outright.
+
+    A fully passing representative page stays the only admission when one
+    exists, so a deck that worked before chooses exactly as before.
+    """
+
+    if any(page.get("eligible") for page in pages.values()):
+        return
+    for page in pages.values():
+        if page.get("header_eligible") is True:
+            page["eligible"] = True
+            page["eligibility"] = HEADER_SCOPED
+
+
 def _representative_index(ctx, outline, cover_exception, stage_plan=None):
     eligible = list(range(1 if cover_exception else 0, ctx.count))
     if stage_plan is not None:
@@ -311,9 +366,19 @@ def _selection_input(ctx, request, outline, plan, document, candidates, pages, i
         quality = payload.get("quality") or {}
         eligible = page.get("eligible") is True
         png = read_png(payload) if eligible else None
+        if page.get("eligibility") == HEADER_SCOPED:
+            failures = quality.get("failures") or []
+            required_checks = {"passed": True, "scope": HEADER_SCOPED, "failures": [], "error": None}
+            body_checks = {"passed": False, "failures": failures,
+                           "page_outcome": (payload.get("terminal") or {}).get("remakeOutcome"),
+                           "handling": "page_rescue_after_selection"}
+        else:
+            required_checks = {"passed": quality.get("passed") is True,
+                "failures": quality.get("failures", []), "error": page.get("error")}
+            body_checks = None
         record = {"display_id": display_id, "candidate_revision": candidate["revision"],
-            "eligible": eligible, "required_checks": {"passed": quality.get("passed") is True,
-                "failures": quality.get("failures", []), "error": page.get("error")},
+            "eligible": eligible, "required_checks": required_checks,
+            **({"body_checks": body_checks} if body_checks is not None else {}),
             "svg_digest": sha256_hex((payload.get("svg_content") or "").encode()),
             "body_input_digest": payload.get("input_digest"),
             "source_preservation": {"digest": _digest(payload.get("source_preservation")),
@@ -571,6 +636,7 @@ async def _prepare_designed_document_header(ctx, request, presentation_id, outli
             return candidate_id, {"eligible": (result.get("quality", {}).get("passed") is True
                     and not result.get("terminal") and not result.get("flag")
                     and not (result.get("attempts", [{}])[-1].get("receipt") or {}).get("validation_error")),
+                "header_eligible": header_scoped_eligible(result),
                 "payload": result, "header_digest": candidate_ctx.snapshot["common_header"]["digest"]}
         except Exception as error:
             from services.svg_common_header_design_plan import HEADER_DESIGN_PLAN_VERSION
@@ -592,6 +658,7 @@ async def _prepare_designed_document_header(ctx, request, presentation_id, outli
         if isinstance(outcome, BaseException):
             raise outcome
         pages[outcome[0]] = outcome[1]
+    admit_header_scoped_candidates(pages)
     if not any(page.get("eligible") for page in pages.values()):
         raise ValueError("svg_common_header_representative_pages_ineligible")
     selection_input, images = _selection_input(ctx, request, outline, plan, document, candidates, pages, index, read_png)
@@ -646,7 +713,8 @@ async def _prepare_designed_document_header(ctx, request, presentation_id, outli
         raise ValueError("svg_common_header_selected_body_missing")
     # Promote author evidence only. Recreate final composition, measures and
     # native/publication evidence through the regular page loop without spend.
-    for key in ("quality", "png_path", "png_sha256", "svgAssetManifest", "system_furniture", "terminal", "flag"):
+    for key in ("quality", "png_path", "png_sha256", "svgAssetManifest", "system_furniture", "terminal", "flag",
+                "terminal_error"):
         candidate_payload.pop(key, None)
     candidate_payload["svg_content"] = body_svg
     composition = (candidate_payload.get("source_preservation") or {}).get("common_header_composition")

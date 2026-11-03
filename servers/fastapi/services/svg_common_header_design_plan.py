@@ -40,6 +40,9 @@ _BOUNDED_FAILURES = frozenset({
     "svg_common_header_candidates_ineligible",
     "svg_common_header_all_candidates_unsuitable",
     "svg_common_header_representative_visual_review_failed",
+    # Every candidate's representative page failed its header checks (or kept
+    # no body to promote): the designed header is unproven, the deck is not.
+    "svg_common_header_representative_pages_ineligible",
 })
 
 

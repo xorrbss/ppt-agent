@@ -992,6 +992,17 @@ def test_header_v2_metadata_preserves_exact_values_provenance_and_admitted_input
         {"selector_capability": {"provider": "test", "model": "test"}}, candidates, pages, batch_index, lambda _: png)
     assert screens == [png, png] and selected_input["available_values"] == batch_values
     assert context_bytes(selected_input, SELECTION_RULES, selection_schema(), compact=True) + 1024 <= 32768
+    assert all("body_checks" not in record for record in selected_input["candidates"])
+    body_failures = [{"kind": "asset_icon_omitted"}, {"kind": "source_text_paint_occluded"}]
+    scoped = {candidate_id: {**page, "eligibility": "header", "payload": {**page["payload"],
+        "quality": {"passed": False, "failures": body_failures, "common_header": {"passed": True}},
+        "terminal": {"remakeOutcome": "svg_fallback_page"}}} for candidate_id, page in pages.items()}
+    scoped_input, _ = _selection_input(ctx, batch_request, batch_outline, batch_plan,
+        {"selector_capability": {"provider": "test", "model": "test"}}, candidates, scoped, batch_index, lambda _: png)
+    for record in scoped_input["candidates"]:
+        assert record["required_checks"] == {"passed": True, "scope": "header", "failures": [], "error": None}
+        assert record["body_checks"] == {"passed": False, "failures": body_failures,
+            "page_outcome": "svg_fallback_page", "handling": "page_rescue_after_selection"}
     rejected_artifact = artifact.with_name("baseline12-projected-failed-job.json")
     if rejected_artifact.is_file():
         from services.ppt_writing_visible import svg_text_nodes

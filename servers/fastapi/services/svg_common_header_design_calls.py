@@ -19,7 +19,7 @@ from utils.provider_idempotency import supports_provider_idempotency
 from utils.hashing import canonical_json_digest
 from services.svg_common_header_transport import TRANSPORT_RULES, pack_header_transport
 
-PROMPT_VERSION = "svg-common-header-screen-choice/v2.1"
+PROMPT_VERSION = "svg-common-header-screen-choice/v2.2"
 DESIGN_INPUT_PROJECTION_VERSION = "svg-common-header-design-input/v1"
 
 # Header templates bind empty text fields; whole-page image placement and native
@@ -186,8 +186,10 @@ preservation take priority over novelty. Compare purpose, information hierarchy,
 alignment, whitespace, body/header harmony and meaningful structural differences. Explain
 visible screen evidence, not decoration count or an author's claim. Candidate display order
 and anonymous IDs carry no quality preference. Never choose a candidate whose required checks
-failed; one eligible candidate still requires your suitability judgment. Return null if all
-are unsuitable. Return candidate_selection and representative_visual_review as two separate
+failed; one eligible candidate still requires your suitability judgment. A candidate with
+body_checks passed its header checks but its page body did not: that body is measured, repaired
+or replaced page by page after selection, so judge its header and the header/body fit, not
+those body defects. Return null if all are unsuitable. Return candidate_selection and representative_visual_review as two separate
 contracts in this same response. The visual review reports harmony and known defects of the
 selected actual representative page; it does not replace source, native, export or other page
 checks. Echo the complete selection_input_digest and selected candidate revision. Never rewrite

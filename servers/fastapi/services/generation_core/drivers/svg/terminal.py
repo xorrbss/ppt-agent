@@ -259,6 +259,12 @@ async def _publish_substitute(*, ctx, svg, rendered, index, payload, error, job,
         LOGGER.warning("[svg] substitute page measurement unbound slide=%d", index + 1, exc_info=True)
         return None
     rescued = fields["content"]["svgReceipt"]
+    if payload.get("author_body_svg") and payload.get("header_author_attempt_identity"):
+        # A common-header candidate's representative page: the header choice
+        # promotes the author's body, not this substitute, and the regular
+        # page loop then measures and rescues that body like any other page.
+        rescued.update(author_body_svg=payload["author_body_svg"],
+                       header_author_attempt_identity=deepcopy(payload["header_author_attempt_identity"]))
     rescued.update(svg_content=fields["svg_content"], source_digest=sha256_hex(fields["svg_content"].encode()),
                    **write_png(rendered.png),
                    terminal=flagged_entry(index=index, reason=reason, attempted=False, outcome=outcome),

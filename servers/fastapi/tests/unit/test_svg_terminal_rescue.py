@@ -611,3 +611,32 @@ def test_a_declined_rescue_keeps_the_screen_error(monkeypatch):
     with pytest.raises(AuthoredStageError) as failed:
         _recover(quality_recovery, ctx, outline, [pending], state, hooks, AsyncMock())
     assert failed.value is pending.error
+
+
+def test_a_header_candidate_fallback_keeps_the_author_body_for_promotion(monkeypatch):
+    # A common-header candidate's representative page is chosen by its header;
+    # the author's body, not the fallback, is what the selection promotes.
+    _renderer(monkeypatch)
+    stores = _Stores()
+    payload = _rendered_payload(stores, _AUTHORED, _quality(_AUTHORED, passed=False,
+        failures=[{"kind": "source_text_paint_occluded"}]))
+    identity = {"candidate_revision": "1", "candidate_id": "a", "page_id": "p"}
+    payload.update(author_body_svg=_AUTHORED, header_author_attempt_identity=identity)
+
+    rescued, _png = _rescue(_ctx(), stores, payload)
+
+    assert rescued["terminal"]["remakeOutcome"] == "svg_fallback_page"
+    assert FALLBACK_GROUP_ID in rescued["svg_content"]
+    assert rescued["author_body_svg"] == _AUTHORED
+    assert rescued["header_author_attempt_identity"] == identity
+
+
+def test_an_ordinary_fallback_carries_no_author_body(monkeypatch):
+    _renderer(monkeypatch)
+    stores = _Stores()
+    payload = _rendered_payload(stores, _AUTHORED, _quality(_AUTHORED, passed=False,
+        failures=[{"kind": "source_text_paint_occluded"}]))
+
+    rescued, _png = _rescue(_ctx(), stores, payload)
+
+    assert "author_body_svg" not in rescued and "header_author_attempt_identity" not in rescued
