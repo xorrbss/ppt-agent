@@ -32,6 +32,19 @@ def _tag(name: str) -> str:
     return name.rsplit("}", 1)[-1].lower()
 
 
+#: A template-redesign page carries the user's template furniture (fixed
+#: header, footer, logo text) under ``svg-system-template-*`` IDs. That text is
+#: the template's own and frozen: the author cannot rephrase it, so it is not
+#: writing the policy judges. Only the body group is authored.
+_TEMPLATE_FURNITURE_PREFIX = "svg-system-template-"
+_TEMPLATE_BODY_ID = "svg-system-template-body"
+
+
+def _template_furniture(node: ET.Element) -> bool:
+    node_id = node.get("id") or ""
+    return node_id.startswith(_TEMPLATE_FURNITURE_PREFIX) and node_id != _TEMPLATE_BODY_ID
+
+
 def _svg_text_records(svg: str) -> tuple[dict, ...]:
     root = ET.fromstring(svg)
     qids = {node: f"svg-{index}" for index, node in enumerate(root.iter())}
@@ -41,7 +54,7 @@ def _svg_text_records(svg: str) -> tuple[dict, ...]:
         tag = _tag(node.tag)
         style = (node.get("style") or "").replace(" ", "").lower()
         hidden = hidden or tag in _SVG_EXCLUDED or node.get("display") == "none" or "display:none" in style
-        if hidden:
+        if hidden or _template_furniture(node):
             return
         if tag == "text":
             value = "".join(node.itertext()).strip()

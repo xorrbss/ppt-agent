@@ -240,7 +240,7 @@ def apply_template_body_quality(quality: dict, svg: str, snapshot: dict, context
             return None
         return result if all(math.isfinite(number) for number in result.values()) and result["width"] >= 0 and result["height"] >= 0 else None
     measurements = {item.get("qid"): item for item in (quality.get("browser_metrics") or {}).get("elements", [])}
-    bounds, failures = [], []
+    bounds, failures, owners = [], [], []
     for node in body.iter():
         tag = node.tag.rsplit("}", 1)[-1]
         if tag in {"svg", "g"}:
@@ -273,10 +273,24 @@ def apply_template_body_quality(quality: dict, svg: str, snapshot: dict, context
                 continue
             bounds.append(FrameRect(x=box["x"] - margin, y=box["y"] - margin,
                                     width=box["width"] + 2 * margin, height=box["height"] + 2 * margin))
+            owners.append(node)
+    frame = page_frame(snapshot, context["page_index"], context["page_count"])
     try:
-        validate_body_paint(page_frame(snapshot, context["page_index"], context["page_count"]), tuple(bounds))
+        validate_body_paint(frame, tuple(bounds))
     except ValueError as error:
-        failures.append({"kind": str(error)})
+        failure = {"kind": str(error)}
+        if str(error) == "svg_template_body_outside_allowed_region":
+            # Name what left the region, so a repair can move exactly that.
+            region = frame.body_region
+            outside = [(owner, box) for owner, box in zip(owners, bounds, strict=True)
+                       if box.x < region.x - .5 or box.y < region.y - .5
+                       or box.x + box.width > region.x + region.width + .5
+                       or box.y + box.height > region.y + region.height + .5]
+            failure.update(body_region=region.model_dump(mode="json"), elements=[
+                {"qid": qids[owner], "id": owner.get("id"),
+                 "box": {key: round(getattr(box, key), 1) for key in ("x", "y", "width", "height")}}
+                for owner, box in outside[:8]])
+        failures.append(failure)
     quality.setdefault("failures", []).extend(failures)
     quality["template_preservation"] = {
         "schema_version": "svg-template-preservation/v1", "page_context_digest": context["digest"],
