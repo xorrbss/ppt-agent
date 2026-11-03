@@ -142,7 +142,8 @@ def _style():
 def _build(**overrides):
     kwargs = dict(outline=_outline(), brand=SimpleNamespace(primary="#2563EB", topic="현장 자동화"),
                   style=_style(), roles=["cover", "content", "content", "content"], instructions=None,
-                  budget=4, timeout_seconds=30, icons_only=True, illustration_mode="vector")
+                  budget=4, timeout_seconds=30, icons_only=True, illustration_mode="vector",
+                  illustration_parts=("cover", "scene", "spots", "pairs"))
     kwargs.update(overrides)
     return asyncio.run(offer_mod.build_asset_offer(**kwargs))
 
@@ -248,3 +249,26 @@ def test_an_omitted_drawing_is_recorded_but_an_omitted_icon_still_fails():
     apply_vector_icon_quality(quality, {"assetOffer": {"vectorIcons": {
         "offered": ["drawing", "icon"], "used": ["drawing"], "optional": ["drawing"]}}})
     assert quality["passed"] is False and quality["assetOffer"]["omitted"] == ["icon"]
+
+
+def test_the_default_parts_draw_only_cover_and_scene_pictures(vector_fakes):
+    offer = _build(illustration_parts=None)
+    assert sorted({request.kind for request in vector_fakes["draw"]}) == ["cover", "scene"]
+    assert not [slot for slot in offer.slots if slot.kind == "spot"]
+    # the process page keeps its icons when it gets no step pictures
+    assert {slot.page_index for slot in offer.slots if slot.kind == "icon"} == {2, 3}
+    assert offer.receipt["vectorDrawings"]["parts"] == ["cover", "scene"]
+
+
+@pytest.mark.parametrize(("raw", "parts"), [
+    (None, ("cover", "scene")), ("", ("cover", "scene")), ("bogus", ("cover", "scene")),
+    ("spots, pairs", ("spots", "pairs")), ("cover,scene,spots,pairs", ("cover", "scene", "spots", "pairs")),
+])
+def test_the_parts_knob(monkeypatch, raw, parts):
+    from utils.get_env_concurrency import get_svg_illustration_parts_env
+
+    if raw is None:
+        monkeypatch.delenv("SVG_ILLUSTRATION_PARTS", raising=False)
+    else:
+        monkeypatch.setenv("SVG_ILLUSTRATION_PARTS", raw)
+    assert get_svg_illustration_parts_env() == parts

@@ -264,7 +264,8 @@ async def _icon_slots(pages, *, pack_key, context, color, receipt, preselected=N
 async def build_asset_offer(*, outline, brand, style, roles: Sequence[str], instructions: Optional[str],
                             budget: int, timeout_seconds: float, image_service=None,
                             settings=None, icons_only: bool = False,
-                            illustration_mode: str = "off") -> AssetOffer:
+                            illustration_mode: str = "off",
+                            illustration_parts: Optional[Sequence[str]] = None) -> AssetOffer:
     """Plan and produce one deck's illustrations and icons; never raises for a provider.
 
     ``icons_only`` is the no-image-provider mode: the same deck plan decides
@@ -279,8 +280,9 @@ async def build_asset_offer(*, outline, brand, style, roles: Sequence[str], inst
 
     ``illustration_mode`` ``vector`` or ``hybrid`` has the model draw the deck's
     pictures as vector SVG (``vector_offer.py``): scenes (no image provider
-    needed, no scene ceiling), cover/section/closing pictures, step pictures
-    and before/after pairs. In ``hybrid`` a scene marked as a photograph still
+    needed, no scene ceiling), cover/section/closing pictures, and, when
+    ``illustration_parts`` names them, step pictures and before/after pairs
+    (default: cover and scene only). In ``hybrid`` a scene marked as a photograph still
     takes the image-provider path when a provider is configured. A node that
     got a step picture gets no icon.
     """
@@ -357,7 +359,8 @@ async def build_asset_offer(*, outline, brand, style, roles: Sequence[str], inst
 
         vector_task = asyncio.ensure_future(build_vector_drawings(
             plan, outline=outline, roles=roles, brand=brand, style=style, timeout_seconds=timeout_seconds,
-            vector_scene_pages={slide.index for slide in all_scenes} - {slide.index for slide in scenes}))
+            vector_scene_pages={slide.index for slide in all_scenes} - {slide.index for slide in scenes},
+            **({"parts": tuple(illustration_parts)} if illustration_parts else {})))
     with observe_image_provider_calls() as scene_calls, svg_outline_spans.span("scenes"):
         scene_slots = await asyncio.gather(*(scene(slide) for slide in scenes))
         if vector_task is not None:

@@ -424,7 +424,7 @@ def _cover_body(group: ET.Element, *, title: str, bullets: Sequence[str], top: i
         for column, lines in enumerate(split):
             left = _MARGIN_X + column * (column_width + _COLUMN_GAP_PX)
             y = start + font_px
-            for first, line in lines:
+            for _first, line in lines:
                 _text_node(group, x=left, y=y, text=line, font_px=font_px, font_family=body_font, fill=text_color)
                 y += font_px * _BODY_LINE_HEIGHT
 

@@ -30,6 +30,13 @@ from utils.hashing import sha256_hex
 LOGGER = logging.getLogger(__name__)
 
 MAX_CALLS = 12
+#: Picture kinds a deck may get. ``SVG_ILLUSTRATION_PARTS`` chooses among them;
+#: the default keeps the two that did not add page failures when measured
+#: (cover and scene pictures). Step pictures and before/after pairs crowd
+#: text-dense pages: 4 of 8 step-picture pages and 1 of 3 pair pages failed
+#: the author's own checks in the 2026-11-03 measurement.
+ALL_PARTS = ("cover", "scene", "spots", "pairs")
+DEFAULT_PARTS = ("cover", "scene")
 MAX_COVER_PAGES = 3
 COVER_ROLES = frozenset({"COVER", "SECTION", "CLOSING"})
 SPOT_ARCHETYPES = frozenset({"process", "cycle", "timeline", "roadmap"})
@@ -72,7 +79,7 @@ def _first_line(content: str) -> str:
 
 
 def plan_jobs(plan, contents: Sequence[str], roles: Sequence[str], *, topic: str, palette: dict[str, str],
-              background: str, vector_scene_pages: set[int]) -> list[_Job]:
+              background: str, vector_scene_pages: set[int], parts: Sequence[str] = DEFAULT_PARTS) -> list[_Job]:
     """Every drawing call this deck would make, highest priority first, capped at ``MAX_CALLS``."""
     from utils.llm_calls.draw_vector_illustrations import DrawingRequest, DrawingSpec
 
@@ -82,7 +89,9 @@ def plan_jobs(plan, contents: Sequence[str], roles: Sequence[str], *, topic: str
                               context=context, extra=tuple(extra))
 
     jobs: list[_Job] = []
-    cover_pages = [index for index, role in enumerate(roles) if (role or "").strip().upper() in COVER_ROLES]
+    parts = set(parts)
+    cover_pages = ([index for index, role in enumerate(roles) if (role or "").strip().upper() in COVER_ROLES]
+                   if "cover" in parts else [])
     for page in cover_pages[:MAX_COVER_PAGES]:
         drawing = f"cover-p{page}"
         subject = _first_line(contents[page]) or topic
@@ -92,14 +101,14 @@ def plan_jobs(plan, contents: Sequence[str], roles: Sequence[str], *, topic: str
     for slide in plan.slides:
         page, labels = slide.index, [node.label for node in slide.nodes]
         context = contents[page][:_CONTEXT_CHARS]
-        if slide.archetype == "scene" and page in vector_scene_pages:
+        if slide.archetype == "scene" and page in vector_scene_pages and "scene" in parts:
             drawing = f"scene-p{page}"
             subject = "; ".join(part for part in (slide.takeaway, ", ".join(labels)) if part)
             jobs.append(_Job(1, page, "scene", request("scene", page, [DrawingSpec(drawing, *SCENE_SIZE, subject)],
                                                         context=context),
                              ((drawing, "scene", f"picture of this slide's message: {slide.takeaway or labels[0]}",
                                None),)))
-        elif slide.archetype in PAIR_ARCHETYPES and labels:
+        elif slide.archetype in PAIR_ARCHETYPES and labels and "pairs" in parts:
             before = "; ".join(f"{node.label} {node.before}" for node in slide.nodes if node.before) or labels[0]
             after = "; ".join(f"{node.label} {node.after}" for node in slide.nodes if node.after) or labels[-1]
             specs = [DrawingSpec(f"pair-p{page}-before", *PAIR_SIZE, f"As-Is (current state): {before}"),
@@ -109,7 +118,7 @@ def plan_jobs(plan, contents: Sequence[str], roles: Sequence[str], *, topic: str
                                None),
                               (specs[1].id, "comparison-after", "To-Be picture: place it on the target-state side",
                                None))))
-        elif slide.archetype in SPOT_ARCHETYPES and 3 <= len(labels) <= 6:
+        elif slide.archetype in SPOT_ARCHETYPES and 3 <= len(labels) <= 6 and "spots" in parts:
             specs = [DrawingSpec(f"spot-p{page}-n{number}", *SPOT_SIZE,
                                  f"step {number}: {node.label}" + (f" ({node.desc})" if node.desc else ""))
                      for number, node in enumerate(slide.nodes, start=1)]
@@ -189,7 +198,8 @@ async def _run(job: _Job, *, palette: Sequence[str], ink: str, call_seconds: flo
 
 
 async def build_vector_drawings(plan, *, outline, roles: Sequence[str], brand, style, timeout_seconds: float,
-                                vector_scene_pages: set[int]) -> tuple[list[AssetSlot], dict]:
+                                vector_scene_pages: set[int],
+                                parts: Sequence[str] = DEFAULT_PARTS) -> tuple[list[AssetSlot], dict]:
     """Draw this deck's vector pictures; returns their slots and a receipt. Never raises."""
     receipt: dict = {"calls": 0, "retries": 0, "timeouts": 0, "accepted": 0, "requested": 0,
                      "rejected": Counter(), "fillRatios": [], "jobs": {}}
@@ -197,11 +207,13 @@ async def build_vector_drawings(plan, *, outline, roles: Sequence[str], brand, s
         palette, background = deck_palette(brand, style)
         contents = [slide.content for slide in outline.slides]
         jobs = plan_jobs(plan, contents, list(roles), topic=getattr(brand, "topic", "") or "",
-                         palette=palette, background=background, vector_scene_pages=vector_scene_pages)
+                         palette=palette, background=background, vector_scene_pages=vector_scene_pages,
+                         parts=parts)
     except (ValueError, IndexError, AttributeError) as error:
         LOGGER.warning("[svg] vector drawing plan failed: %s", type(error).__name__)
         return [], {**receipt, "rejected": {}, "status": "plan_failed", "reason": type(error).__name__}
     receipt["requested"] = sum(len(job.request.drawings) for job in jobs)
+    receipt["parts"] = sorted(set(parts))
     receipt["jobs"] = dict(Counter(job.kind for job in jobs))
     receipt["palette"] = palette
     colors = list(dict.fromkeys(palette.values()))
@@ -224,5 +236,5 @@ async def build_vector_drawings(plan, *, outline, roles: Sequence[str], brand, s
     return slots, receipt
 
 
-__all__ = ["COVER_ROLES", "MAX_CALLS", "PAIR_ARCHETYPES", "SPOT_ARCHETYPES", "build_vector_drawings",
+__all__ = ["ALL_PARTS", "COVER_ROLES", "DEFAULT_PARTS", "MAX_CALLS", "PAIR_ARCHETYPES", "SPOT_ARCHETYPES", "build_vector_drawings",
            "deck_palette", "plan_jobs"]

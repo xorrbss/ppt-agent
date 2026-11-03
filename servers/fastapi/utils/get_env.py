@@ -28,6 +28,7 @@ from utils.get_env_concurrency import (
     get_svg_author_concurrency_source_reflow_env,
     get_svg_illustration_budget_env,
     get_svg_illustration_mode_env,
+    get_svg_illustration_parts_env,
     get_svg_illustration_timeout_seconds_env,
     get_svg_render_concurrency_env,
     get_svg_render_concurrency_source_reflow_env,

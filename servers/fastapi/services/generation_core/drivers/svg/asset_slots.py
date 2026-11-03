@@ -275,7 +275,7 @@ async def resolve_offer(request, outline, roles, job, *, profile, checkpoint, du
     from services.image_generation_service import ImageGenerationService
     from utils.asset_directory_utils import get_images_directory
 
-    from utils.get_env import get_svg_illustration_mode_env
+    from utils.get_env import get_svg_illustration_mode_env, get_svg_illustration_parts_env
 
     literal_pages = _native_literal_pages(request, outline, style_snapshot=style_snapshot,
                                           has_source_assets=has_source_assets)
@@ -286,7 +286,8 @@ async def resolve_offer(request, outline, roles, job, *, profile, checkpoint, du
     elif mode != "off":
         provider = not (image_service.is_image_generation_disabled or image_service.image_gen_func is None)
         offer = await _build(request, outline, roles, job, profile, image_service if provider else None,
-                             icons_only=not provider, illustration_mode=mode)
+                             icons_only=not provider, illustration_mode=mode,
+                             illustration_parts=get_svg_illustration_parts_env())
     elif image_service.is_image_generation_disabled or image_service.image_gen_func is None:
         # No picture can be made, but the bundled vector library needs no
         # provider: the plan still places icons, with no illustration or sprite
@@ -303,7 +304,7 @@ async def resolve_offer(request, outline, roles, job, *, profile, checkpoint, du
 
 
 async def _build(request, outline, roles, job, profile, image_service, *, icons_only: bool = False,
-                 illustration_mode: str = "off") -> AssetOffer:
+                 illustration_mode: str = "off", illustration_parts=None) -> AssetOffer:
     from services.generation_core.assets.offer import build_asset_offer
     from services.generation_core.style.build import resolve_brand
     from services.provider_usage_instrumentation import provider_usage_scope
@@ -317,7 +318,8 @@ async def _build(request, outline, roles, job, profile, image_service, *, icons_
             outline=outline, brand=brand, style=style, roles=roles,
             instructions=request.instructions, budget=profile.illustration_budget,
             timeout_seconds=profile.illustration_timeout_seconds, image_service=image_service,
-            icons_only=icons_only, illustration_mode=illustration_mode)
+            icons_only=icons_only, illustration_mode=illustration_mode,
+            illustration_parts=illustration_parts)
     return offer
 
 
