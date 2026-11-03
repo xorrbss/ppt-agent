@@ -345,3 +345,31 @@ def test_a_frame_with_only_a_background_picture_is_compared_on_it(tmp_path):
     Image.new("RGB", (1280, 720), (0, 0, 0)).save(image, format="PNG")
     comparison = _compare_fixed_regions(image.getvalue(), image.getvalue(), frame)
     assert [region["mean_absolute_channel_error"] for region in comparison["regions"]] == [0]
+
+
+def test_distant_consecutive_decoration_becomes_separate_images(tmp_path):
+    from services.svg_templates.frame import adapt_template_frame
+
+    def build(slide, add, deck):
+        # A top tab and a bottom page pill, consecutive in paint order (the real deck).
+        _gradient(add(slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, Emu(400000), 0, Emu(800000), Emu(500000))))
+        _gradient(add(slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, Emu(5800000), Emu(6500000), Emu(600000), Emu(200000))))
+
+    renderer = _FakeRenderer()
+    package = extract_template_package(_deck(tmp_path / "deck.pptx", build), raster_renderer=renderer)
+    assert [len(request.shapes) for request in renderer.requests] == [1, 1]
+    frame = package.frames[0]
+    assert len([element for element in frame.elements if element.raster_preservation]) == 2
+    adapt_template_frame(frame, frame.source_canvas)
+
+
+def test_decoration_with_an_unknown_box_is_never_merged(tmp_path):
+    def build(slide, add, deck):
+        _gradient(add(slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, Emu(9000000), Emu(6400000), Emu(1000000), Emu(300000))))
+        tab = add(slide.shapes.add_shape(MSO_SHAPE.ROUND_2_SAME_RECTANGLE, Emu(400000), 0, Emu(800000), Emu(500000)))
+        _gradient(tab)
+        tab.rotation = 180
+
+    renderer = _FakeRenderer()
+    extract_template_package(_deck(tmp_path / "deck.pptx", build), raster_renderer=renderer)
+    assert [len(request.shapes) for request in renderer.requests] == [1, 1]

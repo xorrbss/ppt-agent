@@ -159,6 +159,12 @@ def _emu(bounds, context):
     return tuple(round(value * context.scale) for value in (bounds.x, bounds.y, bounds.width, bounds.height))
 
 
+def _overlaps(a, b) -> bool:
+    """Overlapping or touching: shapes sharing an edge blend at it, so they
+    stay one image."""
+    return a.x <= b.x + b.width and b.x <= a.x + a.width and a.y <= b.y + b.height and b.y <= a.y + a.height
+
+
 class _RasterRuns:
     """Consecutive raster candidates of one frame, in paint order."""
 
@@ -173,7 +179,7 @@ class _RasterRuns:
     def background(self, elements, part, reason) -> bool:
         if not self.enabled or reason not in RASTERIZABLE:
             return False
-        self.runs.append({"position": len(elements), "shapes": [], "reasons": {reason},
+        self.runs.append({"position": len(elements), "shapes": [], "reasons": {reason}, "boxes": [],
                           "background_part": part, "layer": "background", "refs": [part + "#background"]})
         self.open = None
         return True
@@ -184,10 +190,20 @@ class _RasterRuns:
         if not self.enabled or reason not in RASTERIZABLE:
             return False
         layer = "background" if background else "foreground"
-        if self.open is None or self.open["layer"] != layer:
+        # Separate images keep paint order exactly, so consecutive decoration
+        # is merged only where known boxes overlap or touch (blending at the
+        # shared edge). One image spanning a top tab and a bottom logo would
+        # reserve the whole body; a shape whose box is unknown (a rotated
+        # tab) is never merged.
+        separate = (self.open is not None and (
+            bounds is None or len(self.open["boxes"]) != len(self.open["shapes"])
+            or not any(_overlaps(bounds, box) for box in self.open["boxes"])))
+        if self.open is None or self.open["layer"] != layer or separate:
             self.open = {"position": len(elements), "shapes": [], "reasons": set(), "background_part": None,
-                         "layer": layer, "refs": []}
+                         "layer": layer, "refs": [], "boxes": []}
             self.runs.append(self.open)
+        if bounds is not None:
+            self.open["boxes"].append(bounds)
         self.open["shapes"].append(RasterShape(part=part, element=shape, emu_rect=emu, hide_text=hide_text))
         if bounds is not None and not hide_text:
             # Replaced by the run image's own bounds once it is rendered. A
