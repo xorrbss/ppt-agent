@@ -124,7 +124,11 @@ def get_system_prompt(
         )
 
     title_slide_instruction = (
-        "Include presenter name in first slide."
+        "The first slide is the title slide. Put a presenter name, organisation or "
+        "presentation date on it only when the user's content, instructions or source "
+        "documents state it; otherwise leave that line out entirely. Never write a "
+        "placeholder such as [Presenter Name], never invent a presenter, role or "
+        "organisation, and never use today's date as the presentation date."
         if include_title_slide
         else "Do not include presenter name in any slides."
     )
@@ -167,7 +171,7 @@ def get_system_prompt(
         f"{toc_block}"
         f"{slide_outline_structure}\n"
         "Slide content must not contain any presentation branding/styling information.\n"
-        "Title slide must only contain title, presenter name, date and overview.\n"
+        "Title slide must only contain the title, an overview and, only when the user provided them, the presenter name, organisation and date.\n"
         "Only include URLs if they appear in the provided content/context.\n"
         "When source content/context is provided, ground your facts in it and do not contradict or go beyond it. "
         "When only a topic is given without source material, draw on your own well-established domain knowledge to add specific, accurate facts, figures, and examples — but never fabricate precise statistics, quotes, or sources you are not confident about.\n"

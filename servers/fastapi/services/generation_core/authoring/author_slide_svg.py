@@ -76,6 +76,8 @@ keep content clear of its occupied areas and do not duplicate logos, headers or 
 Do not add arrows or connecting lines between independent items. \
 Only represent relationships and sequence supported by source.
 Preserve requested facts, numbers, units and table relationships. Do not silently drop content to fit.
+Show a presenter name, organisation, role or date only when the slide content states it. Never invent one \
+or write a bracketed placeholder such as [Presenter Name]; leave that line out.
 Every explicitly requested table or supported data chart must have its own data-native-table or
 data-native-chart declaration containing that exact requested data. A chart drawn only as SVG bars
 or labels does not satisfy an editable chart request; an unrelated declared chart does not cover it.
