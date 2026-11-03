@@ -235,3 +235,16 @@ def test_projection_places_drawings_as_multicolour_vector_slots(vector_fakes, mo
     assert len(drawings) == 5 and all(entry["vector"].multicolor for entry in drawings)
     assert projected.receipt["drawingsPlaced"] == 5
     assert Path(offer.slots[0].path).is_file()
+
+
+def test_an_omitted_drawing_is_recorded_but_an_omitted_icon_still_fails():
+    from services.generation_core.drivers.svg.embed_assets import apply_vector_icon_quality
+
+    quality = {"passed": True}
+    apply_vector_icon_quality(quality, {"assetOffer": {"vectorIcons": {
+        "offered": ["drawing", "icon"], "used": ["icon"], "optional": ["drawing"]}}})
+    assert quality["passed"] is True
+    assert quality["assetOffer"]["omitted"] == [] and quality["assetOffer"]["omittedOptional"] == ["drawing"]
+    apply_vector_icon_quality(quality, {"assetOffer": {"vectorIcons": {
+        "offered": ["drawing", "icon"], "used": ["drawing"], "optional": ["drawing"]}}})
+    assert quality["passed"] is False and quality["assetOffer"]["omitted"] == ["icon"]

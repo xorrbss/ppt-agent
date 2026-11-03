@@ -593,8 +593,13 @@ async def attempt_author(*, ctx, request, index, content, role, count, payload, 
     if offer is not None and offer.slots[index]:
         # Per-page AssetOffer receipt; raster slots are also accounted for by
         # the render step's sourceImages check, vector icons only here.
+        # A model-drawn picture is optional page support: leaving it out is
+        # recorded, not a quality failure (an offered icon still must be used).
+        drawings = sorted(slot for slot, meta in offer.slots[index].items()
+                          if slot in vector_icons and meta.get("kind") in {"illustration", "spot"})
         payload["assetOffer"] = {"slots": offer.slots[index], "vectorIcons": {
-            "offered": sorted(vector_icons), "used": authored.receipt.get("vector_icons_used", [])}}
+            "offered": sorted(vector_icons), "used": authored.receipt.get("vector_icons_used", []),
+            **({"optional": drawings} if drawings else {})}}
     if ctx.source_reflow:
         payload["source_preservation"] = authored.receipt.get("source_preservation")
         if payload["source_preservation"] is not None:

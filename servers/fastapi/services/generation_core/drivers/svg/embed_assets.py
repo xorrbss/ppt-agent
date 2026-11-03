@@ -279,7 +279,11 @@ def replace_vector_icon_images(root: ET.Element, vector_icons: dict[str, Flatten
 
 
 def apply_vector_icon_quality(quality: dict, payload: dict) -> None:
-    """Record offered/used vector icons; an offered icon left unused fails quality."""
+    """Record offered/used vector slots; an offered icon left unused fails quality.
+
+    Slots listed as ``optional`` (model-drawn pictures) may be left out: they
+    are reported under ``omittedOptional`` and never fail the page.
+    """
     offer = (payload or {}).get("assetOffer")
     vector = offer.get("vectorIcons") if isinstance(offer, dict) else None
     if not isinstance(vector, dict):
@@ -288,8 +292,10 @@ def apply_vector_icon_quality(quality: dict, payload: dict) -> None:
     if not offered:
         return
     used = {str(slot) for slot in vector.get("used") or []}
-    omitted = sorted(offered - used)
-    quality["assetOffer"] = {"offered": sorted(offered), "used": sorted(used), "omitted": omitted}
+    optional = {str(slot) for slot in vector.get("optional") or []}
+    omitted = sorted(offered - used - optional)
+    quality["assetOffer"] = {"offered": sorted(offered), "used": sorted(used), "omitted": omitted,
+                             **({"omittedOptional": sorted((offered & optional) - used)} if optional else {})}
     if omitted:
         quality["passed"] = False
         quality.setdefault("failures", []).append({"kind": "asset_icon_omitted", "slotIds": omitted})
