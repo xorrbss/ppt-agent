@@ -60,6 +60,27 @@ Reading:
   page composition (or skip drawings on text-dense pages), and re-measure with
   the vision-review fix in place.
 
+### Re-measurement with cover and scene pictures only
+
+Same prompt and styles, code at `d268f1fd4` (vision-review fix, group font
+push-down, `SVG_ILLUSTRATION_PARTS` default `cover,scene`).
+
+| mode | exec-report | strategic-navy | flat-infographic |
+|---|---|---|---|
+| off | 6/8 (attempts exhausted 2) | 7/8 (attempts exhausted 1) | 8/8 |
+| vector (cover, scene) | **deck failed**: both header candidates' representative page failed static quality (`asset_icon_omitted`, `source_text_paint_occluded`) on an icon-only page | 6/8 (attempts exhausted 1, design density/structure 1) | 5/8 (design density 2, attempts exhausted 1) |
+
+* 4 drawings requested, 4 accepted (3 covers, 1 scene). Cost: off $4.62, vector
+  $5.23 for the three decks (vector includes the failed deck's partial spend).
+* Author-level page failures are now level (off 3 of 24, vector 2 of 16), but
+  the vision review flagged 3 vector pages for density balance and none with
+  pictures off. The failed deck was not caused by a picture: its representative
+  page carried only icons. Decision: the default stays **off** for now.
+* The deck failure shows the structural gap again: when every representative
+  page fails static quality, for any reason, the whole deck fails. Across both
+  arms icon omission hit 1 of 21 icon pages outside the header step, but 4
+  header-candidate attempts in the failed deck.
+
 ## Open
 
 1. **Group font attributes — decided 2026-11-03.** A model sometimes writes
