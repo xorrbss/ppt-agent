@@ -77,9 +77,25 @@ def test_write_icon_is_content_addressed(tmp_path):
 
 def test_selection_request_quotes_labels_and_lists_the_vocabulary():
     messages = selection.build_deck_icon_messages(["다중 인증", "데이터 암호화"], ["database", "lock"])
-    user = messages[-1].content
+    system, user = messages[0].content, messages[-1].content
     assert "1. 다중 인증" in user and "2. 데이터 암호화" in user
-    assert user.rstrip().endswith("database lock")
+    assert system.rstrip().endswith("database lock") and "다중 인증" not in system
+    # the deck-independent prefix is identical for every deck
+    assert selection.build_deck_icon_messages(["다른 라벨"], ["database", "lock"])[0].content == system
+
+
+def test_anthropic_system_prompt_becomes_a_cache_breakpoint_only_when_asked():
+    from llmai.shared.messages import SystemMessage, UserMessage
+
+    from utils.anthropic_structured_output import RepositoryAnthropicClient, cache_system_prompt
+
+    client = RepositoryAnthropicClient.__new__(RepositoryAnthropicClient)
+    messages = [SystemMessage(content="fixed vocabulary"), UserMessage(content="labels")]
+    assert client._get_system_prompt(messages) == "fixed vocabulary"
+    with cache_system_prompt():
+        assert client._get_system_prompt(messages) == [
+            {"type": "text", "text": "fixed vocabulary", "cache_control": {"type": "ephemeral"}}]
+    assert client._get_system_prompt(messages) == "fixed vocabulary"
 
 
 def test_parse_keeps_valid_picks_and_drops_the_rest():

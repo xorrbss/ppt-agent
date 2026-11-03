@@ -56,7 +56,9 @@ from __future__ import annotations
 import json
 import logging
 import threading
-from collections.abc import Generator, Iterable, Mapping
+from collections.abc import Generator, Iterable, Iterator, Mapping
+from contextlib import contextmanager
+from contextvars import ContextVar
 from copy import deepcopy
 from dataclasses import dataclass
 from typing import Any
@@ -509,8 +511,35 @@ class _StructuredPlan:
     output_format: Mapping[str, Any] | None = None
 
 
+_CACHE_SYSTEM_PROMPT: ContextVar[bool] = ContextVar("anthropic_cache_system_prompt", default=False)
+
+
+@contextmanager
+def cache_system_prompt() -> Iterator[None]:
+    """Mark the system prompt of Anthropic calls made inside as a prompt-cache breakpoint.
+
+    For calls whose long system prompt is identical across requests (a fixed
+    vocabulary, say) and whose varying part is the user message. Other
+    providers ignore it; their automatic prefix caching needs nothing more
+    than the stable prefix.
+    """
+    token = _CACHE_SYSTEM_PROMPT.set(True)
+    try:
+        yield
+    finally:
+        _CACHE_SYSTEM_PROMPT.reset(token)
+
+
 class RepositoryAnthropicClient(AnthropicClient):
     """llmai's Anthropic client with native structured output."""
+
+    # -- prompt caching --------------------------------------------------------
+
+    def _get_system_prompt(self, messages: list[Any]):
+        system = super()._get_system_prompt(messages)
+        if _CACHE_SYSTEM_PROMPT.get() and isinstance(system, str) and system:
+            return [{"type": "text", "text": system, "cache_control": {"type": "ephemeral"}}]
+        return system
 
     # -- output budget -----------------------------------------------------
 
