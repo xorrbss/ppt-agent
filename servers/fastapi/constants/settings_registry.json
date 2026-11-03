@@ -338,7 +338,7 @@
     {
       "key": "ANTHROPIC_MODEL",
       "type": "string",
-      "default": "claude-sonnet-4-20250514",
+      "default": "claude-sonnet-5-5",
       "secret": false,
       "targets": ["fastapi.runtime", "start.user_config", "compose.shared", "docs.public"],
       "group": "llm.anthropic",

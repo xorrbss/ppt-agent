@@ -257,10 +257,11 @@ async def resolve_offer(request, outline, roles, job, *, profile, checkpoint, du
     if literal_pages is not None:
         offer = await _native_literal_offer(literal_pages, request)
     elif image_service.is_image_generation_disabled or image_service.image_gen_func is None:
-        # No picture can be made, so the plan call that would place them is
-        # not bought either. Persisted like any offer, so a resume after the
-        # setting changes still matches the sealed source manifest.
-        offer = AssetOffer(receipt={"status": "image_generation_unavailable"})
+        # No picture can be made, but the bundled vector library needs no
+        # provider: the plan still places icons, with no illustration or sprite
+        # sheet. Persisted like any offer, so a resume after the setting
+        # changes still matches the sealed source manifest.
+        offer = await _build(request, outline, roles, job, profile, None, icons_only=True)
     else:
         offer = await _build(request, outline, roles, job, profile, image_service)
     if job is not None:
@@ -270,7 +271,7 @@ async def resolve_offer(request, outline, roles, job, *, profile, checkpoint, du
     return offer
 
 
-async def _build(request, outline, roles, job, profile, image_service) -> AssetOffer:
+async def _build(request, outline, roles, job, profile, image_service, *, icons_only: bool = False) -> AssetOffer:
     from services.generation_core.assets.offer import build_asset_offer
     from services.generation_core.style.build import resolve_brand
     from services.provider_usage_instrumentation import provider_usage_scope
@@ -283,7 +284,8 @@ async def _build(request, outline, roles, job, profile, image_service) -> AssetO
         offer = await build_asset_offer(
             outline=outline, brand=brand, style=style, roles=roles,
             instructions=request.instructions, budget=profile.illustration_budget,
-            timeout_seconds=profile.illustration_timeout_seconds, image_service=image_service)
+            timeout_seconds=profile.illustration_timeout_seconds, image_service=image_service,
+            icons_only=icons_only)
     return offer
 
 

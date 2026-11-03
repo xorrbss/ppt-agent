@@ -156,6 +156,14 @@ async def _flag_only(*, ctx, index, payload, error, job, checkpoint, read_png):
         return None  # no rendered page to keep
     if not quality_keeps_content(quality):
         return None  # the kept page would lose content: the fallback holds all of it
+    header_pages = getattr(ctx, "header_pages", None)
+    header_page = header_pages[index] if header_pages else None
+    if (isinstance(header_page, dict) and header_page.get("applied")
+            and (quality.get("common_header") or {}).get("passed") is not True):
+        # Publication requires a passed header measurement on every applied
+        # page (refresh_svg_page_numbers), so keeping this page would fail the
+        # whole deck later; the fallback page renders the header itself.
+        return None
     png = None
     if ctx.source_reflow:
         from services.svg_source_layout import verify_source_receipt
@@ -196,9 +204,11 @@ async def _fallback(*, ctx, request, index, content, payload, error, job, checkp
     from services.svg_renderer import render_svg_with_metrics
 
     try:
+        header_pages = getattr(ctx, "header_pages", None)
         svg = fallback_page_svg(content=content, role=ctx.roles[index], index=index, count=ctx.count,
                                 width=ctx.canvas.width_px, height=ctx.canvas.height_px,
-                                style_snapshot=ctx.snapshot)
+                                style_snapshot=ctx.snapshot,
+                                header_page=header_pages[index] if header_pages else None)
         async with ctx.render_semaphore:
             rendered = await render_svg_with_metrics(
                 svg, width=ctx.canvas.width_px, height=ctx.canvas.height_px,
@@ -212,8 +222,35 @@ async def _fallback(*, ctx, request, index, content, payload, error, job, checkp
         outcome=FALLBACK_OUTCOME, png_returned=True)
 
 
+def _apply_substitute_header_quality(ctx, index, svg, quality):
+    """Measure the server header on a substitute page as the page loop does.
+
+    Publication requires a passed header measurement on every applied page;
+    substitute pages rendered without one could never be published.
+    """
+
+    header_pages = getattr(ctx, "header_pages", None)
+    header_page = header_pages[index] if header_pages else None
+    contract = (getattr(ctx, "snapshot", None) or {}).get("common_header")
+    if not (isinstance(header_page, dict) and header_page.get("applied") and isinstance(contract, dict)):
+        return
+    from services.generation_core.drivers.svg.render import _apply_common_header_quality
+    from services.svg_master_furniture import master_furniture_receipt
+
+    furniture = master_furniture_receipt(svg, ctx.snapshot, width=ctx.canvas.width_px,
+                                         height=ctx.canvas.height_px, index=index, n=ctx.count,
+                                         header_page=header_page)
+    _apply_common_header_quality(quality, svg, contract, header_page, furniture)
+
+
 async def _publish_substitute(*, ctx, svg, rendered, index, payload, error, job, checkpoint, write_png,
                               reason, outcome, png_returned):
+    if not getattr(ctx, "source_reflow", False):
+        try:
+            _apply_substitute_header_quality(ctx, index, svg, rendered.quality)
+        except (ValueError, TypeError, KeyError):
+            LOGGER.warning("[svg] substitute page header measurement failed slide=%d", index + 1, exc_info=True)
+            return None
     try:
         fields = {}
         set_svg_page(fields, svg_content=svg, content={"svgReceipt": _rescued_identity(payload)},
@@ -323,8 +360,10 @@ async def _placeholder(*, ctx, request, index, content, payload, error, job, che
         else:
             from services.svg_trusted_fonts import DEFAULT_FONT_FAMILY
 
+            header_pages = getattr(ctx, "header_pages", None)
             svg = placeholder_page_svg(title=str(content or ""), width=width, height=height,
-                font_family=DEFAULT_FONT_FAMILY, index=index, count=ctx.count, style_snapshot=ctx.snapshot)
+                font_family=DEFAULT_FONT_FAMILY, index=index, count=ctx.count, style_snapshot=ctx.snapshot,
+                header_page=header_pages[index] if header_pages else None)
             render_kwargs = {"instructions": request.instructions}
         async with ctx.render_semaphore:
             rendered = await render_svg_with_metrics(svg, width=width, height=height, **render_kwargs,

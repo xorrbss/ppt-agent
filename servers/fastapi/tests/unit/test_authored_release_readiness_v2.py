@@ -42,9 +42,9 @@ from services.authored_vnext.semantic.readiness import (
     revoke_capability_receipt,
     validate_attempt_receipt_pins,
 )
-from services.presentation_export_direct_attempt_service import (
-    _completed_export_binding,
-    _release_authority_pin_from_projection,
+from services.presentation_export_direct_attempt_semantic import (
+    completed_export_binding as _completed_export_binding,
+    release_authority_pin_from_projection as _release_authority_pin_from_projection,
 )
 from models.authored_vnext.semantic.contracts import ExportAttemptDigestBindingV1
 from models.authored_vnext.semantic.readiness import ReleasePinnedExportAttemptDigestBindingV2

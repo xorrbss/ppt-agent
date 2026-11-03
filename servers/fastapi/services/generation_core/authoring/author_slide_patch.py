@@ -17,7 +17,7 @@ from dataclasses import dataclass as dataclass
 from html.parser import HTMLParser as HTMLParser
 from typing import Any
 
-from llmai import get_client
+from utils.llm_config import get_client
 from llmai.shared import (
     ImageContentPart as ImageContentPart,
     JSONSchemaResponse,

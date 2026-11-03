@@ -49,7 +49,7 @@ ProcessTerminationReason = Literal[
 
 @dataclass(frozen=True, slots=True)
 class ProcessSupervisorCapability:
-    backend: Literal["windows-job-object", "linux-cgroup-v2", "unsupported"]
+    backend: Literal["windows-job-object", "linux-cgroup-v2", "linux-process-session", "unsupported"]
     host_support_detected: bool
     enforcement_ready: bool
     reason: str

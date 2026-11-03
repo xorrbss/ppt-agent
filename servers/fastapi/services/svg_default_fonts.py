@@ -21,8 +21,16 @@ FONT_PROFILE = "svg-default-bundled-fonts/v1"
 
 
 def normalize_model_font_families(svg: str) -> tuple[str, list[dict]]:
-    """Use the bundled SVG font registry for model-authored text families."""
-    root = ET.fromstring(svg)
+    """Use the bundled SVG font registry for model-authored text families.
+
+    Unparseable output is returned unchanged: the author step has already
+    recorded it as a validation error, and the render step retries the page.
+    Raising here instead failed the whole deck as an internal defect.
+    """
+    try:
+        root = ET.fromstring(svg)
+    except ET.ParseError:
+        return svg, []
     advisories = []
     for node in root.iter():
         requested = node.get("font-family")

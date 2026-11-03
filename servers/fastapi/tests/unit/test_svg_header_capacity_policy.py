@@ -188,6 +188,31 @@ def test_integrity_and_unbound_inputs_are_never_bounded_failures(reason):
     assert not policy.known_header_design_rejection(plan, ValueError(reason))
 
 
+@pytest.mark.parametrize("reason", ["svg_common_header_paint_outside_header",
+    "svg_common_header_text_overlap", "svg_template_font_unsupported"])
+def test_defects_in_a_model_candidate_reject_only_that_candidate(reason):
+    """A real Claude run failed the deck on paint outside the header band."""
+    _, plan, _, _, _ = _inputs()
+    assert policy.known_header_design_rejection(plan, ValueError(reason))
+
+
+@pytest.mark.parametrize("reason", ["svg_common_header_field_dependency_invalid",
+    "svg_common_header_canvas_mismatch", "svg_common_header_value_missing",
+    "svg_common_header_page_number_owned_by_master", "svg_common_header_font_material_invalid"])
+def test_more_candidate_content_rejections_retire_the_candidate(reason):
+    # A live Anthropic run failed a whole deck on field_dependency_invalid.
+    _, plan, _, _, _ = _inputs()
+    assert policy.known_header_design_rejection(plan, ValueError(reason))
+    assert not policy.permits_header_fallback(plan, reason, {"steps": {}})
+
+
+def test_design_rules_state_the_admitted_field_fonts():
+    from services.svg_common_header_design_calls import DESIGN_RULES
+    assert 'font_family is exactly "Noto Sans KR"' in DESIGN_RULES
+    assert "font_weight 400 or 700" in DESIGN_RULES
+    assert "contains no field" in DESIGN_RULES
+
+
 @pytest.mark.parametrize("mode", ["reduced", "free"])
 def test_capacity_fallback_real_cas_replays_without_provider_spend(tmp_path, monkeypatch, mode):
     from test_authored_checkpoint_service import _checkpoint_database, _running_authored_job
@@ -403,3 +428,18 @@ def test_legacy_publication_still_requires_and_reuses_selected_body(tmp_path, mo
         finally:
             await engine.dispose()
     asyncio.run(scenario())
+
+
+def test_candidate_schema_pins_the_operation_revision():
+    # A live run returned revision 3 for design call 2, which the identity
+    # check then treated as an integrity breach and failed the deck.
+    from services.svg_common_header_design_calls import candidate_schema
+
+    schema = candidate_schema({"candidate_revision": 2})
+    candidate = schema["properties"]["candidates"]["items"]
+    assert candidate["properties"]["revision"] == {"type": "integer", "enum": [2]}
+    field = candidate["properties"]["fields"]["items"]["properties"]
+    assert field["font_family"]["enum"] == ["Noto Sans KR"]
+    assert field["font_weight"]["enum"] == [400, 700]
+    unpinned = candidate_schema({})["properties"]["candidates"]["items"]["properties"]["revision"]
+    assert unpinned == {"type": "integer", "minimum": 1}

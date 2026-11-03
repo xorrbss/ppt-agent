@@ -23,6 +23,10 @@ from llmai.shared import (
 )
 
 from enums.llm_provider import LLMProvider
+from utils.anthropic_structured_output import (
+    RepositoryAnthropicClient,
+    install_anthropic_structured_output_client,
+)
 from utils.get_env import (
     get_azure_openai_api_key_env,
     get_azure_openai_api_version_env,
@@ -144,11 +148,19 @@ def _get_codex_access_token(settings: RuntimeSettings) -> str:
 
 LOGGER = logging.getLogger(__name__)
 
+# Most call sites build their client with ``from llmai import get_client``.
+# Installing here (every one of them imports this module, directly or through
+# ``utils.llm_utils``) routes their Anthropic clients through native
+# structured output too; see ``utils/anthropic_structured_output.py``.
+install_anthropic_structured_output_client()
+
 
 def get_client(*, config: ClientConfig, logger: logging.Logger | None = None):
-    """Build a repository-observed Codex client, delegating other providers."""
+    """Build repository-owned Codex and Anthropic clients, delegating others."""
     if isinstance(config, ChatGPTClientConfig):
         return RepositoryChatGPTClient(config=config, logger=logger)
+    if isinstance(config, AnthropicClientConfig):
+        return RepositoryAnthropicClient(config=config, logger=logger)
     from llmai import get_client as sdk_get_client
 
     return sdk_get_client(config=config, logger=logger)

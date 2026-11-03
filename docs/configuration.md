@@ -43,7 +43,7 @@ Secret values are never read or rendered by the generator.
 | `CEREBRAS_MODEL` | string | `llama-3.3-70b` | no | Cerebras model id. |
 | `CEREBRAS_BASE_URL` | string | — | no | Optional Cerebras base URL. |
 | `ANTHROPIC_API_KEY` | string | — | yes | Anthropic API key. |
-| `ANTHROPIC_MODEL` | string | `claude-sonnet-4-20250514` | no | Anthropic model id. |
+| `ANTHROPIC_MODEL` | string | `claude-sonnet-5-5` | no | Anthropic model id. |
 | `OLLAMA_URL` | string | `http://localhost:11434` | no | Ollama HTTP API base URL. |
 | `OLLAMA_MODEL` | string | — | no | Ollama model name. |
 | `CUSTOM_LLM_URL` | string | — | no | Custom OpenAI-compatible LLM base URL. |

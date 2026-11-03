@@ -783,7 +783,7 @@ class ProductDeckIrExecutionAdapter:
         context: object,
         strategy_receipt: Mapping[str, object],
     ) -> Mapping[str, object]:
-        from llmai import get_client
+        from utils.llm_config import get_client
         from services.authored_vnext.deck_ir.contracts import DeckIRV1
         from services.authored_vnext.deck_ir.strategy import (
             server_owned_requirement_graph, validate_sealed_generation_strategy,

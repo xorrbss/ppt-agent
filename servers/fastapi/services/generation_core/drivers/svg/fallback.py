@@ -5,7 +5,8 @@ This is the SVG driver's counterpart to the authored driver's placeholder page
 rescue (``generation_core/drivers/svg/terminal.py``) publishes, flagged, once a
 slide's SVG failed the contract on every attempt and its last render either
 does not exist or lost content. The outline lines are read the way the
-authored placeholder reads them (``_lines``), but nothing is cut: every line
+authored placeholder reads them (``_lines``, with markdown syntax shown as
+plain text), but nothing is cut: every line
 is published, whole. Content that does not fit at the regular size is set
 smaller and, if needed, in more columns -- a flagged page that is hard to read
 is reviewable; a page that silently dropped part of the slide is not.
@@ -25,11 +26,11 @@ as the first body line, so the shortening loses nothing.
 from __future__ import annotations
 
 import copy
+import re
 from collections import Counter
 from collections.abc import Mapping, Sequence
 import xml.etree.ElementTree as ET
 
-from services.authored_author_stage_placeholder import _lines
 from services.svg_contract import SVG_NS, SVG_CONTRACT_VERSION, finalize_svg
 
 FALLBACK_GROUP_ID = "svg-fallback-page"
@@ -145,13 +146,75 @@ def _text_node(parent: ET.Element, *, x: float, y: float, text: str, font_px: in
     node.text = text
 
 
+_HEADING_MARKER = re.compile(r"^#{1,6}(?:\s+|$)")
+_QUOTE_MARKER = re.compile(r"^>+\s*")
+#: A list marker is a bullet glyph, or ``-``/``*``/``+`` followed by a space, so
+#: ``**bold**`` and a leading ``-5%`` keep their characters.
+_LIST_MARKER = re.compile(r"^(?:[•·▪●◦]\s*|[-*+]\s+)")
+#: Lines that carry no words at all: thematic breaks and code fences.
+_DECORATION_LINE = re.compile(r"^(?:[-*_=]{3,}|`{3,}[\w-]*|~{3,}[\w-]*)$")
+_LINK = re.compile(r"!?\[([^\]\n]*)\]\(([^)\s]+)(?:\s+\"[^\"]*\")?\)")
+_BOLD_STAR = re.compile(r"\*\*(?=\S)(.+?)(?<=\S)\*\*")
+_BOLD_UNDERSCORE = re.compile(r"(?<!\w)__(?=\S)(.+?)(?<=\S)__(?!\w)")
+_STRIKE = re.compile(r"~~(?=\S)(.+?)(?<=\S)~~")
+_ITALIC_STAR = re.compile(r"(?<![\w*])\*(?=[^\s*])([^*\n]+?)(?<=[^\s*])\*(?![\w*])")
+_INLINE_CODE = re.compile(r"`([^`\n]+)`")
+_HTML_BREAK = re.compile(r"(?i)<br\s*/?>")
+
+
+def _plain_line(raw: str) -> str:
+    """One outline line as the plain text a reader should see.
+
+    Markdown syntax that would render literally on an SVG page is dropped:
+    heading and quote markers, list markers (the page draws its own bullet),
+    emphasis and code markers, and link syntax (``[label](url)`` keeps both the
+    label and the address). Only syntax characters are removed, never words.
+    """
+
+    line = _HTML_BREAK.sub(" ", raw).strip()
+    if _DECORATION_LINE.match(line):
+        return ""
+    line = _HEADING_MARKER.sub("", line, count=1).strip()
+    line = _QUOTE_MARKER.sub("", line, count=1)
+    while True:
+        stripped = _LIST_MARKER.sub("", line, count=1)
+        if stripped == line:
+            break
+        line = stripped
+    line = _LINK.sub(lambda m: f"{m.group(1)} ({m.group(2)})" if m.group(1).strip() else m.group(2), line)
+    for pattern in (_BOLD_STAR, _BOLD_UNDERSCORE, _STRIKE, _ITALIC_STAR, _INLINE_CODE):
+        line = pattern.sub(r"\1", line)
+    return " ".join(line.split())
+
+
+def _lines(content: str) -> list[str]:
+    """The outline's own lines as plain text, blank and decoration-only lines removed."""
+
+    output: list[str] = []
+    for raw in str(content or "").splitlines():
+        line = _plain_line(raw)
+        if line:
+            output.append(line)
+    return output
+
+
+def _same_text(left: str, right: str) -> bool:
+    return " ".join(left.split()).casefold() == " ".join(right.split()).casefold()
+
+
 def _complete_split(content: str, *, title_budget: int) -> tuple[str, list[str]]:
-    """``(title, body lines)``: every outline line, none shortened or dropped."""
+    """``(title, body lines)``: every outline line, none shortened or dropped.
+
+    The one line that is not repeated is an exact duplicate of the title
+    directly under it: the title already shows those words.
+    """
 
     lines = _lines(content)
     if not lines:
         return "", []
     head, rest = lines[0], lines[1:]
+    if rest and _same_text(head, rest[0]):
+        rest = rest[1:]
     if len(head) <= title_budget:
         return head, rest
     # The untruncated line is still the slide's own text; it leads the body.
@@ -190,8 +253,26 @@ def _body_layout(bullets: Sequence[str], *, available_width: float,
     return font_px, columns, split
 
 
+def _body_top(style_snapshot: dict | None, header_page: dict | None) -> int:
+    """Where a rescue page's own content may start.
+
+    A deck with a common header reserves the band above ``content_top_px``
+    for the server-rendered header; a rescue page drawn from the canvas top
+    would sit under it.
+    """
+
+    contract = (style_snapshot or {}).get("common_header")
+    if not isinstance(contract, dict) or not isinstance(header_page, dict) or not header_page.get("applied"):
+        return _TOP_MARGIN
+    content_top = contract.get("content_top_px")
+    if isinstance(content_top, (int, float)) and not isinstance(content_top, bool):
+        return max(_TOP_MARGIN, int(content_top) + _GAP_TITLE_TO_BODY_PX)
+    return _TOP_MARGIN
+
+
 def fallback_page_svg(*, content: str, role: str, index: int, count: int,
-                       width: int, height: int, style_snapshot: dict | None) -> str:
+                       width: int, height: int, style_snapshot: dict | None,
+                       header_page: dict | None = None) -> str:
     """Deterministic contract-valid SVG for one page, finalized (page number added).
 
     Same inputs always produce the same bytes: no randomness, no clock, no
@@ -220,12 +301,13 @@ def fallback_page_svg(*, content: str, role: str, index: int, count: int,
     ET.SubElement(group, f"{{{SVG_NS}}}rect", {
         "x": "0", "y": "0", "width": str(width), "height": str(height), "fill": "#FFFFFF",
     })
+    top = _body_top(style_snapshot, header_page)
     ET.SubElement(group, f"{{{SVG_NS}}}rect", {
-        "x": str(_MARGIN_X), "y": str(_TOP_MARGIN),
+        "x": str(_MARGIN_X), "y": str(top),
         "width": str(_ACCENT_BAR_WIDTH), "height": str(_ACCENT_BAR_HEIGHT), "fill": accent,
     })
 
-    cursor = _TOP_MARGIN + _ACCENT_BAR_HEIGHT + _GAP_BAR_TO_LABEL_PX
+    cursor = top + _ACCENT_BAR_HEIGHT + _GAP_BAR_TO_LABEL_PX
     eyebrow = str(role or "").strip().upper()[:_EYEBROW_MAX_CHARS]
     if eyebrow:
         _text_node(group, x=_MARGIN_X, y=cursor + _EYEBROW_FONT_PX, text=eyebrow,
@@ -253,12 +335,12 @@ def fallback_page_svg(*, content: str, role: str, index: int, count: int,
 
     raw = ET.tostring(root, encoding="unicode")
     return finalize_svg(raw, index=index, n=count, width=width, height=height,
-                        style_snapshot=style_snapshot)
+                        style_snapshot=style_snapshot, header_page=header_page)
 
 
 def placeholder_page_svg(*, title: str, width: int, height: int, font_family: str,
                          index: int | None = None, count: int | None = None,
-                         style_snapshot: dict | None = None) -> str:
+                         style_snapshot: dict | None = None, header_page: dict | None = None) -> str:
     """The last-resort page: the slide's title (or "—") on a plain page.
 
     Published only when no complete-content page could be rendered; the flag
@@ -283,12 +365,13 @@ def placeholder_page_svg(*, title: str, width: int, height: int, font_family: st
     ET.SubElement(group, f"{{{SVG_NS}}}rect", {
         "x": "0", "y": "0", "width": str(width), "height": str(height), "fill": "#FFFFFF",
     })
-    _text_node(group, x=_MARGIN_X, y=_TOP_MARGIN + _TITLE_FONT_PX, text=text, font_px=_TITLE_FONT_PX,
+    top = _body_top(style_snapshot, header_page)
+    _text_node(group, x=_MARGIN_X, y=top + _TITLE_FONT_PX, text=text, font_px=_TITLE_FONT_PX,
                font_family=font_family, fill=_BODY_COLOR, weight="700")
     raw = ET.tostring(root, encoding="unicode")
     if index is not None and count is not None:
         return finalize_svg(raw, index=index, n=count, width=width, height=height,
-                            style_snapshot=style_snapshot)
+                            style_snapshot=style_snapshot, header_page=header_page)
     validate_svg(raw, width=width, height=height, allow_system_page_number=False, source_manifest={})
     return raw
 

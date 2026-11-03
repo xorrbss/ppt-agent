@@ -12,6 +12,7 @@ since the SVG pptx is assembled in Python, not in a browser.
 
 from __future__ import annotations
 
+import re
 import zipfile
 from pathlib import Path
 from xml.etree import ElementTree as ET
@@ -39,6 +40,35 @@ def _next_relationship_id(rels_root: ET.Element) -> int:
         if raw.isdigit():
             existing.append(int(raw))
     return (max(existing) + 1) if existing else 1
+
+
+def _serialize_package_part(root: ET.Element, namespace: str) -> bytes:
+    """Write a flat OPC part ([Content_Types].xml, .rels) in its default namespace.
+
+    ElementTree emits these namespaces with a prefix (``<ct:Types>``) and its
+    ``default_namespace`` option rejects their unqualified attributes, so the
+    two flat structures (a root whose children carry only attributes) are
+    written directly.
+    """
+
+    from xml.sax.saxutils import quoteattr
+
+    def local(tag: str) -> str:
+        if not tag.startswith(f"{{{namespace}}}"):
+            raise ValueError("svg_pptx_package_part_namespace_invalid")
+        return tag.split("}", 1)[1]
+
+    children = []
+    for child in root:
+        if len(child) or (child.text or "").strip():
+            raise ValueError("svg_pptx_package_part_not_flat")
+        attributes = "".join(f" {name}={quoteattr(value)}" for name, value in child.attrib.items())
+        children.append(f"<{local(child.tag)}{attributes}/>")
+    text = (
+        "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n"
+        f"<{local(root.tag)} xmlns=\"{namespace}\">{''.join(children)}</{local(root.tag)}>"
+    )
+    return text.encode("utf-8")
 
 
 def _ensure_fntdata_content_type(content_types_root: ET.Element) -> None:
@@ -125,15 +155,65 @@ def trusted_export_font_faces(font_usage=None, *, font_manifest=None):
     return tuple(result)
 
 
-def embed_trusted_fonts(target: Path, *, font_usage=None, font_manifest=None) -> tuple[str, ...]:
-    """Embed the bundled Pretendard faces into the pptx at ``target``, in place.
+_TRUSTED_RUN_FAMILIES = (FONT_FAMILY, "Noto Sans KR")
+_SLIDE_TEXT_PART = re.compile(r"ppt/(slides/slide|charts/chart)[0-9]+\.xml")
+NS_A = "http://schemas.openxmlformats.org/drawingml/2006/main"
 
-    The default preserves the historical Pretendard contract. Whole-page
-    callers supply actual OOXML font usage for Noto and the trusted fallback.
-    Returns each embedded face's digest for the export receipt to bind to.
+
+def ooxml_trusted_font_usage(target: Path) -> dict[str, set[int]]:
+    """Trusted families and weights the package's text runs actually name.
+
+    Without this the generic converter embedded only the historical Pretendard
+    faces, while ordinary SVG decks set their text in Noto Sans KR, so the
+    embedded faces did not cover the deck. Families outside the bundled,
+    embeddable set are left to the viewer, as before.
+    """
+
+    usage: dict[str, set[int]] = {}
+    with zipfile.ZipFile(target) as archive:
+        for name in archive.namelist():
+            if not _SLIDE_TEXT_PART.fullmatch(name):
+                continue
+            root = ET.fromstring(archive.read(name))
+            for properties in (*root.iter(f"{{{NS_A}}}rPr"), *root.iter(f"{{{NS_A}}}defRPr")):
+                latin = properties.find(f"{{{NS_A}}}latin")
+                family = None if latin is None else latin.get("typeface")
+                if family in _TRUSTED_RUN_FAMILIES:
+                    weight = 700 if properties.get("b") in {"1", "true"} else 400
+                    usage.setdefault(family, set()).add(weight)
+    return usage
+
+
+def export_font_faces(target: Path, font_usage=None, *, font_manifest=None, subset: bool = True):
+    """The faces ``embed_trusted_fonts`` writes into ``target``: trusted, then subset.
+
+    Subsetting keeps only the glyphs the package's text uses (plus a small
+    baseline set; see ``services/svg_pptx_font_subset.py``), so embedding adds
+    hundreds of kilobytes instead of ~10 MB. The result depends only on the
+    trusted faces and the package text, which embedding does not change, so a
+    caller may compute it before embedding and compare.
     """
 
     faces = trusted_export_font_faces(font_usage, font_manifest=font_manifest)
+    if not subset:
+        return faces
+    from services.svg_pptx_font_subset import subset_faces, subset_text
+
+    return subset_faces(faces, text=subset_text(target))
+
+
+def embed_trusted_fonts(
+    target: Path, *, font_usage=None, font_manifest=None, subset: bool = True,
+) -> tuple[str, ...]:
+    """Embed the trusted faces into the pptx at ``target``, in place.
+
+    The default preserves the historical Pretendard contract. Whole-page
+    callers supply actual OOXML font usage for Noto and the trusted fallback.
+    Faces are subset to the package's glyphs unless ``subset`` is false.
+    Returns each embedded face's digest for the export receipt to bind to.
+    """
+
+    faces = export_font_faces(target, font_usage, font_manifest=font_manifest, subset=subset)
     with zipfile.ZipFile(target) as archive:
         entries = {name: archive.read(name) for name in archive.namelist()}
 
@@ -168,8 +248,11 @@ def embed_trusted_fonts(target: Path, *, font_usage=None, font_manifest=None) ->
     _ensure_fntdata_content_type(content_types_root)
 
     entries["ppt/presentation.xml"] = ET.tostring(presentation_root, encoding="utf-8", xml_declaration=True)
-    entries[rels_path] = ET.tostring(rels_root, encoding="utf-8", xml_declaration=True)
-    entries["[Content_Types].xml"] = ET.tostring(content_types_root, encoding="utf-8", xml_declaration=True)
+    # The package parts must keep the default (unprefixed) namespace: LibreOffice
+    # refuses a package whose [Content_Types].xml or .rels uses a prefix
+    # (``<ct:Types>``), which ElementTree otherwise emits for these namespaces.
+    entries[rels_path] = _serialize_package_part(rels_root, NS_RELS)
+    entries["[Content_Types].xml"] = _serialize_package_part(content_types_root, NS_CT)
 
     target.unlink()
     with zipfile.ZipFile(target, "w", zipfile.ZIP_DEFLATED) as archive:
@@ -178,4 +261,7 @@ def embed_trusted_fonts(target: Path, *, font_usage=None, font_manifest=None) ->
     return tuple(digests)
 
 
-__all__ = ["embed_trusted_fonts", "FONT_CONTENT_TYPE", "FONT_RELATIONSHIP_TYPE"]
+__all__ = [
+    "embed_trusted_fonts", "export_font_faces", "ooxml_trusted_font_usage",
+    "FONT_CONTENT_TYPE", "FONT_RELATIONSHIP_TYPE",
+]

@@ -28,6 +28,11 @@ def _is_application_exception(e: Exception) -> bool:
             continue
         if not source_file.is_file():
             continue
+        # ``uv sync`` puts the virtualenv inside servers/fastapi, so installed
+        # packages (SQLAlchemy, SDKs) sit under the source root too; their
+        # ``code`` attributes are driver-private, not application codes.
+        if "site-packages" in source_file.parts or ".venv" in source_file.parts:
+            continue
         try:
             source_file.relative_to(_VENDORED_SOURCE_ROOT)
         except ValueError:

@@ -65,16 +65,33 @@ def current_prompt_cache_key() -> str | None:
     return key
 
 
+#: Providers whose request accepts ``prompt_cache_key`` (the OpenAI SDK's
+#: chat-completions and responses endpoints). Anthropic rejects the unknown
+#: field with a 400 ("prompt_cache_key: Extra inputs are not permitted"), which
+#: failed every SVG author call of an Anthropic-configured deck.
+CACHE_KEY_PROVIDERS = frozenset({"openai", "codex"})
+
+
+def _provider_accepts_cache_key() -> bool:
+    from utils.llm_provider import get_llm_provider
+
+    try:
+        return str(get_llm_provider().value) in CACHE_KEY_PROVIDERS
+    except Exception:
+        return False
+
+
 def apply_prompt_cache_key(generate_kwargs: dict) -> dict:
     """Merge the bound key into one call's ``extra_body``, in place.
 
-    A call made with no key bound, or with the knob off, is left exactly as it
-    was -- including keeping no ``extra_body`` at all -- and any reasoning dict
-    already assembled there is preserved.
+    A call made with no key bound, with the knob off, or to a provider that
+    does not accept the field is left exactly as it was -- including keeping
+    no ``extra_body`` at all -- and any reasoning dict already assembled there
+    is preserved.
     """
 
     key = current_prompt_cache_key()
-    if key is None:
+    if key is None or not _provider_accepts_cache_key():
         return generate_kwargs
     extra_body = generate_kwargs.get("extra_body")
     generate_kwargs["extra_body"] = {
@@ -86,6 +103,7 @@ def apply_prompt_cache_key(generate_kwargs: dict) -> dict:
 
 __all__ = [
     "CACHE_KEY_CHARS",
+    "CACHE_KEY_PROVIDERS",
     "apply_prompt_cache_key",
     "current_prompt_cache_key",
     "deck_prompt_cache_key",

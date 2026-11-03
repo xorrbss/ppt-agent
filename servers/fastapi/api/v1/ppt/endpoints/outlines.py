@@ -4,7 +4,6 @@ import logging
 import re
 import traceback
 import uuid
-import dirtyjson
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from sqlalchemy import select
@@ -16,7 +15,6 @@ from services.content_brief_policy import (
     merge_brief_context,
     run_content_brief_with_policy,
 )
-from models.presentation_outline_model import PresentationOutlineModel
 from models.sql.workspace import WorkspaceOperation, get_workspace_owner_scope
 from services.public_operation_deadline_scope import remaining_public_operation_seconds
 from models.sse_response import (
@@ -43,9 +41,11 @@ from utils.document_context import (
 )
 from utils.llm_utils import message_content_to_text
 from utils.outline_utils import (
+    OutlineResponseError,
     explicit_outline_title,
     get_no_of_outlines_to_generate_for_n_slides,
     get_presentation_title_from_presentation_outline,
+    parse_outline_response,
 )
 from utils.llm_calls.generate_content_brief import generate_content_brief
 from utils.llm_calls.generate_presentation_outlines import (
@@ -325,17 +325,16 @@ async def stream_outlines(
             presentation_outlines_text += chunk
 
         try:
-            presentation_outlines_json = dict(
-                dirtyjson.loads(presentation_outlines_text)
+            presentation_outlines = parse_outline_response(
+                presentation_outlines_text, n_slides_to_generate
             )
-        except Exception as e:
-            traceback.print_exc()
-            yield SSEErrorResponse(
-                detail=f"Failed to generate presentation outlines. Please try again. {str(e)}",
-            ).to_string()
+        except OutlineResponseError as error:
+            if error.cause is not None:
+                traceback.print_exc()
+            detail = error.detail if error.cause is None else f"{error.detail} {error.cause}"
+            yield SSEErrorResponse(detail=detail).to_string()
             return
 
-        presentation_outlines = PresentationOutlineModel(**presentation_outlines_json)
         # With web search on the model cites its sources inline. The URL is what
         # the slide author turns into an `<a href>` the renderer refuses, and it
         # also eats the slide's text budget, so it goes before the outline is
@@ -347,25 +346,6 @@ async def stream_outlines(
             except ValueError as error:
                 yield SSEErrorResponse(detail=str(error)).to_string()
                 return
-
-        # Only undershooting is fatal. Overshooting is trimmed by the slice just
-        # below, which this check used to make unreachable for that case.
-        if (
-            n_slides_to_generate is not None
-            and len(presentation_outlines.slides) < n_slides_to_generate
-        ):
-            yield SSEErrorResponse(
-                detail=(
-                    "Failed to generate presentation outlines with requested "
-                    "number of slides. Please try again."
-                )
-            ).to_string()
-            return
-
-        if n_slides_to_generate is not None:
-            presentation_outlines.slides = presentation_outlines.slides[
-                :n_slides_to_generate
-            ]
 
         if presentation.n_slides <= 0:
             presentation.n_slides = len(presentation_outlines.slides)

@@ -22,8 +22,10 @@ them turns SlideSpec on for generation.
 * ``SLIDESPEC_REPAIR_CANARY`` (default ``100``) -- percent of the stable
   owner/presentation cohort a review may repair; ``true`` means 100.
 * ``SLIDESPEC_REPAIR_ROLLOUT_SALT`` -- salt for that cohort bucket.
-* ``SLIDESPEC_IMPORT_SHADOW`` / ``SLIDESPEC_REPAIR_SHADOW`` -- report-only
-  import/repair runs alongside a review that is not admitted to repair.
+* ``SLIDESPEC_REPAIR_SHADOW`` -- report-only repair runs alongside a review
+  that is not admitted to repair. (``SLIDESPEC_IMPORT_SHADOW`` was removed: the
+  importer only runs for ``slidespec_active``, so it only relabelled skipped
+  slides; the ``import_shadow`` value stays valid on stored bundle rows.)
 
 This is intentionally independent from the Chat-first workspace rollout. The
 workspace owns write admission, while this module keeps operational rollback
@@ -68,7 +70,6 @@ class SlideSpecRepairRolloutDecision:
     """A request-scoped decision; ``publisher_allowed`` is the write authority."""
 
     route: str
-    import_shadow: bool
     repair_shadow: bool
     canary_eligible: bool
     apply_enabled: bool
@@ -107,7 +108,6 @@ def resolve_slidespec_repair_rollout(
     """
 
     rollout = get_slidespec_rollout_settings()
-    import_shadow = rollout.import_shadow
     repair_shadow = rollout.repair_shadow
     kill_switch = rollout.kill_switch
     apply_enabled = rollout.repair_apply
@@ -120,26 +120,25 @@ def resolve_slidespec_repair_rollout(
 
     if kill_switch:
         return SlideSpecRepairRolloutDecision(
-            "legacy", import_shadow, repair_shadow, False, apply_enabled, True,
+            "legacy", repair_shadow, False, apply_enabled, True,
             bucket, "system.kill_switch_enabled",
         )
     if not opt_in or not slide_scope_eligible or not canary_eligible:
         if repair_shadow:
             return SlideSpecRepairRolloutDecision(
-                "repair_shadow", import_shadow, True, False, apply_enabled, False,
+                "repair_shadow", True, False, apply_enabled, False,
                 bucket, "legacy_preserved.canary_not_admitted",
             )
         return SlideSpecRepairRolloutDecision(
-            "import_shadow" if import_shadow else "legacy", import_shadow,
-            repair_shadow, False, apply_enabled, False, bucket,
+            "legacy", repair_shadow, False, apply_enabled, False, bucket,
             "legacy_preserved.canary_not_admitted",
         )
     if not apply_enabled:
         return SlideSpecRepairRolloutDecision(
-            "repair_shadow", import_shadow, repair_shadow, True, False, False,
+            "repair_shadow", repair_shadow, True, False, False,
             bucket, "legacy_preserved.apply_disabled",
         )
     return SlideSpecRepairRolloutDecision(
-        "slidespec_active", import_shadow, repair_shadow, True, True, False,
+        "slidespec_active", repair_shadow, True, True, False,
         bucket, None,
     )

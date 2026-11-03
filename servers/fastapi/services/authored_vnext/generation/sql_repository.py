@@ -52,7 +52,9 @@ from services.authored_vnext.generation.errors import (
     GenerationNotFoundError,
 )
 from services.authored_vnext.integration.sql_repository import (
+    SQLITE_LOCK_RETRY_DELAYS,  # noqa: F401  (re-exported for callers)
     AuthoredVNextSqlRepository,
+    sqlite_write_retry,
 )
 from services.authored_vnext.master.digests import canonical_json
 from services.authored_vnext.master.errors import (
@@ -67,7 +69,6 @@ from .sql_publication import append_generation_deck
 from utils.hashing import sha256_hex
 
 
-SQLITE_LOCK_RETRY_DELAYS = (0.025, 0.075, 0.15)
 LOGGER = logging.getLogger(__name__)
 
 
@@ -94,35 +95,7 @@ def _same_imported_deck(left: DeckGenerationSnapshot, right: DeckGenerationSnaps
     return normalized(left) == normalized(right)
 
 
-def _is_sqlite_lock(error: OperationalError, dialect_name: str) -> bool:
-    if dialect_name != "sqlite":
-        return False
-    original = error.orig
-    sqlite_error_code = getattr(original, "sqlite_errorcode", None)
-    if isinstance(sqlite_error_code, int) and sqlite_error_code & 0xFF in {5, 6}:
-        return True
-    message = str(original).lower()
-    return "database is locked" in message or "database table is locked" in message
-
-
-def _retry_sqlite_write(method: Callable[..., Any]) -> Callable[..., Any]:
-    """Retry only transient SQLite writer contention inside one API attempt."""
-
-    @wraps(method)
-    def wrapped(self: "SqlGenerationRepository", *args: Any, **kwargs: Any) -> Any:
-        for attempt in range(len(SQLITE_LOCK_RETRY_DELAYS) + 1):
-            try:
-                return method(self, *args, **kwargs)
-            except OperationalError as error:
-                if (
-                    not _is_sqlite_lock(error, self._base.engine.dialect.name)
-                    or attempt == len(SQLITE_LOCK_RETRY_DELAYS)
-                ):
-                    raise
-                time.sleep(SQLITE_LOCK_RETRY_DELAYS[attempt])
-        raise AssertionError("unreachable sqlite retry state")
-
-    return wrapped
+_retry_sqlite_write = sqlite_write_retry(lambda repository: repository._base.engine)
 
 
 def _payload(model: Any) -> dict[str, Any]:

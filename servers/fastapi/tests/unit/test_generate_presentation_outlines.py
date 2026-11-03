@@ -317,3 +317,23 @@ def test_concise_type_scale_leaves_the_page_number_specification_alone(monkeypat
     # floor, is what makes a concise deck set its text larger.
     assert "below 12px (9pt equivalent)" in design_system
     assert "below 15px" not in design_system
+
+
+def test_title_slide_presenter_and_date_only_when_user_provided():
+    prompt = outline_module.get_system_prompt(None, True, False)
+    assert "only when the user's content, instructions or source documents state it" in prompt
+    assert "leave that line out entirely" in prompt
+    assert "Never write a placeholder such as [Presenter Name]" in prompt
+    assert "never use today's date as the presentation date" in prompt
+    assert "only when the user provided them" in prompt
+    # The unconditional demand for a presenter/date line is gone.
+    assert "Include presenter name in first slide." not in prompt
+    assert "Title slide must only contain title, presenter name, date and overview." not in prompt
+
+
+def test_svg_author_rules_forbid_invented_presenter_details():
+    from services.generation_core.authoring.author_slide_svg import SVG_AUTHOR_RULES
+
+    flat = " ".join(SVG_AUTHOR_RULES.split())
+    assert "only when the slide content states it" in flat
+    assert "bracketed placeholder such as [Presenter Name]" in flat

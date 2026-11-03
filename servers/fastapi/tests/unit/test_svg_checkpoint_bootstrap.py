@@ -258,6 +258,33 @@ def test_completed_schema_repair_setup_is_accounted(tmp_path, monkeypatch):
     asyncio.run(scenario())
 
 
+def test_outline_density_expansion_setup_is_accounted(tmp_path, monkeypatch):
+    """A thin outline spends one more outline-stage call under its own slot prefix."""
+    from utils.llm_calls.outline_density import EXPANSION_SEMANTIC_SLOT_PREFIX
+    from utils.structured_semantic_slots import structured_semantic_slot
+
+    slot = structured_semantic_slot(
+        validation_attempt=0, parse_attempt=0, prefix=EXPANSION_SEMANTIC_SLOT_PREFIX) + ".attempt-1"
+
+    async def scenario():
+        world = await _world(tmp_path, monkeypatch)
+        try:
+            async with world.maker() as session:
+                admission = await session.get(PublicOperationAdmission, world.admission_id)
+                session.add_all(_setup_pair(world.job, admission.id, "outline", slot=slot))
+                admission.initial_request_count += 1
+                admission.planned_request_limit += 1
+                admission.estimated_consumed_microunits += 3
+                admission.actual_consumed_microunits += 2
+                await session.commit()
+            await _enter(world, "preflight")
+            await _enter(world, "initialize")
+            assert len(await _pages(world)) == 10
+        finally:
+            await world.engine.dispose()
+    asyncio.run(scenario())
+
+
 def test_prompt_only_initializer_accepts_reported_setup_without_title_plan(tmp_path, monkeypatch):
     """R10: two completed deck setup calls, pending header design, zero pages."""
     async def scenario():

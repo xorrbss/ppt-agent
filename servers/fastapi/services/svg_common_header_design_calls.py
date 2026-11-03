@@ -93,8 +93,16 @@ def candidate_schema(payload=None):
     box = _object({key: number for key in ("x", "y", "width", "height")})
     allowed_refs = payload.get("available_value_refs") if isinstance(payload, dict) else None
     value_ref = ({"type": "string", "enum": allowed_refs} if allowed_refs else text)
+    # Header fields are measured with the trusted embedded faces only
+    # (svg_common_header._font), at 400/700. An open string/integer let the
+    # model pick e.g. weight 600, which failed the whole deck with
+    # svg_template_font_unsupported after the design call. Only Noto Sans KR
+    # has a measured Chromium space advance (_CHROMIUM_SPACE_ADVANCE_EM_BY_FONT_DIGEST);
+    # a Pretendard field failed a live deck with svg_common_header_font_material_invalid.
+    font_family = {"type": "string", "enum": ["Noto Sans KR"]}
+    font_weight = {"type": "integer", "enum": [400, 700]}
     field = _object({"node_id": text, "role": text, "value_ref": value_ref, "box": box,
-        "font_family": text, "font_weight": {"type": "integer"}, "font_size_px": number,
+        "font_family": font_family, "font_weight": font_weight, "font_size_px": number,
         "line_height_px": number, "baseline_offset_px": number,
         "max_lines": {"type": "integer", "minimum": 1, "maximum": 2},
         "alignment": {"type": "string", "enum": ["left", "center", "right"]},
@@ -115,7 +123,13 @@ def candidate_schema(payload=None):
         for branch in branches:
             branch["properties"]["box"] = {"$ref": "#/$defs/box"}
         field = {"anyOf": branches}
-    candidate = _object({"candidate_id": text, "revision": {"type": "integer", "minimum": 1},
+    # The operation, not the model, owns the revision; _checked_candidates
+    # rejects any other value as an identity breach, so pin it when known.
+    supplied_revision = payload.get("candidate_revision") if isinstance(payload, dict) else None
+    revision = ({"type": "integer", "enum": [supplied_revision]}
+                if type(supplied_revision) is int and supplied_revision >= 1
+                else {"type": "integer", "minimum": 1})
+    candidate = _object({"candidate_id": text, "revision": revision,
         "svg": text, "fields": {"type": "array", "items": field},
         "body_box": {"$ref": "#/$defs/box"} if allowed_refs else box,
         "design_intent": text, "shared_style": _object({"body_typography": text,
@@ -149,7 +163,10 @@ The title value_ref must use role="title" and optional=false; metadata roles rem
 Every meaningful text node in the SVG
 must be an empty text field with its node_id in fields: the server binds actual exact values,
 measures glyph ink and wraps at most two lines. Fonts and sizes are uniform within each field.
-Dependent decoration is named explicitly and omitted with an absent optional field. Return a
+Dependent decoration is named explicitly and omitted with an absent optional field: each
+dependent_node_ids entry is the id of an existing non-text element that contains no field.
+Each field's font_family is exactly "Noto Sans KR" and its font_weight 400 or 700;
+any other family or weight rejects the candidate. Return a
 full-canvas SVG template containing only header elements and transparent remaining body; never
 author body content here. Give each candidate its own body_box with a physically readable
 body area and no overlap with header or existing furniture. No CSS, gradients, defs, clipping,

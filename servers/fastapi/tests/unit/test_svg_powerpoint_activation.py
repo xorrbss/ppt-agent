@@ -1,6 +1,7 @@
 """Office ownership is established before execution, never inferred from a ROT result."""
 
 import asyncio
+import importlib.util
 import json
 import sys
 from types import SimpleNamespace
@@ -12,6 +13,12 @@ from services.workspace_operation_handler_registry import RetryableWorkspaceOper
 from services.svg_final_pptx_review import render_final_review_inputs
 from tests.unit.test_svg_final_review_render_availability import _inputs, office_host
 from workers import public_svg_pptx_render as office
+
+# Tests that drive ``_render_child`` or raise the real pywin32 ``com_error``
+# need pywin32; the rest use the faked Windows modules and run on any OS.
+_needs_pywin32 = pytest.mark.skipif(
+    importlib.util.find_spec("pythoncom") is None, reason="requires pywin32 (Windows)"
+)
 
 
 @pytest.mark.parametrize(
@@ -30,10 +37,11 @@ def test_attach_proves_single_owned_pid(activation_host, existing, in_job, owned
 
 @pytest.mark.parametrize("error_factory", [
     lambda: TypeError("C:\\private\\deck.pptx leaked message"),
-    lambda: __import__("pythoncom").com_error(
+    pytest.param(lambda: __import__("pythoncom").com_error(
         -2147220992, "C:\\private\\deck.pptx leaked message", None, 5
-    ),
+    ), marks=_needs_pywin32),
 ])
+@_needs_pywin32
 def test_attach_failure_writes_bounded_diagnostic_without_message_or_path(
     tmp_path, monkeypatch, error_factory
 ):
@@ -100,7 +108,9 @@ def test_real_render_records_open_stage_after_activation(activation_host, tmp_pa
         ("create", "create", OSError("create"), False, "svg_final_pptx_render_failed", True),
         ("assign_job", "assign_job", OSError("assign"), False, "svg_final_pptx_render_failed", True),
         ("resume", "resume", OSError("resume"), False, "svg_final_pptx_render_failed", True),
-        ("get_active_object", "get_active_object", __import__("pythoncom").com_error(-1, "private", None, 1), False, "svg_final_pptx_render_failed", True),
+        pytest.param("get_active_object", "get_active_object",
+                     lambda: __import__("pythoncom").com_error(-1, "private", None, 1),
+                     False, "svg_final_pptx_render_failed", True, marks=_needs_pywin32),
         ("hwnd_pid_match", "hwnd_pid_match", TypeError("private path"), False, "svg_final_pptx_render_failed", True),
         ("open", "open", ValueError("open"), True, "svg_final_pptx_render_failed", False),
         ("export", "export", OSError("export"), True, "svg_final_pptx_render_failed", False),
@@ -110,6 +120,7 @@ def test_real_render_records_open_stage_after_activation(activation_host, tmp_pa
         ("SharedPowerPointInstance", "create", office.SharedPowerPointInstance(), False, office.SHARED_INSTANCE_REASON, True),
     ],
 )
+@_needs_pywin32
 def test_child_failure_table_preserves_baseline_retryability(
     tmp_path, monkeypatch, case, stage, error, activated, reason, retryable
 ):
@@ -117,7 +128,7 @@ def test_child_failure_table_preserves_baseline_retryability(
         office._mark_render_stage(stage)
         if activated:
             (tmp_path / "activated").write_text("20", encoding="ascii")
-        raise error
+        raise error() if callable(error) else error
 
     monkeypatch.setattr(office, "_render", failed_render)
     result = _child_result(tmp_path)

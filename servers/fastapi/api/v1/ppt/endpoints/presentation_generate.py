@@ -74,6 +74,14 @@ async def generate_presentation_sync(
     # rendering, or export can execute on the HTTP request lifetime.
     _require_local_sync_generation(sql_engine.url)
     request._request_id = getattr(request_http.state, "request_id", None)
+    # The svg driver (the default strategy) needs a durable generation job for
+    # its checkpoints, quality recovery and header design; this inline route
+    # has none, so it used to fail with a 500 after spending the brief and
+    # outline calls. Refuse it up front and name the route that works.
+    from services.generation_core.admission.strategy import resolve_generation_strategy
+
+    if resolve_generation_strategy(request) == "svg":
+        raise HTTPException(status_code=422, detail="svg_generation_requires_async_route")
     try:
         (presentation_id,) = await generation_pipeline.check_if_api_request_is_valid(request, sql_session)
         return await generation_pipeline.generate_presentation_handler(

@@ -28,7 +28,6 @@ from pathlib import PurePosixPath
 from time import perf_counter
 from typing import Any, List, Optional, Tuple
 
-import dirtyjson
 from fastapi import (
     BackgroundTasks,
     Depends,
@@ -209,7 +208,9 @@ from utils.llm_calls.outline_canvas_budget import budget_for_canvas_contract
 from utils.llm_utils import message_content_to_text
 from utils.outline_citations import strip_outline_citations
 from utils.outline_utils import (
+    OutlineResponseError,
     get_no_of_outlines_to_generate_for_n_slides,
+    parse_outline_response,
 )
 from utils.owner_context import get_current_owner_id, get_current_tenant_id
 
@@ -1190,34 +1191,13 @@ async def generate_presentation_handler(
             outline_post_started = time.monotonic()
 
             try:
-                presentation_outlines_json = dict(
-                    dirtyjson.loads(presentation_outlines_text)
+                presentation_outlines = parse_outline_response(
+                    presentation_outlines_text, n_slides_to_generate
                 )
-            except Exception:
-                traceback.print_exc()
-                raise HTTPException(
-                    status_code=400,
-                    detail="Failed to generate presentation outlines. Please try again.",
-                )
-            presentation_outlines = PresentationOutlineModel(
-                **presentation_outlines_json
-            )
-
-            if n_slides_to_generate is not None:
-                if len(presentation_outlines.slides) < n_slides_to_generate:
-                    raise HTTPException(
-                        status_code=400,
-                        detail=(
-                            "Failed to generate presentation outlines with requested "
-                            "number of slides. Please try again."
-                        ),
-                    )
-                # Overshooting by a slide or two is common and recoverable: keep
-                # the first n and drop the rest. Only undershooting is a real
-                # failure, since there is nothing to pad the deck out with.
-                presentation_outlines.slides = presentation_outlines.slides[
-                    :n_slides_to_generate
-                ]
+            except OutlineResponseError as error:
+                if error.cause is not None:
+                    traceback.print_exc()
+                raise HTTPException(status_code=400, detail=error.detail) from None
 
             total_outlines = len(presentation_outlines.slides)
 
@@ -1398,6 +1378,9 @@ async def generate_presentation_handler(
               and str(e).startswith(("svg_common_header_", "svg_header_design_"))):
             # Bounded header failures retain their precise safe reason. A new
             # operation attempt cannot repair exhausted/unknown provider work.
+            # The reason alone does not say which check raised it; keep the
+            # stack in the log (content-free: these are code paths, not data).
+            logger.warning("Bounded header failure %s", e, exc_info=True)
             safe_error = AuthoredStageError(slide_index=None, stage="author",
                 code=str(e), retryable=False).as_safe_dict(
                     request_id=request._request_id, attempt_number=authored_attempt_number)

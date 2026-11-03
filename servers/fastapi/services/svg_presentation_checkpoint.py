@@ -348,11 +348,25 @@ def _verified_outline_bootstrap(job, count, usage, operation, admission, calls):
             or admission.actual_consumed_microunits > admission.actual_cost_limit_microunits):
         raise RuntimeError("svg_checkpoint_missing")
     # These are the existing producer slots, independent of prompt/file/UI input.
-    slots = {"outline": [("stream.primary", False)], "content_brief": [
-        (structured_semantic_slot(validation_attempt=validation, parse_attempt=parse) + ".attempt-1",
-         validation > 0 or parse > 0)
-        for validation in range(2) for parse in range(2)
-    ]}
+    # The outline stage may also spend its density expansion (thin slides with
+    # a source or brief) and condensation calls, each under its own slot prefix.
+    from utils.llm_calls.outline_density import EXPANSION_SEMANTIC_SLOT_PREFIX
+    from utils.llm_calls.outline_density_ceiling import CONDENSE_SEMANTIC_SLOT_PREFIX
+
+    def structured_slots(prefix=None):
+        return [
+            (structured_semantic_slot(validation_attempt=validation, parse_attempt=parse,
+                                      **({"prefix": prefix} if prefix else {})) + ".attempt-1",
+             validation > 0 or parse > 0)
+            for validation in range(2) for parse in range(2)
+        ]
+
+    slots = {
+        "outline": [("stream.primary", False),
+                    *structured_slots(EXPANSION_SEMANTIC_SLOT_PREFIX),
+                    *structured_slots(CONDENSE_SEMANTIC_SLOT_PREFIX)],
+        "content_brief": structured_slots(),
+    }
     expected = {}
     for stage, stage_slots in slots.items():
         for slot, is_retry in stage_slots:

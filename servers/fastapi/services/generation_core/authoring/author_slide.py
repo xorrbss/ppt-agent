@@ -52,7 +52,7 @@ from services.generation_core.authoring.author_slide_stream import (
     stream_author_call,
 )
 
-from llmai import get_client
+from utils.llm_config import get_client
 
 from models.authored_header_contract import AuthoredHeaderContract
 from models.authored_infographic_plan import AuthoredSlideInfographic
@@ -705,6 +705,53 @@ def _authoring_extra_body(
     return None if level is None else {"reasoning": {"effort": level}}
 
 
+_ANTHROPIC_EFFORTS = {"minimal": "low", "low": "low", "medium": "medium", "high": "high", "xhigh": "max"}
+
+
+def _apply_anthropic_authoring_reasoning(
+    kwargs: dict, effort: Optional[str] = None, *, model: object = None
+) -> dict:
+    """Pass the authored effort to Anthropic as ``output_config.effort`` only.
+
+    Claude models differ in their default. claude-sonnet-5 thinks when
+    ``thinking`` is omitted and spent whole 16k authoring budgets on hidden
+    reasoning (pages returned no text: ``public_provider_empty_output``);
+    claude-sonnet-4-6 does not think by default, and *enabling* adaptive
+    thinking there consumed the budget the same way. Measured on one SVG
+    prompt (16k budget): ``output_config.effort`` alone bounded sonnet-5
+    (omitted: max_tokens with truncated text; medium: 5.8k tokens, complete)
+    and left sonnet-4-6 / opus-4-8 without thinking, whereas adaptive thinking
+    at medium made sonnet-4-6 return 16k thinking tokens and no text. So
+    ``thinking`` is never enabled here; ``none`` disables it.
+
+    An operator who sets AUTHORED_REASONING_EFFORT (or CODEX_REASONING_EFFORT)
+    to a disable word turns the override off, whatever effort the call site
+    passes. Other providers are left unchanged.
+    """
+    from enums.llm_provider import LLMProvider
+
+    try:
+        provider = get_llm_provider()
+    except Exception:
+        # Offline and unit contexts may have no resolvable provider.
+        return kwargs
+    if provider != LLMProvider.ANTHROPIC:
+        return kwargs
+    if author_slide_effort.resolve_authoring_reasoning_level(None, model) is None:
+        return kwargs
+    level = author_slide_effort.resolve_authoring_reasoning_level(effort, model)
+    if level is None:
+        return kwargs
+    extra = kwargs.get("extra_body")
+    extra = dict(extra) if isinstance(extra, dict) else {}
+    if level == "none":
+        extra["thinking"] = {"type": "disabled"}
+    else:
+        extra["output_config"] = {"effort": _ANTHROPIC_EFFORTS.get(level, "medium")}
+    kwargs["extra_body"] = extra
+    return kwargs
+
+
 def _authoring_output_profile(
     *,
     role: str,
@@ -909,6 +956,9 @@ async def author_slide_html(
         # codex-only; get_extra_body() populates extra_body only for the (mutually
         # exclusive) CUSTOM provider, so this reasoning dict is the sole source here.
         kwargs["extra_body"] = reasoning
+    _apply_anthropic_authoring_reasoning(
+        kwargs, reasoning_effort or default_reasoning_effort, model=model
+    )
     apply_prompt_cache_key(kwargs)
     if not isinstance(allow_provider_fallback, bool):
         raise ValueError("allow_provider_fallback must be a boolean")

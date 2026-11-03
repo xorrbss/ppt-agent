@@ -96,7 +96,7 @@ async def review_planned_source_images(
     geometry_receipt: Mapping, slide_index: int, slide_context: str = "",
 ) -> dict:
     """One bounded source-vs-final-render review; no HTML mutation or recapture."""
-    from llmai import get_client
+    from utils.llm_config import get_client
     from llmai.shared import ImageContentPart, JSONSchemaResponse, SystemMessage, TextContentPart, UserMessage
     from utils.llm_config import enforce_llm_egress_policy, get_llm_config
     from utils.llm_utils import generate_structured_with_schema_retries

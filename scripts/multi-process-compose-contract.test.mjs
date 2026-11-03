@@ -165,6 +165,42 @@ test("api and worker run the external worker mode against the same PostgreSQL da
   assert.match(lifespan, /await require_public_api_database_authority\(\)/u);
 });
 
+test("the multi-export controller runs every job in the pinned container sandbox", () => {
+  const exportBlock = serviceBlock("export");
+  assert.match(exportBlock, /^    profiles: \["multi-export"\]$/mu, "export must be opt-in");
+  assert.equal(environmentValue(exportBlock, "PPT_PROCESS_PROFILE"), "ppt-core");
+  assert.equal(environmentValue(exportBlock, "WORKSPACE_OPERATION_EXTERNAL_CONTROLLER"), "export");
+  assert.equal(environmentValue(exportBlock, "WORKSPACE_OPERATION_WORKER_MODE"), "external");
+  assert.equal(environmentValue(exportBlock, "PUBLIC_DATABASE_PROCESS_ROLE"), "controller");
+  assert.equal(environmentValue(exportBlock, "ENVIRONMENT"), "production");
+  assert.equal(environmentValue(exportBlock, "PUBLIC_TRUSTED_WORKER_SANDBOX_BACKEND"), "container");
+  assertNoEnvironmentKey(exportBlock, "PUBLIC_TRUSTED_WORKER_LOCAL_POLICY");
+  assert.equal(environmentValue(exportBlock, "PUBLIC_TRUSTED_WORKER_CONTAINER_IMAGE"), "${PRESENTON_PUBLIC_WORKER_IMAGE:-}");
+  assert.equal(environmentValue(exportBlock, "PUBLIC_TRUSTED_WORKER_CONTAINER_USER"), '"65532:65532"');
+  // Bind sources are resolved by the host daemon: same path on both sides.
+  const staging = environmentValue(exportBlock, "PUBLIC_TRUSTED_WORKER_STAGING_ROOT");
+  assert.ok(exportBlock.includes(`      - ${staging}:${staging}\n`), "staging root must be mounted at the same path");
+  assert.match(exportBlock, /^      - \/var\/run\/docker\.sock:\/var\/run\/docker\.sock$/mu);
+  for (const role of ["RENDER", "EXPORT"]) {
+    const argv = JSON.parse(environmentValue(exportBlock, `PUBLIC_${role}_WORKER_COMMAND_JSON`).slice(1, -1));
+    assert.equal(argv[0], "/opt/venv/bin/python", "worker executables are paths inside the worker image");
+  }
+  assert.deepEqual(dependsOn(exportBlock), { postgres: "service_healthy", api: "service_healthy" });
+  const controllerTarget = databaseTarget(environmentValue(exportBlock, "PUBLIC_CONTROLLER_DATABASE_URL"));
+  assert.equal(controllerTarget.login, "presenton_public_controller_login");
+
+  const { worker } = services;
+  for (const key of ["PUBLIC_RENDER_WORKER_IMAGE_DIGEST", "PUBLIC_RENDER_WORKER_FONT_INVENTORY_DIGEST"]) {
+    assert.equal(environmentValue(worker, key), environmentValue(exportBlock, key),
+      "generation and export must bind renders to the same pinned runtime");
+  }
+  const builder = read("scripts/build-public-worker-image.sh");
+  assert.match(builder, /--target public-worker-runtime/u);
+  assert.match(builder, /PRESENTON_PUBLIC_WORKER_IMAGE=\$PINNED/u);
+  assert.match(read("Dockerfile"), /^FROM python:3\.11-slim-trixie AS public-worker-runtime$/mu);
+  assert.match(read("Dockerfile"), /^USER 65532:65532$/mu);
+});
+
 test("start.js bundles a generation worker unless the deployment provides one as a service", () => {
   const launcher = read("start.js");
   assert.match(

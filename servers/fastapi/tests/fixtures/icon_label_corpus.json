@@ -1,0 +1,2033 @@
+{
+"note": "Gold judgements: 'fit' lists library icon id prefixes that depict the label; [] means no library icon fits.",
+"labels": [
+{
+"label": "거버넌스",
+"source": "deck",
+"fit": []
+},
+{
+"label": "개발 비용",
+"source": "deck",
+"fit": [
+"finance-01",
+"finance-06",
+"finance-07"
+]
+},
+{
+"label": "검토",
+"source": "deck",
+"fit": [
+"collaboration-09",
+"operations-19",
+"process-05"
+]
+},
+{
+"label": "경비 보고서 승인",
+"source": "deck",
+"fit": [
+"process-08",
+"finance-10",
+"finance-15"
+]
+},
+{
+"label": "계정 생성",
+"source": "deck",
+"fit": []
+},
+{
+"label": "계정 및 접근 관리",
+"source": "deck",
+"fit": [
+"data-19"
+]
+},
+{
+"label": "고객 확보",
+"source": "deck",
+"fit": [
+"growth-09",
+"people-12"
+]
+},
+{
+"label": "고객 획득 비용",
+"source": "deck",
+"fit": [
+"finance-01",
+"finance-06",
+"finance-07"
+]
+},
+{
+"label": "경쟁사",
+"source": "deck",
+"fit": [
+"strategy-13"
+]
+},
+{
+"label": "경영진 의지 표명",
+"source": "deck",
+"fit": [
+"people-13"
+]
+},
+{
+"label": "구독자 규모",
+"source": "deck",
+"fit": []
+},
+{
+"label": "구현 난이도",
+"source": "deck",
+"fit": []
+},
+{
+"label": "국내 시장 특성",
+"source": "deck",
+"fit": []
+},
+{
+"label": "글로벌 시장 성장",
+"source": "deck",
+"fit": [
+"growth-01",
+"growth-08"
+]
+},
+{
+"label": "근태",
+"source": "deck",
+"fit": [
+"operations-16"
+]
+},
+{
+"label": "급여 데이터 처리",
+"source": "deck",
+"fit": [
+"data-01",
+"finance-01",
+"finance-02",
+"finance-10"
+]
+},
+{
+"label": "기술 보안 통제",
+"source": "deck",
+"fit": [
+"infrastructure-15",
+"ai-14"
+]
+},
+{
+"label": "기술 변화 추적",
+"source": "deck",
+"fit": [
+"innovation-19"
+]
+},
+{
+"label": "내재화",
+"source": "deck",
+"fit": []
+},
+{
+"label": "네트워크 보안",
+"source": "deck",
+"fit": [
+"infrastructure-15",
+"infrastructure-03"
+]
+},
+{
+"label": "네트워크 분리",
+"source": "deck",
+"fit": [
+"infrastructure-03",
+"data-11"
+]
+},
+{
+"label": "다중 인증",
+"source": "deck",
+"fit": [
+"data-19",
+"infrastructure-15",
+"process-08"
+]
+},
+{
+"label": "데이터 암호화",
+"source": "deck",
+"fit": [
+"data-19",
+"finance-11",
+"infrastructure-15"
+]
+},
+{
+"label": "데이터 입력",
+"source": "deck",
+"fit": [
+"data-01",
+"data-09"
+]
+},
+{
+"label": "데이터 자동 수집",
+"source": "deck",
+"fit": [
+"data-13",
+"process-20",
+"data-01"
+]
+},
+{
+"label": "도입 계획",
+"source": "deck",
+"fit": [
+"strategy-05"
+]
+},
+{
+"label": "도입 지연 위험",
+"source": "deck",
+"fit": [
+"strategy-18"
+]
+},
+{
+"label": "리스크 관리",
+"source": "deck",
+"fit": [
+"strategy-18",
+"strategy-11"
+]
+},
+{
+"label": "매출 손실",
+"source": "deck",
+"fit": []
+},
+{
+"label": "모니터링",
+"source": "deck",
+"fit": [
+"infrastructure-20"
+]
+},
+{
+"label": "모니터링 및 개선",
+"source": "deck",
+"fit": [
+"infrastructure-20",
+"innovation-11"
+]
+},
+{
+"label": "백업 자동화",
+"source": "deck",
+"fit": [
+"data-20",
+"process-20"
+]
+},
+{
+"label": "법적 과태료",
+"source": "deck",
+"fit": []
+},
+{
+"label": "변화관리",
+"source": "deck",
+"fit": [
+"innovation-19"
+]
+},
+{
+"label": "보안 담당자 지정",
+"source": "deck",
+"fit": [
+"infrastructure-15",
+"ai-14"
+]
+},
+{
+"label": "보안 문화 정착",
+"source": "deck",
+"fit": [
+"infrastructure-15",
+"ai-14"
+]
+},
+{
+"label": "분류",
+"source": "deck",
+"fit": [
+"ai-08"
+]
+},
+{
+"label": "브랜드 인지도 조사",
+"source": "deck",
+"fit": []
+},
+{
+"label": "비용 절감",
+"source": "deck",
+"fit": [
+"finance-01",
+"finance-06",
+"finance-07"
+]
+},
+{
+"label": "비용 우위",
+"source": "deck",
+"fit": [
+"finance-01",
+"strategy-13"
+]
+},
+{
+"label": "사고 대응 절차",
+"source": "deck",
+"fit": [
+"strategy-18",
+"process-01",
+"process-15"
+]
+},
+{
+"label": "새로운 위협 대응",
+"source": "deck",
+"fit": [
+"strategy-18"
+]
+},
+{
+"label": "성과",
+"source": "deck",
+"fit": [
+"growth-18"
+]
+},
+{
+"label": "성과 인센티브",
+"source": "deck",
+"fit": [
+"growth-18",
+"finance-16"
+]
+},
+{
+"label": "수작업 데이터 입력",
+"source": "deck",
+"fit": [
+"data-01",
+"data-09"
+]
+},
+{
+"label": "시범 적용",
+"source": "deck",
+"fit": [
+"innovation-02",
+"innovation-04"
+]
+},
+{
+"label": "시간 낭비",
+"source": "deck",
+"fit": [
+"process-18",
+"process-10"
+]
+},
+{
+"label": "실행 로드맵",
+"source": "deck",
+"fit": [
+"strategy-05"
+]
+},
+{
+"label": "승인",
+"source": "deck",
+"fit": [
+"process-08"
+]
+},
+{
+"label": "오류율 감소",
+"source": "deck",
+"fit": []
+},
+{
+"label": "우선순위",
+"source": "deck",
+"fit": [
+"strategy-11"
+]
+},
+{
+"label": "운영 인사이트",
+"source": "deck",
+"fit": []
+},
+{
+"label": "워크플로 자동화",
+"source": "deck",
+"fit": [
+"process-01",
+"process-20"
+]
+},
+{
+"label": "원격 접속",
+"source": "deck",
+"fit": [
+"data-19",
+"technology-18"
+]
+},
+{
+"label": "위험 평가",
+"source": "deck",
+"fit": [
+"strategy-18",
+"operations-19",
+"process-05"
+]
+},
+{
+"label": "위협 현황 진단",
+"source": "deck",
+"fit": [
+"operations-19",
+"strategy-18"
+]
+},
+{
+"label": "이메일",
+"source": "deck",
+"fit": []
+},
+{
+"label": "인력 효율 재배치",
+"source": "deck",
+"fit": []
+},
+{
+"label": "인센티브 제도",
+"source": "deck",
+"fit": [
+"growth-18",
+"finance-16"
+]
+},
+{
+"label": "인플루언서 마케팅",
+"source": "deck",
+"fit": []
+},
+{
+"label": "임직원 보안 교육",
+"source": "deck",
+"fit": [
+"education-01",
+"education-02",
+"education-10",
+"infrastructure-15"
+]
+},
+{
+"label": "업무 자동화",
+"source": "deck",
+"fit": [
+"process-20"
+]
+},
+{
+"label": "사내 업무 자동화",
+"source": "deck",
+"fit": [
+"process-20"
+]
+},
+{
+"label": "자동화 전략",
+"source": "deck",
+"fit": [
+"process-20",
+"strategy-05",
+"strategy-03"
+]
+},
+{
+"label": "전사 확산",
+"source": "deck",
+"fit": [
+"growth-04",
+"growth-08"
+]
+},
+{
+"label": "전환율",
+"source": "deck",
+"fit": [
+"process-03"
+]
+},
+{
+"label": "접근 권한 관리",
+"source": "deck",
+"fit": [
+"data-19"
+]
+},
+{
+"label": "접근 로그 보존",
+"source": "deck",
+"fit": [
+"data-19",
+"data-20"
+]
+},
+{
+"label": "정책 수립",
+"source": "deck",
+"fit": [
+"strategy-05",
+"process-05",
+"process-08"
+]
+},
+{
+"label": "조직 역량 구축",
+"source": "deck",
+"fit": [
+"growth-19",
+"education-14"
+]
+},
+{
+"label": "주기적 검토",
+"source": "deck",
+"fit": [
+"process-02",
+"collaboration-09",
+"process-14",
+"operations-19"
+]
+},
+{
+"label": "중소기업",
+"source": "deck",
+"fit": []
+},
+{
+"label": "대기업",
+"source": "deck",
+"fit": []
+},
+{
+"label": "지속적 운영 방안",
+"source": "deck",
+"fit": [
+"process-02",
+"process-14"
+]
+},
+{
+"label": "직원 경험 개선",
+"source": "deck",
+"fit": [
+"innovation-11"
+]
+},
+{
+"label": "처리 속도",
+"source": "deck",
+"fit": [
+"growth-11",
+"process-18"
+]
+},
+{
+"label": "채널 전략",
+"source": "deck",
+"fit": [
+"strategy-01",
+"strategy-03",
+"strategy-05",
+"strategy-16"
+]
+},
+{
+"label": "첫 구매 전환율",
+"source": "deck",
+"fit": [
+"process-03"
+]
+},
+{
+"label": "최고경영자",
+"source": "deck",
+"fit": [
+"people-13"
+]
+},
+{
+"label": "추진 배경",
+"source": "deck",
+"fit": []
+},
+{
+"label": "취약점 정기 스캔",
+"source": "deck",
+"fit": [
+"operations-19",
+"infrastructure-15",
+"ai-14"
+]
+},
+{
+"label": "콘텐츠",
+"source": "deck",
+"fit": []
+},
+{
+"label": "크리에이터",
+"source": "deck",
+"fit": [
+"people-06",
+"innovation-13"
+]
+},
+{
+"label": "클릭률",
+"source": "deck",
+"fit": []
+},
+{
+"label": "통계적 유의성",
+"source": "deck",
+"fit": [
+"data-05",
+"data-17"
+]
+},
+{
+"label": "투자 회수 기간",
+"source": "deck",
+"fit": [
+"finance-08",
+"finance-19",
+"process-10"
+]
+},
+{
+"label": "파트너십",
+"source": "deck",
+"fit": [
+"collaboration-01",
+"collaboration-02",
+"collaboration-14"
+]
+},
+{
+"label": "퍼포먼스 마케팅",
+"source": "deck",
+"fit": []
+},
+{
+"label": "페이지 로딩 속도",
+"source": "deck",
+"fit": [
+"growth-11",
+"process-18"
+]
+},
+{
+"label": "프로세스",
+"source": "deck",
+"fit": [
+"process-01",
+"process-15"
+]
+},
+{
+"label": "피싱 메일 모의훈련",
+"source": "deck",
+"fit": [
+"education-01",
+"education-02",
+"education-10",
+"education-12",
+"infrastructure-15",
+"ai-14"
+]
+},
+{
+"label": "핵심 과제 요약",
+"source": "deck",
+"fit": []
+},
+{
+"label": "핵심 목표",
+"source": "deck",
+"fit": [
+"strategy-01"
+]
+},
+{
+"label": "핵심 성과 지표",
+"source": "deck",
+"fit": [
+"data-05",
+"growth-14",
+"data-08",
+"growth-18"
+]
+},
+{
+"label": "핵심 시사점",
+"source": "deck",
+"fit": []
+},
+{
+"label": "핵심 요약",
+"source": "deck",
+"fit": []
+},
+{
+"label": "핵심 원칙",
+"source": "deck",
+"fit": []
+},
+{
+"label": "핵심 인사이트",
+"source": "deck",
+"fit": []
+},
+{
+"label": "핵심 플랫폼",
+"source": "deck",
+"fit": []
+},
+{
+"label": "현업 담당자",
+"source": "deck",
+"fit": [
+"people-18"
+]
+},
+{
+"label": "현황 분석",
+"source": "deck",
+"fit": [
+"data-07"
+]
+},
+{
+"label": "현황 진단",
+"source": "deck",
+"fit": [
+"operations-19",
+"data-07"
+]
+},
+{
+"label": "확산",
+"source": "deck",
+"fit": [
+"growth-04"
+]
+},
+{
+"label": "확장성",
+"source": "deck",
+"fit": [
+"growth-04"
+]
+},
+{
+"label": "효과",
+"source": "deck",
+"fit": [
+"growth-01",
+"growth-18"
+]
+},
+{
+"label": "효과 측정",
+"source": "deck",
+"fit": [
+"growth-14",
+"data-05"
+]
+},
+{
+"label": "효율성 향상",
+"source": "deck",
+"fit": [
+"growth-15",
+"growth-11",
+"growth-01"
+]
+},
+{
+"label": "생산성 향상 보고",
+"source": "deck",
+"fit": [
+"growth-15",
+"growth-01"
+]
+},
+{
+"label": "신규 고객 목표",
+"source": "deck",
+"fit": [
+"strategy-01",
+"growth-09",
+"people-12"
+]
+},
+{
+"label": "업무 만족도",
+"source": "deck",
+"fit": []
+},
+{
+"label": "사용자 생성 콘텐츠",
+"source": "deck",
+"fit": []
+},
+{
+"label": "문서 오류율 감소",
+"source": "deck",
+"fit": []
+},
+{
+"label": "문서 전달",
+"source": "deck",
+"fit": [
+"process-16",
+"collaboration-15"
+]
+},
+{
+"label": "발주서",
+"source": "deck",
+"fit": [
+"finance-15",
+"operations-20"
+]
+},
+{
+"label": "계약서",
+"source": "deck",
+"fit": []
+},
+{
+"label": "회계 전표 입력",
+"source": "deck",
+"fit": [
+"finance-10",
+"finance-15",
+"finance-13"
+]
+},
+{
+"label": "결재 문서 작성",
+"source": "deck",
+"fit": [
+"process-08"
+]
+},
+{
+"label": "중복 결재 프로세스",
+"source": "deck",
+"fit": [
+"process-08",
+"process-01"
+]
+},
+{
+"label": "반복적 고객 응대",
+"source": "deck",
+"fit": [
+"operations-14",
+"people-12"
+]
+},
+{
+"label": "FAQ 챗봇",
+"source": "deck",
+"fit": [
+"ai-02",
+"ai-05"
+]
+},
+{
+"label": "AI 챗봇",
+"source": "deck",
+"fit": [
+"ai-02",
+"ai-05"
+]
+},
+{
+"label": "AI 예측 분석",
+"source": "deck",
+"fit": [
+"ai-16",
+"data-07"
+]
+},
+{
+"label": "AI 기반 개인화",
+"source": "deck",
+"fit": [
+"ai-09",
+"ai-01",
+"ai-03"
+]
+},
+{
+"label": "OCR 자동화",
+"source": "deck",
+"fit": [
+"process-20",
+"ai-18"
+]
+},
+{
+"label": "LTV 예측 모델",
+"source": "deck",
+"fit": [
+"ai-16",
+"ai-04"
+]
+},
+{
+"label": "ISMS 표준 도입",
+"source": "deck",
+"fit": []
+},
+{
+"label": "CSP 인증",
+"source": "deck",
+"fit": [
+"data-19",
+"process-08"
+]
+},
+{
+"label": "EDR 솔루션",
+"source": "deck",
+"fit": [
+"infrastructure-15",
+"ai-14"
+]
+},
+{
+"label": "패치 자동화",
+"source": "deck",
+"fit": [
+"process-20",
+"operations-09"
+]
+},
+{
+"label": "관리형 보안 서비스",
+"source": "deck",
+"fit": [
+"infrastructure-15"
+]
+},
+{
+"label": "MSSP 위탁 운영",
+"source": "deck",
+"fit": [
+"infrastructure-15"
+]
+},
+{
+"label": "다단계 인증",
+"source": "deck",
+"fit": [
+"data-19",
+"infrastructure-15",
+"process-08"
+]
+},
+{
+"label": "보안 이벤트 로그",
+"source": "deck",
+"fit": [
+"infrastructure-20",
+"infrastructure-15"
+]
+},
+{
+"label": "엔드포인트 보호",
+"source": "deck",
+"fit": [
+"infrastructure-15",
+"finance-12"
+]
+},
+{
+"label": "침입탐지시스템",
+"source": "deck",
+"fit": [
+"infrastructure-15",
+"infrastructure-20"
+]
+},
+{
+"label": "개인정보 처리 방침",
+"source": "deck",
+"fit": [
+"data-19",
+"infrastructure-15"
+]
+},
+{
+"label": "개인정보 보호법",
+"source": "deck",
+"fit": [
+"data-19",
+"infrastructure-15",
+"process-05"
+]
+},
+{
+"label": "법령 개정 모니터링",
+"source": "deck",
+"fit": [
+"infrastructure-20",
+"process-05"
+]
+},
+{
+"label": "교육 및 인식 제고",
+"source": "deck",
+"fit": [
+"education-01",
+"education-02",
+"education-10"
+]
+},
+{
+"label": "감사 및 지속 개선",
+"source": "deck",
+"fit": [
+"operations-19",
+"innovation-11"
+]
+},
+{
+"label": "목표",
+"source": "deck",
+"fit": [
+"strategy-01"
+]
+},
+{
+"label": "타겟 고객 분석",
+"source": "deck",
+"fit": [
+"data-07",
+"people-12"
+]
+},
+{
+"label": "타겟 고객 세분화",
+"source": "deck",
+"fit": [
+"data-16",
+"people-12"
+]
+},
+{
+"label": "예산 배분",
+"source": "deck",
+"fit": [
+"finance-07",
+"finance-17"
+]
+},
+{
+"label": "예산 비중",
+"source": "deck",
+"fit": [
+"finance-07",
+"data-02"
+]
+},
+{
+"label": "연평균 성장률",
+"source": "deck",
+"fit": [
+"growth-01"
+]
+},
+{
+"label": "인적 오류율 감소",
+"source": "deck",
+"fit": []
+},
+{
+"label": "전환 퍼널",
+"source": "deck",
+"fit": [
+"process-03"
+]
+},
+{
+"label": "처리 품질 균일화",
+"source": "deck",
+"fit": [
+"operations-11"
+]
+},
+{
+"label": "저코드 도구 활용",
+"source": "deck",
+"fit": []
+},
+{
+"label": "효율성",
+"source": "deck",
+"fit": [
+"growth-11"
+]
+},
+{
+"label": "리스크 대응",
+"source": "deck",
+"fit": [
+"strategy-18"
+]
+},
+{
+"label": "주요 리스크 대응",
+"source": "deck",
+"fit": [
+"strategy-18"
+]
+},
+{
+"label": "비상연락체계",
+"source": "deck",
+"fit": []
+},
+{
+"label": "3단계 교육 체계",
+"source": "deck",
+"fit": [
+"education-01",
+"education-02",
+"education-10",
+"education-07",
+"process-15"
+]
+},
+{
+"label": "수집",
+"source": "common",
+"fit": [
+"data-13",
+"data-14",
+"process-03"
+]
+},
+{
+"label": "분석",
+"source": "common",
+"fit": [
+"data-07"
+]
+},
+{
+"label": "대응",
+"source": "common",
+"fit": [
+"strategy-18"
+]
+},
+{
+"label": "보안",
+"source": "common",
+"fit": [
+"infrastructure-15",
+"ai-14",
+"finance-12"
+]
+},
+{
+"label": "성장",
+"source": "common",
+"fit": [
+"growth-01",
+"growth-02"
+]
+},
+{
+"label": "비용",
+"source": "common",
+"fit": [
+"finance-01",
+"finance-06",
+"finance-07"
+]
+},
+{
+"label": "일정",
+"source": "common",
+"fit": [
+"operations-16"
+]
+},
+{
+"label": "고객",
+"source": "common",
+"fit": [
+"people-12"
+]
+},
+{
+"label": "데이터",
+"source": "common",
+"fit": [
+"data-01"
+]
+},
+{
+"label": "자동화",
+"source": "common",
+"fit": [
+"process-20"
+]
+},
+{
+"label": "데이터 분석",
+"source": "common",
+"fit": [
+"data-07"
+]
+},
+{
+"label": "고객 분석",
+"source": "common",
+"fit": [
+"data-07",
+"people-12"
+]
+},
+{
+"label": "시장 분석",
+"source": "common",
+"fit": [
+"data-07"
+]
+},
+{
+"label": "시장 확대",
+"source": "common",
+"fit": [
+"growth-08",
+"growth-04"
+]
+},
+{
+"label": "비용 분석",
+"source": "common",
+"fit": [
+"data-07",
+"finance-01",
+"finance-06"
+]
+},
+{
+"label": "운영 효율",
+"source": "common",
+"fit": [
+"growth-11",
+"process-06"
+]
+},
+{
+"label": "운영",
+"source": "common",
+"fit": [
+"process-06",
+"operations-17"
+]
+},
+{
+"label": "기술",
+"source": "common",
+"fit": [
+"technology-11",
+"technology-02"
+]
+},
+{
+"label": "평가",
+"source": "common",
+"fit": [
+"operations-19",
+"ai-13",
+"process-05"
+]
+},
+{
+"label": "계획",
+"source": "common",
+"fit": [
+"strategy-05"
+]
+},
+{
+"label": "전략",
+"source": "common",
+"fit": [
+"strategy-03",
+"strategy-01",
+"strategy-05"
+]
+},
+{
+"label": "교육",
+"source": "common",
+"fit": [
+"education-01",
+"education-02"
+]
+},
+{
+"label": "협업",
+"source": "common",
+"fit": [
+"collaboration-06",
+"collaboration-01"
+]
+},
+{
+"label": "혁신",
+"source": "common",
+"fit": [
+"innovation-01"
+]
+},
+{
+"label": "품질",
+"source": "common",
+"fit": [
+"operations-11"
+]
+},
+{
+"label": "안전",
+"source": "common",
+"fit": [
+"operations-10",
+"health-08"
+]
+},
+{
+"label": "위험",
+"source": "common",
+"fit": [
+"strategy-18"
+]
+},
+{
+"label": "목표 설정",
+"source": "common",
+"fit": [
+"strategy-01"
+]
+},
+{
+"label": "현황 파악",
+"source": "common",
+"fit": []
+},
+{
+"label": "효율 개선",
+"source": "common",
+"fit": [
+"innovation-11",
+"growth-11"
+]
+},
+{
+"label": "고객 만족",
+"source": "common",
+"fit": [
+"people-12"
+]
+},
+{
+"label": "고객 이탈",
+"source": "common",
+"fit": [
+"people-12"
+]
+},
+{
+"label": "매출 증가",
+"source": "common",
+"fit": [
+"growth-07",
+"growth-01",
+"growth-15"
+]
+},
+{
+"label": "매출 감소",
+"source": "common",
+"fit": []
+},
+{
+"label": "성장 둔화",
+"source": "common",
+"fit": []
+},
+{
+"label": "비용 증가",
+"source": "common",
+"fit": [
+"finance-01",
+"finance-06",
+"finance-07"
+]
+},
+{
+"label": "수익성",
+"source": "common",
+"fit": [
+"growth-07",
+"finance-01"
+]
+},
+{
+"label": "데이터 수집",
+"source": "common",
+"fit": [
+"data-13",
+"data-14"
+]
+},
+{
+"label": "데이터 정제",
+"source": "common",
+"fit": [
+"data-15"
+]
+},
+{
+"label": "데이터 보안",
+"source": "common",
+"fit": [
+"infrastructure-15",
+"data-19"
+]
+},
+{
+"label": "정보 보호",
+"source": "common",
+"fit": [
+"infrastructure-15",
+"data-19"
+]
+},
+{
+"label": "자동화 도입",
+"source": "common",
+"fit": [
+"process-20"
+]
+},
+{
+"label": "업무 효율화",
+"source": "common",
+"fit": [
+"growth-11",
+"process-20"
+]
+},
+{
+"label": "성과 관리",
+"source": "common",
+"fit": [
+"growth-18"
+]
+},
+{
+"label": "성과 측정",
+"source": "common",
+"fit": [
+"data-05",
+"growth-18"
+]
+},
+{
+"label": "일정 관리",
+"source": "common",
+"fit": [
+"operations-16"
+]
+},
+{
+"label": "프로젝트 일정",
+"source": "common",
+"fit": [
+"operations-16"
+]
+},
+{
+"label": "예산 관리",
+"source": "common",
+"fit": [
+"finance-07"
+]
+},
+{
+"label": "인력",
+"source": "common",
+"fit": []
+},
+{
+"label": "조직 문화",
+"source": "common",
+"fit": []
+},
+{
+"label": "현장",
+"source": "common",
+"fit": []
+},
+{
+"label": "생성형 AI",
+"source": "common",
+"fit": [
+"ai-01"
+]
+},
+{
+"label": "클라우드 전환",
+"source": "common",
+"fit": [
+"technology-04"
+]
+},
+{
+"label": "클라우드 인프라",
+"source": "common",
+"fit": [
+"technology-04",
+"infrastructure-01",
+"infrastructure-19"
+]
+},
+{
+"label": "서버 운영",
+"source": "common",
+"fit": [
+"infrastructure-01"
+]
+},
+{
+"label": "시스템 연동",
+"source": "common",
+"fit": [
+"technology-06"
+]
+},
+{
+"label": "API 연동",
+"source": "common",
+"fit": [
+"technology-06"
+]
+},
+{
+"label": "모바일 앱",
+"source": "common",
+"fit": [
+"technology-03"
+]
+},
+{
+"label": "앱 개발",
+"source": "common",
+"fit": [
+"technology-05",
+"technology-03"
+]
+},
+{
+"label": "제품 개발",
+"source": "common",
+"fit": []
+},
+{
+"label": "연구 개발",
+"source": "common",
+"fit": []
+},
+{
+"label": "신제품 출시",
+"source": "common",
+"fit": [
+"innovation-12"
+]
+},
+{
+"label": "시장 진출",
+"source": "common",
+"fit": [
+"growth-08"
+]
+},
+{
+"label": "글로벌 진출",
+"source": "common",
+"fit": []
+},
+{
+"label": "신규 고객 확보",
+"source": "common",
+"fit": [
+"growth-09",
+"people-12"
+]
+},
+{
+"label": "고객 유지",
+"source": "common",
+"fit": [
+"people-12"
+]
+},
+{
+"label": "고객 지원",
+"source": "common",
+"fit": [
+"operations-14"
+]
+},
+{
+"label": "고객 응대",
+"source": "common",
+"fit": [
+"operations-14"
+]
+},
+{
+"label": "공급망 관리",
+"source": "common",
+"fit": [
+"operations-07"
+]
+},
+{
+"label": "재고 관리",
+"source": "common",
+"fit": [
+"operations-03"
+]
+},
+{
+"label": "물류 최적화",
+"source": "common",
+"fit": [
+"operations-01",
+"operations-06"
+]
+},
+{
+"label": "품질 관리",
+"source": "common",
+"fit": [
+"operations-11"
+]
+},
+{
+"label": "안전 관리",
+"source": "common",
+"fit": [
+"operations-10"
+]
+},
+{
+"label": "리스크 평가",
+"source": "common",
+"fit": [
+"strategy-18"
+]
+},
+{
+"label": "위기 대응",
+"source": "common",
+"fit": [
+"strategy-18"
+]
+},
+{
+"label": "규정 준수",
+"source": "common",
+"fit": [
+"process-05",
+"process-17"
+]
+},
+{
+"label": "감사 대응",
+"source": "common",
+"fit": [
+"operations-19",
+"strategy-18"
+]
+},
+{
+"label": "투자 계획",
+"source": "common",
+"fit": [
+"finance-08",
+"strategy-05"
+]
+},
+{
+"label": "투자 수익",
+"source": "common",
+"fit": [
+"finance-08",
+"growth-07"
+]
+},
+{
+"label": "재무 분석",
+"source": "common",
+"fit": [
+"finance-13",
+"data-07"
+]
+},
+{
+"label": "재무제표",
+"source": "common",
+"fit": [
+"finance-13"
+]
+},
+{
+"label": "현금 흐름",
+"source": "common",
+"fit": [
+"finance-14"
+]
+},
+{
+"label": "원가 절감",
+"source": "common",
+"fit": [
+"finance-01",
+"finance-06"
+]
+},
+{
+"label": "가격 정책",
+"source": "common",
+"fit": [
+"finance-01"
+]
+},
+{
+"label": "협력사",
+"source": "common",
+"fit": [
+"collaboration-01",
+"collaboration-02"
+]
+},
+{
+"label": "팀 협업",
+"source": "common",
+"fit": [
+"collaboration-06",
+"collaboration-01"
+]
+},
+{
+"label": "회의 운영",
+"source": "common",
+"fit": [
+"collaboration-03"
+]
+},
+{
+"label": "피드백 수렴",
+"source": "common",
+"fit": [
+"collaboration-19"
+]
+},
+{
+"label": "파일럿 운영",
+"source": "common",
+"fit": [
+"innovation-04",
+"innovation-02"
+]
+},
+{
+"label": "PoC",
+"source": "common",
+"fit": [
+"innovation-04",
+"innovation-02"
+]
+},
+{
+"label": "성공 사례",
+"source": "common",
+"fit": [
+"growth-18"
+]
+},
+{
+"label": "향후 계획",
+"source": "common",
+"fit": [
+"strategy-05"
+]
+},
+{
+"label": "기대 효과",
+"source": "common",
+"fit": [
+"growth-01",
+"growth-18",
+"growth-15"
+]
+},
+{
+"label": "개선 과제",
+"source": "common",
+"fit": [
+"innovation-11"
+]
+},
+{
+"label": "로드맵",
+"source": "common",
+"fit": [
+"strategy-05"
+]
+},
+{
+"label": "우선순위 설정",
+"source": "common",
+"fit": [
+"strategy-11"
+]
+},
+{
+"label": "의사결정 지원",
+"source": "common",
+"fit": [
+"strategy-06"
+]
+},
+{
+"label": "탄소 중립",
+"source": "common",
+"fit": [
+"environment-09",
+"environment-18"
+]
+},
+{
+"label": "친환경 경영",
+"source": "common",
+"fit": [
+"environment-01",
+"environment-19"
+]
+},
+{
+"label": "건강 관리",
+"source": "common",
+"fit": [
+"health-01",
+"health-07"
+]
+},
+{
+"label": "의료 서비스",
+"source": "common",
+"fit": [
+"health-05"
+]
+},
+{
+"label": "학습 경로",
+"source": "common",
+"fit": [
+"education-07"
+]
+},
+{
+"label": "온라인 교육",
+"source": "common",
+"fit": [
+"education-10",
+"education-01"
+]
+},
+{
+"label": "Data Analysis",
+"source": "common",
+"fit": [
+"data-07"
+]
+},
+{
+"label": "Security",
+"source": "common",
+"fit": [
+"infrastructure-15"
+]
+},
+{
+"label": "Cost Reduction",
+"source": "common",
+"fit": [
+"finance-01",
+"finance-06",
+"finance-07"
+]
+},
+{
+"label": "Customer Growth",
+"source": "common",
+"fit": [
+"growth-09",
+"growth-01",
+"people-12"
+]
+},
+{
+"label": "Schedule",
+"source": "common",
+"fit": [
+"operations-16"
+]
+},
+{
+"label": "Automation",
+"source": "common",
+"fit": [
+"process-20"
+]
+},
+{
+"label": "Risk Management",
+"source": "common",
+"fit": [
+"strategy-18"
+]
+},
+{
+"label": "Team Collaboration",
+"source": "common",
+"fit": [
+"collaboration-06",
+"collaboration-01"
+]
+},
+{
+"label": "Revenue Growth",
+"source": "common",
+"fit": [
+"growth-07",
+"growth-01"
+]
+},
+{
+"label": "Market Research",
+"source": "common",
+"fit": []
+},
+{
+"label": "Brand Awareness",
+"source": "common",
+"fit": []
+},
+{
+"label": "Employee Training",
+"source": "common",
+"fit": [
+"education-01"
+]
+},
+{
+"label": "Cloud Migration",
+"source": "common",
+"fit": [
+"technology-04"
+]
+},
+{
+"label": "의사 표명",
+"source": "common",
+"fit": []
+},
+{
+"label": "환경 보호",
+"source": "common",
+"fit": []
+},
+{
+"label": "보안관",
+"source": "common",
+"fit": []
+},
+{
+"label": "시장 환경",
+"source": "common",
+"fit": []
+},
+{
+"label": "사고방식",
+"source": "common",
+"fit": []
+},
+{
+"label": "발표 시간",
+"source": "common",
+"fit": [
+"process-18"
+]
+},
+{
+"label": "대기업 고객",
+"source": "common",
+"fit": [
+"people-12"
+]
+}
+]
+}

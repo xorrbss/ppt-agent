@@ -16,8 +16,8 @@ from models.authored_vnext.semantic.release_profile_v3 import (
 )
 from services.authored_vnext.semantic.canonical import canonical_digest
 from services.authored_vnext.semantic.readiness_v3 import load_release_profile_definition_v3
-from services.presentation_export_direct_attempt_service import (
-    _release_authority_pin_from_projection,
+from services.presentation_export_direct_attempt_semantic import (
+    release_authority_pin_from_projection as _release_authority_pin_from_projection,
 )
 
 

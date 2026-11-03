@@ -135,7 +135,6 @@ def _dependencies(events, *, candidate_dom=None, proposer=None):
 
 def test_defaults_to_all_slide_active_and_kill_switch_wins(monkeypatch):
     for name in (
-        "SLIDESPEC_IMPORT_SHADOW",
         "SLIDESPEC_REPAIR_SHADOW",
         "SLIDESPEC_REPAIR_CANARY",
         "SLIDESPEC_REPAIR_APPLY",

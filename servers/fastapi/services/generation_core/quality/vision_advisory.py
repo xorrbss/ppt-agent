@@ -315,7 +315,7 @@ async def _request_advisory(sheet: bytes, *, slide_count: int, required: bool = 
     """One multimodal call, through the same admission/idempotency wrappers
     every other authored provider call uses."""
 
-    from llmai import get_client
+    from utils.llm_config import get_client
     from llmai.shared import JSONSchemaResponse
 
     from services.provider_usage_instrumentation import (
@@ -465,7 +465,52 @@ def _reject_design_review(rejection_reasons, reason):
     return None
 
 
-def _parse_design_axes(value, axis_names=DESIGN_AXES, *, rejection_reasons=None):
+_EVIDENCE_MAX_CHARS = 160
+_EVIDENCE_MAX_WORDS = 14
+
+
+def _bounded_text(value, field, notes, *, max_words=_EVIDENCE_MAX_WORDS, allow_blank=False):
+    """Bring one model-written evidence string inside its published bounds.
+
+    Strict-schema providers enforce ``maxLength`` themselves; others do not, and
+    one long phrase must not discard the verdicts of every page. A string over
+    ``_EVIDENCE_MAX_CHARS`` characters or ``max_words`` whitespace-separated
+    words is deterministically cut to the longest leading run of whole words
+    that fits both (words are re-joined with single spaces; a single token that
+    alone exceeds the character bound is hard-cut). Strings already inside the
+    bounds are returned untouched. Each cut appends ``field`` to ``notes`` so the
+    review records how many fields were normalised.
+
+    Non-strings, and blank strings where evidence is required, are not
+    normalisable (there is nothing to keep, and inventing text would fabricate
+    evidence): this returns ``None`` and the caller rejects as before.
+    """
+    if not isinstance(value, str):
+        return None
+    words = value.split()
+    if not words and not allow_blank:
+        return None
+    if len(value) <= _EVIDENCE_MAX_CHARS and (max_words is None or len(words) <= max_words):
+        return value
+    text = ""
+    for word in words[:max_words]:
+        candidate = f"{text} {word}" if text else word
+        if len(candidate) > _EVIDENCE_MAX_CHARS:
+            break
+        text = candidate
+    if not text and words:
+        text = words[0][:_EVIDENCE_MAX_CHARS]
+    if notes is not None:
+        notes.append(field)
+    return text
+
+
+def _evidence_normalization(notes):
+    """Receipt diagnostic: field names and counts only, never model text."""
+    return dict(count=len(notes), fieldNames=sorted(set(notes))) if notes else None
+
+
+def _parse_design_axes(value, axis_names=DESIGN_AXES, *, rejection_reasons=None, evidence_notes=None):
     if not isinstance(value, Mapping) or set(value) != set(axis_names):
         return _reject_design_review(rejection_reasons, "axis_keys")
     severity_for = {"passed": {"none"}, "advisory": {"minor"},
@@ -476,34 +521,40 @@ def _parse_design_axes(value, axis_names=DESIGN_AXES, *, rejection_reasons=None)
         if (not isinstance(axis, Mapping) or axis.get("verdict") not in severity_for
                 or axis.get("severity") not in severity_for[axis["verdict"]]):
             return _reject_design_review(rejection_reasons, "axis_semantics")
-        if (not isinstance(axis.get("visibleEvidence"), str) or not axis["visibleEvidence"].strip()
-                or len(axis["visibleEvidence"]) > 160 or len(axis["visibleEvidence"].split()) > 14):
+        evidence = _bounded_text(axis.get("visibleEvidence"), "visibleEvidence", evidence_notes)
+        if evidence is None:
             return _reject_design_review(rejection_reasons, "evidence_bounds")
         if (axis.get("repairScope") not in {"none", "local_repair", "design_rewrite"}
                 or (axis["verdict"] != "failed" and axis["repairScope"] != "none")
                 or (axis["verdict"] == "failed" and axis["repairScope"] == "none")):
             return _reject_design_review(rejection_reasons, "axis_semantics")
-        axes[name] = {key: axis[key] for key in ("verdict", "severity", "visibleEvidence", "repairScope")}
+        axes[name] = {"verdict": axis["verdict"], "severity": axis["severity"],
+                      "visibleEvidence": evidence, "repairScope": axis["repairScope"]}
     return axes
 
 
-def _parse_design_targets(value, names):
+def _parse_design_targets(value, names, evidence_notes=None):
     if not isinstance(value, list) or len(value) > len(names):
         return None
     targets, seen = [], set()
     keys = {"axis", "evidenceRegion", "visibleEvidence", "sourceEvidence", "improvementGoal"}
     for target in value:
         if (not isinstance(target, Mapping) or set(target) != keys
-                or target.get("axis") not in names or target["axis"] in seen
-                or any(not isinstance(target[key], str) or not target[key].strip()
-                       or len(target[key]) > 160 or len(target[key].split()) > 14 for key in keys - {"axis"})):
+                or target.get("axis") not in names or target["axis"] in seen):
             return None
+        clean = dict(target)
+        for key in target:
+            if key != "axis":
+                clean[key] = _bounded_text(target[key], key, evidence_notes)
+                if clean[key] is None:
+                    return None
         seen.add(target["axis"])
-        targets.append(dict(target))
+        targets.append(clean)
     return targets
 
 
-def _parse_baseline_review(payload, *, slide_count, context, rejection_reasons=None, rejection_fields=None):
+def _parse_baseline_review(payload, *, slide_count, context, rejection_reasons=None, rejection_fields=None,
+                           evidence_notes=None):
     """Project anonymous current-review evidence into the existing sealed gate shape."""
     from copy import deepcopy
     if not isinstance(payload, Mapping):
@@ -526,7 +577,8 @@ def _parse_baseline_review(payload, *, slide_count, context, rejection_reasons=N
         normalized["deckReview"] = normalized.get("variantReview")
         normalized["priorReview"] = normalized.get("alternativeReview")
         result = _parse_global_review(normalized, slide_count=slide_count, context=context,
-            rejection_reasons=rejection_reasons, rejection_fields=rejection_fields)
+            rejection_reasons=rejection_reasons, rejection_fields=rejection_fields,
+            evidence_notes=evidence_notes)
         raw_targets = payload.get("designTargets")
         if not isinstance(raw_targets, list) or len(raw_targets) > slide_count:
             return _reject_design_review(rejection_reasons, "design_target_fields")
@@ -536,15 +588,16 @@ def _parse_baseline_review(payload, *, slide_count, context, rejection_reasons=N
                     or type(entry.get("index")) is not int or not 1 <= entry["index"] <= slide_count
                     or entry["index"] - 1 in targets_by_index):
                 return _reject_design_review(rejection_reasons, "design_target_fields")
-            targets_by_index[entry["index"] - 1] = _parse_design_targets(entry.get("targets"), names)
+            targets_by_index[entry["index"] - 1] = _parse_design_targets(entry.get("targets"), names, evidence_notes)
     else:
         if not isinstance(payload.get("slides"), list) or not isinstance(payload.get("pairComparisons", []), list):
             return _reject_design_review(rejection_reasons, "page_fields")
         normalized["candidateComparisons"] = [dict(entry, priorAxes=entry.get("alternativeAxes"))
             for entry in payload.get("pairComparisons", []) if isinstance(entry, Mapping)]
         result = _parse_design_review(normalized, slide_count=slide_count, context=context,
-                                     rejection_reasons=rejection_reasons)
-        targets_by_index = {entry["index"] - 1: _parse_design_targets(entry.get("designTargets"), names)
+                                     rejection_reasons=rejection_reasons, evidence_notes=evidence_notes)
+        targets_by_index = {entry["index"] - 1: _parse_design_targets(entry.get("designTargets"), names,
+                                                                      evidence_notes)
             for entry in payload.get("slides", []) if isinstance(entry, Mapping) and type(entry.get("index")) is int}
     if result is None:
         return None
@@ -571,13 +624,14 @@ def _parse_baseline_review(payload, *, slide_count, context, rejection_reasons=N
         changes = {}
         for name, change in pair["axisChanges"].items():
             if (not isinstance(change, Mapping) or set(change) != {"preferred", "visibleEvidence"}
-                    or change.get("preferred") not in {"A", "B", "equivalent", "unjudged"}
-                    or not isinstance(change.get("visibleEvidence"), str) or not change["visibleEvidence"].strip()
-                    or len(change["visibleEvidence"]) > 160 or len(change["visibleEvidence"].split()) > 14):
+                    or change.get("preferred") not in {"A", "B", "equivalent", "unjudged"}):
+                return _reject_design_review(rejection_reasons, "comparison_change_fields")
+            change_evidence = _bounded_text(change.get("visibleEvidence"), "visibleEvidence", evidence_notes)
+            if change_evidence is None:
                 return _reject_design_review(rejection_reasons, "comparison_change_fields")
             preferred = change["preferred"]
             changes[name] = dict(change="improved" if preferred == main else
-                "worsened" if preferred in {"A", "B"} else preferred, visibleEvidence=change["visibleEvidence"])
+                "worsened" if preferred in {"A", "B"} else preferred, visibleEvidence=change_evidence)
         changes_by_index[pair["index"] - 1] = changes
     for comparison in result.get("candidateComparisons", []):
         comparison["axisChanges"] = changes_by_index[comparison["index"]]
@@ -587,7 +641,7 @@ def _parse_baseline_review(payload, *, slide_count, context, rejection_reasons=N
     return result
 
 
-def _parse_design_review(payload, *, slide_count, context, rejection_reasons=None):
+def _parse_design_review(payload, *, slide_count, context, rejection_reasons=None, evidence_notes=None):
     """Reject ambiguous coverage and invented review authority; retain visible reasons."""
     if not isinstance(payload, Mapping) or not isinstance(payload.get("slides"), list):
         return _reject_design_review(rejection_reasons, "page_fields")
@@ -607,7 +661,8 @@ def _parse_design_review(payload, *, slide_count, context, rejection_reasons=Non
         if (not isinstance(page.get("issues"), list)
                 or any(not isinstance(issue, str) or _normalize_issue(issue) is None for issue in page["issues"])):
             return _reject_design_review(rejection_reasons, "page_fields")
-        axes = _parse_design_axes(page["axes"], axis_names, rejection_reasons=rejection_reasons)
+        axes = _parse_design_axes(page["axes"], axis_names, rejection_reasons=rejection_reasons,
+                                  evidence_notes=evidence_notes)
         if axes is None:
             return _reject_design_review(rejection_reasons, "axis_semantics")
         issues = [_normalize_issue(issue) for issue in page["issues"]]
@@ -626,32 +681,35 @@ def _parse_design_review(payload, *, slide_count, context, rejection_reasons=Non
         return _reject_design_review(rejection_reasons, "index_coverage")
     flow = (dict(evaluated=False, visibleEvidence="Global flow is reviewed separately.", repetitionGroups=[])
             if local else payload.get("deckFlow"))
+    flow_evidence = (_bounded_text(flow.get("visibleEvidence"), "visibleEvidence", evidence_notes)
+                     if isinstance(flow, Mapping) else None)
     if (not isinstance(flow, Mapping) or type(flow.get("evaluated")) is not bool
-            or not isinstance(flow.get("visibleEvidence"), str) or not flow["visibleEvidence"].strip()
-            or len(flow["visibleEvidence"]) > 160 or len(flow["visibleEvidence"].split()) > 14
+            or flow_evidence is None
             or not isinstance(flow.get("repetitionGroups"), list)
             or flow["evaluated"] and not context.get("deckComplete")):
         return _reject_design_review(rejection_reasons, "page_fields")
     groups = []
     observations = (context.get("composition") or {}).get("pages") or []
     for group in flow["repetitionGroups"]:
-        if (not isinstance(group, Mapping) or not isinstance(group.get("pages"), list)
+        if not isinstance(group, Mapping):
+            return _reject_design_review(rejection_reasons, "page_fields")
+        source_evidence = _bounded_text(group.get("sourceEvidence"), "sourceEvidence", evidence_notes,
+                                        max_words=None, allow_blank=True)
+        group_evidence = _bounded_text(group.get("visibleEvidence"), "visibleEvidence", evidence_notes)
+        if (not isinstance(group.get("pages"), list)
                 or not group["pages"]
                 or any(type(index) is not int or not 1 <= index <= slide_count for index in group["pages"])
                 or len(set(group["pages"])) != len(group["pages"])
                 or type(group.get("intentional")) is not bool
-                or not isinstance(group.get("sourceEvidence"), str)
-                or len(group["sourceEvidence"]) > 160
-                or not isinstance(group.get("visibleEvidence"), str) or not group["visibleEvidence"].strip()
-                or len(group["visibleEvidence"]) > 160 or len(group["visibleEvidence"].split()) > 14):
+                or source_evidence is None or group_evidence is None):
             return _reject_design_review(rejection_reasons, "page_fields")
         indices = sorted(index - 1 for index in group["pages"])
-        if group["intentional"] and (not group["sourceEvidence"].strip()
+        if group["intentional"] and (not source_evidence.strip()
                 or any(index >= len(observations) or not observations[index].get("comparisonBasis") for index in
                     indices)):
             return _reject_design_review(rejection_reasons, "issue_axis_consistency")
         groups.append(dict(pages=indices, intentional=group["intentional"],
-                           sourceEvidence=group["sourceEvidence"], visibleEvidence=group["visibleEvidence"]))
+                           sourceEvidence=source_evidence, visibleEvidence=group_evidence))
     if flow["evaluated"]:
         # Every observed distant/adjacent cluster needs an explicit semantic
         # explanation, even when geometry repetition is judged harmless.
@@ -672,19 +730,20 @@ def _parse_design_review(payload, *, slide_count, context, rejection_reasons=Non
                 return _reject_design_review(rejection_reasons, "prior_coverage")
             if type(comparison.get("evaluated")) is not bool:
                 return _reject_design_review(rejection_reasons, "page_fields")
-            if (not isinstance(comparison.get("visibleEvidence"), str) or not comparison["visibleEvidence"].strip()
-                    or len(comparison["visibleEvidence"]) > 160 or len(comparison["visibleEvidence"].split()) > 14):
+            comparison_evidence = _bounded_text(comparison.get("visibleEvidence"), "visibleEvidence",
+                                                evidence_notes)
+            if comparison_evidence is None:
                 return _reject_design_review(rejection_reasons, "evidence_bounds")
             axes = _parse_design_axes(comparison.get("priorAxes"), axis_names,
-                                      rejection_reasons=rejection_reasons)
+                                      rejection_reasons=rejection_reasons, evidence_notes=evidence_notes)
             if axes is None or comparison["evaluated"] and any(axis["verdict"] == "unreviewed" for axis in
                 axes.values()):
                 return _reject_design_review(rejection_reasons, "axis_semantics")
             seen.add(comparison["index"])
             comparisons.append(dict(index=comparison["index"] - 1, evaluated=comparison["evaluated"],
-                                    priorAxes=axes, visibleEvidence=comparison["visibleEvidence"]))
+                                    priorAxes=axes, visibleEvidence=comparison_evidence))
     return dict(pages=sorted(pages, key=lambda page: page["index"]), candidateComparisons=comparisons,
-                deckFlow=dict(evaluated=flow["evaluated"], visibleEvidence=flow["visibleEvidence"],
+                deckFlow=dict(evaluated=flow["evaluated"], visibleEvidence=flow_evidence,
                               repetitionGroups=groups))
 
 
@@ -794,10 +853,11 @@ def _global_partition_diagnostics(review, *, expected):
              ("missingPageIndices", missing))), **samples)
 
 
-def _parse_global_review(payload, *, slide_count, context, rejection_reasons=None, rejection_fields=None):
+def _parse_global_review(payload, *, slide_count, context, rejection_reasons=None, rejection_fields=None,
+                         evidence_notes=None):
     if axis_review_active(context):
         return _parse_server_global_review(payload, slide_count=slide_count, context=context,
-                                           rejection_reasons=rejection_reasons)
+                                           rejection_reasons=rejection_reasons, evidence_notes=evidence_notes)
     if (not isinstance(payload, Mapping) or not isinstance(payload.get("findings"), list)
             or len(payload["findings"]) > DESIGN_GLOBAL_FINDING_LIMIT):
         _reject_design_review(rejection_reasons, "global_finding_fields")
@@ -806,24 +866,30 @@ def _parse_global_review(payload, *, slide_count, context, rejection_reasons=Non
     for finding in payload["findings"]:
         if (not isinstance(finding, Mapping) or type(finding.get("id")) is not int
                 or not 1 <= finding["id"] <= DESIGN_GLOBAL_FINDING_LIMIT
-                or finding["id"] in findings or type(finding.get("intentional")) is not bool
-                or not isinstance(finding.get("sourceEvidence"), str) or len(finding["sourceEvidence"]) > 160):
+                or finding["id"] in findings or type(finding.get("intentional")) is not bool):
+            _reject_design_review(rejection_reasons, "global_finding_fields")
+            return None
+        source_evidence = _bounded_text(finding.get("sourceEvidence"), "sourceEvidence", evidence_notes,
+                                        max_words=None, allow_blank=True)
+        if source_evidence is None:
             _reject_design_review(rejection_reasons, "global_finding_fields")
             return None
         axes = _parse_design_axes({"repetition_deck_flow": finding.get("axis")}, ("repetition_deck_flow",),
-            rejection_reasons=rejection_reasons)
+            rejection_reasons=rejection_reasons, evidence_notes=evidence_notes)
         if axes is None:
             if (rejection_fields is not None and rejection_reasons
                     and rejection_reasons[-1] == "evidence_bounds"):
                 rejection_fields.update(_global_finding_evidence_diagnostics(finding))
             return None
-        findings[finding["id"]] = {**finding, "axis": axes["repetition_deck_flow"]}
+        findings[finding["id"]] = {**finding, "sourceEvidence": source_evidence,
+                                   "axis": axes["repetition_deck_flow"]}
     def project(review, expected, *, prior=False, present=True):
+        clean_evidence = (_bounded_text(review.get("cleanEvidence"), "cleanEvidence", evidence_notes)
+                          if isinstance(review, Mapping) else None)
         if (not isinstance(review, Mapping) or not isinstance(review.get("cleanPages"), list)
                 or not isinstance(review.get("unreviewedPages"), list) or not isinstance(review.get("groups"), list)
                 or len(review["groups"]) > DESIGN_GLOBAL_FINDING_LIMIT
-                or not isinstance(review.get("cleanEvidence"), str) or not review["cleanEvidence"].strip()
-                or len(review["cleanEvidence"]) > 160 or len(review["cleanEvidence"].split()) > 14):
+                or clean_evidence is None):
             if rejection_fields is not None and not rejection_fields:
                 rejection_fields.update(_global_review_field_diagnostics(
                     review, target="priorReview" if prior else "deckReview", present=present))
@@ -846,7 +912,7 @@ def _parse_global_review(payload, *, slide_count, context, rejection_reasons=Non
                 assignments[index - 1] = axis
             return True
         if not assign(review["cleanPages"], dict(verdict="passed", severity="none",
-                visibleEvidence=review["cleanEvidence"], repairScope="none")):
+                visibleEvidence=clean_evidence, repairScope="none")):
             reject_partition("cleanPages")
             return None
         if not assign(review["unreviewedPages"], dict(verdict="unreviewed", severity="none",
@@ -911,7 +977,7 @@ def _parse_global_review(payload, *, slide_count, context, rejection_reasons=Non
         return dict(pages=[dict(index=index, evaluated=axis["verdict"] != "unreviewed",
                     axes={"repetition_deck_flow": axis}, issues=[]) for index, axis in sorted(assignments.items())],
             deckFlow=dict(evaluated=all(axis["verdict"] != "unreviewed" for axis in assignments.values()),
-                visibleEvidence=review["cleanEvidence"], repetitionGroups=groups))
+                visibleEvidence=clean_evidence, repetitionGroups=groups))
     if not isinstance(payload, Mapping):
         _reject_design_review(rejection_reasons, "global_finding_fields")
         return None
@@ -931,7 +997,7 @@ def _parse_global_review(payload, *, slide_count, context, rejection_reasons=Non
     return result
 
 
-def _parse_server_global_review(payload, *, slide_count, context, rejection_reasons):
+def _parse_server_global_review(payload, *, slide_count, context, rejection_reasons, evidence_notes=None):
     """The response supplies judgments only; coverage belongs to the server."""
     partition = server_review_partition(context, slide_count)
 
@@ -948,21 +1014,24 @@ def _parse_server_global_review(payload, *, slide_count, context, rejection_reas
             for key in keys:
                 index, item = int(key[5:]) - 1, raw[group][key]
                 if (not isinstance(item, Mapping) or set(item) != {"axis", "intentional", "sourceEvidence"}
-                        or type(item["intentional"]) is not bool
-                        or not isinstance(item["sourceEvidence"], str) or len(item["sourceEvidence"]) > 160):
+                        or type(item["intentional"]) is not bool):
+                    return _reject_design_review(rejection_reasons, "global_finding_fields")
+                source_evidence = _bounded_text(item["sourceEvidence"], "sourceEvidence", evidence_notes,
+                                                max_words=None, allow_blank=True)
+                if source_evidence is None:
                     return _reject_design_review(rejection_reasons, "global_finding_fields")
                 axes = _parse_design_axes({"repetition_deck_flow": item["axis"]}, DESIGN_AXES[-1:],
-                                          rejection_reasons=rejection_reasons)
+                                          rejection_reasons=rejection_reasons, evidence_notes=evidence_notes)
                 if axes is None:
                     return None
-                if item["intentional"] and (not item["sourceEvidence"].strip()
+                if item["intentional"] and (not source_evidence.strip()
                         or not context["composition"]["pages"][index].get("comparisonBasis")):
                     return _reject_design_review(rejection_reasons, "global_intentional_evidence")
                 axis = axes["repetition_deck_flow"]
                 pages.append(dict(index=index, evaluated=axis["verdict"] != "unreviewed", axes=axes, issues=[]))
                 repetitions.append(dict(pages=[index], intentional=item["intentional"],
                     retainedPages=[index] if axis["verdict"] == "passed" else [],
-                    sourceEvidence=item["sourceEvidence"], visibleEvidence=axis["visibleEvidence"]))
+                    sourceEvidence=source_evidence, visibleEvidence=axis["visibleEvidence"]))
         return dict(pages=sorted(pages, key=lambda page: page["index"]),
                     deckFlow=dict(evaluated=all(page["evaluated"] for page in pages), repetitionGroups=repetitions))
 
@@ -982,14 +1051,16 @@ def _parse_server_global_review(payload, *, slide_count, context, rejection_reas
     return result
 
 
-def _parse_edited_review(payload, *, slide_count, context):
-    global_review = _parse_global_review(payload, slide_count=slide_count, context=context)
+def _parse_edited_review(payload, *, slide_count, context, evidence_notes=None):
+    global_review = _parse_global_review(payload, slide_count=slide_count, context=context,
+                                         evidence_notes=evidence_notes)
     if global_review is None or not isinstance(payload.get("localReview"), Mapping):
         return None
     changed = context["changedPageIndices"]
     if changed:
         local_review = _parse_design_review(payload["localReview"], slide_count=len(changed),
-            context={**context, "reviewScope": "local", "deckComplete": False, "composition": {}})
+            context={**context, "reviewScope": "local", "deckComplete": False, "composition": {}},
+            evidence_notes=evidence_notes)
         if local_review is None:
             return None
         if any(len(page["issues"]) > _MAX_ISSUES_PER_SLIDE for page in local_review["pages"]):
@@ -1073,20 +1144,23 @@ async def run_vision_advisory(
         if payload is None:
             return {"skipped": "unparseable_response"}
         design_review = None
+        evidence_notes = []
         if design_context is not None:
             rejection_reasons = [] if (baseline_review_active(design_context)
                 or design_context.get("reviewScope") in {"local", "global"}) else None
             rejection_fields = {} if design_context.get("reviewScope") == "global" else None
             design_review = (_parse_baseline_review(payload, slide_count=len(renders), context=design_context,
-                rejection_reasons=rejection_reasons, rejection_fields=rejection_fields)
+                rejection_reasons=rejection_reasons, rejection_fields=rejection_fields,
+                evidence_notes=evidence_notes)
                 if baseline_review_active(design_context) else _parse_edited_review(payload,
-                    slide_count=len(renders), context=design_context)
+                    slide_count=len(renders), context=design_context, evidence_notes=evidence_notes)
                 if design_context.get("reviewScope") == "edited" else
                 _parse_global_review(payload, slide_count=len(renders), context=design_context,
-                    rejection_reasons=rejection_reasons, rejection_fields=rejection_fields)
+                    rejection_reasons=rejection_reasons, rejection_fields=rejection_fields,
+                    evidence_notes=evidence_notes)
                 if design_context.get("reviewScope") == "global" else
                 _parse_design_review(payload, slide_count=len(renders), context=design_context,
-                                     rejection_reasons=rejection_reasons))
+                                     rejection_reasons=rejection_reasons, evidence_notes=evidence_notes))
             if design_review is None:
                 if baseline_review_active(design_context) and design_context.get("reviewScope") == "full":
                     reason = rejection_reasons[0] if rejection_reasons else "page_fields"
@@ -1152,6 +1226,8 @@ async def run_vision_advisory(
             "promptVersion": (review_prompt_version(design_context) if design_context is not None else
                               "svg-required-visual-review/v1" if required else ADVISORY_PROMPT_VERSION),
             **({"designReview": design_review} if design_review is not None else {}),
+            **({"evidenceNormalization": _evidence_normalization(evidence_notes)}
+               if design_review is not None and evidence_notes else {}),
             **({"inputEnvelope": payload.get("_serverInputEnvelope"),
                 "representativeIndices": payload.get("_serverRepresentativeIndices", []),
                 "omittedSupplementalRepresentativeIndices": payload.get("_serverOmittedRepresentativeIndices", [])}

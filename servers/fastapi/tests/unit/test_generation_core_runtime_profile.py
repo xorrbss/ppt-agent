@@ -26,7 +26,7 @@ def test_defaults_match_the_source_reflow_runtime_defaults(monkeypatch):
     monkeypatch.setattr(profile, "_author_executor_capacity", lambda: 8)
 
     ordinary = resolve_svg_runtime_profile(source_reflow=False)
-    assert ordinary.author_concurrency == DEFAULT_AUTHOR_CONCURRENCY == 3
+    assert ordinary.author_concurrency == DEFAULT_AUTHOR_CONCURRENCY == 5
     assert ordinary.render_concurrency == DEFAULT_RENDER_CONCURRENCY == 3
 
     reflow, provenance = resolve_svg_runtime_profile_with_provenance(source_reflow=True)
@@ -102,3 +102,16 @@ def test_source_reflow_author_concurrency_records_env_source(monkeypatch):
     resolved, provenance = resolve_svg_runtime_profile_with_provenance(source_reflow=True)
     assert resolved.author_concurrency == 3
     assert provenance["author_concurrency"]["source"] == "env"
+
+
+def test_ordinary_author_concurrency_clamps_to_executor(monkeypatch):
+    import services.generation_core.runtime.profile as profile
+
+    monkeypatch.delenv("SVG_AUTHOR_CONCURRENCY", raising=False)
+    monkeypatch.setattr(profile, "_author_executor_capacity", lambda: 4)
+    resolved, provenance = resolve_svg_runtime_profile_with_provenance(source_reflow=False)
+    assert resolved.author_concurrency == 4
+    assert provenance["author_concurrency"] == {
+        "source": "default", "requested": 5, "executor_capacity": 4,
+        "clamped_to_executor": True, "resolved": 4, "effective": 4,
+    }

@@ -73,7 +73,6 @@ ENV_NAMES: tuple[str, ...] = (
     # SlideSpec executor and rollout policy.
     "SLIDESPEC_REPAIR_PROPOSAL_LLM_ENABLED",
     "SLIDESPEC_SLIDE_CONCURRENCY",
-    "SLIDESPEC_IMPORT_SHADOW",
     "SLIDESPEC_REPAIR_SHADOW",
     "SLIDESPEC_REPAIR_CANARY",
     "SLIDESPEC_REPAIR_APPLY",
@@ -397,7 +396,6 @@ def get_slidespec_slide_concurrency(
 
 @dataclass(frozen=True, slots=True)
 class SlidespecRolloutSettings:
-    import_shadow: bool
     repair_shadow: bool
     repair_apply: bool
     repair_all_slides: bool
@@ -428,7 +426,6 @@ def get_slidespec_rollout_settings(
     """The documented ``SLIDESPEC_*`` review rollout knobs, semantics unchanged."""
     salt = get_setting_env("SLIDESPEC_REPAIR_ROLLOUT_SALT", settings)
     return SlidespecRolloutSettings(
-        import_shadow=_set_or_default_flag("SLIDESPEC_IMPORT_SHADOW", False, settings),
         repair_shadow=_set_or_default_flag("SLIDESPEC_REPAIR_SHADOW", False, settings),
         repair_apply=_set_or_default_flag("SLIDESPEC_REPAIR_APPLY", True, settings),
         repair_all_slides=_set_or_default_flag(

@@ -168,8 +168,17 @@ async def _scene_slot(index, slide, content, *, style, context, image_service, s
                       alt=alt, bbox_hint=SCENE_BBOX_HINT, origin="illustration")
 
 
-async def _icon_slots(pages, *, pack_key, context, color, spend, receipt):
-    """One icon slot per planned node, resolved through the icon pack."""
+def _is_library_vector(icon) -> bool:
+    return icon.source == "library" and Path(icon.path).suffix.lower() == ".svg"
+
+
+async def _icon_slots(pages, *, pack_key, context, color, spend, receipt, library_only=False):
+    """One icon slot per planned node, resolved through the icon pack.
+
+    ``library_only`` keeps just the bundled vector library's icons: nothing is
+    generated and a cached sprite-sheet PNG (which an image provider once made)
+    is not offered either, so the slots never depend on a provider.
+    """
     from services.generation_core.assets.icon_pack import resolve_icons
     from services.generation_core.assets.icon_pack.sheet import MAX_CONCEPTS_PER_SHEET
     from services.generation_core.assets.icon_pack.service import IconResolution
@@ -192,6 +201,8 @@ async def _icon_slots(pages, *, pack_key, context, color, spend, receipt):
         wanted = missing[: affordable * MAX_CONCEPTS_PER_SHEET]
         await spend.bounded(resolve_icons(wanted, generate=True, result=generated, **common))
         resolution.icons.update(generated.icons)
+    if library_only:
+        resolution.icons = {key: icon for key, icon in resolution.icons.items() if _is_library_vector(icon)}
     receipt.update(requested=len(labels), resolved=len(resolution.icons),
                    sheetsAllocated=affordable,
                    sheetsAttempted=generated.sheets_attempted,
@@ -213,9 +224,17 @@ async def _icon_slots(pages, *, pack_key, context, color, spend, receipt):
 
 async def build_asset_offer(*, outline, brand, style, roles: Sequence[str], instructions: Optional[str],
                             budget: int, timeout_seconds: float, image_service=None,
-                            settings=None) -> AssetOffer:
-    """Plan and produce one deck's illustrations and icons; never raises for a provider."""
+                            settings=None, icons_only: bool = False) -> AssetOffer:
+    """Plan and produce one deck's illustrations and icons; never raises for a provider.
+
+    ``icons_only`` is the no-image-provider mode: the same deck plan decides
+    which pages carry a figure, but every scene is demoted to its HTML-only
+    fallback, no illustration or sprite sheet is requested, and each node gets
+    its bundled library vector icon when the library has one. It costs the
+    plan's one LLM call and zero image-provider calls.
+    """
     from models.authored_illustration_plan import illustrations_are_prohibited
+    from models.authored_infographic_plan import without_scenes
     from services.generation_core.assets.infographic_assets import (
         DEFAULT_PACK_KEY, build_infographic_asset_context,
     )
@@ -223,7 +242,9 @@ async def build_asset_offer(*, outline, brand, style, roles: Sequence[str], inst
     from services.generation_core.authoring.author_slide import EXACT_RECONSTRUCTION, normalize_reference_mode
     from services.image_generation_service import image_request_scope, observe_image_provider_calls
 
-    receipt: dict = {"budget": budget, "timeoutSeconds": timeout_seconds}
+    receipt: dict = {"budget": 0 if icons_only else budget, "timeoutSeconds": timeout_seconds}
+    if icons_only:
+        receipt["iconsOnly"] = True
     if illustrations_are_prohibited(instructions):
         return AssetOffer(receipt={**receipt, "status": "prohibited_by_instructions"})
     if normalize_reference_mode(getattr(style, "reference_mode", None)) == EXACT_RECONSTRUCTION:
@@ -233,9 +254,16 @@ async def build_asset_offer(*, outline, brand, style, roles: Sequence[str], inst
                                               instructions=instructions)
     if plan is None:
         return AssetOffer(receipt={**receipt, "status": "plan_unavailable"})
-    context = build_infographic_asset_context(style=style, brand=brand, instructions=instructions,
-                                              image_service=image_service, settings=settings)
-    spend = _Spend(budget, timeout_seconds)
+    if icons_only:
+        # No picture can be made: a scene page is drawn as its HTML figure
+        # instead, and nothing below may reach an image provider.
+        plan = without_scenes(plan)
+        context = None
+        spend = _Spend(0, timeout_seconds)
+    else:
+        context = build_infographic_asset_context(style=style, brand=brand, instructions=instructions,
+                                                  image_service=image_service, settings=settings)
+        spend = _Spend(budget, timeout_seconds)
     contents = [slide.content for slide in outline.slides]
     scenes = [slide for slide in plan.slides if slide.archetype == "scene"]
     figures = [(slide.index, [node.label for node in slide.nodes]) for slide in plan.slides
@@ -260,7 +288,8 @@ async def build_asset_offer(*, outline, brand, style, roles: Sequence[str], inst
         with observe_image_provider_calls() as icon_calls, svg_outline_spans.span("icon_sheets"):
             icon_slots = await _icon_slots(figures, pack_key=getattr(context, "pack_key", style_id),
                                            context=context, spend=spend, receipt=icon_receipt,
-                                           color=getattr(brand, "primary", None) or "#1E5EFF")
+                                           color=getattr(brand, "primary", None) or "#1E5EFF",
+                                           library_only=icons_only)
     except Exception as error:  # noqa: BLE001 - icons are optional
         LOGGER.warning("[svg] asset offer icon resolution failed: %s", type(error).__name__)
         icon_slots, icon_receipt = [], {"error": type(error).__name__}
@@ -269,12 +298,15 @@ async def build_asset_offer(*, outline, brand, style, roles: Sequence[str], inst
         icon_receipt.update(sheetsSpent=icon_calls.entered, providerCalls=icon_calls.entered)
     failures.extend({"kind": "icon_sheet", **failure} for failure in icon_receipt.get("failures", []))
     slots = tuple(slot for slot in scene_slots if slot is not None) + tuple(icon_slots)
-    receipt.update(status="resolved", scenesPlanned=len(scenes), figurePages=len(figures),
+    receipt.update(status="library_icons_only" if icons_only else "resolved",
+                   scenesPlanned=len(scenes), figurePages=len(figures),
                    illustrations=sum(slot.kind == "illustration" for slot in slots),
                    icons=sum(slot.kind == "icon" for slot in slots), icon=icon_receipt,
                    providerCalls=scene_calls.entered + icon_calls.entered,
                    budgetAllocatedCalls=spend.calls, timeouts=spend.timeouts, failures=failures,
                    transparentProvider=context is not None)
+    if icons_only:
+        receipt.update(planLlmCalls=1, reason="image_generation_unavailable")
     return AssetOffer(slots=slots, receipt=receipt)
 
 

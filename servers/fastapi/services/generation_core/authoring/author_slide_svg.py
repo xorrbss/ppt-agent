@@ -37,7 +37,8 @@ from utils.llm_calls.author_prompt_profile import authoring_model
 from utils.llm_calls.author_prompt_split import author_messages
 from utils.llm_calls.author_slide_effort import svg_author_call_timeout_seconds
 from services.generation_core.authoring.author_slide import (
-    _AUTHOR_EXECUTOR, _authoring_extra_body, _authoring_output_profile, _wait_for_author_rate_slot,
+    _AUTHOR_EXECUTOR, _apply_anthropic_authoring_reasoning, _authoring_extra_body,
+    _authoring_output_profile, _wait_for_author_rate_slot,
 )
 from services.generation_core.authoring.author_slide_images import REFERENCE_IMAGE_MAX_BYTES, reference_parts
 from utils.llm_config import enforce_llm_egress_policy, get_client, get_llm_config
@@ -75,6 +76,8 @@ keep content clear of its occupied areas and do not duplicate logos, headers or 
 Do not add arrows or connecting lines between independent items. \
 Only represent relationships and sequence supported by source.
 Preserve requested facts, numbers, units and table relationships. Do not silently drop content to fit.
+Show a presenter name, organisation, role or date only when the slide content states it. Never invent one \
+or write a bracketed placeholder such as [Presenter Name]; leave that line out.
 Every explicitly requested table or supported data chart must have its own data-native-table or
 data-native-chart declaration containing that exact requested data. A chart drawn only as SVG bars
 or labels does not satisfy an editable chart request; an unrelated declared chart does not cover it.
@@ -832,7 +835,9 @@ def svg_author_input_receipt(style_snapshot: dict, messages: Sequence, *, provid
             else:
                 summarized.append({"text": part.text})
         assembled.append({"role": type(message).__name__, "content": summarized})
-    settings = {key: value for key, value in kwargs.items() if key != "messages"}
+    settings = {key: (value.model_dump(mode="json", exclude_unset=True)
+                      if hasattr(value, "model_dump") else value)
+                for key, value in kwargs.items() if key != "messages"}
     payload = {"version": "svg-author-input/v1", "messages": assembled,
                "settings": {"provider": provider, "model": model, "max_tokens": budget, **settings}}
     # author_messages hoists invariant parts into the system message when
@@ -1006,7 +1011,12 @@ async def author_slide_svg(content: str, style_snapshot: dict, role: str, index:
     profile = read_authoring_profile(style_snapshot)
     repair_receipt = {}
     # The model sees previous_svg in the output view; receipts keep the canonical digest.
-    prompt_previous_svg, previous_svg_compacted = outbound_previous_svg(previous_svg, view_plan)
+    shown_previous_svg = previous_svg
+    if previous_svg and header_page is not None and header_page.get("applied"):
+        from services.svg_common_header import strip_system_common_header
+
+        shown_previous_svg = strip_system_common_header(previous_svg)
+    prompt_previous_svg, previous_svg_compacted = outbound_previous_svg(shown_previous_svg, view_plan)
     previous_svg_shown = False
     if quality_policy is not None and active_correction:
         prompt += "\n\n" + json.dumps({"correction_mode": active_correction,
@@ -1176,6 +1186,7 @@ async def author_slide_svg(content: str, style_snapshot: dict, role: str, index:
     extra = _authoring_extra_body(reasoning_effort or effort, model=model)
     if extra:
         kwargs["extra_body"] = extra
+    _apply_anthropic_authoring_reasoning(kwargs, reasoning_effort or effort, model=model)
     # The deck's prompt-cache lane, when the SVG page loop bound one; the
     # receipt below hashes the request as actually sent, key included.
     apply_prompt_cache_key(kwargs)

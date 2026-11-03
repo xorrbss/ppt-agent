@@ -1,6 +1,6 @@
 {
   "name": "slide-master-svg-converter",
-  "version": "vendored-20260916+document-canvas.2+text-advance.1+chart-furniture.16+native-fixed-text.1",
+  "version": "vendored-20260916+document-canvas.2+text-advance.1+chart-furniture.16+native-fixed-text.1+xfrm-bounds.1",
   "license": "MIT",
   "source": "https://github.com/byungjunjang/slide-master",
   "files": {
@@ -65,7 +65,7 @@
     "svg_to_pptx/drawingml/styles.py": "bc09854175b2973621bc8669ff68ebe4bda0f285dad7b45dcc82537b05bae036",
     "svg_to_pptx/drawingml/theme_colors.py": "c632de1a8453fa60398b2f6dc3075c0d8c7ec20caf94a0089f624b08e412a573",
     "svg_to_pptx/drawingml/theme_fonts.py": "d280dd0204f6ccce997f9b9fe9882037fec4b05d9e7fa611f61cbeb01262c978",
-    "svg_to_pptx/drawingml/utils.py": "798607d8f4046126135572fac905a85b2b13cb2f583a19611ddf4f9f9893331c",
+    "svg_to_pptx/drawingml/utils.py": "49a2ab7d7c5673b3733f399ec257f842c4e94eed475078a7131200a3556a2746",
     "svg_to_pptx/geometry_properties.py": "4408dbc0cc6b9b392ef1d97c613595a5f61b3b6107c79ea892b28365b874de0e",
     "svg_to_pptx/native_objects/__init__.py": "41ec5af48a25a9c96e91afb6b4350d587372eaade44c2275e6041805c9769890",
     "svg_to_pptx/native_objects/chart_data.py": "83e7aad4875131a4d635840cb286cedac4fa24f451184668f7514b3b8164ab33",
@@ -96,10 +96,12 @@
   "presentonPatches": [
     "config.py: disable host profile and dotenv discovery in isolated conversion",
     "document-canvas.2: invocation-local physical units and bounded source-canvas rounding",
-    "text-advance.1: single-line text frames never narrower than the caller's exact font advance"
+    "text-advance.1: single-line text frames never narrower than the caller's exact font advance",
+    "xfrm-bounds.1: axis-aligned xfrm shapes trace the exact off+ext frame their xfrm declares"
   ],
   "patches": {
     "document-canvas-1.patch": "70aa54650ee16995534d5ff7eaff6de7c24782e23970bf5c48b6a7ffcf60ab61",
-    "text-advance-1.patch": "c8e7fe0fd5de7693876e4f9c9da40b16f533db88d69d93eba7e18ab5ea18ff3a"
+    "text-advance-1.patch": "c8e7fe0fd5de7693876e4f9c9da40b16f533db88d69d93eba7e18ab5ea18ff3a",
+    "xfrm-bounds-1.patch": "71022608ad679891b827bf09036bc7616507b7de1e7b52f425f2e42e67e25eb4"
   }
 }

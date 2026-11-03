@@ -93,8 +93,31 @@ Claims are row leases taken with `SKIP LOCKED`, so two replicas never execute th
 
 ## 8. Known limits
 
-- Workers claim only `presentation.generate` and `quality.review`. Keep `CHAT_FIRST_WORKSPACE_ENABLED` and `AUTHORED_VNEXT_GENERATION_ENABLED` off: their other operation kinds have no executor in `external` mode on Linux (the export controller needs the Windows-local sandbox backend). PPTX/PDF export from the UI runs inside `api` (direct attempt service).
+- `worker` claims only `presentation.generate` and `quality.review`. `export.pptx`/`export.pdf` need the export controller of the opt-in `multi-export` profile (section 9); without it an export stays queued.
 - `PRESENTON_MULTI_DEPLOYMENT_TIER=production` requires a scanner-equipped image (`WORKSPACE_ASSET_MALWARE_SCAN_MODE=required`, see `docker-compose.chat-first-canary.yml`); the stock image runs the `development` tier with `PROVIDER_DURABLE_RUNTIME_REQUIRED=true` set explicitly.
 - `ENVIRONMENT=production` disables the loopback development principal. The standard UI and `/api/v1/ppt` need nothing more; the public v2 API (`/api/v1/public/...`) additionally needs `PPT_PUBLIC_OIDC_*`.
 - The owner login is the postgres image superuser. Keep it out of `api`/`worker`; the startup authority probe rejects it there.
 - `app_data` is a bind mount shared by `api` and every worker; multi-host deployments need a shared filesystem or the public artifact store.
+
+## 9. SVG generation and export (`multi-export`, opt-in)
+
+The base profile does not carry what the svg driver (the default strategy) needs. Three additions, none of which changes `multi` on its own:
+
+1. **Public-profile settings** in `.env.multi-public` (read by `worker` and `export` when present; the path can be changed with `PRESENTON_MULTI_PUBLIC_ENV_FILE`). At least: `PUBLIC_ARTIFACT_STORE_BACKEND=s3` with the `PUBLIC_ARTIFACT_S3_*` settings and credentials (production tier refuses the local store), and, for a non-codex provider, `PUBLIC_PROVIDER_PRICING_CATALOG` + `PUBLIC_PROVIDER_PRICING_REVISION` naming the selected model.
+2. **A pinned worker image.** The container sandbox launches only `name@sha256:<digest>`, which exists only after a push:
+
+   ```bash
+   REGISTRY=registry.example.com/presenton scripts/build-public-worker-image.sh
+   ```
+
+   It builds the Dockerfile's `public-worker-runtime` target, pushes it, and writes `.env.public-worker` with `PRESENTON_PUBLIC_WORKER_IMAGE` (the pinned reference), `PRESENTON_PUBLIC_WORKER_IMAGE_DIGEST` and `PRESENTON_PUBLIC_WORKER_FONT_INVENTORY_DIGEST` (fingerprinted inside that image). `worker` passes the two digests to the svg render binding; without them generation fails with `public_render_worker_runtime_pins_required`.
+3. **The export controller**:
+
+   ```bash
+   docker compose --env-file .env --env-file .env.public-worker --profile multi --profile multi-export up -d --build
+   ```
+
+   `export` runs `PPT_PROCESS_PROFILE=ppt-core` with `PUBLIC_TRUSTED_WORKER_SANDBOX_BACKEND=container`. Before claiming anything it creates (never starts) a probe container from the pinned image and refuses to run unless the runtime's inspect output proves non-root, read-only root, network none, read-only inputs, a bounded tmpfs and memory/pid limits. It mounts the host Docker socket, which is host-level control: run it only on a host dedicated to this deployment. The staging root (`PRESENTON_PUBLIC_WORKER_STAGING_ROOT`, default `/var/lib/presenton/worker-staging`) is mounted at the same absolute path in the container and on the host, because the sandbox containers' bind sources are resolved by the host daemon.
+
+Single-machine development without containers can instead use `PUBLIC_TRUSTED_WORKER_SANDBOX_BACKEND=linux-local` (or `windows-local`) with `PUBLIC_TRUSTED_WORKER_LOCAL_POLICY=development` and a local `ENVIRONMENT` tier; those backends provide no isolation and are refused in production.
+

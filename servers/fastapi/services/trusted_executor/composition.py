@@ -4,13 +4,16 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import os
+import sys
 from pathlib import Path
 from collections.abc import Mapping
 from typing import Protocol
 
 from services.trusted_executor.isolation_policy import (
+    LINUX_LOCAL_DEVELOPMENT_ISOLATION_BACKEND,
     IsolationUnavailableError,
     PlatformIsolationReport,
+    linux_local_development_isolation_report,
     probe_platform_isolation,
 )
 from services.trusted_executor.process_supervisor import probe_process_supervisor
@@ -85,9 +88,11 @@ def create_trusted_worker_executor_runtime(
 ) -> TrustedWorkerExecutorRuntime:
     """Build Scheduler -> Adapter -> concrete wire transport -> Dispatcher.
 
-    Windows local execution is available only under the explicit development
-    policy.  A normal public profile remains fail-closed because a Job Object
-    cannot prove network-none or filesystem namespace controls.
+    Windows (``windows-local``) and Linux (``linux-local``) local execution
+    are available only under the explicit development policy and a local
+    runtime tier.  A normal public profile remains fail-closed because neither
+    a Job Object nor a process session can prove network-none or filesystem
+    namespace controls.
     """
 
     root = Path(staging_root)
@@ -110,20 +115,28 @@ def create_trusted_worker_executor_runtime(
             scheduler_policy=scheduler_policy,
             zero_timeout_seconds=zero_timeout_seconds,
         )
-    if backend != "windows-local":
+    if backend not in {"windows-local", "linux-local"}:
         raise IsolationUnavailableError(
-            "PUBLIC_TRUSTED_WORKER_SANDBOX_BACKEND must be container or windows-local"
+            "PUBLIC_TRUSTED_WORKER_SANDBOX_BACKEND must be container, windows-local or linux-local"
         )
     runtime_environment = source.get("ENVIRONMENT", "production").strip().lower()
     local_policy = source.get("PUBLIC_TRUSTED_WORKER_LOCAL_POLICY", "").strip().lower()
     if local_policy != "development":
         raise IsolationUnavailableError(
-            "windows-local requires PUBLIC_TRUSTED_WORKER_LOCAL_POLICY=development; "
+            f"{backend} requires PUBLIC_TRUSTED_WORKER_LOCAL_POLICY=development; "
             "normal public profiles require stronger network and filesystem isolation"
         )
     if runtime_environment not in {"local", "development", "dev", "test"}:
         raise IsolationUnavailableError(
-            "windows-local is forbidden unless ENVIRONMENT is an explicit local development tier"
+            f"{backend} is forbidden unless ENVIRONMENT is an explicit local development tier"
+        )
+    if backend == "linux-local":
+        return _create_linux_local_runtime(
+            root=root,
+            node_id=node_id,
+            artifact_authority=artifact_authority,
+            scheduler_policy=scheduler_policy,
+            zero_timeout_seconds=zero_timeout_seconds,
         )
     supervisor_capability = probe_process_supervisor()
     if (
@@ -151,6 +164,54 @@ def create_trusted_worker_executor_runtime(
         WeightedScheduler(
             scheduler_policy or default_trusted_worker_scheduler_policy()
         )
+    )
+    dispatcher = TrustedWorkerDispatcher(
+        adapter=adapter,
+        transport=transport,
+        staging_root=root,
+        node_id=node_id,
+    )
+    return TrustedWorkerExecutorRuntime(
+        dispatcher=dispatcher,
+        transport=transport,
+        isolation_report=isolation_report,
+    )
+
+
+def _create_linux_local_runtime(
+    *,
+    root: Path,
+    node_id: str,
+    artifact_authority: TrustedWorkerArtifactAuthority,
+    scheduler_policy: SchedulerPolicy | None,
+    zero_timeout_seconds: float,
+) -> TrustedWorkerExecutorRuntime:
+    from services.trusted_executor.linux_process_supervisor import (
+        LinuxSessionProcessSupervisor,
+        probe_linux_session_supervisor,
+    )
+
+    if not sys.platform.startswith("linux"):
+        raise IsolationUnavailableError("linux-local trusted workers require a Linux host")
+    capability = probe_linux_session_supervisor()
+    if not capability.enforcement_ready:
+        raise IsolationUnavailableError(capability.reason)
+    isolation_report = linux_local_development_isolation_report()
+    if (isolation_report.backend != LINUX_LOCAL_DEVELOPMENT_ISOLATION_BACKEND
+            or isolation_report.production_eligible):
+        raise IsolationUnavailableError(
+            "linux-local development report unexpectedly claims production eligibility"
+        )
+    root.mkdir(parents=True, exist_ok=True)
+    transport = SupervisedStdioWireTransport(
+        artifact_authority=artifact_authority,
+        isolation_report=isolation_report,
+        allow_local_development_isolation_gap=True,
+        zero_timeout_seconds=zero_timeout_seconds,
+        supervisor_factory=LinuxSessionProcessSupervisor,
+    )
+    adapter = TrustedExecutorProductAdapter(
+        WeightedScheduler(scheduler_policy or default_trusted_worker_scheduler_policy())
     )
     dispatcher = TrustedWorkerDispatcher(
         adapter=adapter,

@@ -2131,7 +2131,7 @@ class _FakeClient:
 def _install_fake_client(monkeypatch, client):
     import llmai
 
-    monkeypatch.setattr(llmai, "get_client", lambda config=None: client)
+    monkeypatch.setattr(llmai, "get_client", lambda config=None, **_kwargs: client)
     monkeypatch.setattr("utils.llm_config.get_llm_config", lambda *a, **k: None)
     # get_generate_kwargs resolves the configured provider for extra_body; this
     # test has no configured provider and none is needed to pin the shape.
