@@ -1,0 +1,44 @@
+# SVG deck pictures and icon families: what was built (2026-11-03)
+
+Follow-up to `svg-illustration-icon-pilot-20261103.md`, which holds the pilot
+measurements and the decisions. This note records what is now in the code,
+how to switch it, what was measured live, and what is still open.
+
+## In the code
+
+| area | where | what |
+|---|---|---|
+| contract | `utils/svg_validation.py` | `stroke-linecap` butt/round and `stroke-linejoin` miter/round admitted; version string unchanged (stored receipts compare it verbatim) |
+| flattener | `drivers/svg/icon_flatten.py`, `embed_assets.py` | round caps kept on icons; opacity kept; a filled multi-subpath path becomes one compound linear path (holes survive in SVG, PNG preview and PPTX); `palette=` mode keeps each shape's colour, snapping off-palette paints |
+| icon families | `assets/icon_families/<id>/` (nodes.json, manifest.json, LICENSE), `icon_pack/families.py` | `lucide` (1.67.0, 2,019), `tabler-outline` (3.50.0, 4,825, no brand logos), `phosphor-regular` / `-fill` / `-duotone` (core 2.1.1; 1,509 / 1,512 / 1,477, over-budget icons left out and listed in the manifests) |
+| icon choice | `utils/llm_calls/select_deck_icons.py`, `assets/offer.py` | one call per deck picks a main icon and optional badge per figure label from the style's family; the fixed prompt prefix (role, rules, icon list) is a cached system prompt on Anthropic |
+| style → family | `utils/authored_styles.py` | `icon_family` YAML key; default by category: business → `tabler-outline`, others → `lucide`; `flat-infographic` → `phosphor-duotone` |
+| no provider icons | `assets/offer.py` | icons are family picks or bundled library vectors only; sprite-sheet PNGs are never requested or offered |
+| model pictures | `utils/llm_calls/draw_vector_illustrations.py`, `assets/vector_offer.py`, `assets/vector_illustration.py` | with `SVG_ILLUSTRATION_MODE=vector|hybrid`: scene pictures, cover/section/closing pictures, step pictures (kind `spot`) for process/cycle/timeline/roadmap pages, before/after pairs; validated, normalised, at most 12 calls per deck |
+| plan | `utils/llm_calls/author_infographic_plan.py`, `models/authored_infographic_plan.py` | vector mode: scenes may show an abstract message as a metaphor, carry `depiction` (photo/concept), no scene ceiling |
+| authoring | `authoring/author_slide_svg.py` | one rule sentence for kind `spot`; omitted model pictures are reported (`omittedOptional`) and do not fail the page |
+| fallback pages | `drivers/svg/fallback.py` | background, text and accent from the deck tokens by contrast; cover-shaped fallback for the cover role |
+| vision review | `quality/vision_advisory.py` | on Anthropic the review sends `thinking: disabled` (mapped to the model's lowest setting) so thinking no longer exhausts its 4,000-token answer |
+
+`SVG_ILLUSTRATION_MODE` is an internal knob (`tests/support/internal_env_names.py`),
+read when a deck's asset offer is built; a resumed deck replays its persisted offer.
+
+## Live measurement
+
+See the table appended below (filled from the measurement run).
+
+## Open
+
+1. **Group font attributes.** A model sometimes writes `font-family` on a `<g>`;
+   the contract rejects it and, on a header representative page, the whole deck
+   fails (`svg_common_header_representative_pages_ineligible`). Pushing those
+   attributes down to the texts is a one-function change, but the tests pin the
+   rule that without a pinned output view a response is parsed as written and
+   the compact form is rejected; changing that is a design decision, not done.
+2. **Pictographs** (counts drawn as rows of icons) are not implemented.
+3. **Icons the author does not place** still fail their page (`asset_icon_omitted`);
+   seen on two pages of the first live vector deck.
+4. The bundled 300-icon library under the repository root `assets/` is not copied
+   into the Docker image; the icon families live under `servers/fastapi/assets/`.
+5. Pre-existing red gates, unchanged by this work: `ruff check .` (25 findings in
+   `svg_templates` and others), and the long-standing svg unit-test failures.
