@@ -42,6 +42,13 @@ RUN mkdir -p /app/document-extraction-liteparse \
 COPY resources/document-extraction/liteparse_runner.mjs /app/document-extraction-liteparse/liteparse_runner.mjs
 COPY tessdata /app/tessdata
 
+# The bundled monochrome icon library (fallback for figure icons the deck's
+# icon family pick does not cover). icon_pack/library.py resolves it from the
+# repository root (/app/assets/...); only its manifest, SVG masters and licence
+# are needed at runtime, not the thumbnails or contact sheets.
+COPY assets/infographics/monochrome-v1/manifest.json assets/infographics/monochrome-v1/LICENSE-lucide.txt /app/assets/infographics/monochrome-v1/
+COPY assets/infographics/monochrome-v1/originals /app/assets/infographics/monochrome-v1/originals
+
 COPY scripts/presenton-terminal-banner.mjs /app/scripts/presenton-terminal-banner.mjs
 RUN mkdir -p /app_data-private \
     && chmod 0700 /app_data-private

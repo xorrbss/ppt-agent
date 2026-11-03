@@ -211,6 +211,13 @@ COPY --from=assets-builder /app/document-extraction-liteparse /app/document-extr
 # Resolved by LiteParseService via PRESENTON_APP_ROOT (=/app) -> /app/tessdata.
 COPY tessdata /app/tessdata
 
+# The bundled monochrome icon library (fallback for figure icons the deck's
+# icon family pick does not cover). icon_pack/library.py resolves it from the
+# repository root (/app/assets/...); only its manifest, SVG masters and licence
+# are needed at runtime, not the thumbnails or contact sheets.
+COPY assets/infographics/monochrome-v1/manifest.json assets/infographics/monochrome-v1/LICENSE-lucide.txt /app/assets/infographics/monochrome-v1/
+COPY assets/infographics/monochrome-v1/originals /app/assets/infographics/monochrome-v1/originals
+
 COPY --from=nextjs-builder /app/servers/nextjs/.next-build/standalone/ /app/servers/nextjs/
 COPY --from=nextjs-builder /app/servers/nextjs/public /app/servers/nextjs/public
 COPY --from=nextjs-builder /app/servers/nextjs/.next-build/static /app/servers/nextjs/.next-build/static
