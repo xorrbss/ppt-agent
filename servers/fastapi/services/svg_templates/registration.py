@@ -167,8 +167,24 @@ async def draft_detail(session, template_id):
             "errorCode": operation.error_code if operation else None}
 
 
+def revised_registration_payload(old_payload: dict, *, frame_reviews, expected_head_revision,
+                                 representative_frame_id=None, font_substitutions=None) -> dict:
+    """The analysis payload of a revision: reviews merge per frame; a given
+    substitution map replaces the previous one (``[]`` clears it)."""
+    payload = {**old_payload, "frame_reviews": {**old_payload.get("frame_reviews", {}), **frame_reviews},
+               "expected_head_revision": expected_head_revision,
+               "representative_frame_id": representative_frame_id or old_payload.get("representative_frame_id")}
+    if font_substitutions is not None:
+        payload.pop("font_substitutions", None)
+        if font_substitutions:
+            payload["font_substitutions"] = [dict(item) for item in font_substitutions]
+    return payload
+
+
 async def revise_draft(session, *, template_id, operation_id, expected_head_revision,
-                       frame_reviews, representative_frame_id=None):
+                       frame_reviews, representative_frame_id=None, font_substitutions=None):
+    """Re-analyse a draft with corrected frame reviews and/or a new explicit
+    font substitution map (``None`` keeps the previous map, ``[]`` clears it)."""
     require_new_template_admission()
     template = await get_template(session, template_id)
     owner, _ = principal()
@@ -181,13 +197,13 @@ async def revise_draft(session, *, template_id, operation_id, expected_head_revi
     prior = previous.result or {}
     package = prior.get("package") or {}
     known = {frame["frame_id"] for frame in package.get("frames", [])}
-    if (not frame_reviews or not set(frame_reviews).issubset(known)
+    if (not frame_reviews and font_substitutions is None or not set(frame_reviews).issubset(known)
             or representative_frame_id is not None and representative_frame_id not in known):
         raise HTTPException(422, "svg_template_frame_selection_invalid")
     old_payload = previous.request_payload.get("generation_settings", {}).get("svg_template_registration", {})
-    overrides = {**old_payload.get("frame_reviews", {}), **frame_reviews}
-    payload = {**old_payload, "frame_reviews": overrides, "expected_head_revision": expected_head_revision,
-               "representative_frame_id": representative_frame_id or old_payload.get("representative_frame_id")}
+    payload = revised_registration_payload(old_payload, frame_reviews=frame_reviews,
+        expected_head_revision=expected_head_revision, representative_frame_id=representative_frame_id,
+        font_substitutions=font_substitutions)
     conversation, operation = await new_operation(session, kind="svg.template.analyze", payload=payload,
         name=template.name, conversation_id=previous.conversation_id)
     changed = (await session.execute(update(SvgTemplate).where(SvgTemplate.id == template.id,

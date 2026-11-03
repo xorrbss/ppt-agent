@@ -80,6 +80,14 @@ class SvgTemplateFontSubstitution(FrameModel):
     target_weight: int = Field(ge=100, le=900)
 
 
+class SvgTemplateUnavailableFont(FrameModel):
+    """A source face the server cannot use, with the substitute review suggests."""
+    source_family: str = Field(min_length=1, max_length=128)
+    source_weight: int = Field(ge=100, le=900)
+    suggested_family: str = Field(min_length=1, max_length=128)
+    suggested_weight: int = Field(ge=100, le=900)
+
+
 class SvgTemplateRasterPreservation(FrameModel):
     """Fixed decoration kept as an image cut from a source render (never text)."""
     schema_version: Literal["svg-template-raster-preservation/v1"] = "svg-template-raster-preservation/v1"
@@ -182,6 +190,7 @@ class SvgTemplatePackage(FrameModel):
     issues: tuple[FrameIssue, ...] = ()
     registration_state: Literal["review-required", "failed"] = "review-required"
     font_substitutions: tuple[SvgTemplateFontSubstitution, ...] = ()
+    unavailable_fonts: tuple[SvgTemplateUnavailableFont, ...] = ()
     digest: str
 
     @model_validator(mode="after")
@@ -207,6 +216,8 @@ class SvgTemplatePackage(FrameModel):
         value = handler(self)
         if not self.font_substitutions:
             value.pop("font_substitutions", None)
+        if not self.unavailable_fonts:
+            value.pop("unavailable_fonts", None)
         if "frames" in value and "font_manifest" in value:
             return pack_package_fonts(value)
         return value

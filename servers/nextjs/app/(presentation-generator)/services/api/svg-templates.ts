@@ -26,6 +26,9 @@ export interface SvgTemplateCapability {
 }
 /** Fixed decoration the converter cannot draw, kept as an image cut from a source render. */
 export interface SvgTemplateRasterPreservation { renderer: string; renderer_version?: string; approximate: boolean; reasons: string[]; shape_refs: string[] }
+/** An explicit replacement for a source font the server cannot use (wire shape). */
+export interface SvgTemplateFontSubstitution { sourceFamily: string; targetFamily: string; targetWeight: number }
+export interface SvgTemplateUnavailableFont { source_family: string; source_weight: number; suggested_family: string; suggested_weight: number }
 export interface SvgTemplateFrameReview {
   frameId: string; fixedShapeIds: string[]; bodyRegion: { x: number; y: number; width: number; height: number }; role: "cover" | "section" | "body";
 }
@@ -42,7 +45,8 @@ export interface SvgTemplateDraft {
   source_previews?: Record<string, string>;
   reviewEvidence?: SvgTemplateReviewEvidence;
   review_evidence?: SvgTemplateReviewEvidence;
-  package: { digest?: string; frames: SvgTemplateFrame[]; body_evidence?: Array<{ source_page: number; body_shape_ids: string[]; body_bounds?: Array<{ x: number; y: number; width: number; height: number }>; body_kinds?: string[] }>; issues?: Array<string | SvgTemplateIssue>; font_manifest?: unknown } | null;
+  package: { digest?: string; frames: SvgTemplateFrame[]; body_evidence?: Array<{ source_page: number; body_shape_ids: string[]; body_bounds?: Array<{ x: number; y: number; width: number; height: number }>; body_kinds?: string[] }>; issues?: Array<string | SvgTemplateIssue>; font_manifest?: unknown;
+    unavailable_fonts?: SvgTemplateUnavailableFont[]; font_substitutions?: Array<{ source_family: string; target_family: string; target_weight: number }> } | null;
 }
 const base = "/api/v1/ppt/svg-templates/v1";
 async function request<T>(path: string, body?: unknown, method?: "PATCH"): Promise<T> {
@@ -58,7 +62,7 @@ export const SvgTemplatesApi = {
   register: (body: { name: string; referenceSnapshotId: string; registrationMode: "framed" | "style-only"; conversationId?: string }) => request<{ template: SvgTemplateCard; operationId: string }>("/register", body),
   version: (pin: SvgTemplatePin) => request<{ template: SvgTemplateCard }>(`/${encodeURIComponent(pin.templateId)}/versions/${pin.revision}`),
   draft: (id: string) => request<SvgTemplateDraft>(`/${encodeURIComponent(id)}/draft`),
-  review: (id: string, body: { operationId: string; expectedHeadRevision: number; frameReviews: SvgTemplateFrameReview[]; representativeFrameId?: string }) => request<{ operationId: string; registrationState: string }>(`/${encodeURIComponent(id)}/draft`, body, "PATCH"),
+  review: (id: string, body: { operationId: string; expectedHeadRevision: number; frameReviews: SvgTemplateFrameReview[]; representativeFrameId?: string; fontSubstitutions?: SvgTemplateFontSubstitution[] }) => request<{ operationId: string; registrationState: string }>(`/${encodeURIComponent(id)}/draft`, body, "PATCH"),
   publish: (id: string, body: { operationId: string; expectedHeadRevision: number; selectedFrameIds: string[]; confirmReview: boolean; styleOnly?: boolean }) => request<{ template: SvgTemplateCard }>(`/${encodeURIComponent(id)}/publish`, body),
   prepare: (body: { templatePin: SvgTemplatePin; canvas: DocumentCanvasRequest }) => request<{ operationId: string; state: string }>("/adaptations", body),
   operation: (id: string) => request<SvgTemplateOperation>(`/operations/${encodeURIComponent(id)}`),

@@ -1,4 +1,4 @@
-import type { SvgTemplateDraft, SvgTemplateFrame, SvgTemplateIssue } from "./svg-templates";
+import type { SvgTemplateDraft, SvgTemplateFontSubstitution, SvgTemplateFrame, SvgTemplateIssue } from "./svg-templates";
 
 export function templateReason(value: string | null | undefined): string {
   const code = value ?? "";
@@ -66,4 +66,20 @@ export function frameElementShapeRefs(element: NonNullable<SvgTemplateFrame["ele
   if (element.raster_preservation) return element.raster_preservation.shape_refs.filter(ref => !/#(implicit-)?background$/.test(ref));
   if (element.source_shape_id === "background" || element.source_shape_id === "implicit-background") return [];
   return [`${element.source_part}#${element.source_shape_id}`];
+}
+
+/**
+ * The substitution map review starts from: substitutions already applied, then
+ * one per unavailable family with its suggested face. Substitution is per family.
+ */
+export function initialFontSubstitutions(pkg: SvgTemplateDraft["package"]): SvgTemplateFontSubstitution[] {
+  const byFamily = new Map<string, SvgTemplateFontSubstitution>();
+  for (const item of pkg?.font_substitutions ?? []) byFamily.set(item.source_family.toLocaleLowerCase(), { sourceFamily: item.source_family, targetFamily: item.target_family, targetWeight: item.target_weight });
+  for (const item of pkg?.unavailable_fonts ?? []) {
+    const key = item.source_family.toLocaleLowerCase();
+    const known = byFamily.get(key);
+    // Several weights of one family: the heaviest suggestion keeps headings bold.
+    if (!known || (!pkg?.font_substitutions?.some(applied => applied.source_family.toLocaleLowerCase() === key) && item.suggested_weight > known.targetWeight)) byFamily.set(key, { sourceFamily: item.source_family, targetFamily: item.suggested_family, targetWeight: item.suggested_weight });
+  }
+  return [...byFamily.values()].sort((a, b) => a.sourceFamily.localeCompare(b.sourceFamily));
 }

@@ -3031,5 +3031,16 @@
       "outcomeUnknown": "The result of the request is not confirmed yet. You can check again with the same approval.",
       "started": "Requested the remaining pages. Full quality review and export are still pending."
     }
+  },
+  "svgTemplateFonts": {
+    "title": "Font substitution",
+    "description": "Source fonts the server cannot use are replaced with Pretendard in the template and in generated bodies. The source preview is still drawn with the original fonts, so fixed text may look different.",
+    "weightLabel": "{family} substitute weight",
+    "applied": "(substitution applied)",
+    "pending": "(not applied yet)",
+    "apply": "Apply font substitution and analyse again",
+    "applyFailed": "Could not apply the font substitution. The previous analysis is kept.",
+    "regular": "Regular",
+    "bold": "Bold"
   }
 }

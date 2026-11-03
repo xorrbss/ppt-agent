@@ -10,7 +10,7 @@ from lxml import etree
 
 from models.svg_template_frame import (
     FrameIssue, FrameRect, SvgTemplateBodyEvidence, SvgTemplateFrame,
-    SvgTemplateFrameElement, SvgTemplatePackage,
+    SvgTemplateFrameElement, SvgTemplatePackage, SvgTemplateUnavailableFont,
 )
 from services.document_canvas import document_canvas_from_source_slide_size
 from services.source_content.pptx_extraction_constants import NS, R_NS
@@ -323,6 +323,19 @@ def _font_substitutions(raw) -> dict:
     return result
 
 
+#: The server face review suggests for a source font it cannot use (D-3).
+SUGGESTED_SUBSTITUTE_FAMILY = "Pretendard"
+
+
+def suggested_substitute_weight(family: str, weight: int) -> int:
+    """Nearest bundled weight (400/700): a weight digit in the family name
+    ("Paperlogy 7 Bold") wins over the run's bold flag."""
+    import re
+    digit = re.search(r"(?<!\d)([1-9])(?!\d)", family)
+    value = int(digit.group(1)) * 100 if digit else weight
+    return 700 if value >= 600 else 400
+
+
 def _selected_pages(source_pages, slide_count) -> tuple[int, ...] | None:
     if source_pages is None:
         return None
@@ -428,7 +441,7 @@ def extract_template_package(pptx_path: str | Path, *, font_assets=None,
         context.font_manifest = font_manifest
         # Repetition is judged over the whole deck: more pages, better evidence.
         repeats = Counter(key for part in all_slides for key in {_repeat_key(shape, package, part) for shape in _children(context.root(part))})
-        pending = []
+        pending, unavailable = [], set()
         for slide_part in slides:
             page_index = page_numbers[slide_part]
             frame_id = f"frame-{page_index + 1}"
@@ -458,6 +471,7 @@ def extract_template_package(pptx_path: str | Path, *, font_assets=None,
                 try:
                     font_asset_for(font_manifest, family, weight)
                 except ValueError:
+                    unavailable.add((family, weight))
                     issues.append(FrameIssue(reason_code=font_discovery_diagnostics.get((family, weight),
                         "svg_template_font_unavailable"), severity="blocked", source_part=slide_part))
             elements, fixed_bounds, body_ids, body_bounds, body_kinds = [], [], [], [], []
@@ -661,6 +675,10 @@ def extract_template_package(pptx_path: str | Path, *, font_assets=None,
     applied = tuple(record for key, record in substitutions.items() if key in context.substituted_families)
     result = SvgTemplatePackage(schema_version="svg-template-package/v2" if native_fixed_text_layout else "svg-template-package/v1",
         font_substitutions=applied,
+        unavailable_fonts=tuple(SvgTemplateUnavailableFont(source_family=family, source_weight=weight,
+            suggested_family=SUGGESTED_SUBSTITUTE_FAMILY, suggested_weight=suggested_substitute_weight(family, weight))
+            for family, weight in sorted(unavailable, key=lambda face: (face[0].casefold(), face[1]))
+            if family.casefold() != SUGGESTED_SUBSTITUTE_FAMILY.casefold()),
         compiler_version="ooxml-frame/2" if native_fixed_text_layout else "ooxml-frame/1",
         source_digest=source_digest, source_canvas=canvas, frames=tuple(frames),
         body_evidence=tuple(evidence), assets=assets, font_manifest=font_manifest,

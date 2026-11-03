@@ -165,6 +165,13 @@ default frames compile with no blocked issue in about 70 s; the package is
   `font_substitutions`; the review shows "Paperlogy 7 Bold → Pretendard Bold
   (대체)". The source preview still renders the original deck, so fixed-text
   regions are expected to differ and the comparison says why.
+* As built: the package lists `unavailable_fonts` (source face, suggested
+  Pretendard weight; omitted when empty, so existing digests are stable). The
+  review screen (`SvgTemplateFontSubstitutions`) starts from the applied map
+  plus one suggestion per unavailable family and sends the map through the
+  draft revision (`PATCH …/draft` with `fontSubstitutions` and no frame
+  review), which re-analyses the source. Substitution is per family: one
+  family with several bold flags maps to one weight.
 * Follow-up option, not in this version: vendor Pretendard 500/600/800 as
   trusted faces so Paperlogy's hierarchy keeps more than two weights.
 

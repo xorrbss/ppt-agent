@@ -224,3 +224,38 @@ def test_the_slide_contract_admits_bounded_letter_spacing():
     for value in ("-21", "1em", "normal"):
         with pytest.raises(ValueError, match="svg_contract_invalid_letter_spacing"):
             validate_svg(page.format(value), width=100, height=100)
+
+
+# --- explicit font substitution: suggestion and revision --------------------------
+
+def test_unavailable_fonts_are_listed_with_a_suggested_substitute(tmp_path):
+    from services.svg_templates.frame import suggested_substitute_weight
+    assert [suggested_substitute_weight(name, 400) for name in (
+        "Paperlogy 3 Light", "Paperlogy 5 Medium", "Paperlogy 6 SemiBold", "Paperlogy 8 ExtraBold")] == [400, 400, 700, 700]
+    assert suggested_substitute_weight("Acme Sans", 700) == 700 and suggested_substitute_weight("Acme 12", 400) == 400
+
+    path = _deck(tmp_path / "deck.pptx", pages=3, font="Paperlogy 7 Bold")
+    blocked = extract_template_package(path)
+    assert [(item.source_family, item.suggested_family, item.suggested_weight) for item in blocked.unavailable_fonts] == [
+        ("Paperlogy 7 Bold", "Pretendard", 700)]
+    substituted = extract_template_package(path, font_substitutions=[
+        {"source_family": "Paperlogy 7 Bold", "target_family": "Pretendard", "target_weight": 700}])
+    assert "unavailable_fonts" not in substituted.model_dump(mode="json")
+
+
+def test_a_revision_replaces_or_keeps_the_substitution_map():
+    from api.v1.ppt.endpoints.svg_templates import DraftRevisionRequest
+    from services.svg_templates.registration import revised_registration_payload
+    old = {"frame_reviews": {"frame-1": {"role": "cover"}}, "representative_frame_id": "frame-1",
+           "font_substitutions": [{"source_family": "A", "target_family": "Pretendard", "target_weight": 400}]}
+    swap = [{"source_family": "B", "target_family": "Pretendard", "target_weight": 700}]
+    replaced = revised_registration_payload(old, frame_reviews={}, expected_head_revision=0, font_substitutions=swap)
+    assert replaced["font_substitutions"] == swap and replaced["frame_reviews"] == old["frame_reviews"]
+    kept = revised_registration_payload(old, frame_reviews={"frame-2": {"role": "body"}}, expected_head_revision=0)
+    assert kept["font_substitutions"] == old["font_substitutions"] and set(kept["frame_reviews"]) == {"frame-1", "frame-2"}
+    assert "font_substitutions" not in revised_registration_payload(old, frame_reviews={}, expected_head_revision=0,
+                                                                    font_substitutions=[])
+    request = DraftRevisionRequest.model_validate({"operationId": "00000000-0000-0000-0000-000000000001",
+        "expectedHeadRevision": 0, "fontSubstitutions": [{"sourceFamily": "B", "targetFamily": "Pretendard",
+                                                          "targetWeight": 700}]})
+    assert request.frame_reviews == [] and request.font_substitutions[0].source_family == "B"

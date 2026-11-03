@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { frameElementShapeRefs, rasterPreservationLines, templateReason } from "./svg-template-status";
+import { frameElementShapeRefs, initialFontSubstitutions, rasterPreservationLines, templateReason } from "./svg-template-status";
 import type { SvgTemplateFrame } from "./svg-templates";
 
 const bounds = { x: 0, y: 0, width: 10, height: 10 };
@@ -36,4 +36,17 @@ test("raster reasons get their own text instead of the source-mode message", () 
   assert.match(templateReason("svg_template_raster_renderer_unavailable"), /LibreOffice/);
   assert.match(templateReason("svg_template_fullslide_raster_forbidden"), /배경/);
   assert.doesNotMatch(templateReason("svg_template_raster_render_failed"), /원본 보존 방식/);
+});
+
+test("font substitution starts from applied choices, then one suggestion per family", () => {
+  assert.deepEqual(initialFontSubstitutions({ frames: [], unavailable_fonts: [
+    { source_family: "Paperlogy 4 Regular", source_weight: 400, suggested_family: "Pretendard", suggested_weight: 400 },
+    { source_family: "Acme", source_weight: 400, suggested_family: "Pretendard", suggested_weight: 400 },
+    { source_family: "Acme", source_weight: 700, suggested_family: "Pretendard", suggested_weight: 700 },
+  ], font_substitutions: [{ source_family: "Paperlogy 7 Bold", target_family: "Pretendard", target_weight: 400 }] }), [
+    { sourceFamily: "Acme", targetFamily: "Pretendard", targetWeight: 700 },
+    { sourceFamily: "Paperlogy 4 Regular", targetFamily: "Pretendard", targetWeight: 400 },
+    { sourceFamily: "Paperlogy 7 Bold", targetFamily: "Pretendard", targetWeight: 400 },
+  ]);
+  assert.deepEqual(initialFontSubstitutions(null), []);
 });

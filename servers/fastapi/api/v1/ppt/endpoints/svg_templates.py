@@ -104,8 +104,11 @@ class FrameReview(Wire):
 class DraftRevisionRequest(Wire):
     operation_id: uuid.UUID = Field(alias="operationId")
     expected_head_revision: int = Field(alias="expectedHeadRevision", ge=0)
-    frame_reviews: list[FrameReview] = Field(alias="frameReviews", min_length=1, max_length=200)
+    frame_reviews: list[FrameReview] = Field(alias="frameReviews", default_factory=list, max_length=200)
     representative_frame_id: str | None = Field(alias="representativeFrameId", default=None)
+    #: Replaces the draft's explicit font substitutions; omitted keeps them.
+    font_substitutions: list[FontSubstitution] | None = Field(default=None, alias="fontSubstitutions",
+                                                              max_length=32)
 
 
 def public_error(error):
@@ -196,7 +199,9 @@ async def correct_draft(template_id: uuid.UUID, request: DraftRevisionRequest, s
     return await revise_draft(session, template_id=template_id, operation_id=request.operation_id,
         expected_head_revision=request.expected_head_revision,
         frame_reviews={item.frame_id: item.model_dump(exclude={"frame_id"}) for item in request.frame_reviews},
-        representative_frame_id=request.representative_frame_id)
+        representative_frame_id=request.representative_frame_id,
+        font_substitutions=[item.model_dump() for item in request.font_substitutions]
+            if request.font_substitutions is not None else None)
 
 
 @SVG_TEMPLATES_ROUTER.get("/{template_id}/versions/{revision}")

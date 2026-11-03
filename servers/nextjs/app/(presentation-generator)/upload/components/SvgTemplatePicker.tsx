@@ -12,6 +12,7 @@ import { SvgTemplatesApi, svgTemplateCanvas, type SvgTemplateCard, type SvgTempl
 import { AUTH_SESSION_EXPIRED_EVENT } from "../../services/api/api-error-handler";
 import { templateReason, templateIssueText, templateFontText, templateRoleText, templateOperationText, templateActionText, frameReviewBlockReason, rasterPreservationLines } from "../../services/api/svg-template-status";
 import SvgTemplateReview from "./SvgTemplateReview";
+import SvgTemplateFontSubstitutions from "./SvgTemplateFontSubstitutions";
 import type { PresentationConfig } from "../type";
 
 const stateLabels = { analyzing: "분석 중", "review-required": "확인 필요", ready: "사용 가능", failed: "분석 실패", archived: "보관됨" };
@@ -257,6 +258,19 @@ export default function SvgTemplatePicker({ config, onConfigChange, sourceConten
           {blockedReason ? <p role="status" className="mt-1 text-xs text-amber-800">{blockedReason}</p> : null}
         </div>;
       })}
+      <SvgTemplateFontSubstitutions key={`fonts:${draft.operationId}:${draft.package?.digest ?? "pending"}`} draft={draft} busy={busy || reviewDirty} onApply={async fontSubstitutions => {
+        if (!ownerAlive.current || available !== true) return false;
+        const owner = ownerEpoch.current;
+        setBusy(true);
+        try {
+          const result = await SvgTemplatesApi.review(draft.template.templateId, { operationId: draft.operationId, expectedHeadRevision: draft.template.pin?.revision ?? 0, frameReviews: [], fontSubstitutions });
+          if (!live(owner)) return false;
+          setDraft({ template: { ...draft.template, registrationState: "analyzing" }, operationId: result.operationId, package: null });
+          setConfirmed(false); setRefresh(value => value + 1);
+          return true;
+        } catch (error) { if (live(owner)) throw error; return false; }
+        finally { if (live(owner)) setBusy(false); }
+      }} />
       <SvgTemplateReview key={`${draft.operationId}:${draft.package?.digest ?? "pending"}`} draft={draft} busy={busy} onDirtyChange={dirty => { setReviewDirty(dirty); setConfirmed(false); }} onSave={async (frames, representativeFrameId) => {
         if (!ownerAlive.current || available !== true) return;
         const owner = ownerEpoch.current;
