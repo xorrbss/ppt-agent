@@ -37,7 +37,7 @@ def _validate_design_instruction(instructions: str | None) -> None:
 def _validate_raster_design_mode(request: Any, analysis: Any) -> None:
     """Preserved pixels cannot receive an explicitly selected replacement design."""
     explicit_reference = any(getattr(request, name, None) is not None for name in (
-        "master_pin", "svg_design_reference_pin", "svg_design_reference_snapshot_id"))
+        "master_pin", "svg_design_reference_snapshot_id"))
     selected_style = getattr(request, "authored_style", None)
     replacement_design = explicit_reference or selected_style not in {None, "default", "screenshot-blue"}
     if replacement_design and any(page.render_mode != "redesign" for page in analysis.pages):

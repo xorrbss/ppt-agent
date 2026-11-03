@@ -357,7 +357,7 @@ def test_native_literal_offer_never_dispatches_planner_or_image_provider_and_rep
 
 
 @pytest.mark.parametrize("change", ["prose", "partial_chart", "imagery", "relation", "master", "reference",
-    "style", "source", "source_unknown", "outline_changed", "implicit_svg", "registered", "not_free", "frozen_ref"])
+    "style", "source", "source_unknown", "outline_changed", "implicit_svg", "brand_style_mode", "not_free", "frozen_ref"])
 def test_native_literal_offer_requires_complete_data_and_explicit_source_absence(change):
     request, outline, snapshot = _literal_request()
     has_source_assets = False
@@ -382,8 +382,8 @@ def test_native_literal_offer_requires_complete_data_and_explicit_source_absence
         outline.slides[0].content += "\n새 항목"
     elif change == "implicit_svg":
         request.strategy = None
-    elif change == "registered":
-        request.generation_mode = "registered-template"
+    elif change == "brand_style_mode":
+        request.generation_mode = "brand-style"
     elif change == "not_free":
         snapshot["composition_mode"] = "template-layout"
     elif change == "frozen_ref":

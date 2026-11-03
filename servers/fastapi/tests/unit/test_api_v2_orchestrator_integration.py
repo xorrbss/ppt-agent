@@ -1247,10 +1247,10 @@ async def _submit_source_restyle(
     route_slide_counts: list[int] = []
 
     def fake_route_resolver(**kwargs):
-        from services.authored_vnext.generation_route import resolve_generation_route
+        from services.public_generation_route import resolve_authored_generation_route
 
         route_slide_counts.append(kwargs["slide_count"])
-        return resolve_generation_route(owner_id=owner, **kwargs)
+        return resolve_authored_generation_route(**kwargs)
 
     async def fake_admission(session, *, principal, operation_id, operation_kind, **kwargs):
         request_plans.append(kwargs["request_plan"])
@@ -1340,7 +1340,6 @@ def test_api_submit_source_restyle_charges_source_pages_and_pins_master(
         submission = dict(_SOURCE_RESTYLE_SUBMISSION)
         if verbatim:
             submission.update(
-                generationMode="registered-template",
                 contentPolicy={"text": "verbatim", "allowSummarization": False},
             )
         response, maker, generation_settings, request_plans, route_counts = (

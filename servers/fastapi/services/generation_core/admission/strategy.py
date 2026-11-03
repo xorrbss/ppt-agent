@@ -20,9 +20,7 @@ GenerationStrategy = Literal["svg", "authored"]
 #: asked to avoid. A value outside this fixed set is one of
 #: services.svg_generation_admission.svg_creation_admission_violation's own
 #: structural reason codes (e.g. "svg_source_verbatim_required").
-StrategyReason = Literal[
-    "explicit", "registered_template", "design_pack_pin", "default"
-]
+StrategyReason = Literal["explicit", "default"]
 
 
 def resolve_generation_strategy_with_reason(
@@ -35,9 +33,8 @@ def resolve_generation_strategy_with_reason(
     still runs downstream and may 422 it. Only the *omitted* case is resolved
     here, and only for that case do the exceptions below apply:
 
-    1. ``generation_mode == "registered-template"`` or a ``design_pack_pin``:
-       design packs patch an element of a source-native document, so they
-       cannot project onto from-scratch svg authoring.
+    1. A source restyle with a page-size/orientation override stays on its
+       existing authored route.
     2. Any other combination svg admission would reject (checked structurally,
        not by source_mode alone) falls back to authored silently -- the new
        default must never turn a previously-valid authored request into a 422.
@@ -47,10 +44,6 @@ def resolve_generation_strategy_with_reason(
     explicit = getattr(request, "strategy", None)
     if explicit in ("svg", "authored"):
         return explicit, "explicit"
-    if getattr(request, "generation_mode", "auto") == "registered-template":
-        return "authored", "registered_template"
-    if getattr(request, "design_pack_pin", None) is not None:
-        return "authored", "design_pack_pin"
     # A4 source reflow is opted into with an explicit SVG strategy. Keep
     # previously omitted-strategy requests on their existing authored route.
     if (

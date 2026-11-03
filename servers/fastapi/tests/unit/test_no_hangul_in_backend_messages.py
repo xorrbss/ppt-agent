@@ -37,8 +37,6 @@ _ALLOWED_HANGUL_MODULES: frozenset[str] = frozenset(
         "services/authored_vnext/generation/scene_compiler.py",
         "services/authored_vnext/master/ai_import.py",
         "services/authored_vnext/master/catalog_seed.py",
-        "services/authored_vnext/source_native_generation.py",
-        "services/authored_vnext/source_unitization.py",
         "services/chat/service.py",
         "models/authored_illustration_plan.py",
         "utils/authored_infographic/icons.py",

@@ -95,12 +95,6 @@ class RasterApprovalPinInput(BaseModel):
     approval_digest: str = Field(pattern=r"^[0-9a-f]{64}$")
 
 
-class DesignPackPinInput(StrictCamelModel):
-    design_pack_id: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")
-    version: int = Field(ge=1)
-    digest: Digest
-
-
 class SvgTemplatePinInput(StrictCamelModel):
     template_id: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")
     revision: int = Field(ge=1)
@@ -119,8 +113,7 @@ def validate_svg_template_selection(request: Any) -> None:
         return
     if request.strategy != "svg" or request.generation_mode not in {"auto", "free-design"}:
         raise ValueError("svg_template_strategy_required")
-    if any(value is not None for value in (request.master_pin, request.design_pack_pin,
-            request.svg_design_reference_pin, request.svg_design_reference_snapshot_id)):
+    if any(value is not None for value in (request.master_pin, request.svg_design_reference_snapshot_id)):
         raise ValueError("svg_template_selection_conflict")
     if "authored_style" in request.model_fields_set and request.authored_style is not None:
         raise ValueError("svg_template_authored_style_conflict")
@@ -239,7 +232,6 @@ class GeneratePresentationRequest(BaseModel):
     )
     svg_canvas: Optional[SvgCanvasInput] = Field(default=None, alias="svgCanvas", exclude_if=lambda value: value is None)
     svg_design_reference_snapshot_id: Optional[uuid.UUID] = Field(default=None, alias="svgDesignReferenceSnapshotId", exclude_if=lambda value: value is None)
-    svg_design_reference_pin: Optional[DesignPackPinInput] = Field(default=None, alias="svgDesignReferencePin", exclude_if=lambda value: value is None)
     svg_template_pin: Optional[SvgTemplatePinInput] = Field(default=None, alias="svgTemplatePin", exclude_if=lambda value: value is None)
     svg_template_mode: Optional[Literal["free-design", "template-redesign"]] = Field(default=None, alias="svgTemplateMode", exclude_if=lambda value: value is None)
     svg_template_frame_map: Optional[dict[str, str]] = Field(default=None, alias="svgTemplateFrameMap", exclude_if=lambda value: value is None)
@@ -301,8 +293,8 @@ class GeneratePresentationRequest(BaseModel):
         default=None,
         description=(
             "Explicit generation strategy. Omit to use the server default (svg), "
-            "except for registered-template/design-pack requests and combinations "
-            "svg admission does not support, which stay on authored -- see "
+            "except for combinations svg admission does not support, which stay "
+            "on authored -- see "
             "services.generation_core.admission.resolve_generation_strategy."
         ),
     )
@@ -319,10 +311,6 @@ class GeneratePresentationRequest(BaseModel):
         default="auto",
         alias="generationMode",
         description="Public product routing intent; the server owns route resolution.",
-    )
-    design_pack_pin: Optional[DesignPackPinInput] = Field(
-        default=None,
-        alias="designPackPin",
     )
     generation_engine: Optional[Literal["authored", "deck-ir"]] = Field(
         default="authored",
@@ -427,19 +415,19 @@ class GeneratePresentationRequest(BaseModel):
             raise ValueError("common_header_svg_strategy_required")
         if self.common_header_cover_exception and self.common_header_mode != "uniform":
             raise ValueError("common_header_cover_exception_requires_uniform")
-        references = (self.master_pin, self.svg_design_reference_pin, self.svg_design_reference_snapshot_id)
-        if (self.svg_design_reference_pin is not None or self.svg_design_reference_snapshot_id is not None) and sum(value is not None for value in references) > 1:
+        if self.svg_design_reference_snapshot_id is not None and self.master_pin is not None:
             raise ValueError("svg_design_reference_conflict")
-        if (self.svg_design_reference_pin is not None or self.svg_design_reference_snapshot_id is not None) and (self.strategy != "svg" or self.design_pack_pin is not None or self.generation_mode not in {"auto", "free-design"}):
+        if self.svg_design_reference_snapshot_id is not None and (
+                self.strategy != "svg" or self.generation_mode not in {"auto", "free-design"}):
             raise ValueError("svg_design_reference_strategy_required")
         if self.strategy == "authored" and (self.svg_canvas is not None or self.aspect_ratio == "4:3"):
             raise ValueError("svg_canvas_strategy_required")
         if self.generation_mode == "editable-first":
             raise ValueError("capability_not_supported: editable-first")
-        if self.generation_mode == "registered-template" and self.design_pack_pin is None:
-            raise ValueError("design_pack_pin_required")
-        if self.design_pack_pin is not None and self.generation_mode != "registered-template":
-            raise ValueError("design_pack_pin_requires_registered_template")
+        if self.generation_mode == "registered-template":
+            # The design-pack route this mode selected was removed on 2026-11-03;
+            # a durable job staged for it fails here with this code on replay.
+            raise ValueError("registered_template_removed")
         return self
 
     @model_validator(mode="after")

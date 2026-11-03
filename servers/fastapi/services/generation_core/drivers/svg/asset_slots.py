@@ -178,8 +178,8 @@ def _native_literal_pages(request, outline, *, style_snapshot, has_source_assets
             or style_snapshot.get("style_id") != "default"):
         return None
     if any(getattr(request, key, None) for key in (
-        "files", "reference_snapshot_ids", "_reference_snapshots", "master_pin", "design_pack_pin",
-        "svg_design_reference_pin", "svg_design_reference_snapshot_id", "_svg_uploaded_design_reference",
+        "files", "reference_snapshot_ids", "_reference_snapshots", "master_pin",
+        "svg_design_reference_snapshot_id", "_svg_uploaded_design_reference",
         "svg_template_pin",
         "_source_content_svg_reflow", "_raster_reconstruction")):
         return None

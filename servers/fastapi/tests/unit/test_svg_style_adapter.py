@@ -126,34 +126,6 @@ def test_master_reference_does_not_require_source_title_slots():
     assert result["provenance"]["master_digest"] == contract.digest
 
 
-def test_trusted_pack_pin_projects_across_canvases_and_rejects_digest_change(tmp_path, monkeypatch):
-    import uuid
-    from services.authored_vnext.design_pack import ingest_design_pack
-    from services.authored_vnext import generation_route
-    from services.generation_core.style.design_pack_projection import DesignPackProjectionError, resolve_design_pack_reference
-    from tests.unit import test_source_native_design_pack as fixture
-
-    monkeypatch.setattr(fixture, "_PRESENTATION", fixture._PRESENTATION.replace('cy="6858000"', 'cy="12192000"'))
-    source, storage = tmp_path / "reference.pptx", tmp_path / "packs"
-    fixture._synthetic_pptx(source)
-    manifest = ingest_design_pack(source, pack_id="reference-blue", package_version="1.0.0", storage_root=storage)
-    owner = uuid.uuid4()
-    seen = []
-    def owner_storage(owner_id):
-        seen.append(owner_id)
-        return storage
-    monkeypatch.setattr(generation_route, "design_pack_storage_root", owner_storage)
-    pin = {"designPackId": "reference-blue", "version": 1, "digest": manifest.package_digest}
-    profile = resolve_design_pack_reference(owner_id=owner, pin=pin, width=840, height=1188)
-    assert seen == [owner]
-    assert profile["composition_mode"] == "free-svg"
-    assert profile["provenance"]["package_digest"] == manifest.package_digest
-    assert "layouts" not in profile and "slots" not in profile
-    assert profile["references"] == {}  # Structural outlines are evidence, not art direction.
-    with pytest.raises(DesignPackProjectionError, match="pin_digest_mismatch"):
-        resolve_design_pack_reference(owner_id=owner, pin={**pin, "digest": "sha256:" + "0" * 64}, width=840, height=1188)
-
-
 def test_master_logo_is_owner_verified_reanchored_and_stamped_once(tmp_path, monkeypatch):
     import io
     import uuid
@@ -221,7 +193,7 @@ def test_uploaded_artifact_design_reference_uses_signals_and_bounded_examples(tm
     assert profile["provenance"]["source_format"] == (format if format in {"pdf", "pptx"} else "image")
     assert profile["identity"]["colors"]
     adapted = adapt_svg_style(resolve_authored_style("default"), width=840, height=1188,
-        request=_request(), design_pack_rules=profile)
+        request=_request(), design_reference_rules=profile)
     assert adapted["tokens"]["primary"] == profile["tokens"]["accent"]
     assert adapted["tokens"]["heading_font"] == profile["fonts"]["heading"]["family"]
     assert adapted["tokens"]["body_font"] == profile["fonts"]["body"]["family"]
@@ -281,7 +253,7 @@ def test_uploaded_design_reference_admits_real_owner_snapshot_and_rejects_change
                         request, session, asset_gateway=gateway, frozen_profile=profile)
                     assert resumed is profile and request._svg_uploaded_design_reference is profile
                     projected = adapt_svg_style(resolve_authored_style("default"),
-                        **profile["canvas"], request=_request(), design_pack_rules=profile)
+                        **profile["canvas"], request=_request(), design_reference_rules=profile)
                     assert "references" not in projected["design_pack_template"]
                     assert projected["references"] == profile["references"]
                     request._svg_style_snapshot = deepcopy(projected)

@@ -52,7 +52,6 @@ from api.v1.ppt.endpoints.source_locked import SOURCE_LOCKED_ROUTER
 from api.v1.ppt.endpoints.source_content import SOURCE_CONTENT_ROUTER
 from api.v1.ppt.endpoints.raster_reconstruction import RASTER_RECONSTRUCTION_ROUTER
 from api.v1.ppt.endpoints.presentation_slide_order import PRESENTATION_SLIDE_ORDER_ROUTER
-from api.v1.ppt.endpoints.design_packs import DESIGN_PACKS_ROUTER
 from api.v1.ppt.endpoints.svg_templates import SVG_TEMPLATES_ROUTER
 
 
@@ -139,11 +138,6 @@ PPT_FEATURE_MODULES = (
         "presentation-slide-order",
         PRESENTATION_SLIDE_ORDER_ROUTER,
         frozenset({"ppt-api", "presentation"}),
-    ),
-    FeatureModule(
-        "design-packs",
-        DESIGN_PACKS_ROUTER,
-        frozenset({"ppt-api", "assets", "presentation", "templates"}),
     ),
 )
 

@@ -337,130 +337,6 @@ class ProviderCallBudgetV1(StrictModel):
         return self
 
 
-class FrameQualityVectorV1(StrictModel):
-    role_fitness: UnitScore
-    content_capacity: UnitScore
-    source_compatibility: UnitScore
-    semantic_fit: UnitScore
-
-
-class FrameSearchCandidateV1(StrictModel):
-    candidate_id: Key
-    frame_id: Key
-    frame_digest: Digest
-    source_part_digest: Digest
-    hard_constraint_status: Literal["passed", "failed"]
-    rejection_reasons: list[Key] = Field(default_factory=list, max_length=16)
-    quality_vector: FrameQualityVectorV1
-    pareto_layer: int = Field(ge=0, le=999)
-    rank: int = Field(ge=1, le=10000)
-    candidate_digest: Digest
-
-
-class SlideFrameSearchV1(StrictModel):
-    slide_key: Key
-    sequence_index: int = Field(ge=0, le=999)
-    candidates: list[FrameSearchCandidateV1] = Field(min_length=1, max_length=1000)
-    eligible_count: int = Field(ge=0, le=1000)
-
-
-class FrameSearchReceiptV1(StrictModel):
-    schema_version: Literal["frame-search-receipt/v1"] = "frame-search-receipt/v1"
-    operation_id: UUID
-    design_pack_id: Key
-    design_pack_version: int = Field(ge=1)
-    design_pack_manifest_digest: Digest
-    frame_registry_digest: Digest
-    search_policy_digest: Digest
-    narrative_digest: Digest
-    slides: list[SlideFrameSearchV1] = Field(min_length=1, max_length=100)
-    status: Literal["passed", "no-compatible-frame"]
-    receipt_digest: Digest
-
-
-class SlideFrameSelectionV1(StrictModel):
-    slide_key: Key
-    sequence_index: int = Field(ge=0, le=999)
-    selected_candidate_id: Key
-    selected_frame_id: Key
-    selected_frame_digest: Digest
-    selected_source_part_digest: Digest
-    quality_vector: FrameQualityVectorV1
-    tie_break_digest: Digest
-
-
-class FrameSelectionReceiptV1(StrictModel):
-    schema_version: Literal["frame-selection-receipt/v1"] = (
-        "frame-selection-receipt/v1"
-    )
-    operation_id: UUID
-    design_pack_id: Key
-    design_pack_version: int = Field(ge=1)
-    design_pack_manifest_digest: Digest
-    frame_registry_digest: Digest
-    search_receipt_digest: Digest
-    narrative_digest: Digest
-    selection_policy_digest: Digest
-    slides: list[SlideFrameSelectionV1] = Field(min_length=1, max_length=100)
-    receipt_digest: Digest
-
-
-class RouteResolutionReceiptV1(StrictModel):
-    schema_version: Literal["narrative-route-resolution-receipt/v1"] = (
-        "narrative-route-resolution-receipt/v1"
-    )
-    operation_id: UUID
-    narrative_digest: Digest
-    design_pack_id: Key | None = None
-    design_pack_version: int | None = Field(default=None, ge=1)
-    design_pack_manifest_digest: Digest | None = None
-    frame_registry_digest: Digest | None = None
-    frame_search_receipt_digest: Digest | None = None
-    frame_selection_receipt_digest: Digest | None = None
-    provider_call_budget: ProviderCallBudgetV1
-    final_route: Literal["source-native", "authored-scene-fallback", "reject"]
-    fallback_reason: Literal["design-pack-unavailable", "no-compatible-frame"] | None = None
-    whole_operation: Literal[True] = True
-    legacy_provider_html_allowed: Literal[False] = False
-    receipt_digest: Digest
-
-    @model_validator(mode="after")
-    def _route_fields_match(self) -> "RouteResolutionReceiptV1":
-        pack_fields = (
-            self.design_pack_id,
-            self.design_pack_version,
-            self.design_pack_manifest_digest,
-            self.frame_registry_digest,
-        )
-        if self.final_route == "source-native":
-            if any(value is None for value in pack_fields):
-                raise ValueError("narrative_route_pack_binding_missing")
-            if not self.frame_search_receipt_digest or not self.frame_selection_receipt_digest:
-                raise ValueError("narrative_route_selection_binding_missing")
-            if self.fallback_reason is not None:
-                raise ValueError("narrative_route_fallback_reason_invalid")
-        elif self.final_route == "authored-scene-fallback":
-            if self.fallback_reason is None:
-                raise ValueError("narrative_route_fallback_reason_missing")
-        return self
-
-
-class NarrativeCheckpointV1(StrictModel):
-    schema_version: Literal["narrative-ir-checkpoint/v1"] = "narrative-ir-checkpoint/v1"
-    operation_id: UUID
-    job_id: UUID
-    attempt_id: Digest
-    fencing_token: int = Field(ge=1)
-    strategy_receipt_digest: Digest
-    narrative: NarrativeIRV1
-    provider_call_budget: ProviderCallBudgetV1
-    frame_search_receipt: FrameSearchReceiptV1 | None = None
-    frame_selection_receipt: FrameSelectionReceiptV1 | None = None
-    route_resolution_receipt: RouteResolutionReceiptV1
-    lineage_digest: Digest
-    checkpoint_digest: Digest
-
-
 ContentGraphV1.model_rebuild()
 
 
@@ -474,12 +350,7 @@ __all__ = [
     "ContentUnitPayloadV1",
     "ContentUnitV1",
     "Digest",
-    "FrameQualityVectorV1",
-    "FrameSearchCandidateV1",
-    "FrameSearchReceiptV1",
-    "FrameSelectionReceiptV1",
     "Key",
-    "NarrativeCheckpointV1",
     "NarrativeDraftV1",
     "NarrativeIRV1",
     "PageContentIntegrityV1",
@@ -487,9 +358,6 @@ __all__ = [
     "PreserveSourceInputV1",
     "ProviderCallBudgetV1",
     "ProviderCallReservationV1",
-    "RouteResolutionReceiptV1",
-    "SlideFrameSearchV1",
-    "SlideFrameSelectionV1",
     "SourceOwnershipV1",
     "SourceUnitOrderV1",
     "model_payload",

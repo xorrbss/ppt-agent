@@ -29,17 +29,13 @@ def generation_request_admission_error_code(error: ValidationError) -> str:
 def generation_route_error_types() -> tuple[type[BaseException], ...]:
     """Deterministic route-resolution rejections, distinct from real outages.
 
-    ``GenerationRouteError`` (raised for e.g. an unsupported pack+restyle
-    combination) is a client-facing admission rejection, not a resolver
-    failure -- unlike an unexpected exception from the resolver itself.
+    ``GenerationRouteError`` (raised for e.g. an unsupported generation mode)
+    is a client-facing admission rejection, not a resolver failure -- unlike
+    an unexpected exception from the resolver itself.
     """
 
-    try:
-        from services.authored_vnext.generation_route import GenerationRouteError
-    except ModuleNotFoundError as error:
-        if error.name == "services.authored_vnext.generation_route":
-            return ()
-        raise
+    from services.public_generation_route import GenerationRouteError
+
     return (GenerationRouteError,)
 
 

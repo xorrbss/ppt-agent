@@ -25,8 +25,6 @@ _ALIAS_GENERATOR_MODULES = (
     "services.authored_vnext.generation.ai_text_zones",
     "services.authored_vnext.semantic.canonical",
     "models.authored_vnext.semantic.contracts",
-    "services.authored_vnext.design_pack.models",
-    "services.authored_vnext.design_pack.manifest",
     "services.source_content.contracts",
 )
 

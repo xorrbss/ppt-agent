@@ -234,7 +234,6 @@ def _generation_request_hash_payload(
     payload = request.model_dump(mode="json", by_alias=True)
     if "generation_mode" not in request.model_fields_set:
         payload.pop("generationMode", None)
-        payload.pop("designPackPin", None)
     if request.aspect_ratio == "16:9":
         payload.pop("aspectRatio", None)
     profile = validate_authoring_profile(svg_authoring_profile)
@@ -306,18 +305,6 @@ def _generation_route_digest(payload: Mapping[str, Any]) -> str:
     return sha256_prefixed(encoded)
 
 
-def _installed_generation_route_resolver() -> GenerationRouteResolver | None:
-    try:
-        from services.authored_vnext.generation_route import (
-            resolve_generation_route,
-        )
-    except ModuleNotFoundError as error:
-        if error.name == "services.authored_vnext.generation_route":
-            return None
-        raise
-    return resolve_generation_route
-
-
 async def _resolve_generation_route_receipt(
     request: PresentationGenerationRequestV2,
     *,
@@ -341,66 +328,49 @@ async def _resolve_generation_route_receipt(
         return GenerationRouteReceiptV1.model_validate({
             **payload, "receiptDigest": _generation_route_digest(payload),
         })
-    active_resolver = resolver or _installed_generation_route_resolver()
-    if active_resolver is None:
-        resolution: Mapping[str, Any] = {
-            "selectedRoute": "authored-fallback",
-            "narrativeIrDigest": None,
-            "fallbackReason": "route_resolver_unavailable",
-        }
+    from services.public_generation_route import resolve_authored_generation_route
+
+    active_resolver = resolver or resolve_authored_generation_route
+    try:
+        raw_resolution = active_resolver(
+            generation_mode=request.generation_mode,
+            source_mode=request.source_mode,
+            authored_style=request.authored_style,
+            **({"page_size": request.page_size, "orientation": request.orientation}
+               if request.page_size is not None else {"aspect_ratio": request.aspect_ratio}),
+            slide_count=slide_count,
+        )
+        if inspect.isawaitable(raw_resolution):
+            raw_resolution = await raw_resolution
+    except generation_route_error_types() as error:
+        raise _public_error(422, getattr(error, "code", str(error))) from error
+    except Exception as error:
+        raise _public_error(503, "generation_route_resolver_unavailable") from error
+    if isinstance(raw_resolution, GenerationRouteReceiptV1):
+        resolution = raw_resolution.model_dump(mode="json", by_alias=True)
+    elif isinstance(raw_resolution, Mapping):
+        resolution = raw_resolution
     else:
-        try:
-            raw_resolution = active_resolver(
-                generation_mode=request.generation_mode,
-                design_pack_pin=(
-                    request.design_pack_pin.model_dump(mode="json", by_alias=True)
-                    if request.design_pack_pin is not None
-                    else None
-                ),
-                source_mode=request.source_mode,
-                authored_style=request.authored_style,
-                **({"page_size": request.page_size, "orientation": request.orientation}
-                   if request.page_size is not None else {"aspect_ratio": request.aspect_ratio}),
-                slide_count=slide_count,
-            )
-            if inspect.isawaitable(raw_resolution):
-                raw_resolution = await raw_resolution
-        except generation_route_error_types() as error:
-            raise _public_error(422, getattr(error, "code", str(error))) from error
-        except Exception as error:
-            raise _public_error(503, "generation_route_resolver_unavailable") from error
-        if isinstance(raw_resolution, GenerationRouteReceiptV1):
-            resolution = raw_resolution.model_dump(mode="json", by_alias=True)
-        elif isinstance(raw_resolution, Mapping):
-            resolution = raw_resolution
-        else:
-            raise _public_error(503, "generation_route_resolution_invalid")
+        raise _public_error(503, "generation_route_resolution_invalid")
 
     selected_route = resolution.get("selectedRoute") or resolution.get(
         "selected_route"
     )
+    # Only the authored route remains; the design-pack (source-native) route
+    # was removed on 2026-11-03.
+    if selected_route != "authored-fallback":
+        raise _public_error(503, "generation_route_resolution_invalid")
     narrative_ir_digest = resolution.get("narrativeIrDigest") or resolution.get(
         "narrative_ir_digest"
     )
     fallback_reason = resolution.get("fallbackReason") or resolution.get(
         "fallback_reason"
-    )
-    resolved_design_pack_pin = resolution.get("designPackPin") or resolution.get(
-        "design_pack_pin"
-    )
-    if selected_route == "authored-fallback" and not fallback_reason:
-        fallback_reason = "resolver_selected_authored_fallback"
+    ) or "resolver_selected_authored_fallback"
     receipt_payload: dict[str, Any] = {
         "schemaVersion": "generation-route-receipt/v1",
         "requestedMode": request.generation_mode,
         "selectedRoute": selected_route,
-        "designPackPin": (
-            resolved_design_pack_pin
-            if isinstance(resolved_design_pack_pin, Mapping)
-            else request.design_pack_pin.model_dump(mode="json", by_alias=True)
-            if request.design_pack_pin is not None
-            else None
-        ),
+        "designPackPin": None,
         "narrativeIrDigest": narrative_ir_digest,
         "fallbackReason": fallback_reason,
         "outputCapability": "fidelity",
@@ -836,32 +806,17 @@ class SqlPublicV2Orchestrator:
                 mode="json",
                 by_alias=True,
             )
-            source_native_route = (
-                generation_route_receipt.selected_route == "source-native"
-            )
-            effective_generation_engine = (
-                "authored" if source_native_route else _effective_generation_engine(request)
-            )
+            effective_generation_engine = _effective_generation_engine(request)
             internal_generation_mode = (
-                "registered-template"
-                if source_native_route
-                else "free-design"
+                "free-design"
                 if request.source_mode in {"source_content_restyle", "raster_reconstruction"}
                 else request.generation_mode
-            )
-            internal_design_pack_pin = (
-                generation_route_receipt.design_pack_pin.model_dump(
-                    mode="json", by_alias=True
-                )
-                if generation_route_receipt.design_pack_pin is not None
-                else None
             )
             internal_request = resolve_internal_generation_request(
                 request,
                 slide_count=slide_count,
                 reference_ids=reference_ids,
                 internal_generation_mode=internal_generation_mode,
-                internal_design_pack_pin=internal_design_pack_pin,
                 effective_generation_engine=effective_generation_engine,
             )
             from services.svg_common_header_title_budget import (
@@ -908,7 +863,7 @@ class SqlPublicV2Orchestrator:
                 )
             except ValueError as error:
                 if str(error).startswith(
-                    ("document_canvas", "authored_canvas", "authored_portrait", "design_pack_canvas")
+                    ("document_canvas", "authored_canvas", "authored_portrait")
                 ):
                     raise _public_error(422, str(error)) from error
                 raise
@@ -1042,7 +997,6 @@ class SqlPublicV2Orchestrator:
                             else None
                         ),
                         "generation_mode": internal_generation_mode,
-                        "design_pack_pin": internal_design_pack_pin,
                         "generation_engine": effective_generation_engine,
                     },
                     asset_ids=asset_ids,

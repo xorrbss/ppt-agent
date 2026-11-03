@@ -577,7 +577,6 @@ async def check_if_api_request_is_valid(
             str(error).startswith("document_canvas")
             or str(error).startswith("authored_canvas")
             or str(error).startswith("authored_portrait")
-            or str(error).startswith("design_pack_canvas")
         ):
             raise HTTPException(status_code=422, detail=str(error)) from error
         raise
@@ -2269,7 +2268,6 @@ async def queue_presentation_generation(
             str(error).startswith("document_canvas")
             or str(error).startswith("authored_canvas")
             or str(error).startswith("authored_portrait")
-            or str(error).startswith("design_pack_canvas")
         ):
             raise HTTPException(status_code=422, detail=str(error)) from error
         raise

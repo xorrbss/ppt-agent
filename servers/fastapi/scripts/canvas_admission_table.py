@@ -12,8 +12,7 @@ Paths stop at canvas admission and touch neither HTTP nor a DB:
 * ``async`` - same file ``:1751-1764``. Skipped ``:1747`` (model preset).
 * ``v2`` - ``services/public_v2_orchestrator.py``: wire model validation;
   ``:650`` actor context; ``:724-728`` real ``_resolve_generation_route_receipt``
-  with the installed resolver (pinned design pack treated as registered, see
-  ``_v2_context``); ``:733-796`` shaping copied verbatim; ``:804-811`` canvas
+  with the installed resolver; ``:733-796`` shaping copied verbatim; ``:804-811`` canvas
   admission on the raw style id. Skipped ``:700-723`` (DB; the request's
   ``slide_count`` is used) and ``:798-803`` (master pin resolution, DB).
 
@@ -36,7 +35,6 @@ import sys
 import uuid
 from contextlib import contextmanager
 from pathlib import Path
-from types import SimpleNamespace
 from typing import Any, Iterator
 
 FASTAPI_ROOT = Path(__file__).resolve().parents[1]
@@ -46,7 +44,6 @@ if str(FASTAPI_ROOT) not in sys.path:
 from fastapi import HTTPException  # noqa: E402
 from pydantic import ValidationError  # noqa: E402
 
-import services.authored_vnext.generation_route as generation_route  # noqa: E402
 import utils.authored_styles as style_catalogue  # noqa: E402
 from models.public_v2_contracts import PresentationGenerationRequestV2  # noqa: E402
 from services.public_v2_orchestration_types import PublicRequestActor, PublicV2OrchestrationError  # noqa: E402
@@ -72,7 +69,7 @@ STYLES = ("default", "kbs-company-proposal", "osb-smart-banking", "hyundai-cultu
 # raster row would be a boundary rejection and the route itself unexercised.
 RASTER_EXTRA_STYLES = ("screenshot-blue",)
 STRATEGIES = ("omitted", "svg", "authored")
-PINS = ("free", "pack", "master")
+PINS = ("free", "master")
 SOURCES = ("topic", "restyle", "raster")
 EXTRA_FREE_TOPIC_MODES = ("brand-style", "fidelity-first")
 CALLERS = ("sync", "async", "v2")
@@ -80,7 +77,6 @@ KEY_FIELDS = ("caller", "canvas", "style", "strategy", "pins", "source", "mode")
 
 _DIGEST = "sha256:" + "a" * 64
 _HEX = "b" * 64
-DESIGN_PACK_PIN = {"designPackId": "baseline-pack", "version": 1, "digest": _DIGEST}
 MASTER_PIN = {"masterId": "master:baseline", "revision": 1, "digest": _DIGEST}
 MANIFEST_PIN = {"manifestId": "manifest-baseline", "digest": _DIGEST}
 CONTENT_POLICY = {"text": "verbatim"}
@@ -89,14 +85,14 @@ RASTER_APPROVAL_PIN = {
     "analysisDigest": _HEX, "sourceSha256": _HEX, "approvedRegionIds": [], "approvalDigest": _HEX,
 }
 _SNAPSHOT_ID = str(uuid.UUID(int=1))
-_MAPPED_PREFIXES = ("document_canvas", "authored_canvas", "authored_portrait", "design_pack_canvas")
+_MAPPED_PREFIXES = ("document_canvas", "authored_canvas", "authored_portrait")
 
 
 def axes() -> dict[str, Any]:
     return {
         "caller": list(CALLERS), "canvas": dict(CANVASES), "style": list(STYLES),
         "rasterExtraStyle": list(RASTER_EXTRA_STYLES), "strategy": list(STRATEGIES),
-        "pins": {"free": "generationMode omitted (auto)", "pack": "registered-template + designPackPin", "master": "masterPin"},  # noqa: E501
+        "pins": {"free": "generationMode omitted (auto)", "master": "masterPin"},
         "source": {"topic": None, "restyle": "source_content_restyle, verbatim, pptx", "raster": "raster_reconstruction"},  # noqa: E501
         "mode": {"freeTopicExtra": list(EXTRA_FREE_TOPIC_MODES)},
     }
@@ -105,7 +101,7 @@ def axes() -> dict[str, Any]:
 def combinations() -> Iterator[tuple[str, ...]]:
     for canvas, strategy, pins, source in itertools.product(CANVASES, STRATEGIES, PINS, SOURCES):
         styles = STYLES + (RASTER_EXTRA_STYLES if source == "raster" else ())
-        modes: tuple[str, ...] = ("registered-template",) if pins == "pack" else ("auto",)
+        modes: tuple[str, ...] = ("auto",)
         if pins == "free" and source == "topic":
             modes += EXTRA_FREE_TOPIC_MODES
         for style, mode in itertools.product(styles, modes):
@@ -119,9 +115,7 @@ def payload(caller: str, canvas: str, style: str, strategy: str, pins: str, sour
         fields["generationMode"] = mode
     if strategy != "omitted":
         fields["strategy"] = strategy
-    if pins == "pack":
-        fields["designPackPin"] = dict(DESIGN_PACK_PIN)
-    elif pins == "master":
+    if pins == "master":
         fields["masterPin"] = dict(MASTER_PIN)
     if source == "restyle":
         fields.update(sourceMode="source_content_restyle", sourceContentManifestPin=dict(MANIFEST_PIN),
@@ -194,22 +188,16 @@ async def run_v2(request: PresentationGenerationRequestV2) -> None:
     from services.public_v2_request_bridge import resolve_canvas_style_id, resolve_internal_generation_request
 
     slide_count = request.slide_count
-    receipt = await _resolve_generation_route_receipt(request, slide_count=slide_count, resolver=None)
-    source_native_route = receipt.selected_route == "source-native"
+    await _resolve_generation_route_receipt(request, slide_count=slide_count, resolver=None)
     internal_request = resolve_internal_generation_request(
         request,
         slide_count=slide_count,
         reference_ids=[uuid.UUID(value) for value in request.reference_snapshot_ids],
         internal_generation_mode=(
-            "registered-template" if source_native_route
-            else "free-design" if request.source_mode in {"source_content_restyle", "raster_reconstruction"}
+            "free-design" if request.source_mode in {"source_content_restyle", "raster_reconstruction"}
             else request.generation_mode
         ),
-        internal_design_pack_pin=(
-            receipt.design_pack_pin.model_dump(mode="json", by_alias=True)
-            if receipt.design_pack_pin is not None else None
-        ),
-        effective_generation_engine="authored" if source_native_route else _effective_generation_engine(request),
+        effective_generation_engine=_effective_generation_engine(request),
     )
     try:
         validate_authored_canvas_admission(internal_request, style_id=resolve_canvas_style_id(internal_request))
@@ -246,16 +234,12 @@ def _build_context() -> Iterator[None]:
       a build took 7.5 min). The catalogue is static for a run, so the YAML
       read and loaded list are memoized (callers get copies); the lookup logic
       of ``resolve_authored_style`` still runs every time. Verified identical.
-    * The installed v2 route resolver needs the owner ``submit_generation``
-      sets. Its ``load_pinned_design_pack`` reads the owner's pack store
-      (storage state, like the master pin), so the pinned pack is treated as
-      registered after the real ``normalize_design_pack_pin``; sync/async rows
-      likewise assume later pin checks pass. No sync/async step reads either.
+    * The v2 orchestrator runs under the actor context ``submit_generation``
+      sets; sync/async rows assume later pin checks (master) pass.
     """
     parsed: dict[str, Any] = {}
     loaded: dict[Any, list] = {}
-    originals = (style_catalogue._read_style_mapping, style_catalogue.load_authored_styles,
-                 generation_route.load_pinned_design_pack)
+    originals = (style_catalogue._read_style_mapping, style_catalogue.load_authored_styles)
 
     def read(source: Path) -> Any:
         if str(source) not in parsed:
@@ -267,20 +251,13 @@ def _build_context() -> Iterator[None]:
             loaded[styles_directory] = originals[1](styles_directory)
         return list(loaded[styles_directory])
 
-    def registered(*, owner_id: Any, design_pack_pin: object) -> Any:
-        pin = generation_route.normalize_design_pack_pin(design_pack_pin)
-        return SimpleNamespace(manifest=SimpleNamespace(
-            pack_id=pin["designPackId"], package_version=f"{pin['version']}.0.0", package_digest=pin["digest"]))
-
     actor = PublicRequestActor(owner_id=uuid.UUID(int=1), tenant_id="baseline", correlation_id="canvas-baseline")
     style_catalogue._read_style_mapping, style_catalogue.load_authored_styles = read, load
-    generation_route.load_pinned_design_pack = registered
     try:
         with _actor_context(actor):
             yield
     finally:
-        style_catalogue._read_style_mapping, style_catalogue.load_authored_styles = originals[:2]
-        generation_route.load_pinned_design_pack = originals[2]
+        style_catalogue._read_style_mapping, style_catalogue.load_authored_styles = originals
 
 
 def build_rows() -> list[dict[str, str]]:

@@ -1,6 +1,4 @@
 from dataclasses import FrozenInstanceError
-import hashlib
-from types import SimpleNamespace
 
 import pytest
 
@@ -8,10 +6,6 @@ from services.document_canvas import document_canvas_for_orientation
 from services.document_canvas_contain import (
     CanvasRect, ContainCssTypographyError, ContainTypographyError,
     build_contain_plan, validate_contain_css_typography, validate_contain_typography,
-)
-from services.authored_vnext.source_native_canvas import (
-    apply_source_native_canvas_placement,
-    build_source_native_canvas_placement,
 )
 
 
@@ -77,29 +71,6 @@ def test_dense_css_floor_applies_contain_scale_once_without_pt_reinterpretation(
             policy_id="dense-source-7px", measurement_space="source-local")
 
 
-def test_source_native_final_html_is_digest_bound_to_one_fixed_geometry_transform():
-    placement = build_source_native_canvas_placement(
-        design_canvas=SimpleNamespace(width=1280, height=720, unit="px"),
-        target_canvas=document_canvas_for_orientation("portrait"),
-    )
-    final_html, receipt = apply_source_native_canvas_placement(
-        "<html><head></head><body><main data-qid='slide'>kept</main></body></html>",
-        placement=placement,
-        font_policy_id="dense-source-7px",
-    )
-    assert receipt["finalHtmlDigest"] == "sha256:" + hashlib.sha256(
-        final_html.encode("utf-8")
-    ).hexdigest()
-    assert receipt["scale"] == 0.5625
-    assert "kept" in final_html
-    with pytest.raises(ValueError, match="viewport_dependent_geometry"):
-        apply_source_native_canvas_placement(
-            "<html><style>main{width:100vw}</style><body></body></html>",
-            placement=placement,
-            font_policy_id="dense-source-7px",
-        )
-
-
 @pytest.mark.parametrize("width", [0, -1, True, "1280", float("nan"), float("inf")])
 def test_unmeasurable_source_rejected(width):
     with pytest.raises(ValueError):
@@ -117,16 +88,6 @@ def test_font_measurement_and_policy_must_be_explicit():
             minimum_physical_pt=9.5, policy_id="test", measurement_space="source-local")
 
 
-def test_source_master_emu_geometry_uses_css_pixel_space_before_contain():
-    placement = build_source_native_canvas_placement(
-        design_canvas=SimpleNamespace(width=12192000, height=6858000, unit="emu"),
-        target_canvas=document_canvas_for_orientation("portrait"),
-    )
-    assert placement.plan.source_rect.width == 1280
-    assert placement.plan.source_rect.height == 720
-    assert placement.plan.scale == 0.5625
-
-
 def test_fixed_master_responsive_css_validates_every_branch_without_changing_source():
     from utils.source_canvas_css import flatten_layout_conditions
     from utils.renderer_isolation import _validate_css
@@ -135,35 +96,3 @@ def test_fixed_master_responsive_css_validates_every_branch_without_changing_sou
     _validate_css(flattened)
     assert "80vw" in flattened and "50vw" in flattened
     assert "@media" not in flattened
-
-
-def test_target_body_typography_is_set_before_allocation_without_changing_caption():
-    from services.authored_vnext.source_native_target_fit import target_typography_slots
-    slots = [{"slotId": "body", "sourceFlowRole": "body", "textStyle": {"fontSize": 22}},
-             {"slotId": "caption", "sourceFlowRole": "caption", "textStyle": {"fontSize": 16}}]
-    target = target_typography_slots(slots, contain_scale=0.5625,
-        minimum_effective_font_px=12 * 12700 / 9000,
-        policy_id="source-native/min-body-12-physical-pt")
-    physical = target[0]["textStyle"]["fontSize"] * 0.5625 * 9000 / 12700
-    assert 12 <= physical < 12.01
-    assert target[1] == slots[1]
-    assert slots[0]["textStyle"]["fontSize"] == 22
-
-
-def test_source_native_exempt_title_cannot_mask_missing_body_telemetry():
-    from services.authored_vnext.source_native_canvas import (
-        source_native_font_policy, validate_source_native_canvas_capture,
-    )
-    placement = build_source_native_canvas_placement(
-        design_canvas=SimpleNamespace(width=1280, height=720, unit="px"),
-        target_canvas=document_canvas_for_orientation("portrait"),
-    )
-    digest = "sha256:" + hashlib.sha256(b"html").hexdigest()
-    with pytest.raises(ValueError, match="font_measurement_missing"):
-        validate_source_native_canvas_capture(html="html", capture_html_digest=digest,
-            receipt={"finalHtmlDigest": digest}, placement=placement,
-            policy=source_native_font_policy(source_mode=None, placement=placement),
-            text_expected=True, normalized_metrics={"elements": [
-                {"qid": "source-flow:title", "semantic_role": "title", "effective_font_size": 24},
-                {"qid": "source-flow:body", "semantic_role": "body", "effective_font_size": None},
-            ]})

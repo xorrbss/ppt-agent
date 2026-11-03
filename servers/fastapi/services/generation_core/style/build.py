@@ -127,13 +127,13 @@ def build_style_context(
     reference_images: Mapping[str, Sequence[Mapping[str, str]]] | None = None,
     master_rules: Mapping[str, object] | None = None,
     master_pin: Mapping[str, object] | None = None,
-    design_pack_rules: Mapping[str, object] | None = None,
+    design_reference_rules: Mapping[str, object] | None = None,
 ) -> StyleContext:
     """Compose the request's brand tokens with the resolved style preset.
 
     ``style`` is whatever the caller already resolved (an ``AuthoredStyle`` or
     a source-restyle catalogue style); this function reads only the fields
-    every style preset exposes. ``master_rules`` / ``design_pack_rules`` are
+    every style preset exposes. ``master_rules`` / ``design_reference_rules`` are
     already-projected rule sets (see the sibling ``*_projection`` modules),
     never markup.
     """
@@ -144,7 +144,7 @@ def build_style_context(
     # Precedence, high to low: an explicit request override; a published
     # company-standard master's own tokens (it is the org's actual brand, so
     # it outranks the generic style preset); the style preset's own tokens;
-    # a hard default. Without this, master_rules/design_pack_rules would sit
+    # a hard default. Without this, master_rules/design_reference_rules would sit
     # in the snapshot unread -- the svg author prompt only ever looks at
     # tokens.primary/heading_font/body_font (see project_style.py).
     master_tokens = (master_rules or {}).get("tokens") if master_rules else None
@@ -187,7 +187,7 @@ def build_style_context(
         reference_images={role: tuple(refs) for role, refs in (reference_images or {}).items()},
         master_rules=master_rules,
         master_pin=master_pin,
-        design_pack_rules=design_pack_rules,
+        design_reference_rules=design_reference_rules,
     )
 
 

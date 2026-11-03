@@ -164,8 +164,10 @@ SERVER_STAMPED_ATTRIBUTES: Mapping[str, str] = {
     "data-source-block-id": "services/source_content/text_stamping.py",
     "data-qid": "services/source_content/source_stamp_dom.py",
     "data-semantic-role": "services/source_content/source_stamp_dom.py",
-    "data-source-image-kind": "services/authored_vnext/source_native_generation.py",
-    "data-source-image-aspect-ratio": "services/authored_vnext/source_native_generation.py",
+    # Stamped by the design-pack route (removed 2026-11-03) on decks it made;
+    # utils/slide_capture.py still reads them when such a deck is re-captured.
+    "data-source-image-kind": "services/authored_vnext/source_native_generation.py (removed)",
+    "data-source-image-aspect-ratio": "services/authored_vnext/source_native_generation.py (removed)",
 }
 
 

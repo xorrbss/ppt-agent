@@ -201,7 +201,6 @@ def evaluate_a4_request(
         source_content=getattr(request, "source_mode", None) == "source_content_restyle",
         has_fixed_master=(
             getattr(request, "master_pin", None) is not None
-            or getattr(request, "design_pack_pin", None) is not None
             or getattr(request, "_authored_master_pin", None) is not None
         ),
         exact_source=(

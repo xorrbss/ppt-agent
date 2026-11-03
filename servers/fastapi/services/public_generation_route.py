@@ -16,6 +16,55 @@ from utils.hashing import canonical_json_digest
 LEGACY_RESTYLE_FIT_POLICY_KEY = "_internal_composer_fit_policy"
 
 
+class GenerationRouteError(ValueError):
+    """A deterministic route-resolution rejection (a client-facing 422)."""
+
+    code = "generation_route_invalid"
+
+    def __init__(self, code: str | None = None) -> None:
+        resolved = code or self.code
+        super().__init__(resolved)
+        self.code = resolved
+
+
+#: Generation modes a public request may still ask for. ``registered-template``
+#: ran the design-pack (source-native) route, removed on 2026-11-03.
+ROUTABLE_GENERATION_MODES = frozenset({"auto", "brand-style", "free-design", "fidelity-first", "editable-first"})
+
+
+def resolve_authored_generation_route(
+    *,
+    generation_mode: str | None = None,
+    source_mode: str | None = None,
+    authored_style: str | None = None,
+    **_: Any,
+) -> dict[str, object]:
+    """Resolve an authored-strategy public request to its route, once, at admission.
+
+    Every authored request now runs the authored pipeline; the receipt keeps
+    its ``designPackPin``/``narrativeIrDigest`` fields (always null) because
+    stored receipts of earlier operations are digest-sealed with them.
+    """
+
+    mode = (generation_mode or "auto").strip()
+    if mode not in ROUTABLE_GENERATION_MODES:
+        raise GenerationRouteError("generation_mode_invalid")
+    if mode == "editable-first":
+        raise GenerationRouteError("capability_not_supported")
+    if source_mode == "source_content_restyle":
+        if not str(authored_style or "").strip():
+            raise GenerationRouteError("source_content_template_required")
+        fallback_reason = "source-content-authored-reflow"
+    else:
+        fallback_reason = "authored-route"
+    return {
+        "selectedRoute": "authored-fallback",
+        "designPackPin": None,
+        "narrativeIrDigest": None,
+        "fallbackReason": fallback_reason,
+    }
+
+
 def effective_generation_engine(
     request: PresentationGenerationRequestV2,
 ) -> str:
@@ -26,12 +75,6 @@ def effective_generation_engine(
     if resolve_generation_strategy(request) == "svg":
         return "authored"
     if request.source_mode == "source_content_restyle":
-        return "authored"
-    if request.generation_mode == "registered-template":
-        # The design-pack route receipt and source-native handler own this
-        # operation.  Sending it through bounded Deck IR preflight would reject
-        # valid packs with more than ten requested output pages before the
-        # provider-free capacity admission can run.
         return "authored"
     if "generation_mode" in request.model_fields_set:
         return "deck-ir"

@@ -3,20 +3,8 @@ from __future__ import annotations
 
 from fastapi import HTTPException
 
-from services.generation_core.style.design_pack_projection import (
-    DesignPackProjectionError,
-    assert_design_pack_projects,
-)
 from utils.env_settings.authored_vnext import is_authored_vnext_master_enabled
 from utils.hashing import canonical_json_digest
-
-
-def _design_pack_admission_reason() -> str:
-    try:
-        assert_design_pack_projects()
-    except DesignPackProjectionError as error:
-        return str(error)
-    raise AssertionError("design pack projection unexpectedly succeeded")
 
 
 def source_svg_capability(*, strategy: str | None, source_content: bool | None,
@@ -75,16 +63,13 @@ def svg_creation_admission_violation(request: object) -> str | None:
     allowed_source_modes = {None, "source_content_restyle", "raster_reconstruction"}
     blocked = (
         (getattr(request, "source_mode", None) not in allowed_source_modes, "svg_source_restyle_not_supported"),
-        (getattr(request, "design_pack_pin", None), _design_pack_admission_reason),
         (getattr(request, "generation_engine", None) == "deck-ir", "svg_engine_conflict"),
-        (getattr(request, "generation_mode", "auto") == "registered-template", "svg_registered_template_not_supported"),
     )
     for condition, code in blocked:
         if condition:
-            return code() if callable(code) else code
+            return code
     references = (
         getattr(request, "svg_template_pin", None),
-        getattr(request, "svg_design_reference_pin", None),
         getattr(request, "svg_design_reference_snapshot_id", None),
         getattr(request, "master_pin", None),
     )
@@ -188,28 +173,12 @@ def _resolve_design_reference(request: object, canvas: object) -> dict | None:
         if not isinstance(selection, dict):
             raise HTTPException(status_code=422, detail="svg_template_admission_required")
         return selection.get("style_projection") or None
-    pin = getattr(request, "svg_design_reference_pin", None)
-    if pin is None:
-        if getattr(request, "svg_design_reference_snapshot_id", None) is not None:
-            uploaded = getattr(request, "_svg_uploaded_design_reference", None)
-            if not isinstance(uploaded, dict):
-                raise HTTPException(status_code=422, detail="svg_uploaded_design_reference_admission_required")
-            return uploaded
-        return None
-    from services.generation_core.style.design_pack_projection import resolve_design_pack_reference
-    from utils.owner_context import get_current_owner_id
-
-    owner_id = get_current_owner_id()
-    if owner_id is None:
-        raise HTTPException(status_code=401, detail="svg_design_reference_owner_required")
-    try:
-        return resolve_design_pack_reference(
-            owner_id=owner_id, pin=pin, width=canvas.width_px, height=canvas.height_px,
-        )
-    except DesignPackProjectionError as error:
-        code = str(error)
-        status = 404 if code == "design_pack_pin_not_found" else 409 if "digest" in code else 422
-        raise HTTPException(status_code=status, detail=code) from error
+    if getattr(request, "svg_design_reference_snapshot_id", None) is not None:
+        uploaded = getattr(request, "_svg_uploaded_design_reference", None)
+        if not isinstance(uploaded, dict):
+            raise HTTPException(status_code=422, detail="svg_uploaded_design_reference_admission_required")
+        return uploaded
+    return None
 
 
 async def prepare_private_svg_recovery_authority(request: object, session) -> list[dict]:
@@ -269,7 +238,7 @@ def pin_svg_style(request: object) -> dict:
         canvas = request_canvas_contract(request)
         source_restyle = getattr(request, "source_mode", None) in {"source_content_restyle", "raster_reconstruction"}
         master_rules, master_pin = _resolve_master_rules(request, canvas)
-        design_pack_rules = _resolve_design_reference(request, canvas)
+        design_reference_rules = _resolve_design_reference(request, canvas)
         try:
             from services.svg_common_header_design_plan import seal_new_header_design_plan
             if fresh_readability:
@@ -290,7 +259,7 @@ def pin_svg_style(request: object) -> dict:
                 width=canvas.width_px, height=canvas.height_px,
                 source_template=source_restyle,
                 request=request, master_rules=master_rules, master_pin=master_pin,
-                design_pack_rules=design_pack_rules,
+                design_reference_rules=design_reference_rules,
             )
             if source_restyle:
 

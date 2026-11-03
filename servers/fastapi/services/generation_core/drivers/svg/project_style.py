@@ -108,32 +108,35 @@ def project_style(
     if context.master_rules is not None:
         result["master_template"] = context.master_rules
         result["master_pin"] = context.master_pin
-    if context.design_pack_rules is not None:
+    if context.design_reference_rules is not None:
+        # An uploaded design reference or an SVG user template's style
+        # projection. The snapshot key keeps its historical name: stored
+        # snapshots are digest-bound and replayed by that key.
         result["design_pack_template"] = {
-            key: value for key, value in context.design_pack_rules.items()
+            key: value for key, value in context.design_reference_rules.items()
             if key not in {"references", "diagnostics"}
         }
         if context.master_rules is None:
-            result["tokens"]["palette"] = context.design_pack_rules.get("tokens", {}).get("palette", [])
-            if context.design_pack_rules.get("version") == "svg-uploaded-design-reference/v1":
-                identity_tokens = context.design_pack_rules.get("tokens", {})
+            result["tokens"]["palette"] = context.design_reference_rules.get("tokens", {}).get("palette", [])
+            if context.design_reference_rules.get("version") == "svg-uploaded-design-reference/v1":
+                identity_tokens = context.design_reference_rules.get("tokens", {})
                 for key in ("background", "foreground", "accent"):
                     if key in identity_tokens:
                         result["tokens"][key] = identity_tokens[key]
                 if "accent" in identity_tokens:
                     result["tokens"]["primary"] = identity_tokens["accent"]
                 for role in ("heading", "body"):
-                    family = context.design_pack_rules.get("fonts", {}).get(role, {}).get("family")
+                    family = context.design_reference_rules.get("fonts", {}).get(role, {}).get("family")
                     if family:
                         result["tokens"][f"{role}_font"] = family
-        if context.design_pack_rules.get("version") == "svg-uploaded-design-reference/v1":
+        if context.design_reference_rules.get("version") == "svg-uploaded-design-reference/v1":
             # A role without its own uploaded sample uses uploaded content art
             # direction rather than an unrelated catalogue cover or ending.
-            result["references"] = context.design_pack_rules.get("references", {})
-            result["reference_examples"] = context.design_pack_rules.get("reference_examples", [])
+            result["references"] = context.design_reference_rules.get("references", {})
+            result["reference_examples"] = context.design_reference_rules.get("reference_examples", [])
         else:
-            result["references"] = {**references, **context.design_pack_rules.get("references", {})}
-            result["reference_examples"] += context.design_pack_rules.get("reference_examples", [])
+            result["references"] = {**references, **context.design_reference_rules.get("references", {})}
+            result["reference_examples"] += context.design_reference_rules.get("reference_examples", [])
     return result
 
 

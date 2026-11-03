@@ -77,6 +77,13 @@ class PublicWireModel(BaseModel):
 
 
 class DesignPackPinV1(PublicWireModel):
+    """A design-pack pin as recorded on a historical route receipt.
+
+    The design-pack route was removed on 2026-11-03; new receipts always carry
+    ``designPackPin: null``. The type stays so the digest-sealed receipts of
+    earlier operations still validate and project.
+    """
+
     design_pack_id: str = Field(pattern=PUBLIC_ID_PATTERN)
     version: int = Field(ge=1)
     digest: str = Field(pattern=DIGEST_PATTERN)
@@ -132,7 +139,6 @@ class PresentationGenerationRequestV2(PublicWireModel):
         default=None, exclude_if=lambda value: value is None,
     )
     generation_mode: GenerationMode = "auto"
-    design_pack_pin: DesignPackPinV1 | None = None
     generation_engine: Literal["authored", "deck-ir"] | None = "authored"
     content: str = Field(min_length=1, max_length=200_000)
     slides_markdown: list[str] | None = Field(default=None, max_length=100)
@@ -143,7 +149,6 @@ class PresentationGenerationRequestV2(PublicWireModel):
     aspect_ratio: Literal["16:9", "4:3", "9:16", "9:13", "1:1", "21:9"] = "16:9"
     svg_canvas: SvgCanvasInput | None = Field(default=None, exclude_if=lambda value: value is None)
     svg_design_reference_snapshot_id: UUID | None = Field(default=None, exclude_if=lambda value: value is None)
-    svg_design_reference_pin: DesignPackPinV1 | None = Field(default=None, exclude_if=lambda value: value is None)
     svg_template_pin: SvgTemplatePinInput | None = Field(default=None, exclude_if=lambda value: value is None)
     svg_template_mode: Literal["free-design", "template-redesign"] | None = Field(default=None, exclude_if=lambda value: value is None)
     svg_template_frame_map: dict[str, str] | None = Field(default=None, exclude_if=lambda value: value is None)
@@ -215,19 +220,18 @@ class PresentationGenerationRequestV2(PublicWireModel):
             raise ValueError("common_header_svg_strategy_required")
         if self.common_header_cover_exception and self.common_header_mode != "uniform":
             raise ValueError("common_header_cover_exception_requires_uniform")
-        references = (self.master_pin, self.svg_design_reference_pin, self.svg_design_reference_snapshot_id)
-        if (self.svg_design_reference_pin is not None or self.svg_design_reference_snapshot_id is not None) and sum(value is not None for value in references) > 1:
+        if self.svg_design_reference_snapshot_id is not None and self.master_pin is not None:
             raise ValueError("svg_design_reference_conflict")
-        if (self.svg_design_reference_pin is not None or self.svg_design_reference_snapshot_id is not None) and (self.strategy != "svg" or self.design_pack_pin is not None or self.generation_mode not in {None, "auto", "free-design"}):
+        if self.svg_design_reference_snapshot_id is not None and (
+                self.strategy != "svg" or self.generation_mode not in {None, "auto", "free-design"}):
             raise ValueError("svg_design_reference_strategy_required")
         if self.strategy == "authored" and (self.svg_canvas is not None or self.aspect_ratio == "4:3"):
             raise ValueError("svg_canvas_strategy_required")
         if self.generation_mode == "editable-first":
             raise ValueError("capability_not_supported: editable-first")
-        if self.generation_mode == "registered-template" and self.design_pack_pin is None and self.source_mode is None:
-            raise ValueError("design_pack_pin_required")
-        if self.design_pack_pin is not None and self.generation_mode != "registered-template":
-            raise ValueError("design_pack_pin_requires_registered_template")
+        if self.generation_mode == "registered-template":
+            # The design-pack route this mode selected was removed on 2026-11-03.
+            raise ValueError("registered_template_removed")
         if self.source_mode is None:
             if (
                 self.source_content_manifest_pin is not None

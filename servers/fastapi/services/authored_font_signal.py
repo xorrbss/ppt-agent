@@ -14,9 +14,9 @@ not dominate it.
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
+from statistics import median as _median
 
 from services.authored_composition_policy import _is_body_role
-from services.authored_vnext.composition_capacity import _median
 
 
 def _element_role(item: Mapping[str, object]) -> str:

@@ -66,8 +66,7 @@ def source_content_admission_carrier(
         for name in (
             "page_size", "orientation", "aspect_ratio", "svg_canvas",
             "content_policy", "authored_style", "generation_mode",
-            "generation_engine", "design_pack_pin", "master_pin",
-            "svg_design_reference_pin", "svg_design_reference_snapshot_id",
+            "generation_engine", "master_pin", "svg_design_reference_snapshot_id",
             "svg_template_pin", "svg_template_mode", "svg_template_frame_map",
         ):
             setattr(carrier, name, getattr(generation_request, name, None))

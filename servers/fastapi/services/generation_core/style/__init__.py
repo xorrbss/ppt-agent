@@ -1,1 +1,1 @@
-"""StyleContext: preset + request brand + master/design-pack rules, format-neutral."""
+"""StyleContext: preset + request brand + master/design-reference rules, format-neutral."""

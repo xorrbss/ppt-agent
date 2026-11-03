@@ -26,14 +26,12 @@ from api.v2.orchestration import (
     get_public_request_actor,
 )
 from api.v2.router import API_V2_PUBLIC_ROUTER
-from models.generate_presentation_request import GeneratePresentationRequest
 from services import public_v2_orchestrator
 
 
-def test_generation_mode_contract_and_server_owned_route_receipt(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    with pytest.raises(ValidationError, match="design_pack_pin_required"):
+def test_generation_mode_contract_and_server_owned_route_receipt() -> None:
+    # The design-pack route (registered-template) was removed on 2026-11-03.
+    with pytest.raises(ValidationError, match="registered_template_removed"):
         PresentationGenerationRequestV2(
             content="Registered template deck",
             generationMode="registered-template",
@@ -44,27 +42,16 @@ def test_generation_mode_contract_and_server_owned_route_receipt(
             generationMode="editable-first",
         )
 
-    pin = {
-        "designPackId": "registered.enterprise-blue",
-        "version": 7,
-        "digest": "sha256:" + ("1" * 64),
-    }
     request = PresentationGenerationRequestV2(
-        content="Registered template deck",
-        generationMode="registered-template",
-        designPackPin=pin,
-        generationEngine="authored",
+        content="Brand style deck",
+        generationMode="brand-style",
+        strategy="authored",
     )
-    assert public_v2_orchestrator._effective_generation_engine(request) == "authored"
-
     captured: dict[str, object] = {}
 
     def resolve(**kwargs: object) -> dict[str, object]:
         captured.update(kwargs)
-        return {
-            "selectedRoute": "source-native",
-            "narrativeIrDigest": "sha256:" + ("2" * 64),
-        }
+        return {"selectedRoute": "authored-fallback", "fallbackReason": "authored-route"}
 
     receipt = asyncio.run(
         public_v2_orchestrator._resolve_generation_route_receipt(
@@ -74,16 +61,15 @@ def test_generation_mode_contract_and_server_owned_route_receipt(
         )
     )
     assert captured == {
-        "generation_mode": "registered-template",
-        "design_pack_pin": pin,
+        "generation_mode": "brand-style",
         "source_mode": None,
         "authored_style": None,
         "slide_count": 10,
         "aspect_ratio": "16:9",
     }
-    assert receipt.selected_route == "source-native"
+    assert receipt.selected_route == "authored-fallback"
+    assert receipt.design_pack_pin is None
     assert receipt.output_capability == "fidelity"
-    assert receipt.design_pack_pin is not None
     sealed = receipt.model_dump(mode="json", by_alias=True)
     assert GenerationRouteReceiptV1.model_validate(sealed) == receipt
     with pytest.raises(ValidationError, match="receiptDigest"):
@@ -91,34 +77,33 @@ def test_generation_mode_contract_and_server_owned_route_receipt(
             {**sealed, "receiptDigest": "sha256:" + ("0" * 64)}
         )
 
-    monkeypatch.setattr(
-        public_v2_orchestrator,
-        "_installed_generation_route_resolver",
-        lambda: None,
-    )
-    # An explicit authored request reaches the legacy deck-ir/narrative-IR
-    # resolver path exactly as before; the resolver-unavailable fallback
-    # still applies there.
-    fallback_request = PresentationGenerationRequestV2(
-        content="Brand style deck",
-        generationMode="brand-style",
-        strategy="authored",
-    )
-    fallback = asyncio.run(
+    # A resolver may no longer select the removed source-native route.
+    def removed_route(**kwargs: object) -> dict[str, object]:
+        return {"selectedRoute": "source-native", "narrativeIrDigest": "sha256:" + ("2" * 64)}
+
+    with pytest.raises(PublicV2OrchestrationError) as removed:
+        asyncio.run(
+            public_v2_orchestrator._resolve_generation_route_receipt(
+                request, slide_count=10, resolver=removed_route,
+            )
+        )
+    assert removed.value.status_code == 503
+    assert removed.value.reason_code == "generation_route_resolution_invalid"
+
+    # The installed resolver: an explicit authored request takes the authored route.
+    installed = asyncio.run(
         public_v2_orchestrator._resolve_generation_route_receipt(
-            fallback_request,
+            request,
             slide_count=10,
             resolver=None,
         )
     )
-    assert fallback.selected_route == "authored-fallback"
-    assert fallback.fallback_reason == "route_resolver_unavailable"
-    assert public_v2_orchestrator._effective_generation_engine(fallback_request) == (
-        "deck-ir"
-    )
+    assert installed.selected_route == "authored-fallback"
+    assert installed.fallback_reason == "authored-route"
+    assert public_v2_orchestrator._effective_generation_engine(request) == "deck-ir"
 
     # The same generationMode with strategy omitted is svg by default now --
-    # it never reaches the deck-ir/narrative-IR resolver at all.
+    # it never reaches the authored resolver at all.
     svg_default_request = PresentationGenerationRequestV2(
         content="Brand style deck",
         generationMode="brand-style",
@@ -141,34 +126,32 @@ def test_generation_mode_contract_and_server_owned_route_receipt(
         generationEngine="authored",
     )
     assert public_v2_orchestrator._effective_generation_engine(legacy) == "authored"
-    durable = GeneratePresentationRequest(
-        content=request.content,
-        generationMode=request.generation_mode,
-        designPackPin=pin,
-        generationEngine="deck-ir",
-    ).model_dump(mode="json", by_alias=True)
-    assert durable["generationMode"] == "registered-template"
-    assert durable["designPackPin"] == pin
 
 
-@pytest.mark.parametrize("mode", ["auto", "registered-template", "free-design"])
-def test_source_restyle_uses_authored_without_private_design_pack(
-    mode: str, monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    from services.authored_vnext import generation_route
+def test_historical_source_native_receipts_still_validate() -> None:
+    # Operations admitted to the removed design-pack route keep their sealed
+    # receipt; status projection and the export integrity gate still read it.
+    unsigned = {
+        "schemaVersion": "generation-route-receipt/v1",
+        "requestedMode": "registered-template",
+        "selectedRoute": "source-native",
+        "designPackPin": {"designPackId": "pack-1", "version": 1, "digest": "sha256:" + "1" * 64},
+        "narrativeIrDigest": None,
+        "fallbackReason": None,
+        "outputCapability": "fidelity",
+    }
+    receipt = GenerationRouteReceiptV1.model_validate(
+        {**unsigned, "receiptDigest": public_v2_orchestrator._generation_route_digest(unsigned)})
+    assert receipt.selected_route == "source-native"
 
-    def no_pack_lookup(**kwargs):
-        pytest.fail("source restyle must not require a registered Design Pack")
 
-    monkeypatch.setattr(generation_route, "resolve_internal_design_pack_pin", no_pack_lookup)
-    monkeypatch.setattr(generation_route, "load_pinned_design_pack", no_pack_lookup)
+@pytest.mark.parametrize("mode", ["auto", "free-design"])
+def test_source_restyle_uses_authored_reflow(mode: str) -> None:
+    from services.public_generation_route import GenerationRouteError, resolve_authored_generation_route
+
     request = PresentationGenerationRequestV2(
         content="Preserve the source document",
         generationMode=mode,
-        # "deck-ir" is retired as an explicit client selection; the override
-        # this test exercises (source restyle always resolves to authored,
-        # regardless of the requested engine) holds for the field's own
-        # default just as well.
         sourceMode="source_content_restyle",
         sourceContentManifestPin={
             "manifestId": str(uuid.uuid4()),
@@ -192,7 +175,7 @@ def test_source_restyle_uses_authored_without_private_design_pack(
 
     def resolve(**kwargs: object) -> dict[str, object]:
         captured.update(kwargs)
-        return generation_route.resolve_generation_route(owner_id=uuid.uuid4(), **kwargs)
+        return resolve_authored_generation_route(**kwargs)
 
     receipt = asyncio.run(
         public_v2_orchestrator._resolve_generation_route_receipt(
@@ -201,24 +184,14 @@ def test_source_restyle_uses_authored_without_private_design_pack(
             resolver=resolve,
         )
     )
-    assert request.design_pack_pin is None
     assert captured["source_mode"] == "source_content_restyle"
     assert captured["authored_style"] == "devax-first-ten"
     assert receipt.selected_route == "authored-fallback"
     assert receipt.fallback_reason == "source-content-authored-reflow"
     assert receipt.design_pack_pin is None
-    assert receipt.output_capability == "fidelity"
     assert public_v2_orchestrator._effective_generation_engine(request) == "authored"
-    sealed = receipt.model_dump(mode="json", by_alias=True)
-    assert GenerationRouteReceiptV1.model_validate(sealed) == receipt
-    with pytest.raises(generation_route.GenerationRouteError, match="source_content_design_pack_not_supported"):
-        generation_route.resolve_generation_route(
-            owner_id=uuid.uuid4(),
-            source_mode="source_content_restyle",
-            authored_style="devax-first-ten",
-            generation_mode="registered-template",
-            design_pack_pin={"designPackId": "legacy-pack"},
-        )
+    with pytest.raises(GenerationRouteError, match="source_content_template_required"):
+        resolve_authored_generation_route(source_mode="source_content_restyle", authored_style=" ")
 
 
 def test_public_generation_route_is_v2_202_and_bounded_to_100_slides() -> None:

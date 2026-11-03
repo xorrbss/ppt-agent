@@ -8,11 +8,10 @@ internal bridge object in ``services/public_v2_orchestrator.py`` was outside
 any try/except, so the pydantic ``ValidationError`` escaped as an unhandled
 500 instead of the orchestrator's normal 422 envelope.
 
-Finding 2: a ``registered-template`` + ``source_content_restyle`` request
-(design pack pin + restyle) is a deterministic "combination not supported"
-rejection (``services.authored_vnext.generation_route.GenerationRouteError``:
-``source_content_design_pack_not_supported``), not a resolver outage. Before
-the fix, ``_resolve_generation_route_receipt`` mapped every resolver
+Finding 2: a deterministic route-resolution rejection
+(``services.public_generation_route.GenerationRouteError``, e.g.
+``generation_mode_invalid``) is a client-facing 422, not a resolver outage.
+Before the fix, ``_resolve_generation_route_receipt`` mapped every resolver
 exception -- deterministic or not -- to 503
 ``generation_route_resolver_unavailable``.
 """
@@ -29,7 +28,7 @@ from models.public_v2_contracts import PresentationGenerationRequestV2
 from api.v2.orchestration import PublicV2OrchestrationError
 from models.generate_presentation_request import GeneratePresentationRequest
 from services import public_v2_orchestrator
-from services.authored_vnext import generation_route
+from services import public_generation_route
 from services.public_v2_admission_errors import (
     generation_request_admission_error_code,
     generation_route_error_types,
@@ -94,7 +93,6 @@ def test_raster_reconstruction_non_raster_style_is_422_not_500() -> None:
             slide_count=5,
             reference_ids=reference_ids,
             internal_generation_mode="free-design",
-            internal_design_pack_pin=None,
             effective_generation_engine="authored",
         )
     assert excinfo.value.status_code == 422
@@ -109,7 +107,6 @@ def test_raster_reconstruction_admits_the_raster_template_style() -> None:
         slide_count=5,
         reference_ids=reference_ids,
         internal_generation_mode="free-design",
-        internal_design_pack_pin=None,
         effective_generation_engine="authored",
     )
     assert internal_request.authored_style == "screenshot-blue"
@@ -122,7 +119,6 @@ def test_fresh_v2_request_pins_writing_policy_in_durable_payload() -> None:
         slide_count=5,
         reference_ids=[],
         internal_generation_mode=request.generation_mode,
-        internal_design_pack_pin=None,
         effective_generation_engine="authored",
     )
 
@@ -132,27 +128,13 @@ def test_fresh_v2_request_pins_writing_policy_in_durable_payload() -> None:
     assert GeneratePresentationRequest.model_validate(durable_payload).writing_policy == WRITING_POLICY_ID
 
 
-def test_pack_plus_restyle_route_resolution_is_422_not_503() -> None:
-    owner_id = uuid.uuid4()
-
+def test_deterministic_route_rejection_is_422_not_503() -> None:
     def resolver(**kwargs: object) -> dict[str, object]:
-        return generation_route.resolve_generation_route(owner_id=owner_id, **kwargs)
+        return public_generation_route.resolve_authored_generation_route(
+            **{**kwargs, "generation_mode": "registered-template"})
 
     request = PresentationGenerationRequestV2(
-        content="Design pack restyle",
-        generationMode="registered-template",
-        designPackPin={
-            "designPackId": "baseline-pack",
-            "version": 1,
-            "digest": "sha256:" + "a" * 64,
-        },
-        sourceMode="source_content_restyle",
-        sourceContentManifestPin={
-            "manifestId": "manifest-baseline",
-            "digest": "sha256:" + "a" * 64,
-        },
-        contentPolicy={"text": "verbatim"},
-        authoredStyle="default",
+        content="Brand style deck", generationMode="brand-style", strategy="authored",
     )
     with pytest.raises(PublicV2OrchestrationError) as excinfo:
         asyncio.run(
@@ -161,7 +143,17 @@ def test_pack_plus_restyle_route_resolution_is_422_not_503() -> None:
             )
         )
     assert excinfo.value.status_code == 422
-    assert excinfo.value.reason_code == "source_content_design_pack_not_supported"
+    assert excinfo.value.reason_code == "generation_mode_invalid"
+
+
+def test_registered_template_requests_are_rejected_after_the_design_pack_removal() -> None:
+    with pytest.raises(ValidationError, match="registered_template_removed"):
+        PresentationGenerationRequestV2(content="Deck", generationMode="registered-template")
+    with pytest.raises(ValidationError, match="registered_template_removed"):
+        GeneratePresentationRequest(content="Deck", n_slides=1, generation_mode="registered-template")
+    with pytest.raises(ValidationError):
+        PresentationGenerationRequestV2(content="Deck", designPackPin={
+            "designPackId": "baseline-pack", "version": 1, "digest": "sha256:" + "a" * 64})
 
 
 def test_generic_resolver_failure_is_still_503() -> None:
@@ -184,7 +176,7 @@ def test_generic_resolver_failure_is_still_503() -> None:
 
 
 def test_generation_route_error_types_resolves_the_installed_exception() -> None:
-    assert generation_route_error_types() == (generation_route.GenerationRouteError,)
+    assert generation_route_error_types() == (public_generation_route.GenerationRouteError,)
 
 
 def test_resolve_canvas_style_id_resolves_alias_for_a_gated_aspect_ratio() -> None:

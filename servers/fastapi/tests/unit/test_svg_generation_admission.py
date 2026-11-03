@@ -10,7 +10,6 @@ from models.authored_vnext.master.contract import DeckMasterContract
 from models.generate_presentation_request import AuthoredMasterPinInput, GeneratePresentationRequest
 from services.authored_vnext.generation.errors import PublishedMasterRequiredError
 from services.authored_vnext.generation.legacy_pin import ResolvedLegacyMasterPin
-from services.generation_core.style.design_pack_projection import DesignPackProjectionError
 from services.public_operation_admission import PUBLIC_DEFAULT_MAX_SLIDES, PUBLIC_DEFAULT_POLICY_VERSION
 from services.svg_generation_admission import (
     _resolve_design_reference,
@@ -2010,26 +2009,11 @@ def test_restoration_final_review_control_rejects_tampering():
 
 def _svg_request(**overrides):
     base = dict(
-        strategy="svg", source_mode=None, design_pack_pin=None,
+        strategy="svg", source_mode=None,
         generation_engine="authored", generation_mode="auto", master_pin=None,
     )
     base.update(overrides)
     return SimpleNamespace(**base)
-
-
-def test_design_pack_pin_is_rejected_with_a_specific_structural_reason():
-    request = _svg_request(design_pack_pin={"designPackId": "acme", "version": 1})
-    with pytest.raises(HTTPException) as excinfo:
-        require_svg_creation_admission(request)
-    assert excinfo.value.status_code == 422
-    assert excinfo.value.detail == "svg_design_pack_requires_source_native_patch_target"
-
-
-def test_design_pack_projection_error_names_the_real_gap():
-    from services.generation_core.style.design_pack_projection import assert_design_pack_projects
-
-    with pytest.raises(DesignPackProjectionError):
-        assert_design_pack_projects()
 
 
 def test_master_pin_alone_no_longer_blocks_admission():
@@ -2041,29 +2025,24 @@ def test_master_pin_alone_no_longer_blocks_admission():
     require_svg_creation_admission(request)
 
 
-def test_svg_design_reference_does_not_reinterpret_legacy_pack_execution():
-    pin = {"designPackId": "acme", "version": 1, "digest": "sha256:" + "1" * 64}
-    require_svg_creation_admission(_svg_request(svg_design_reference_pin=pin))
+def test_uploaded_design_reference_conflicts_with_a_master_pin():
+    snapshot_id = uuid.uuid4()
+    require_svg_creation_admission(_svg_request(svg_design_reference_snapshot_id=snapshot_id))
+    pin = AuthoredMasterPinInput(master_id="master:acme-1", revision=1, digest="sha256:" + "1" * 64)
     with pytest.raises(HTTPException) as error:
-        require_svg_creation_admission(_svg_request(svg_design_reference_pin=pin, master_pin=pin))
+        require_svg_creation_admission(_svg_request(svg_design_reference_snapshot_id=snapshot_id, master_pin=pin))
     assert error.value.detail == "svg_design_reference_conflict"
 
 
-def test_svg_design_reference_requires_owner_and_pins_target_geometry():
-    pin = {"designPackId": "acme", "version": 1, "digest": "sha256:" + "1" * 64}
-    request = _svg_request(svg_design_reference_pin=pin)
+def test_uploaded_design_reference_requires_its_admitted_projection():
+    request = _svg_request(svg_design_reference_snapshot_id=uuid.uuid4())
     canvas = SimpleNamespace(width_px=720, height_px=1280)
-    with patch("utils.owner_context.get_current_owner_id", return_value=None):
-        with pytest.raises(HTTPException) as error:
-            _resolve_design_reference(request, canvas)
-    assert error.value.status_code == 401
-    owner = uuid.uuid4()
-    with patch("utils.owner_context.get_current_owner_id", return_value=owner), patch(
-        "services.generation_core.style.design_pack_projection.resolve_design_pack_reference",
-        return_value={"reference_semantics": "design-identity"},
-    ) as resolve:
-        assert _resolve_design_reference(request, canvas)["reference_semantics"] == "design-identity"
-        resolve.assert_called_once_with(owner_id=owner, pin=pin, width=720, height=1280)
+    with pytest.raises(HTTPException) as error:
+        _resolve_design_reference(request, canvas)
+    assert error.value.detail == "svg_uploaded_design_reference_admission_required"
+    request._svg_uploaded_design_reference = {"version": "svg-uploaded-design-reference/v1"}
+    assert _resolve_design_reference(request, canvas) == {"version": "svg-uploaded-design-reference/v1"}
+    assert _resolve_design_reference(_svg_request(), canvas) is None
 
 
 def test_source_svg_reference_capability_allows_company_design_and_selected_canvas():

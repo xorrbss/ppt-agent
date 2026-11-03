@@ -10,8 +10,6 @@ a 422 admission response.
 
 from __future__ import annotations
 
-from collections.abc import Mapping
-from typing import Any
 import uuid
 
 from pydantic import ValidationError
@@ -29,7 +27,6 @@ def resolve_internal_generation_request(
     slide_count: int,
     reference_ids: list[uuid.UUID],
     internal_generation_mode: str | None,
-    internal_design_pack_pin: Mapping[str, Any] | None,
     effective_generation_engine: str,
 ) -> GeneratePresentationRequest:
     """Raises ``PublicV2OrchestrationError(422, <code>)`` on a rejected combination."""
@@ -40,7 +37,6 @@ def resolve_internal_generation_request(
             slide_count=slide_count,
             reference_ids=reference_ids,
             internal_generation_mode=internal_generation_mode,
-            internal_design_pack_pin=internal_design_pack_pin,
             effective_generation_engine=effective_generation_engine,
         )
     except ValidationError as error:
@@ -56,7 +52,6 @@ def build_internal_generation_request(
     slide_count: int,
     reference_ids: list[uuid.UUID],
     internal_generation_mode: str | None,
-    internal_design_pack_pin: Mapping[str, Any] | None,
     effective_generation_engine: str,
 ) -> GeneratePresentationRequest:
     return GeneratePresentationRequest(
@@ -86,8 +81,6 @@ def build_internal_generation_request(
         svg_template_mode=request.svg_template_mode,
         svg_template_frame_map=request.svg_template_frame_map,
         svg_design_reference_snapshot_id=request.svg_design_reference_snapshot_id,
-        svg_design_reference_pin=(request.svg_design_reference_pin.model_dump(mode="json", by_alias=True)
-                                  if request.svg_design_reference_pin is not None else None),
         masterPin=(
             request.master_pin.model_dump(mode="json", by_alias=True)
             if request.master_pin is not None
@@ -110,7 +103,6 @@ def build_internal_generation_request(
             else None
         ),
         generationMode=internal_generation_mode,
-        designPackPin=internal_design_pack_pin,
         generationEngine=effective_generation_engine,
     )
 

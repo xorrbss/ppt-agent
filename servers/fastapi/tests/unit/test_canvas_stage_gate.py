@@ -258,4 +258,4 @@ def test_svg_uploaded_reference_selectors_are_exclusive_and_round_trip():
     with pytest.raises(ValueError, match="svg_design_reference_conflict"):
         GeneratePresentationRequest(content="reference",n_slides=1,strategy="svg",
             svg_design_reference_snapshot_id=snapshot_id,
-            svg_design_reference_pin=dict(design_pack_id="test-pack",version=1,digest="sha256:"+"a"*64))
+            masterPin={"masterId": "master:stage", "revision": 1, "digest": "sha256:"+"a"*64})

@@ -66,7 +66,7 @@ def adapt_svg_style(
     request: object | None = None,
     master_rules: dict | None = None,
     master_pin: dict | None = None,
-    design_pack_rules: dict | None = None,
+    design_reference_rules: dict | None = None,
 ) -> dict:
     if width <= 0 or height <= 0 or max(width, height) > 4096:
         raise ValueError("svg_style_canvas_unsupported")
@@ -90,11 +90,11 @@ def adapt_svg_style(
         style=style,
         mapped_guidance=_MAPPINGS.get(style_id, ""),
         reference_images=references,
-        master_rules=master_rules or design_pack_rules,
+        master_rules=master_rules or design_reference_rules,
         master_pin=master_pin,
-        design_pack_rules=design_pack_rules,
+        design_reference_rules=design_reference_rules,
     )
-    if master_rules is None and design_pack_rules is not None:
+    if master_rules is None and design_reference_rules is not None:
         context = replace(context, master_rules=None)
     diagnostics = [
         {"section": line.section, "reason": "format_specific_instruction", "text": line.text}

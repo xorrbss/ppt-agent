@@ -276,6 +276,9 @@ def _identity(request):
     from services.authored_canvas import request_canvas_metadata
     from services.svg_authoring_profile import request_authoring_profile
 
+    # ``svg_design_reference_pin`` (removed 2026-11-03) stays in this tuple:
+    # it now always reads None, exactly as it did for every request without a
+    # pin, so sealed plans keep their input digest on replay.
     names = ("content", "slides_markdown", "instructions", "language", "tone", "writing_policy",
              "common_header_design", "common_header_mode", "common_header_cover_exception", "n_slides",
              "source_mode", "svg_design_reference_pin", "svg_design_reference_snapshot_id", "master_pin",

@@ -67,16 +67,6 @@ def test_omitted_strategy_keeps_default_reason_after_durable_rehydration():
     assert _durable_request_payload(restored)["_internal_generation_strategy_reason"] == "default"
 
 
-def test_omitted_strategy_stays_authored_for_registered_template():
-    request = _request(generation_mode="registered-template")
-    assert resolve_generation_strategy_with_reason(request) == ("authored", "registered_template")
-
-
-def test_omitted_strategy_stays_authored_with_a_design_pack_pin():
-    request = _request(design_pack_pin={"designPackId": "acme", "version": 1})
-    assert resolve_generation_strategy_with_reason(request) == ("authored", "design_pack_pin")
-
-
 def test_omitted_strategy_stays_authored_for_deck_ir_engine_conflict():
     request = _request(generation_engine="deck-ir")
     assert resolve_generation_strategy_with_reason(request) == ("authored", "svg_engine_conflict")
@@ -156,7 +146,7 @@ def test_omitted_strategy_stays_authored_for_an_exact_reconstruction_style():
 
 
 def test_resolve_generation_strategy_is_the_reason_wrapper_dropping_it():
-    request = _request(generation_mode="registered-template")
+    request = _request(generation_engine="deck-ir")
     assert resolve_generation_strategy(request) == "authored"
 
 

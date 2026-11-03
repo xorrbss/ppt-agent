@@ -953,8 +953,10 @@ class ProductDeckIrExecutionAdapter:
             if not isinstance(png, bytes):
                 raise DeckIrIntegrationError("browser_observation_failed")
             pngs.append(png)
+        # Only Deck IR publishes here; the source-native (design-pack) route
+        # that also used this publisher was removed on 2026-11-03.
         publication_route = str(payload.get("publicationRoute") or "deck-ir")
-        if publication_route not in {"deck-ir", "source-native"}:
+        if publication_route != "deck-ir":
             raise DeckIrIntegrationError("authored_manifest_publication_failed")
         image_refs = await asyncio.to_thread(
             _save_slide_pngs,
@@ -1079,12 +1081,7 @@ class ProductDeckIrExecutionAdapter:
                 evidence=quality_v3_evidence,
             )
             next_theme = dict(presentation.theme or {})
-            generation_theme_key = (
-                "generationDesignPack"
-                if publication_route == "source-native"
-                else "generationDeckIr"
-            )
-            next_theme[generation_theme_key] = {
+            next_theme["generationDeckIr"] = {
                 "strategy": publication_route,
                 "styleProfileDigest": payload.get("styleProfileDigest"),
                 "retainedReferenceDigest": payload.get("retainedReferenceDigest"),

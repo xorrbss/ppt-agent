@@ -13,7 +13,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import defer
 from sqlmodel import select
-from models.generate_presentation_request import DesignPackPinInput, SvgTemplatePinInput
+from models.generate_presentation_request import SvgTemplatePinInput
 from models.svg_canvas import SvgCanvasInput
 from models.common_header_design import CommonHeaderDesignInput
 
@@ -407,7 +407,6 @@ async def create_presentation(
     page_size: Annotated[Optional[Literal["A4"]], Body()] = None,
     orientation: Annotated[Optional[Literal["landscape", "portrait"]], Body()] = None,
     svg_canvas: Annotated[Optional[SvgCanvasInput], Body()] = None,
-    svg_design_reference_pin: Annotated[Optional[DesignPackPinInput], Body()] = None,
     svg_design_reference_snapshot_id: Annotated[Optional[uuid.UUID], Body()] = None,
     svg_template_pin: Annotated[Optional[SvgTemplatePinInput], Body()] = None,
     svg_template_mode: Annotated[Optional[Literal["free-design", "template-redesign"]], Body()] = None,
@@ -432,13 +431,13 @@ async def create_presentation(
         body = await http_request.json()
         if strategy != "svg" or body.get("strategy") != "svg":
             raise HTTPException(status_code=422, detail="svg_template_strategy_required")
-        if svg_design_reference_pin is not None or svg_design_reference_snapshot_id is not None:
+        if svg_design_reference_snapshot_id is not None:
             raise HTTPException(status_code=422, detail="svg_template_selection_conflict")
         if svg_template_mode == "template-redesign" and (
             common_header_mode == "uniform" or common_header_design is not None or common_header_cover_exception
         ):
             raise HTTPException(status_code=422, detail="svg_template_common_header_conflict")
-    if (svg_design_reference_pin is not None or svg_design_reference_snapshot_id is not None) and strategy != "svg":
+    if svg_design_reference_snapshot_id is not None and strategy != "svg":
         raise HTTPException(status_code=422, detail="svg_design_reference_strategy_required")
     if common_header_mode is not None and strategy != "svg":
         raise HTTPException(status_code=422, detail="common_header_svg_strategy_required")
@@ -452,8 +451,6 @@ async def create_presentation(
             raise HTTPException(status_code=422, detail="svg_common_header_design_reference_admission_required")
     if common_header_cover_exception and common_header_mode != "uniform":
         raise HTTPException(status_code=422, detail="common_header_cover_exception_requires_uniform")
-    if svg_design_reference_pin is not None and svg_design_reference_snapshot_id is not None:
-        raise HTTPException(status_code=422, detail="svg_design_reference_conflict")
     if svg_design_reference_snapshot_id is not None:
         from services.references.service import admit_reference_snapshot
 
@@ -585,9 +582,6 @@ async def create_presentation(
                               "svgTemplateMode": svg_template_mode}
         if svg_template_frame_map is not None:
             presentation.theme["svgTemplateFrameMap"] = svg_template_frame_map
-    if svg_design_reference_pin is not None:
-        presentation.theme = {**(presentation.theme or {}), "svgDesignReferencePin":
-                              svg_design_reference_pin.model_dump(mode="json", by_alias=True)}
     if svg_design_reference_snapshot_id is not None:
         presentation.theme = {**(presentation.theme or {}),
                               "svgDesignReferenceSnapshotId": str(svg_design_reference_snapshot_id)}
@@ -626,8 +620,6 @@ async def create_presentation(
             settings["svg_template_mode"] = svg_template_mode
             if svg_template_frame_map is not None:
                 settings["svg_template_frame_map"] = svg_template_frame_map
-        if svg_design_reference_pin is not None:
-            settings["svg_design_reference_pin"] = svg_design_reference_pin.model_dump(mode="json", by_alias=True)
         if svg_design_reference_snapshot_id is not None:
             settings["svg_design_reference_snapshot_id"] = str(svg_design_reference_snapshot_id)
         # Authored-only admission stamps a theme-less presentation with the
