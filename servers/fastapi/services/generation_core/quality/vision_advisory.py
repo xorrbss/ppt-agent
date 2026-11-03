@@ -287,13 +287,26 @@ def parse_advisory_payload(payload: object, *, slide_count: int) -> list[dict[st
 
 
 def _advisory_extra_body() -> dict[str, Any] | None:
-    """Ask for the model's cheapest reasoning; this pass is advisory."""
+    """Ask for the model's cheapest reasoning; this pass is advisory.
 
-    from utils.llm_provider import is_codex_selected
+    On Anthropic, thinking shares the response's output budget
+    (``ADVISORY_MAX_OUTPUT_TOKENS``): a Claude model that thinks adaptively by
+    default could spend all of it and cut the JSON off, which the review then
+    reports as ``unparseable_response``. ``thinking: disabled`` is mapped by
+    the repository Anthropic client to each model's lowest accepted setting.
+    """
 
-    if not is_codex_selected():
+    from utils.llm_provider import get_llm_provider, is_codex_selected
+
+    if is_codex_selected():
+        return {"reasoning": {"effort": ADVISORY_REASONING_EFFORT}}
+    try:
+        provider = str(get_llm_provider().value)
+    except Exception:  # noqa: BLE001 - no configured provider means no override
         return None
-    return {"reasoning": {"effort": ADVISORY_REASONING_EFFORT}}
+    if provider == "anthropic":
+        return {"thinking": {"type": "disabled"}}
+    return None
 
 
 def _decode_advisory_text(text: str) -> object:
