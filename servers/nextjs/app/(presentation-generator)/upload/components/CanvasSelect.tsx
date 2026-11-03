@@ -18,6 +18,7 @@ import AuthoredStylesApi, {
 } from "../../services/api/authored";
 import type { DocumentCanvas } from "@/lib/document-canvas";
 import { PresentationConfig } from "../type";
+import { svgCanvasMillimetres } from "../utils/svgCanvasSelection";
 import {
     CANVAS_ROW_GEOMETRY,
     nearestEnabledCanvasRow,
@@ -75,8 +76,9 @@ export function CanvasSelect({
 }: CanvasSelectProps) {
     const tA2b = useA2bTranslations("uploadExtras");
     const [open, setOpen] = useState(false);
-    const [customWidth, setCustomWidth] = useState(String(config.svgCanvas?.width_mm ?? 320));
-    const [customHeight, setCustomHeight] = useState(String(config.svgCanvas?.height_mm ?? 180));
+    const customSize = config.svgCanvas ? svgCanvasMillimetres(config.svgCanvas) : null;
+    const [customWidth, setCustomWidth] = useState(String(customSize?.width ?? 320));
+    const [customHeight, setCustomHeight] = useState(String(customSize?.height ?? 180));
     const [customError, setCustomError] = useState(false);
     const svgMode = generationStrategy === "svg";
     // Template redesign keeps the template's own canvas (set by the template picker).
@@ -233,7 +235,7 @@ export function CanvasSelect({
     }
 
     const displayRowId = config.svgCanvas ? "custom" : config.sourceCanvas ? "source" : isAutoCanvas ? "auto" : appliedRowId;
-    const triggerTitle = config.sourceCanvas ? sourceCanvasLabel : config.svgCanvas ? `${config.svgCanvas.width_mm} × ${config.svgCanvas.height_mm} mm` : isAutoCanvas
+    const triggerTitle = config.sourceCanvas ? sourceCanvasLabel : customSize ? `${customSize.width} × ${customSize.height} mm` : isAutoCanvas
         ? tA2b("canvasAutoTitle")
         : describeRow(appliedRowId).title;
 
@@ -265,7 +267,7 @@ export function CanvasSelect({
                         className="shrink-0 min-w-[160px] max-w-full whitespace-nowrap font-syne font-medium text-slate-600 focus-visible:ring-violet-300 flex justify-between items-center gap-2 h-9 rounded-xl bg-slate-50 px-3 ring-1 ring-inset ring-slate-200/80 shadow-none hover:bg-slate-100"
                     >
                         <span className="flex flex-1 items-center gap-2">
-                            {config.svgCanvas ? <ShapeIcon widthPx={config.svgCanvas.width_mm} heightPx={config.svgCanvas.height_mm} /> : isAutoCanvas ? <Sparkles className="h-3.5 w-3.5 shrink-0" aria-hidden="true" /> : <ShapeIcon {...CANVAS_ROW_GEOMETRY[appliedRowId]} />}
+                            {customSize ? <ShapeIcon widthPx={customSize.width} heightPx={customSize.height} /> : isAutoCanvas ? <Sparkles className="h-3.5 w-3.5 shrink-0" aria-hidden="true" /> : <ShapeIcon {...CANVAS_ROW_GEOMETRY[appliedRowId]} />}
                             <span className="text-xs font-medium whitespace-nowrap">{triggerTitle}</span>
                         </span>
                         <ChevronUp className="ml-2 h-4 w-4 shrink-0" />

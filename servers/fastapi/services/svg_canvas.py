@@ -30,6 +30,9 @@ def svg_canvas_for_aspect_ratio(ratio: str) -> DocumentCanvasMetadata:
 
 def custom_svg_canvas(value: object) -> DocumentCanvasMetadata:
     selected = SvgCanvasInput.model_validate(value)
+    if selected.exact_emu:
+        from services.document_canvas import document_canvas_from_source_slide_size
+        return document_canvas_from_source_slide_size(width_emu=selected.width_emu, height_emu=selected.height_emu)
     scale = Decimal(1280) / max(selected.width_mm, selected.height_mm)
     width = int((selected.width_mm * scale).to_integral_value(rounding=ROUND_HALF_UP))
     height = int((selected.height_mm * scale).to_integral_value(rounding=ROUND_HALF_UP))

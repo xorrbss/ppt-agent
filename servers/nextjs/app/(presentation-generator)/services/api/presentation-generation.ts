@@ -395,7 +395,7 @@ export class PresentationGenerationApi {
     common_header_mode?: "uniform" | "free";
     common_header_cover_exception?: boolean;
     aspect_ratio?: "16:9" | "9:16" | "9:13" | "1:1" | "21:9" | "4:3";
-    svg_canvas?: { width_mm: number; height_mm: number };
+    svg_canvas?: import("../../upload/utils/svgCanvasSelection").SvgCanvasSelection;
     svg_design_reference_snapshot_id?: string;
     svgTemplatePin?: import("./svg-templates").SvgTemplatePin;
     svgTemplateMode?: import("./svg-templates").SvgTemplateMode;
@@ -762,7 +762,7 @@ export class PresentationGenerationApi {
       common_header_cover_exception?: boolean;
       authored_style?: string;
       aspect_ratio?: "16:9" | "9:16" | "9:13" | "1:1" | "21:9" | "4:3";
-      svg_canvas?: { width_mm: number; height_mm: number };
+      svg_canvas?: import("../../upload/utils/svgCanvasSelection").SvgCanvasSelection;
     svg_design_reference_snapshot_id?: string;
     svgTemplatePin?: import("./svg-templates").SvgTemplatePin;
     svgTemplateMode?: import("./svg-templates").SvgTemplateMode;

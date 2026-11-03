@@ -46,12 +46,15 @@ def normalized_canvas(value) -> dict:
             physical_size=PhysicalSize(width_emu=legacy.width_px * 9525, height_emu=legacy.height_px * 9525),
             safe_area=SafeArea(**legacy.safe_area.model_dump())).model_dump(mode="json", by_alias=True)
     from services.svg_canvas import selected_svg_canvas
-    allowed = {"aspect_ratio", "aspectRatio", "page_size", "pageSize", "orientation", "svg_canvas", "widthMm", "heightMm"}
+    allowed = {"aspect_ratio", "aspectRatio", "page_size", "pageSize", "orientation", "svg_canvas",
+               "widthMm", "heightMm", "widthEmu", "heightEmu"}
     if set(value) - allowed:
         raise ValueError("svg_template_canvas_invalid")
     custom = value.get("svg_canvas")
     if custom is None and ("widthMm" in value or "heightMm" in value):
         custom = {"width_mm": value.get("widthMm"), "height_mm": value.get("heightMm")}
+    if custom is None and ("widthEmu" in value or "heightEmu" in value):
+        custom = {"width_emu": value.get("widthEmu"), "height_emu": value.get("heightEmu")}
     selected = selected_svg_canvas(SimpleNamespace(svg_canvas=custom,
         page_size=value.get("page_size", value.get("pageSize")), orientation=value.get("orientation", "landscape"),
         aspect_ratio=value.get("aspect_ratio", value.get("aspectRatio", "16:9"))))
@@ -124,20 +127,12 @@ async def list_templates(session) -> list[dict]:
     return cards
 
 
-#: Half the custom canvas input quantum (0.01 mm): a request canvas this close
-#: to the source slide size is the source canvas at the precision a request
-#: can express (a source of 302.992 mm is requested as 302.99 mm).
-_SOURCE_CANVAS_TOLERANCE_EMU = 180
-
-
 def require_source_canvas(package: dict, canvas_json: dict) -> None:
     """A ``template-redesign`` deck is generated only at the template's own
-    canvas (design D-4, docs/svg-template-real-deck-registration-design-20261103.md)."""
+    canvas, exactly (design D-4, docs/svg-template-real-deck-registration-design-20261103.md).
+    A source size the millimetre selector cannot express is requested in EMU."""
     source = DocumentCanvasMetadata.model_validate(package.get("source_canvas"))
-    target = DocumentCanvasMetadata.model_validate(canvas_json)
-    if (source.logical_size != target.logical_size
-            or abs(source.physical_size.width_emu - target.physical_size.width_emu) > _SOURCE_CANVAS_TOLERANCE_EMU
-            or abs(source.physical_size.height_emu - target.physical_size.height_emu) > _SOURCE_CANVAS_TOLERANCE_EMU):
+    if DocumentCanvasMetadata.model_validate(canvas_json) != source:
         raise HTTPException(422, "svg_template_canvas_locked")
 
 

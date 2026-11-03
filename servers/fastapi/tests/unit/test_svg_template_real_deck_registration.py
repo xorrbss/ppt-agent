@@ -263,20 +263,64 @@ def test_a_revision_replaces_or_keeps_the_substitution_map():
 
 # --- canvas lock (D-4) ---------------------------------------------------------------
 
-def test_template_redesign_is_locked_to_the_source_canvas_at_request_precision():
+def test_template_redesign_is_locked_to_the_exact_source_canvas():
     from fastapi import HTTPException
 
     from services.document_canvas import document_canvas_from_source_slide_size
     from services.svg_canvas import custom_svg_canvas, svg_canvas_for_aspect_ratio
-    from services.svg_templates.catalog import require_source_canvas
+    from services.svg_templates.catalog import normalized_canvas, require_source_canvas
 
     source = document_canvas_from_source_slide_size(width_emu=10907713, height_emu=7775575)
     package = {"source_canvas": source.model_dump(mode="json", by_alias=True)}
-    # 302.992 x 215.988 mm can only be requested to 0.01 mm.
-    require_source_canvas(package, custom_svg_canvas({"widthMm": "302.99", "heightMm": "215.99"})
-                          .model_dump(mode="json", by_alias=True))
-    for other in (custom_svg_canvas({"widthMm": "303.01", "heightMm": "215.99"}),
+    # 302.992 x 215.988 mm: only the EMU form names it exactly.
+    exact = normalized_canvas({"svg_canvas": {"widthEmu": 10907713, "heightEmu": 7775575}})
+    require_source_canvas(package, exact)
+    assert normalized_canvas({"widthEmu": 10907713, "heightEmu": 7775575}) == exact
+    for other in (custom_svg_canvas({"widthMm": "302.99", "heightMm": "215.99"}),
                   custom_svg_canvas({"widthMm": "297", "heightMm": "210"}), svg_canvas_for_aspect_ratio("16:9")):
         with pytest.raises(HTTPException) as error:
             require_source_canvas(package, other.model_dump(mode="json", by_alias=True))
         assert error.value.detail == "svg_template_canvas_locked"
+    # A preset-sized template is requested through its preset.
+    wide = document_canvas_from_source_slide_size(width_emu=12192000, height_emu=6858000)
+    require_source_canvas({"source_canvas": wide.model_dump(mode="json", by_alias=True)},
+                          svg_canvas_for_aspect_ratio("16:9").model_dump(mode="json", by_alias=True))
+
+
+def test_the_exact_canvas_form_is_a_closed_alternative_to_millimetres():
+    from pydantic import ValidationError
+
+    from models.svg_canvas import SvgCanvasInput
+    assert SvgCanvasInput.model_validate({"widthMm": "302.99", "heightMm": "215.99"}).model_dump(
+        mode="json", by_alias=True) == {"widthMm": "302.99", "heightMm": "215.99"}
+    for bad in ({"widthMm": "300", "heightMm": "200", "widthEmu": 10800000, "heightEmu": 7200000},
+                {"widthEmu": 10907713}, {"widthEmu": "10907713", "heightEmu": 7775575},
+                {"widthEmu": 100, "heightEmu": 7775575}, {"widthEmu": 36000000, "heightEmu": 1800000}):
+        with pytest.raises(ValidationError):
+            SvgCanvasInput.model_validate(bad)
+
+
+def test_a_generation_request_carries_the_exact_canvas_through_durable_replay():
+    from models.generate_presentation_request import GeneratePresentationRequest
+    from services.authored_canvas import request_canvas_metadata
+    from services.document_canvas import document_canvas_from_source_slide_size
+    from services.presentation_generation_staging import _durable_request_payload, _request_from_durable_payload
+
+    request = GeneratePresentationRequest(content="proposal", strategy="svg", n_slides=1, common_header_mode="free",
+        svgCanvas={"widthEmu": 10907713, "heightEmu": 7775575},
+        svgTemplatePin={"templateId": "canvas-test", "revision": 1, "digest": "sha256:" + "a" * 64},
+        svgTemplateMode="template-redesign")
+    import copy
+
+    from utils.hashing import canonical_json_digest
+    expected = document_canvas_from_source_slide_size(width_emu=10907713, height_emu=7775575)
+    canvas = request_canvas_metadata(request)
+    assert canvas == expected.model_dump(mode="json", by_alias=True)
+    selection = {"schema_version": "svg-template-selection/v1",
+                 "template_pin": request.svg_template_pin.model_dump(mode="json", by_alias=True),
+                 "mode": request.svg_template_mode, "frame_map": {}, "canvas": canvas}
+    selection["digest"] = canonical_json_digest(selection)
+    request._svg_template_selection = copy.deepcopy(selection)
+    request._svg_style_snapshot = {"svg_template": copy.deepcopy(selection)}
+    restored = _request_from_durable_payload(_durable_request_payload(request))
+    assert request_canvas_metadata(restored) == request_canvas_metadata(request)

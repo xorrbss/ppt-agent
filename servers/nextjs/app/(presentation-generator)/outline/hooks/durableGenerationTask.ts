@@ -47,7 +47,7 @@ export interface DurableGenerationTask {
     svgTemplateMode?: import("@/app/(presentation-generator)/services/api/svg-templates").SvgTemplateMode;
     svgTemplateFrameMap?: Record<string, string>;
     svgDesignReferenceSnapshotId?: string;
-    svgCanvas?: { width_mm: number; height_mm: number };
+    svgCanvas?: import("../../upload/utils/svgCanvasSelection").SvgCanvasSelection;
     sourceCanvas?: boolean;
     pageSize?: "A4";
     orientation?: "landscape" | "portrait";

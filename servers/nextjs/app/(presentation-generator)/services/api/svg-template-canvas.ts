@@ -19,6 +19,9 @@ export function savedSvgTemplateCanvas(themeValue: unknown): Partial<Presentatio
     }
     const width_mm = canvas.physicalSize.widthEmu / 36000, height_mm = canvas.physicalSize.heightEmu / 36000;
     if ([width_mm, height_mm].every(value => value >= 50 && value <= 1000 && Math.abs(value * 100 - Math.round(value * 100)) < 1e-7)) return { svgCanvas: { width_mm, height_mm }, pageSize: undefined, orientation: undefined, sourceCanvas: undefined };
+    // A source slide size finer than 0.01 mm is requested exactly, in EMU.
+    const exact = { width_emu: canvas.physicalSize.widthEmu, height_emu: canvas.physicalSize.heightEmu };
+    if (JSON.stringify(sourceSlideCanvas(exact.width_emu, exact.height_emu)) === JSON.stringify(canvas)) return { svgCanvas: exact, pageSize: undefined, orientation: undefined, sourceCanvas: undefined };
     throw new Error("svg_template_saved_canvas_unrepresentable");
   }
   const legacy = object(object(theme.authored_vnext).canvas);
@@ -28,17 +31,32 @@ export function savedSvgTemplateCanvas(themeValue: unknown): Partial<Presentatio
 }
 
 /**
- * The canvas selector a template-redesign request uses: the template's own
- * source canvas (design D-4). A source size finer than the 0.01 mm a request
- * can express is requested at that precision; the server admits it as the
- * source canvas.
+ * The canvas selector a template-redesign request uses: exactly the template's
+ * own source canvas (design D-4) -- a preset when it is one, otherwise the
+ * source slide size in EMU, which the server resolves as the source does.
  */
 export function templateSourceCanvasSelector(sourceCanvas: DocumentCanvas): Partial<PresentationConfig> {
-  try {
-    return savedSvgTemplateCanvas({ documentCanvas: sourceCanvas });
-  } catch {
-    const round = (emu: number) => Math.round(emu / 360) / 100;
-    return { svgCanvas: { width_mm: round(sourceCanvas.physicalSize.widthEmu), height_mm: round(sourceCanvas.physicalSize.heightEmu) },
-      pageSize: undefined, orientation: undefined, sourceCanvas: undefined };
-  }
+  const preset = savedSvgTemplateCanvasOrNull(sourceCanvas);
+  if (preset && !preset.svgCanvas) return preset;
+  return { svgCanvas: { width_emu: sourceCanvas.physicalSize.widthEmu, height_emu: sourceCanvas.physicalSize.heightEmu },
+    pageSize: undefined, orientation: undefined, sourceCanvas: undefined };
+}
+
+function savedSvgTemplateCanvasOrNull(canvas: DocumentCanvas): Partial<PresentationConfig> | null {
+  try { return savedSvgTemplateCanvas({ documentCanvas: canvas }); } catch { return null; }
+}
+
+/**
+ * Mirror of the server's ``document_canvas_from_source_slide_size``: the
+ * canvas an exact EMU selector resolves to.
+ */
+export function sourceSlideCanvas(widthEmu: number, heightEmu: number): DocumentCanvas {
+  const widthMm = widthEmu / 36000, heightMm = heightEmu / 36000;
+  const legacyA4 = widthMm >= 296 && widthMm <= 298 && heightMm >= 209 && heightMm <= 211;
+  const logicalWidth = legacyA4 ? 1188 : Math.round(1280 * widthMm / Math.max(widthMm, heightMm));
+  const margin = legacyA4 ? 60 : 64;
+  const logicalHeight = Math.round(logicalWidth * heightEmu / widthEmu);
+  return { contractVersion: "document-canvas/v1", logicalSize: { width: logicalWidth, height: logicalHeight },
+    physicalSize: { widthEmu, heightEmu },
+    safeArea: { x: margin, y: margin, width: logicalWidth - 2 * margin, height: logicalHeight - 2 * margin } } as DocumentCanvas;
 }

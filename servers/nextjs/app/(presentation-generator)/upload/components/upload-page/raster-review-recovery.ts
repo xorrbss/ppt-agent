@@ -28,7 +28,7 @@ export type RasterReviewRecovery = {
   commonHeaderMode?: "uniform" | "free";
   commonHeaderCoverException?: boolean;
   aspectRatio?: import("../../type").PresentationConfig["aspectRatio"];
-  svgCanvas?: { width_mm: number; height_mm: number };
+  svgCanvas?: import("../../utils/svgCanvasSelection").SvgCanvasSelection;
   orientation: "landscape" | "portrait";
   authoredStyle: string;
   instructions: string | null;

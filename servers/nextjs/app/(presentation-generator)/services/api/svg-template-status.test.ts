@@ -51,11 +51,22 @@ test("font substitution starts from applied choices, then one suggestion per fam
   assert.deepEqual(initialFontSubstitutions(null), []);
 });
 
-test("a template source canvas becomes the request selector at request precision", async () => {
+test("a template source canvas becomes the exact request selector", async () => {
   const { templateSourceCanvasSelector } = await import("./svg-template-canvas");
   const canvas = { contractVersion: "document-canvas/v1", logicalSize: { width: 1280, height: 912 },
     physicalSize: { widthEmu: 10907713, heightEmu: 7775575 }, safeArea: { x: 64, y: 64, width: 1152, height: 784 } };
-  assert.deepEqual(templateSourceCanvasSelector(canvas as never).svgCanvas, { width_mm: 302.99, height_mm: 215.99 });
+  assert.deepEqual(templateSourceCanvasSelector(canvas as never).svgCanvas, { width_emu: 10907713, height_emu: 7775575 });
   const wide = { ...canvas, logicalSize: { width: 1280, height: 720 }, physicalSize: { widthEmu: 12192000, heightEmu: 6858000 }, safeArea: { x: 64, y: 64, width: 1152, height: 592 } };
   assert.equal(templateSourceCanvasSelector(wide as never).aspectRatio, "16:9");
+});
+
+test("the exact EMU selector resolves like the server's source slide canvas", async () => {
+  const { sourceSlideCanvas, savedSvgTemplateCanvas } = await import("./svg-template-canvas");
+  assert.deepEqual(sourceSlideCanvas(10907713, 7775575), { contractVersion: "document-canvas/v1", logicalSize: { width: 1280, height: 912 },
+    physicalSize: { widthEmu: 10907713, heightEmu: 7775575 }, safeArea: { x: 64, y: 64, width: 1152, height: 784 } });
+  // Legacy A4-sized sources keep the historical 1188-unit raster.
+  assert.deepEqual(sourceSlideCanvas(10692000, 7560000).logicalSize, { width: 1188, height: 840 });
+  // A deck saved at an exact source canvas restores to the same selector.
+  assert.deepEqual(savedSvgTemplateCanvas({ documentCanvas: sourceSlideCanvas(10907713, 7775575) }).svgCanvas,
+    { width_emu: 10907713, height_emu: 7775575 });
 });

@@ -141,7 +141,7 @@ export interface PresentationConfig {
   svgTemplateCapabilityState?: "checking" | "available" | "preparation-required" | "blocked";
   svgDesignReferenceSnapshotId?: string;
   svgDesignReferencePending?: boolean;
-  svgCanvas?: { width_mm: number; height_mm: number };
+  svgCanvas?: import("./utils/svgCanvasSelection").SvgCanvasSelection;
   sourceCanvas?: boolean;
   /** Present only for newly created documents using the common physical canvas. */
   pageSize?: "A4";

@@ -99,7 +99,7 @@ export type RasterPageWire = {
 };
 
 export class RasterSourceApi {
-  static async start(request: { reference_snapshot_id: string; presentation_id: string; orientation?: "landscape" | "portrait"; aspect_ratio?: import("../../../upload/type").PresentationConfig["aspectRatio"]; svg_canvas?: { width_mm: number; height_mm: number }; analysis_mode: RasterAnalysisMode; style_id: string }): Promise<RasterOperationResponse> {
+  static async start(request: { reference_snapshot_id: string; presentation_id: string; orientation?: "landscape" | "portrait"; aspect_ratio?: import("../../../upload/type").PresentationConfig["aspectRatio"]; svg_canvas?: import("../../../upload/utils/svgCanvasSelection").SvgCanvasSelection; analysis_mode: RasterAnalysisMode; style_id: string }): Promise<RasterOperationResponse> {
     return RasterSourceApi.request<RasterOperationResponse>(ROOT, "POST", request);
   }
 
