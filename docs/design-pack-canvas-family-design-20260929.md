@@ -1,5 +1,7 @@
 # Design-pack canvas family: design (2026-09-29)
 
+**Status 2026-11-03: removed.** Design packs and the source-native route they ran on were deleted from both servers. The only successful design-pack run (2026-09-02, 43 pages) was rated a text dump and set as the quality floor in `docs/generation-quality-root-cause-and-composer-architecture-20260904.md`; no feature work landed after it. SVG user templates (`services/svg_templates/`, `docs/svg-user-template-implementation-20261029.md`) replace it as the registered-template path. `generationMode="registered-template"` now fails with `registered_template_removed`; the digest-sealed generation-route receipt keeps its `designPackPin`/`source-native` fields so operations admitted earlier still validate and export. The rest of this document is historical.
+
 **Status 2026-09-29: deferred.** Design packs are declared 16:9-only (`design_pack_canvas_unsupported`), so this canvas-native family is not being built. The variant store, variant source drafting and manifest v2 that this design retires were removed in `docs/svg-master-no-stretch-and-variant-removal-design-20260929.md` section 2 (implemented); its S0 executor work and v3 manifest were not.
 
 
