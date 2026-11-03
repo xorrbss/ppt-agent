@@ -311,7 +311,6 @@ export const usePresentationGeneration = (
         commonHeaderCoverException: (generationConfig?.commonHeaderMode ?? "uniform") === "uniform" && (generationConfig?.commonHeaderCoverException ?? false),
       } : {}),
       ...(generationStrategy === "svg" && generationConfig?.svgDesignReferenceSnapshotId ? { svgDesignReferenceSnapshotId: generationConfig.svgDesignReferenceSnapshotId } : {}),
-      ...(generationStrategy === "svg" && generationConfig?.svgDesignReferencePin ? { svgDesignReferencePin: generationConfig.svgDesignReferencePin } : {}),
       ...(generationStrategy === "svg" && generationConfig?.svgTemplatePin ? { svgTemplatePin: generationConfig.svgTemplatePin, svgTemplateMode: generationConfig.svgTemplateMode, svgTemplateFrameMap: generationConfig.svgTemplateFrameMap } : {}),
       authoredStyle:
         generationStrategy === "authored" && generationConfig?.pageSize !== "A4" && generationConfig?.aspectRatio === "9:16"
@@ -389,7 +388,6 @@ export const usePresentationGeneration = (
         common_header_cover_exception: "commonHeaderCoverException" in authoredRequest ? authoredRequest.commonHeaderCoverException : undefined,
         ...("svgTemplatePin" in authoredRequest && authoredRequest.svgTemplatePin ? {} : { authored_style: authoredRequest.authoredStyle }),
         svg_design_reference_snapshot_id: "svgDesignReferenceSnapshotId" in authoredRequest ? authoredRequest.svgDesignReferenceSnapshotId : undefined,
-        svg_design_reference_pin: "svgDesignReferencePin" in authoredRequest ? authoredRequest.svgDesignReferencePin : undefined,
         svgTemplatePin: "svgTemplatePin" in authoredRequest ? authoredRequest.svgTemplatePin : undefined,
         svgTemplateMode: "svgTemplateMode" in authoredRequest ? authoredRequest.svgTemplateMode : undefined,
         svgTemplateFrameMap: "svgTemplateFrameMap" in authoredRequest ? authoredRequest.svgTemplateFrameMap : undefined,

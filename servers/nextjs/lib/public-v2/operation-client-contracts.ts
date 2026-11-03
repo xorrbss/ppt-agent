@@ -39,6 +39,10 @@ export type PublicV2GenerationMode =
   | "fidelity-first"
   | "editable-first";
 
+/** A mode a new request may ask for; ``registered-template`` only appears on historical receipts. */
+export type PublicV2RequestGenerationMode = Exclude<PublicV2GenerationMode, "registered-template">;
+
+/** A design-pack pin on a historical route receipt; the design-pack route was removed on 2026-11-03. */
 export type PublicV2DesignPackPin = {
   designPackId: string;
   version: number;
@@ -47,8 +51,7 @@ export type PublicV2DesignPackPin = {
 
 export type PublicV2GenerationRequest = {
   schemaVersion?: "presentation-generation-request/v2";
-  generationMode?: PublicV2GenerationMode;
-  designPackPin?: PublicV2DesignPackPin;
+  generationMode?: PublicV2RequestGenerationMode;
   strategy?: "authored" | "svg";
   commonHeaderDesign?: import("@/lib/common-header-design").CommonHeaderDesign;
   commonHeaderMode?: "uniform" | "free";
@@ -57,7 +60,6 @@ export type PublicV2GenerationRequest = {
   svgTemplateMode?: import("@/app/(presentation-generator)/services/api/svg-templates").SvgTemplateMode;
   svgTemplateFrameMap?: Record<string, string>;
   svgDesignReferenceSnapshotId?: string;
-  svgDesignReferencePin?: PublicV2DesignPackPin;
   aspectRatio?: "16:9" | "9:16" | "9:13" | "4:3" | "1:1" | "21:9";
   pageSize?: "A4";
   orientation?: "landscape" | "portrait";

@@ -74,7 +74,6 @@ export const useRasterSessionRecovery = ({
     setConfig((previous) => ({
       ...previous, sourceCanvas: undefined, svgDesignReferencePending: false,
       svgDesignReferenceSnapshotId: recovery.svgDesignReferenceSnapshotId,
-      svgDesignReferencePin: recovery.svgDesignReferencePin,
       commonHeaderMode: recovery.commonHeaderMode ?? "uniform",
       commonHeaderDesign: commonHeaderDesignForConfig(recovery),
       commonHeaderCoverException: recovery.commonHeaderMode === "uniform" && (recovery.commonHeaderCoverException ?? false),

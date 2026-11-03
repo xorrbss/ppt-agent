@@ -400,7 +400,7 @@ const UploadPage = ({
 
             {generationStrategy === "svg" ? <SvgTemplatePicker config={config} onConfigChange={handleConfigChange} sourceContentMode={sourceContentMode} hasCompanyMaster={Boolean(companyStandard)} /> : null}
 
-            {generationStrategy === "svg" ? <SvgDesignReferenceInput config={config} onConfigChange={handleConfigChange} disabled={Boolean(config.svgTemplatePin || config.svgDesignReferencePin || companyStandard)} /> : null}
+            {generationStrategy === "svg" ? <SvgDesignReferenceInput config={config} onConfigChange={handleConfigChange} disabled={Boolean(config.svgTemplatePin || companyStandard)} /> : null}
 
             {generationStrategy === "authored" && masterAdmissionError ? (
               <div

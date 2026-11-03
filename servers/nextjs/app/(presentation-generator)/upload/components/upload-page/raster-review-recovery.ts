@@ -24,7 +24,6 @@ export type RasterReviewRecovery = {
   referenceSnapshotId?: string;
   analysisMode?: RasterAnalysisMode;
   svgDesignReferenceSnapshotId?: string;
-  svgDesignReferencePin?: import("../../type").PresentationConfig["svgDesignReferencePin"];
   commonHeaderDesign?: import("@/lib/common-header-design").CommonHeaderDesign;
   commonHeaderMode?: "uniform" | "free";
   commonHeaderCoverException?: boolean;

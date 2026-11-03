@@ -370,7 +370,6 @@ export class PresentationGenerationApi {
     page_size,
     orientation,
     svg_canvas,
-    svg_design_reference_pin,
     svgTemplatePin,
     svgTemplateMode,
     svgTemplateFrameMap,
@@ -398,7 +397,6 @@ export class PresentationGenerationApi {
     aspect_ratio?: "16:9" | "9:16" | "9:13" | "1:1" | "21:9" | "4:3";
     svg_canvas?: { width_mm: number; height_mm: number };
     svg_design_reference_snapshot_id?: string;
-    svg_design_reference_pin?: { design_pack_id: string; version: number; digest: string };
     svgTemplatePin?: import("./svg-templates").SvgTemplatePin;
     svgTemplateMode?: import("./svg-templates").SvgTemplateMode;
     svgTemplateFrameMap?: Record<string, string>;
@@ -437,7 +435,6 @@ export class PresentationGenerationApi {
               ? { page_size, orientation }
               : { aspect_ratio }),
             ...(svg_design_reference_snapshot_id ? { svg_design_reference_snapshot_id } : {}),
-            ...(svg_design_reference_pin ? { svg_design_reference_pin } : {}),
             ...(svgTemplatePin ? {
               svg_template_pin: svgTemplatePin,
               svg_template_mode: svgTemplateMode,
@@ -767,7 +764,6 @@ export class PresentationGenerationApi {
       aspect_ratio?: "16:9" | "9:16" | "9:13" | "1:1" | "21:9" | "4:3";
       svg_canvas?: { width_mm: number; height_mm: number };
     svg_design_reference_snapshot_id?: string;
-    svg_design_reference_pin?: { design_pack_id: string; version: number; digest: string };
     svgTemplatePin?: import("./svg-templates").SvgTemplatePin;
     svgTemplateMode?: import("./svg-templates").SvgTemplateMode;
     svgTemplateFrameMap?: Record<string, string>;
@@ -824,7 +820,6 @@ export class PresentationGenerationApi {
             vision_qa: resolvedStrategy === "svg" ? false : (body.vision_qa ?? false),
             ...(body.svgTemplatePin ? {} : { authored_style: body.authored_style ?? "default" }),
             ...(body.svg_design_reference_snapshot_id ? { svg_design_reference_snapshot_id: body.svg_design_reference_snapshot_id } : {}),
-            ...(body.svg_design_reference_pin ? { svg_design_reference_pin: body.svg_design_reference_pin } : {}),
             ...(body.svgTemplatePin ? { svgTemplatePin: body.svgTemplatePin, svgTemplateMode: body.svgTemplateMode, svgTemplateFrameMap: body.svgTemplateFrameMap } : {}),
             ...(body.svg_canvas ? { svg_canvas: body.svg_canvas }
               : body.page_size && body.orientation

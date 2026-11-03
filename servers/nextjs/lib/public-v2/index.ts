@@ -7,6 +7,7 @@ export {
   type PublicV2DesignPackPin,
   type PublicV2ExportRequest,
   type PublicV2GenerationMode,
+  type PublicV2RequestGenerationMode,
   type PublicV2GenerationRequest,
   type PublicV2GenerationStageTiming,
   type PublicV2GenerationTiming,

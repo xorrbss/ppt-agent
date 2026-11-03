@@ -4,8 +4,8 @@ import { FormEvent, useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
 
 import {
-  type PublicV2DesignPackPin,
   type PublicV2GenerationMode,
+  type PublicV2RequestGenerationMode,
   type PublicV2OperationSnapshot,
   usePublicV2Operation,
 } from "@/lib/public-v2";
@@ -53,7 +53,7 @@ const EMPTY_FORM = {
   content: "",
   instructions: "",
   slideCount: "",
-  generationMode: "auto" as PublicV2GenerationMode,
+  generationMode: "auto" as PublicV2RequestGenerationMode,
   svgDesignReferenceSnapshotId: "",
   svgComposition: true,
   commonHeaderMode: "uniform" as "uniform" | "free",
@@ -63,12 +63,7 @@ const EMPTY_FORM = {
   canvas: "16:9",
   canvasWidth: "320",
   canvasHeight: "180",
-  designPackId: "",
-  designPackVersion: "",
-  designPackDigest: "",
 };
-
-const SHA256_DIGEST = /^sha256:[0-9a-f]{64}$/;
 
 const GENERATION_MODE_LABEL_KEYS = {
   auto: "automaticSelection",
@@ -194,7 +189,6 @@ export default function PublicV2OperationsClient({ storageScope }: { storageScop
     switch (reasonCode) {
       case "generation_content_required": return t("failureContentRequired");
       case "public_v2_slide_count_must_be_between_1_and_100": return t("failureSlideCountRange");
-      case "public_v2_registered_template_pin_required": return t("failureTemplatePinRequired");
       case "public_v2_source_revision_unavailable": return t("failureSourceRevisionUnavailable");
       case "public_v2_network_error": return t("failureNetworkError");
       case "svg_common_header_title_unresolved": return t("failureHeaderTitleUnresolved");
@@ -247,25 +241,9 @@ export default function PublicV2OperationsClient({ storageScope }: { storageScop
       setRequestError(requestFailure("public_v2_slide_count_must_be_between_1_and_100"));
       return;
     }
-    let designPackPin: PublicV2DesignPackPin | undefined;
     const svgDesignReferenceSnapshotId = form.svgDesignReferenceSnapshotId.trim();
-    if (svgComposition && svgDesignReferenceSnapshotId && (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(svgDesignReferenceSnapshotId) || form.designPackId.trim())) {
-      setRequestError("유효한 디자인 참고 UUID를 입력하고 등록 디자인 참조와 하나만 선택해 주세요."); return;
-    }
-    if (form.generationMode === "registered-template" || (svgComposition && form.designPackId.trim())) {
-      const designPackId = form.designPackId.trim();
-      const version = Number(form.designPackVersion);
-      const digest = form.designPackDigest.trim();
-      if (
-        !designPackId
-        || !Number.isSafeInteger(version)
-        || version < 1
-        || !SHA256_DIGEST.test(digest)
-      ) {
-        setRequestError(requestFailure("public_v2_registered_template_pin_required"));
-        return;
-      }
-      designPackPin = { designPackId, version, digest };
+    if (svgComposition && svgDesignReferenceSnapshotId && !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(svgDesignReferenceSnapshotId)) {
+      setRequestError("유효한 디자인 참고 UUID를 입력해 주세요."); return;
     }
     const widthMm = Number(form.canvasWidth); const heightMm = Number(form.canvasHeight);
     if (svgComposition && form.canvas === "custom" && !([widthMm, heightMm].every((value) => Number.isFinite(value) && value >= 50 && value <= 1000 && Math.abs(value * 100 - Math.round(value * 100)) < 1e-7) && widthMm / heightMm >= 0.25 && widthMm / heightMm <= 4)) {
@@ -280,7 +258,6 @@ export default function PublicV2OperationsClient({ storageScope }: { storageScop
         ...(requestedSlideCount === undefined ? {} : { slideCount: requestedSlideCount }),
         generationMode: form.generationMode,
         ...(svgComposition && svgDesignReferenceSnapshotId ? { svgDesignReferenceSnapshotId } : {}),
-        ...(designPackPin ? svgComposition ? { svgDesignReferencePin: designPackPin } : { designPackPin } : {}),
         ...(svgComposition ? { strategy: "svg" as const, ...(form.canvas === "custom" ? { svgCanvas: { widthMm, heightMm } } : form.canvas.startsWith("a4-") ? { pageSize: "A4" as const, orientation: form.canvas === "a4-portrait" ? "portrait" as const : "landscape" as const } : { aspectRatio: form.canvas as "16:9" | "9:16" | "9:13" | "4:3" | "1:1" | "21:9" }) } : ["auto", "free-design"].includes(form.generationMode) ? { strategy: "authored" as const } : {}),
         ...(svgHeaderApplicable ? { commonHeaderMode: form.commonHeaderMode, commonHeaderCoverException: form.commonHeaderMode === "uniform" && form.commonHeaderCoverException } : {}),
         ...(svgHeaderApplicable && form.commonHeaderMode === "uniform" && (form.commonHeaderInstructions.trim() || form.commonHeaderDocumentLabel.trim() || svgDesignReferenceSnapshotId) ? { commonHeaderDesign: { ...(form.commonHeaderDocumentLabel.trim() ? { document_values: { document_label: form.commonHeaderDocumentLabel } } : {}), ...(form.commonHeaderInstructions.trim() ? { instructions: form.commonHeaderInstructions.trim() } : {}), ...(svgDesignReferenceSnapshotId ? { reference_snapshot_ids: [svgDesignReferenceSnapshotId] } : {}) } } : {}),
@@ -372,9 +349,8 @@ export default function PublicV2OperationsClient({ storageScope }: { storageScop
             <div className="grid gap-4 sm:grid-cols-2">
               <label className="block min-w-0 text-sm font-medium text-slate-700" htmlFor="public-v2-generation-mode">
                 {t("designApproach")} <span className="font-normal text-slate-500">{t("chooseAgainForEachDocument")}</span>
-                <select id="public-v2-generation-mode" value={form.generationMode} onChange={(event) => setForm((value) => ({ ...value, generationMode: event.target.value as PublicV2GenerationMode }))} className="mt-2 min-h-11 w-full min-w-0 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none transition-colors placeholder:text-slate-400 focus:border-violet-300 focus:ring-4 focus:ring-violet-100/60">
+                <select id="public-v2-generation-mode" value={form.generationMode} onChange={(event) => setForm((value) => ({ ...value, generationMode: event.target.value as PublicV2RequestGenerationMode }))} className="mt-2 min-h-11 w-full min-w-0 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none transition-colors placeholder:text-slate-400 focus:border-violet-300 focus:ring-4 focus:ring-violet-100/60">
                   <option value="auto">{t("automaticSelection")}</option>
-                  <option value="registered-template">{t("useRegisteredTemplateAsIs")}</option>
                   <option value="brand-style">{t("applyBrandStyle")}</option>
                   <option value="free-design">{t("freeDesign")}</option>
                   <option value="fidelity-first">{t("prioritizeFidelity")}</option>
@@ -395,7 +371,6 @@ export default function PublicV2OperationsClient({ storageScope }: { storageScop
             {svgHeaderApplicable && form.commonHeaderMode === "uniform" ? <label className="block text-sm text-slate-700">{t("commonHeaderInstructionsLabel")}<textarea aria-label={t("commonHeaderInstructionsLabel")} value={form.commonHeaderInstructions} onChange={(event) => setForm((value) => ({ ...value, commonHeaderInstructions: event.target.value }))} rows={2} className="mt-2 w-full rounded border p-2" placeholder={t("commonHeaderInstructionsPlaceholder")} /><span className="text-xs text-slate-600">{t("commonHeaderComparisonNote")}</span></label> : null}
             {svgHeaderApplicable && form.commonHeaderMode === "uniform" ? <label className="block text-sm text-slate-700">{t("commonHeaderDocumentLabel")}<input aria-label={t("commonHeaderDocumentLabel")} value={form.commonHeaderDocumentLabel} onChange={(event) => setForm((value) => ({ ...value, commonHeaderDocumentLabel: event.target.value }))} className="mt-2 w-full rounded border p-2" placeholder={t("commonHeaderDocumentPlaceholder")} /></label> : null}
             {form.svgComposition && ["auto", "free-design"].includes(form.generationMode) ? <label className="block text-sm text-slate-700">{t("svgReferenceUuidLabel")}<input aria-label={t("svgReferenceUuidLabel")} value={form.svgDesignReferenceSnapshotId} onChange={(event) => setForm((value) => ({ ...value, svgDesignReferenceSnapshotId: event.target.value }))} className="mt-2 w-full rounded border p-2" placeholder={t("svgReferenceUuidPlaceholder")} /></label> : null}
-            {(form.generationMode === "registered-template" || (form.svgComposition && ["auto", "free-design"].includes(form.generationMode))) && <fieldset className="rounded-xl border border-slate-200 bg-slate-50 p-4"><legend className="px-1 text-sm font-semibold text-slate-800">{form.generationMode === "registered-template" ? t("registeredTemplatePin") : t("svgReferenceOptional")}</legend><div className="grid min-w-0 gap-3 sm:grid-cols-3"><label className="text-xs font-medium text-slate-700" htmlFor="public-v2-design-pack-id">{t("designPackId")}<input id="public-v2-design-pack-id" required={form.generationMode === "registered-template"} value={form.designPackId} onChange={(event) => setForm((value) => ({ ...value, designPackId: event.target.value }))} className="mt-2 min-h-11 w-full min-w-0 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm" /></label><label className="text-xs font-medium text-slate-700" htmlFor="public-v2-design-pack-version">{t("version")}<input id="public-v2-design-pack-version" required={form.generationMode === "registered-template" || Boolean(form.designPackId.trim())} min={1} inputMode="numeric" type="number" value={form.designPackVersion} onChange={(event) => setForm((value) => ({ ...value, designPackVersion: event.target.value }))} className="mt-2 min-h-11 w-full min-w-0 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm" /></label><label className="text-xs font-medium text-slate-700" htmlFor="public-v2-design-pack-digest">{t("digest")}<input id="public-v2-design-pack-digest" required={form.generationMode === "registered-template" || Boolean(form.designPackId.trim())} pattern="sha256:[0-9a-f]{64}" value={form.designPackDigest} onChange={(event) => setForm((value) => ({ ...value, designPackDigest: event.target.value }))} placeholder={t("sha256")} className="mt-2 min-h-11 w-full min-w-0 rounded-xl border border-slate-200 bg-white px-3 py-2 font-mono text-sm" /></label></div></fieldset>}
             <button type="submit" disabled={pendingExport || current.phase === "submitting" || current.phase === "monitoring"} className="inline-flex min-h-11 w-full items-center justify-center rounded-xl bg-slate-900 px-5 py-3 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-slate-800 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-violet-200 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto">
               {pendingExport ? t("fileAdmissionRecoveryRequired") : current.pendingAdmission ? t("retryAdmissionRecovery") : t("startGeneration")}
             </button>

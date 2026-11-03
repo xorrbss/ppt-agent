@@ -365,7 +365,7 @@ export const useUploadPageState = ({
     if (generationStrategy === "svg" && config.svgDesignReferencePending) {
       notify.warning(tA2b("svgReferenceRegistrationRequired"), tA2b("svgReferenceRegistrationRequiredBody")); return false;
     }
-    if (generationStrategy === "svg" && config.svgDesignReferenceSnapshotId && (config.svgDesignReferencePin || companyStandard)) {
+    if (generationStrategy === "svg" && config.svgDesignReferenceSnapshotId && companyStandard) {
       notify.warning(tA2b("svgReferenceSelectionConflict"), tA2b("svgReferenceSelectionConflictBody")); return false;
     }
         if (

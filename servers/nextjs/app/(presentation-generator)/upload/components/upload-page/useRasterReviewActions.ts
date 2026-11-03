@@ -167,7 +167,6 @@ export const useRasterReviewActions = ({
       analysisMode: "reconstruct",
       referenceSnapshotId: approved.reference_snapshot_id ?? undefined,
       svgDesignReferenceSnapshotId: config.svgDesignReferenceSnapshotId,
-      svgDesignReferencePin: config.svgDesignReferencePin,
       ...(approved.analysis.target_canvas.svg_canvas ? { svgCanvas: { width_mm: Number(approved.analysis.target_canvas.svg_canvas.width_mm), height_mm: Number(approved.analysis.target_canvas.svg_canvas.height_mm) } }
         : approved.analysis.target_canvas.aspect_ratio ? { aspectRatio: approved.analysis.target_canvas.aspect_ratio } : {}),
       orientation: approved.analysis.target_canvas.orientation,
@@ -191,7 +190,7 @@ export const useRasterReviewActions = ({
       notify.warning(tA2b("commonHeaderModeRequired"), tA2b("commonHeaderRasterPreservationRequired"));
       return;
     }
-    if ((recovery.authoredStyle && recovery.authoredStyle !== "screenshot-blue") || recovery.svgDesignReferenceSnapshotId || recovery.svgDesignReferencePin) {
+    if ((recovery.authoredStyle && recovery.authoredStyle !== "screenshot-blue") || recovery.svgDesignReferenceSnapshotId) {
       notify.warning(tA2b("commonHeaderRedesignRequired"), tA2b("commonHeaderRedesignRequiredBody"));
       return;
     }

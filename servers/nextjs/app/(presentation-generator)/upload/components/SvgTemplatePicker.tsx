@@ -154,7 +154,6 @@ export default function SvgTemplatePicker({ config, onConfigChange, sourceConten
     setPreparation(null);
     dispatch(setPptGenUploadState({ svgTemplateSelection: { pin: card.pin, mode: card.defaultMode, name: card.name, kind: card.kind } }));
     onConfigChange("svgDesignReferenceSnapshotId", undefined);
-    onConfigChange("svgDesignReferencePin", undefined);
     onConfigChange("svgDesignReferencePending", false);
     if (card.kind === "framed" && card.defaultMode === "template-redesign") onConfigChange("commonHeaderMode", "free");
   };

@@ -28,7 +28,8 @@ test("public v2 UI only offers fidelity export and separates terminal states", a
   assert.match(source, /t\("theAdmissionResultNeedsToBeRecovered"\)/);
   assert.equal(ko.theAdmissionResultNeedsToBeRecovered, "접수 결과를 복구해야 합니다.");
   assert.match(source, /recoverPendingExport/);
-  assert.match(source, /value="registered-template">\{t\("useRegisteredTemplateAsIs"\)\}/);
+  // The design-pack route behind "registered-template" was removed on 2026-11-03.
+  assert.doesNotMatch(source, /value="registered-template"/);
   assert.match(source, /value="brand-style">\{t\("applyBrandStyle"\)\}/);
   assert.match(source, /value="free-design">\{t\("freeDesign"\)\}/);
   assert.match(source, /value="fidelity-first">\{t\("prioritizeFidelity"\)\}/);
@@ -40,7 +41,7 @@ test("public v2 UI only offers fidelity export and separates terminal states", a
   assert.match(source, /t\("editabilityFirstIsUnavailableUnderThePublic"\)/);
   assert.equal(ko.editabilityFirstIsUnavailableUnderThePublic, "편집 가능성 우선은 Public v2의 Fidelity-only 출력 계약에서 사용할 수 없습니다.");
   assert.match(source, /generationMode: form\.generationMode/);
-  assert.match(source, /designPackPin/);
+  assert.doesNotMatch(source, /public-v2-design-pack-id|svgDesignReferencePin/);
   assert.match(source, /generationRouteReceipt/);
   assert.doesNotMatch(source, /public-v2-generation-engine/);
   assert.doesNotMatch(source, /hyundai-culture-center/);
