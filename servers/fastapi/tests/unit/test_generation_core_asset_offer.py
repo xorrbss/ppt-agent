@@ -109,17 +109,16 @@ def _build(**overrides):
     return asyncio.run(offer_mod.build_asset_offer(**kwargs))
 
 
-def test_offer_plans_one_illustration_per_scene_and_one_icon_per_node(fakes):
+def test_offer_plans_one_illustration_per_scene_and_library_icons(fakes):
     offer = _build()
     kinds = [(slot.page_index, slot.kind, slot.origin) for slot in offer.slots]
     assert (1, "illustration", "cutout") in kinds
     icons = [slot for slot in offer.slots if slot.kind == "icon"]
-    assert [slot.concept for slot in icons] == ["수집", "분석", "대응"]
-    assert {slot.page_index for slot in icons} == {2}
-    assert icons[0].is_vector and not icons[1].is_vector
-    # one scene call + one sheet for the two missing concepts
-    assert offer.receipt["providerCalls"] == 2
-    assert offer.receipt["illustrations"] == 1 and offer.receipt["icons"] == 3
+    assert [slot.concept for slot in icons] == ["수집"]
+    assert {slot.page_index for slot in icons} == {2} and icons[0].is_vector
+    # one scene call; icons never reach the image provider
+    assert offer.receipt["providerCalls"] == 1
+    assert offer.receipt["illustrations"] == 1 and offer.receipt["icons"] == 1
 
 
 def test_budget_bounds_provider_calls(fakes):
@@ -130,73 +129,13 @@ def test_budget_bounds_provider_calls(fakes):
     assert all(generate is False for _labels, generate in fakes["generate"])
 
 
-def test_offer_reports_sheet_failure_and_observed_calls_separately(fakes, monkeypatch, tmp_path):
-    from services.generation_core.assets.icon_pack import service
-    from services.generation_core.assets.icon_pack.store import IconEntry
-
-    labels = [f"concept-{index}" for index in range(12)]
-
-    async def plan(*_args, **_kwargs):
-        return AuthoredInfographicPlan(slides=tuple(AuthoredSlideInfographic(
-            index=index, archetype="process", weight="hero", nodes=_nodes(*labels[index * 6:(index + 1) * 6]))
-            for index in range(2)))
-
-    async def sheet(pack, provider, concepts, **_kwargs):
-        if len(concepts) < 9:
-            raise RuntimeError("failed before provider entry")
-        async with _metered_image_provider_call(provider="fake", model="test", semantic_slot="image.icon_sheet"):
-            pack.directory.mkdir(parents=True, exist_ok=True)
-            entries = {}
-            for concept in concepts:
-                path = _png(pack.directory / f"{concept}.png")
-                entries[concept_key(concept)] = IconEntry(concept, path.name, 64, 48)
-            return entries, []
-
-    context = infographic_assets.InfographicAssetContext(
-        pack_key="p", output_directory=str(tmp_path), app_data=str(tmp_path),
-        provider=SimpleNamespace(available=True))
-    monkeypatch.setattr(infographic_plan, "resolve_infographic_plan", plan)
-    monkeypatch.setattr(icon_pack, "resolve_icons", service.resolve_icons)
-    monkeypatch.setattr(service, "lookup_reusable_icons", lambda *_args, **_kwargs: {})
-    monkeypatch.setattr(service, "_generate_sheet", sheet)
-    monkeypatch.setattr(infographic_assets, "build_infographic_asset_context", lambda **_: context)
+def test_no_icon_is_generated_even_with_an_image_provider(fakes):
     offer = _build()
-    receipt = offer.receipt["icon"]
-    assert receipt["requested"] == 12 and receipt["resolved"] == 9
-    assert receipt["sheetsAllocated"] == receipt["sheetsAttempted"] == 2
-    assert receipt["sheetsSpent"] == receipt["providerCalls"] == 1
-    assert receipt["sheetsSucceeded"] == receipt["sheetsFailed"] == 1
-    assert receipt["failures"] == [{"sheet": 1, "reason": "RuntimeError"}]
-    assert offer.receipt["failures"] == [{"kind": "icon_sheet", "sheet": 1, "reason": "RuntimeError"}]
-    assert offer.receipt["providerCalls"] == 1 and offer.receipt["budgetAllocatedCalls"] == 2
-
-
-def test_icon_sheet_timeout_keeps_observed_outcomes(fakes, monkeypatch, tmp_path):
-    from services.generation_core.assets.icon_pack import service
-
-    async def plan(*_args, **_kwargs):
-        return AuthoredInfographicPlan(slides=tuple(AuthoredSlideInfographic(
-            index=index, archetype="process", weight="hero",
-            nodes=_nodes(*(f"concept-{index}-{node}" for node in range(6)))) for index in range(2)))
-
-    async def sheet(*_args, **_kwargs):
-        async with _metered_image_provider_call(provider="fake", model="test", semantic_slot="image.icon_sheet"):
-            await asyncio.sleep(5)
-
-    context = infographic_assets.InfographicAssetContext(
-        pack_key="p", output_directory=str(tmp_path), app_data=str(tmp_path),
-        provider=SimpleNamespace(available=True))
-    monkeypatch.setattr(infographic_plan, "resolve_infographic_plan", plan)
-    monkeypatch.setattr(icon_pack, "resolve_icons", service.resolve_icons)
-    monkeypatch.setattr(service, "lookup_reusable_icons", lambda *_args, **_kwargs: {})
-    monkeypatch.setattr(service, "_generate_sheet", sheet)
-    monkeypatch.setattr(infographic_assets, "build_infographic_asset_context", lambda **_: context)
-    offer = _build(timeout_seconds=0.05)
-    receipt = offer.receipt["icon"]
-    assert receipt["sheetsAttempted"] == receipt["sheetsFailed"] == 2
-    assert receipt["sheetsSucceeded"] == receipt["resolved"] == 0
-    assert receipt["failures"] == [{"sheet": 0, "reason": "cancelled"}, {"sheet": 1, "reason": "cancelled"}]
-    assert offer.receipt["providerCalls"] == 2 and offer.receipt["timeouts"] == 1
+    assert all(generate is False for _labels, generate in fakes["generate"])
+    icons = [slot for slot in offer.slots if slot.kind == "icon"]
+    # only the bundled library's vector icon; a missing concept gets no icon
+    assert [slot.concept for slot in icons] == ["수집"] and icons[0].is_vector
+    assert not any(key.startswith("sheets") for key in offer.receipt["icon"])
 
 
 @pytest.mark.parametrize("cutouts", [True, False])
@@ -306,7 +245,7 @@ def test_projection_registers_rasters_and_flattens_vectors(fakes, monkeypatch, t
     assert vector_id.startswith("source-slot-") and entry["kind"] == "icon"
     assert entry["data_url"].startswith("data:image/png;base64,")
     modes = sorted(meta["mode"] for meta in projected.slots[2].values())
-    assert modes == ["flattened", "raster", "raster"]
+    assert modes == ["flattened"]
     assert projected.receipt["iconsFlattened"] == 1
 
 
@@ -325,7 +264,7 @@ def test_over_budget_icon_is_rasterized_and_recorded(fakes, monkeypatch, tmp_pat
     projected = asyncio.run(asset_slots.project_offer(_Session(), _build(), presentation_id=uuid.uuid4(),
                                                       count=3))
     assert projected.vector[2] == {}
-    assert sorted(meta["mode"] for meta in projected.slots[2].values()) == ["raster", "raster", "rasterized"]
+    assert sorted(meta["mode"] for meta in projected.slots[2].values()) == ["rasterized"]
     assert projected.receipt["iconsRasterized"] == 1
 
 
@@ -371,7 +310,7 @@ def test_an_unusable_picture_drops_its_slot_instead_of_failing_the_deck(fakes, m
     offer = _build()
     assert not [slot for slot in offer.slots if slot.kind == "illustration"]
     assert {"page": 1, "reason": "ValueError"} in offer.receipt["failures"]
-    assert offer.receipt["icons"] == 3
+    assert offer.receipt["icons"] == 1
 
 
 def _literal_request():
@@ -514,7 +453,7 @@ def test_icons_only_offer_places_library_vectors_without_any_image_call(library_
     assert receipt["providerCalls"] == 0 and receipt["budget"] == 0 and receipt["budgetAllocatedCalls"] == 0
     assert receipt["illustrations"] == 0 and receipt["scenesPlanned"] == 0
     assert receipt["transparentProvider"] is False
-    assert receipt["icon"]["sheetsAllocated"] == receipt["icon"]["sheetsAttempted"] == 0
+    assert not any(key.startswith("sheets") for key in receipt["icon"])
     assert receipt["icon"]["providerCalls"] == 0 and receipt["icon"]["origins"] == ["library"]
     # the demoted scene page and the process page get icons; "현장" and "생성형" have no library icon
     placed = [(slot.page_index, slot.concept) for slot in offer.slots]
@@ -565,7 +504,7 @@ def test_icons_only_offer_reports_plan_failure_without_icons(library_only, monke
 def test_image_enabled_offer_is_unchanged_by_the_icons_only_mode(fakes):
     offer = _build()
     assert offer.receipt["status"] == "resolved" and "iconsOnly" not in offer.receipt
-    assert "planLlmCalls" not in offer.receipt and offer.receipt["providerCalls"] == 2
+    assert "planLlmCalls" not in offer.receipt and offer.receipt["providerCalls"] == 1
     assert offer.receipt["budget"] == 4 and offer.receipt["illustrations"] == 1
 
 
