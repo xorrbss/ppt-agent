@@ -1,9 +1,9 @@
-"""One deck-scoped LLM call that picks a Lucide icon for every figure label.
+"""One deck-scoped LLM call that picks an icon for every figure label.
 
-The model only chooses names from the vendored icon list (a main icon and an
-optional corner badge); the icons themselves are composed deterministically
-from the vendored geometry (``services/generation_core/assets/icon_pack/
-lucide.py``). Choosing per deck, rather than through a fixed concept table,
+The model only chooses names from one vendored icon family's list (a main
+icon and an optional corner badge); the icons themselves are composed
+deterministically from the vendored geometry (``services/generation_core/
+assets/icon_pack/families.py``). Choosing per deck, rather than through a fixed concept table,
 gives related labels in one deck different icons and covers labels the table
 never anticipated.
 

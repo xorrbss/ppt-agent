@@ -1,12 +1,18 @@
 {
-  "schemaVersion": "lucide-icon-nodes/v1",
+  "schemaVersion": "icon-family/v1",
+  "id": "lucide",
+  "title": "Lucide",
+  "style": "outline",
   "package": "lucide-static",
   "version": "1.67.0",
   "source": "https://registry.npmjs.org/lucide-static/-/lucide-static-1.67.0.tgz",
   "integrity": "sha512-Lu/Ntwfw1GOQiNgTC2iHd/PC4QbqzwktLVFHTB84tldlfUjFgQ+EBWiZc/UPrlNdX97O/KXWRn792hIdQh6nhA==",
-  "file": "icon-nodes.json",
+  "file": "nodes.json",
   "derivation": "package/icon-nodes.json re-serialized with sorted keys and no whitespace",
   "sha256": "fed11f99639ce07c027178d7c925c7ebf19e1468f4eb5f58792c258a7c022d31",
   "icons": 2019,
-  "license": "ISC (LICENSE)"
+  "license": "ISC (LICENSE)",
+  "grid": 24,
+  "strokeWidth": 1.75,
+  "excluded": "none (brand logos were removed upstream before 1.0)"
 }

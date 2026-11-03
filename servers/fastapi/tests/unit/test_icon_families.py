@@ -1,4 +1,4 @@
-"""Vendored Lucide set, its library-style composition, and the deck icon selection call."""
+"""Vendored icon families, their library-style composition, and the deck icon selection call."""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ import xml.etree.ElementTree as ET
 
 import pytest
 
-from services.generation_core.assets.icon_pack import lucide
+from services.generation_core.assets.icon_pack import families
 from services.generation_core.drivers.svg.embed_assets import icon_group
 from services.generation_core.drivers.svg.icon_flatten import ICON_POINT_BUDGET, flatten_icon_svg
 from services.svg_contract import validate_svg
@@ -17,19 +17,29 @@ from utils.hashing import sha256_hex
 from utils.llm_calls import select_deck_icons as selection
 
 
-def test_vendored_set_matches_its_manifest():
-    manifest = json.loads((lucide.LUCIDE_DIRECTORY / "manifest.json").read_text(encoding="utf-8"))
-    payload = (lucide.LUCIDE_DIRECTORY / manifest["file"]).read_bytes()
-    assert sha256_hex(payload) == manifest["sha256"]
-    assert lucide.lucide_version() == manifest["version"] == "1.67.0"
-    assert len(lucide.icon_names()) == manifest["icons"] == 2019
-    assert (lucide.LUCIDE_DIRECTORY / "LICENSE").read_text(encoding="utf-8").startswith("ISC License")
-    # brand logos were removed upstream before this version
-    assert not any(lucide.has_icon(name) for name in ("github", "slack", "linkedin", "youtube"))
+@pytest.mark.parametrize(("family_id", "version", "count", "licence"), [
+    ("lucide", "1.67.0", 2019, "ISC License"),
+    ("tabler-outline", "3.50.0", 4825, "MIT License"),
+])
+def test_vendored_families_match_their_manifests(family_id, version, count, licence):
+    directory = families.FAMILIES_DIRECTORY / family_id
+    manifest = json.loads((directory / "manifest.json").read_text(encoding="utf-8"))
+    assert sha256_hex((directory / manifest["file"]).read_bytes()) == manifest["sha256"]
+    family = families.load_family(family_id)
+    assert (family.version, len(family.names), manifest["icons"]) == (version, count, count)
+    assert (directory / "LICENSE").read_text(encoding="utf-8").startswith(licence)
+    assert not any(families.has_icon(name, family_id) for name in ("github", "slack", "linkedin", "youtube"))
+    assert not any(name.startswith("brand-") for name in family.names)
+
+
+def test_unknown_families_are_refused():
+    assert set(families.available_families()) >= {"lucide", "tabler-outline"}
+    with pytest.raises(ValueError, match="icon_family_unknown"):
+        families.load_family("../lucide")
 
 
 def test_a_single_icon_uses_the_library_layout_and_colour():
-    svg = lucide.compose_icon_svg("shield-check", color="#123456")
+    svg = families.compose_icon_svg("shield-check", color="#123456")
     root = ET.fromstring(svg)
     assert root.get("viewBox") == "0 0 128 128" and root.get("stroke") == "#123456"
     assert (root.get("stroke-width"), root.get("stroke-linecap"), root.get("stroke-linejoin")) == \
@@ -39,28 +49,31 @@ def test_a_single_icon_uses_the_library_layout_and_colour():
 
 
 def test_a_badge_sits_in_the_bottom_right_corner_and_filled_dots_take_the_ink():
-    svg = lucide.compose_icon_svg("key-round", "database", color="#123456")
+    svg = families.compose_icon_svg("key-round", "database", color="#123456")
     root = ET.fromstring(svg)
     groups = [node.get("transform") for node in root if node.tag.endswith("g")]
     assert groups == ["translate(8 8) scale(3.25)", "translate(78 78) scale(1.75)"]
     assert "currentColor" not in svg and 'fill="#123456"' in svg
-    assert lucide.compose_icon_svg("database", "database") == lucide.compose_icon_svg("database")
+    assert families.compose_icon_svg("database", "database") == families.compose_icon_svg("database")
 
 
 def test_unknown_names_are_refused():
-    with pytest.raises(ValueError, match="lucide_icon_unknown"):
-        lucide.compose_icon_svg("not-an-icon")
-    with pytest.raises(ValueError, match="lucide_icon_unknown"):
-        lucide.compose_icon_svg("database", "not-an-icon")
+    with pytest.raises(ValueError, match="icon_family_icon_unknown"):
+        families.compose_icon_svg("not-an-icon")
+    with pytest.raises(ValueError, match="icon_family_icon_unknown"):
+        families.compose_icon_svg("database", "not-an-icon")
 
 
-def test_every_vendored_icon_flattens_within_budget_and_places_on_a_valid_page():
+@pytest.mark.parametrize("family_id", ["lucide", "tabler-outline"])
+def test_every_vendored_icon_flattens_within_budget_and_places_on_a_valid_page(family_id):
     worst = 0
-    for name in lucide.icon_names():
-        icon = flatten_icon_svg(lucide.compose_icon_svg(name, color="#112233"), color="#112233")
-        worst = max(worst, icon.point_count)
+    for name in families.load_family(family_id).names:
+        svg = families.compose_icon_svg(name, color="#112233", family_id=family_id)
+        worst = max(worst, flatten_icon_svg(svg, color="#112233").point_count)
     assert worst <= ICON_POINT_BUDGET
-    icon = flatten_icon_svg(lucide.compose_icon_svg("users", "shield-check", color="#112233"), color="#112233")
+    icon = flatten_icon_svg(families.compose_icon_svg("users", "shield-check", color="#112233",
+                                                      family_id=family_id), color="#112233")
+    assert (icon.line_cap, icon.line_join) == ("round", "round")
     group = ET.tostring(icon_group(icon, x=100, y=100, width=64, height=64), encoding="unicode")
     validate_svg('<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720" viewBox="0 0 1280 720">'
                  '<text x="80" y="80" font-family="Noto Sans KR" font-size="32" fill="#112233">T</text>'
@@ -68,9 +81,9 @@ def test_every_vendored_icon_flattens_within_budget_and_places_on_a_valid_page()
 
 
 def test_write_icon_is_content_addressed(tmp_path):
-    first = lucide.write_icon("siren", None, color="#123456", directory=tmp_path)
-    again = lucide.write_icon("siren", None, color="#123456", directory=tmp_path)
-    other = lucide.write_icon("siren", None, color="#654321", directory=tmp_path)
+    first = families.write_icon("siren", None, color="#123456", directory=tmp_path)
+    again = families.write_icon("siren", None, color="#123456", directory=tmp_path)
+    other = families.write_icon("siren", None, color="#654321", directory=tmp_path)
     assert first == again != other
     assert first.name == sha256_hex(first.read_bytes()) + ".svg"
 

@@ -4,8 +4,8 @@ Format-neutral. The builder reuses the deck-scoped infographic plan to decide
 which pages are scenes (one generated illustration each) and which pages carry
 a figure whose nodes get an icon, then produces the files: a transparent scene
 cutout (or, without an alpha-capable provider, an ordinary illustration from
-the style's illustration prompt) and icons: the Lucide icon the model picked
-for each label (``icon_pack/lucide.py``), else an icon-pack icon (a library
+the style's illustration prompt) and icons: the icon the model picked for each
+label from the style's vendored family (``icon_pack/families.py``), else an icon-pack icon (a library
 vector SVG, a cached pack PNG, or a newly generated sprite-sheet PNG). It returns slots that
 name files on disk; how a slot is placed on a page is the driver's business
 (``drivers/svg/asset_slots.py`` for SVG).
@@ -173,36 +173,37 @@ def _is_library_vector(icon) -> bool:
     return icon.source == "library" and Path(icon.path).suffix.lower() == ".svg"
 
 
-async def _lucide_icons(labels, *, color, receipt) -> dict[str, Path]:
-    """Lucide icons the model picked for this deck's labels, written as icon files.
+async def _family_icons(labels, *, color, receipt, family_id=None) -> dict[str, Path]:
+    """Icons the model picked for this deck's labels from one vendored family, as icon files.
 
-    One deck-scoped LLM call chooses names from the vendored Lucide set; the
-    icons are composed from the vendored geometry. Fails open: any failure
-    leaves every label to the existing resolution below.
+    One deck-scoped LLM call chooses names from the family's list; the icons
+    are composed from the vendored geometry. Fails open: any failure leaves
+    every label to the existing resolution below.
     """
-    from services.generation_core.assets.icon_pack import lucide
+    from services.generation_core.assets.icon_pack import families
     from utils.asset_directory_utils import get_images_directory
     from utils.llm_calls import select_deck_icons as icon_selection
 
     labels = list(dict.fromkeys(labels))
     if not labels:
         return {}
+    family_id = family_id or families.DEFAULT_FAMILY
     try:
-        version, names = lucide.lucide_version(), lucide.icon_names()
+        family = families.load_family(family_id)
     except (OSError, ValueError, KeyError) as error:
-        receipt.update(status="unavailable", reason=type(error).__name__)
+        receipt.update(status="unavailable", family=family_id, reason=type(error).__name__)
         return {}
-    receipt.update(version=version, requested=len(labels))
-    picks = await icon_selection.select_deck_icons(labels, names)
+    receipt.update(family=family.id, version=family.version, requested=len(labels))
+    picks = await icon_selection.select_deck_icons(labels, family.names)
     if picks is None:
         receipt.update(status="selection_failed", selected=0)
         return {}
-    directory = Path(get_images_directory()) / "lucide-icons"
+    directory = Path(get_images_directory()) / "icon-families" / family.id
     paths: dict[str, Path] = {}
     for label, (main, badge) in picks.items():
         try:
-            paths[label] = await asyncio.to_thread(lucide.write_icon, main, badge, color=color,
-                                                   directory=directory)
+            paths[label] = await asyncio.to_thread(families.write_icon, main, badge, color=color,
+                                                   directory=directory, family_id=family.id)
         except (OSError, ValueError) as error:
             receipt.setdefault("failures", []).append({"label": label, "reason": type(error).__name__})
     receipt.update(status="selected", selected=len(paths),
@@ -212,10 +213,10 @@ async def _lucide_icons(labels, *, color, receipt) -> dict[str, Path]:
 
 
 async def _icon_slots(pages, *, pack_key, context, color, spend, receipt, library_only=False,
-                      preselected=None):
-    """One icon slot per planned node: the deck's Lucide picks first, then the icon pack.
+                      preselected=None, family_origin="family"):
+    """One icon slot per planned node: the deck's family picks first, then the icon pack.
 
-    ``preselected`` maps labels to the Lucide icon files picked for this deck;
+    ``preselected`` maps labels to the family icon files picked for this deck;
     only the labels it does not cover go through the icon pack below.
     ``library_only`` keeps just the bundled vector library's icons there: nothing
     is generated and a cached sprite-sheet PNG (which an image provider once
@@ -248,19 +249,20 @@ async def _icon_slots(pages, *, pack_key, context, color, spend, receipt, librar
     if library_only:
         resolution.icons = {key: icon for key, icon in resolution.icons.items() if _is_library_vector(icon)}
     receipt.update(requested=len(labels), resolved=len(resolution.icons) + len(preselected),
-                   lucide=len(preselected), sheetsAllocated=affordable,
+                   family=len(preselected), sheetsAllocated=affordable,
                    sheetsAttempted=generated.sheets_attempted,
                    sheetsSucceeded=generated.sheets_generated, sheetsFailed=generated.sheets_failed,
                    failures=sorted(generated.sheet_failures, key=lambda failure: failure["sheet"]),
                    origins=sorted({icon.source for icon in resolution.icons.values()}
-                                  | ({"lucide"} if preselected else set())))
+                                  | ({family_origin} if preselected else set())))
     slots = []
     for index, nodes in pages:
         for label in dict.fromkeys(nodes):
             if label in preselected:
                 slots.append(_file_slot(preselected[label], page_index=index, role="figure-icon", kind="icon",
                                         alt=f"icon: {label}", concept=label,
-                                        bbox_hint=(0.0, 0.0, ICON_EDGE_HINT, ICON_EDGE_HINT), origin="lucide"))
+                                        bbox_hint=(0.0, 0.0, ICON_EDGE_HINT, ICON_EDGE_HINT),
+                                        origin=family_origin))
                 continue
             icon = resolution.icons.get(concept_key(label))
             if icon is None:
@@ -283,7 +285,7 @@ async def build_asset_offer(*, outline, brand, style, roles: Sequence[str], inst
     its bundled library vector icon when the library has one. It costs the
     plan's one LLM call and zero image-provider calls.
 
-    In every mode the figure labels first get the deck's Lucide picks (one more
+    In every mode the figure labels first get the deck's family picks (one more
     LLM call, run while the scenes are made, ``iconSelection`` in the receipt);
     only the labels it leaves uncovered go through the icon pack.
     """
@@ -334,10 +336,12 @@ async def build_asset_offer(*, outline, brand, style, roles: Sequence[str], inst
             failures.append({"page": slide.index, "reason": type(error).__name__})
             return None
 
-    lucide_receipt: dict = {}
+    family_receipt: dict = {}
+    family_id = getattr(style, "icon_family", None)
     figure_labels = [label for _index, nodes in figures for label in nodes]
-    lucide_task = asyncio.ensure_future(_lucide_icons(
-        figure_labels, color=getattr(brand, "primary", None) or "#1E5EFF", receipt=lucide_receipt))
+    family_task = asyncio.ensure_future(_family_icons(
+        figure_labels, color=getattr(brand, "primary", None) or "#1E5EFF", receipt=family_receipt,
+        family_id=family_id if isinstance(family_id, str) and family_id else None))
     with observe_image_provider_calls() as scene_calls, svg_outline_spans.span("scenes"):
         scene_slots = await asyncio.gather(*(scene(slide) for slide in scenes))
     icon_receipt: dict = {}
@@ -345,15 +349,16 @@ async def build_asset_offer(*, outline, brand, style, roles: Sequence[str], inst
     try:
         with observe_image_provider_calls() as icon_calls, svg_outline_spans.span("icon_sheets"):
             try:
-                preselected = await lucide_task
+                preselected = await family_task
             except Exception as error:  # noqa: BLE001 - icons are optional
                 LOGGER.warning("[svg] deck icon selection failed: %s", type(error).__name__)
                 preselected = {}
-                lucide_receipt.update(status="error", reason=type(error).__name__)
+                family_receipt.update(status="error", reason=type(error).__name__)
             icon_slots = await _icon_slots(figures, pack_key=getattr(context, "pack_key", style_id),
                                            context=context, spend=spend, receipt=icon_receipt,
                                            color=getattr(brand, "primary", None) or "#1E5EFF",
-                                           library_only=icons_only, preselected=preselected)
+                                           library_only=icons_only, preselected=preselected,
+                                           family_origin=family_receipt.get("family", "family"))
     except Exception as error:  # noqa: BLE001 - icons are optional
         LOGGER.warning("[svg] asset offer icon resolution failed: %s", type(error).__name__)
         icon_slots, icon_receipt = [], {"error": type(error).__name__}
@@ -366,7 +371,7 @@ async def build_asset_offer(*, outline, brand, style, roles: Sequence[str], inst
                    scenesPlanned=len(scenes), figurePages=len(figures),
                    illustrations=sum(slot.kind == "illustration" for slot in slots),
                    icons=sum(slot.kind == "icon" for slot in slots), icon=icon_receipt,
-                   iconSelection=lucide_receipt,
+                   iconSelection=family_receipt,
                    providerCalls=scene_calls.entered + icon_calls.entered,
                    budgetAllocatedCalls=spend.calls, timeouts=spend.timeouts, failures=failures,
                    transparentProvider=context is not None)

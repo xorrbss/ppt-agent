@@ -642,7 +642,8 @@ def test_lucide_picks_serve_their_labels_and_only_the_rest_reach_the_icon_pack(f
     selection = offer.receipt["iconSelection"]
     assert (selection["status"], selection["requested"], selection["selected"], selection["badges"]) == \
         ("selected", 3, 2, 1)
-    assert offer.receipt["icon"]["lucide"] == 2 and "lucide" in offer.receipt["icon"]["origins"]
+    assert offer.receipt["icon"]["family"] == 2 and "lucide" in offer.receipt["icon"]["origins"]
+    assert (selection["family"], selection["version"]) == ("lucide", "1.67.0")
 
 
 def test_a_failed_selection_leaves_every_label_to_the_icon_pack(fakes, monkeypatch):

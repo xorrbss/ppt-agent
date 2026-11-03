@@ -1,0 +1,18 @@
+{
+  "schemaVersion": "icon-family/v1",
+  "id": "tabler-outline",
+  "title": "Tabler Icons (outline)",
+  "style": "outline",
+  "package": "@tabler/icons",
+  "version": "3.50.0",
+  "source": "https://registry.npmjs.org/@tabler/icons/-/icons-3.50.0.tgz",
+  "integrity": "sha512-HflLxyrH1cqC7s7jzQGSjpsTAVIoaf7+/yHjbdM59rJQBMjliibp+LYhDPFxOMcwa1M8DNpOk6ENzQiWn9a1Dg==",
+  "file": "nodes.json",
+  "derivation": "package/icons/outline/*.svg parsed to [tag, attributes] nodes; the invisible 24x24 bounding path and class attributes dropped; brand-* icons excluded",
+  "sha256": "83733aae90c600807efda23c2917a7c4ee6a660dc682f8c527f14e79f4853193",
+  "icons": 4825,
+  "license": "MIT (LICENSE)",
+  "grid": 24,
+  "strokeWidth": 1.75,
+  "excluded": "brand-* (378 brand logos)"
+}
