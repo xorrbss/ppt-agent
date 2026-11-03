@@ -81,14 +81,57 @@ push-down, `SVG_ILLUSTRATION_PARTS` default `cover,scene`).
   arms icon omission hit 1 of 21 icon pages outside the header step, but 4
   header-candidate attempts in the failed deck.
 
+### Header candidates judged by their header (`871053c58`)
+
+The failed deck above showed that one representative page's body defects could
+fail a whole deck. Change:
+
+* When no header candidate passes outright, a candidate whose representative
+  page passed every header check (no `svg_common_header_*` failure, a passed
+  `quality.common_header` measurement, a valid last drawing, the author's body
+  kept) is admitted. Its body is promoted and the regular page loop measures,
+  repairs and rescues it like any other page. When a candidate passes outright,
+  selection works exactly as before.
+* A candidate page rescued by the fallback keeps `author_body_svg` and its
+  attempt identity, so it can still be promoted.
+* The selection input marks such a candidate with `body_checks`, and the
+  selection rules say to judge the header and its fit, not those body defects
+  (prompt `svg-common-header-screen-choice/v2.2`).
+* `svg_common_header_representative_pages_ineligible` is a bounded failure:
+  when no candidate qualifies at all, the deck takes the reduced header instead
+  of failing.
+* Not changed: the representative page choice. Its risk counts
+  `ctx.manifests[index]`, but only raster offer slots enter it; deck icons and
+  model drawings are vector slots and do not, so the icon work did not bias it.
+
+Re-measurement with this code, same prompt and styles (cover and scene pictures):
+
+| mode | exec-report | strategic-navy | flat-infographic |
+|---|---|---|---|
+| off | 6/8 (density 1, attempts exhausted 1) | 6/8 (source quality 2) | 8/8 |
+| vector (cover, scene) | 5/8 (design 2, attempts exhausted 1) | 7/8 (density 1) | 8/8 |
+
+* No deck failed; all six published a designed header. In every deck at least
+  one candidate passed outright, so the new header-only admission did not need
+  to run (one vector candidate had a body-only `text_overlap` with its header
+  passed, which is the case it admits). Its behaviour is covered by unit tests
+  (`test_svg_header_scoped_eligibility.py`, `test_svg_terminal_rescue.py`).
+* Pages passed: off 20/24, vector 20/24. Cost: off $4.87, vector $5.30 (the
+  illustration stage $0.33 vs $0.51). 3 drawings requested, 3 accepted (one
+  after a retry for invalid XML).
+* Combined with the previous re-measurement, vector is level with off on page
+  failures but has added design-density flags in two of the three runs. The
+  default stays **off**; turning it on is now a product decision rather than a
+  stability blocker.
+
 ## Open
 
 1. **Group font attributes — decided 2026-11-03.** A model sometimes writes
    `font-family` on a `<g>`; the contract rejected it and, on a header
    representative page, the whole deck failed. Decision: font-family/size/weight
    and text-anchor written on `svg`/`g` are pushed onto the texts (never `fill`),
-   in the producer and in `parse_author_response` alike (`97200520f`). Still open:
-   a deck should not fail outright when every representative page fails.
+   in the producer and in `parse_author_response` alike (`97200520f`). A deck no
+   longer fails outright when every representative page fails (`871053c58`).
 2. **Pictographs** (counts drawn as rows of icons) are not implemented.
 3. **Icons the author does not place** still fail their page (`asset_icon_omitted`);
    seen on two pages of the first live vector deck.
