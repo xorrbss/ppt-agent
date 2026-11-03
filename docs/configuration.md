@@ -82,4 +82,5 @@ Secret values are never read or rendered by the generator.
 | `BRAVE_SEARCH_API_KEY` | string | — | yes | Brave Search API key. |
 | `WORKSPACE_OPERATION_WORKER_LAUNCH` | enum | `bundled` | no | How start.js provides the external workspace operation worker when WORKSPACE_OPERATION_WORKER_MODE=external: bundled spawns one generation worker beside the API in the same container (stock images); service means a separate deployment unit runs python -m services.workspace_operation_worker (the docker-compose multi profile), so start.js must not spawn one. |
 | `OPENAI_REASONING_EFFORT` | enum | — | no | Optional reasoning effort for the OpenAI provider's chat-completions API on reasoning-capable models (o1/o3/o4/gpt-5/gpt-6 families). Unset sends no reasoning parameter; other model families reject it. |
+| `SVG_USER_TEMPLATES_ENABLED` | boolean | `false` | no | Allow new SVG user templates: registering a PPTX as a style or framed template, publishing it, and generating SVG decks from it. Decks already pinned to a template keep opening, editing and exporting when this is off. |
 

@@ -1649,6 +1649,15 @@
       "description": "Spawned workers for CPU-bound raster page analysis. Zero selects min(4, cpu count minus one); positive values set a fixed cap. Each worker holds one page image."
     },
     {
+      "key": "SVG_USER_TEMPLATES_ENABLED",
+      "type": "boolean",
+      "default": false,
+      "secret": false,
+      "targets": ["fastapi.runtime", "compose.shared", "docs.public"],
+      "group": "templates",
+      "description": "Allow new SVG user templates: registering a PPTX as a style or framed template, publishing it, and generating SVG decks from it. Decks already pinned to a template keep opening, editing and exporting when this is off."
+    },
+    {
       "key": "AUTHORED_AUTHOR_PROMPT_MODEL",
       "type": "string",
       "default": null,
