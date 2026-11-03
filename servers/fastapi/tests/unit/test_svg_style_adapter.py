@@ -428,3 +428,19 @@ def test_source_identity_v2_styles_actual_raster_table_and_preserves_legacy_snap
     assert {node.get("fill") for node in texts[2:]} == {modern["tokens"]["text"]}
     assert {node.get("stroke") for node in nodes if node.get("stroke")} == {modern["table"]["border"]}
     assert bindings[0]["region_id"] == "approved-table"
+
+
+def test_uploaded_accent_prefers_colours_the_slides_show_over_theme_only_colours():
+    # A live template took Office's default hyperlink colour #0000FF, defined
+    # in the theme but never shown, as its accent instead of the orange it used.
+    from services.svg_reference_identity import color_identity
+    values = [
+        {"value": "#0E3D7A", "roles": ["fill", "text"], "count": 6},
+        {"value": "#E85D04", "roles": ["fill"], "count": 3},
+        {"value": "#0000FF", "roles": ["theme"], "count": 1},
+        {"value": "#800080", "roles": ["theme"], "count": 1},
+    ]
+    _palette, roles = color_identity(values, [])
+    assert roles["accent"] == "#E85D04"
+    _palette, roles = color_identity([item for item in values if item["roles"] == ["theme"]], [])
+    assert roles["accent"] == "#0000FF"  # nothing shown: the theme still decides

@@ -22,7 +22,7 @@ from utils.hashing import canonical_json_digest, sha256_hex
 _MAX_SOURCE_BYTES = 100 * 1024 * 1024
 _IMAGE_MEDIA_TYPES = {"image/png", "image/jpeg", "image/webp"}
 _DOCUMENT_MEDIA_TYPES = {"application/pdf": "pdf", "application/vnd.openxmlformats-officedocument.presentationml.presentation": "pptx"}
-_EXTRACTION_VERSION = "svg-reference-extraction/v2"
+_EXTRACTION_VERSION = "svg-reference-extraction/v3"
 _EXTRACTION_CACHE: OrderedDict[tuple, dict] = OrderedDict()
 _EXTRACTION_CACHE_LOCK = RLock()
 _EXTRACTION_CACHE_LIMIT = 8

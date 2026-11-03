@@ -59,7 +59,13 @@ def color_identity(color_values: list[dict], examples: list[dict]) -> tuple[list
     if foreground is None:
         foreground = max(palette + ["#111827", "#FFFFFF"], key=lambda color: _contrast(background, color))
     accents = [color for color in palette if color != foreground and _contrast(background, color) >= 1.5]
-    accent = max(accents, key=lambda color: colorsys.rgb_to_hsv(*_rgb(color))[1], default=foreground)
+    # A theme defines colours a deck may never show (Office's default
+    # hyperlink #0000FF, unused accent slots). Prefer colours the slides use,
+    # as shape or text paint or in the rendered pages; theme-only colours
+    # stand in only when the slides show none.
+    shown = {item["value"] for item in color_values if set(item.get("roles", [])) - {"theme"}} | set(sampled)
+    accent = max([color for color in accents if color in shown] or accents,
+                 key=lambda color: colorsys.rgb_to_hsv(*_rgb(color))[1], default=foreground)
     return palette, {
         "background": background, "foreground": foreground, "accent": accent,
         "basis": "observed-colors-and-rendered-edges" if examples else "observed-colors-with-contrast-fallback",
