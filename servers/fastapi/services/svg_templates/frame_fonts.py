@@ -195,12 +195,50 @@ MAX_INSTALLED_FONT_CANDIDATES = 2048
 MAX_INSTALLED_COLLECTION_FACES = 32
 
 
+#: Installed font directories on a non-Windows server (fontconfig's defaults).
+_POSIX_FONT_ROOTS = ("/usr/share/fonts", "/usr/local/share/fonts")
+_POSIX_USER_FONT_DIRS = (".local/share/fonts", ".fonts")
+
+
+def _installed_posix_font_paths():
+    """Installed font files under the system and user font directories.
+
+    Only these fixed directories are read, never a caller-supplied path, and
+    symlinks must resolve inside one of them. The walk is bounded like the
+    Windows inventory.
+    """
+    import os
+    from pathlib import Path
+    roots = [Path(root) for root in _POSIX_FONT_ROOTS]
+    home = os.environ.get("HOME")
+    if home:
+        roots.extend(Path(home) / relative for relative in _POSIX_USER_FONT_DIRS)
+    roots = [root.resolve() for root in roots if root.is_dir()]
+    candidates = set()
+    for root in roots:
+        for directory, _subdirectories, files in os.walk(root):
+            for name in files:
+                path = Path(directory) / name
+                if path.suffix.casefold() not in {".ttf", ".otf", ".ttc"}:
+                    continue
+                try:
+                    resolved = path.resolve(strict=True)
+                except OSError:
+                    continue
+                if not any(resolved.is_relative_to(base) for base in roots) or not resolved.is_file():
+                    continue
+                candidates.add(resolved)
+                if len(candidates) > MAX_INSTALLED_FONT_CANDIDATES:
+                    raise ValueError("svg_template_installed_font_inventory_limit")
+    return tuple(sorted(candidates, key=lambda path: str(path).casefold()))
+
+
 def _installed_font_paths():
-    """Read only installed Windows font locations, never caller-supplied paths."""
+    """Read only installed font locations, never caller-supplied paths."""
     import os
     from pathlib import Path
     if os.name != "nt":
-        return ()
+        return _installed_posix_font_paths()
     import winreg
     from itertools import islice
     roots = [Path(os.environ.get("WINDIR", "C:/Windows")) / "Fonts"]

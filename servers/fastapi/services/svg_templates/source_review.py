@@ -208,6 +208,104 @@ async def _render_source_isolated(path, package, frame):
             if identity is not None:
                 _terminate_owned_powerpoint(identity)
 
+#: Source preview renderers. PowerPoint is the reference on Windows; a server
+#: without it (Linux, Docker) renders the source with LibreOffice, which lays
+#: text out differently, so its review evidence is marked approximate.
+POWERPOINT_RENDERER = "powerpoint"
+LIBREOFFICE_RENDERER = "libreoffice"
+_LIBREOFFICE_TIMEOUT_SECONDS = 120
+
+
+def _libreoffice_executable():
+    import shutil
+    return shutil.which("soffice") or shutil.which("libreoffice")
+
+
+def source_preview_renderer() -> str | None:
+    """The renderer this server uses for source previews, or ``None``."""
+    if os.name == "nt":
+        return POWERPOINT_RENDERER
+    return LIBREOFFICE_RENDERER if _libreoffice_executable() else None
+
+
+def _libreoffice_version(executable: str) -> str:
+    completed = subprocess.run([executable, "--version"], capture_output=True, text=True,
+                               timeout=_LIBREOFFICE_TIMEOUT_SECONDS, check=False)
+    version = " ".join(completed.stdout.split())
+    if completed.returncode != 0 or not version.startswith("LibreOffice "):
+        raise ValueError("svg_template_libreoffice_unavailable")
+    return version[:120]
+
+
+def _private_fontconfig(directory: Path, package) -> dict:
+    """A fontconfig setup that offers the template's own font bytes first.
+
+    The manifest's verified bytes are written to a private directory and
+    fontconfig reads it before the system configuration, so the preview uses
+    the same faces the frame does. Nothing global is installed or changed.
+    """
+    fonts = directory / "fonts"
+    fonts.mkdir()
+    for asset, content in resolve_font_manifest(package.font_manifest):
+        (fonts / f"{asset.asset_id}.{'otf' if content[:4] == b'OTTO' else 'ttf'}").write_bytes(content)
+    config = directory / "fonts.conf"
+    config.write_text('<?xml version="1.0"?><!DOCTYPE fontconfig SYSTEM "fonts.dtd"><fontconfig>'
+                      f"<dir>{fonts}</dir><cachedir>{directory / 'fontcache'}</cachedir>"
+                      '<include ignore_missing="yes">/etc/fonts/fonts.conf</include></fontconfig>',
+                      encoding="utf-8")
+    return {"FONTCONFIG_FILE": str(config)}
+
+
+def _render_source_libreoffice(path: Path, package):
+    """Convert the source deck to PDF with LibreOffice and rasterize each frame's page."""
+    import pypdfium2 as pdfium
+    if bytes_digest(path.read_bytes()) != package.source_digest:
+        raise ValueError("svg_template_source_digest_mismatch")
+    executable = _libreoffice_executable()
+    if not executable:
+        raise ValueError("svg_template_libreoffice_unavailable")
+    version = _libreoffice_version(executable)
+    width, height = package.source_canvas.width_px, package.source_canvas.height_px
+    with tempfile.TemporaryDirectory(prefix="svg-template-libreoffice-") as raw:
+        directory = Path(raw)
+        source = directory / "source.pptx"
+        source.write_bytes(path.read_bytes())
+        environment = {**os.environ, **_private_fontconfig(directory, package), "HOME": str(directory)}
+        completed = subprocess.run([executable, "--headless", "--norestore", "--nolockcheck",
+                                    f"-env:UserInstallation={(directory / 'profile').as_uri()}",
+                                    "--convert-to", "pdf", "--outdir", str(directory), str(source)],
+                                   capture_output=True, timeout=_LIBREOFFICE_TIMEOUT_SECONDS,
+                                   env=environment, check=False)
+        pdf_path = directory / "source.pdf"
+        if completed.returncode != 0 or not pdf_path.is_file():
+            raise ValueError("svg_template_libreoffice_render_failed")
+        images = {}
+        document = pdfium.PdfDocument(pdf_path.read_bytes())
+        try:
+            for page_index in sorted({frame.source_page for frame in package.frames}):
+                if page_index >= len(document):
+                    raise ValueError("svg_template_source_page_missing")
+                page = document[page_index]
+                try:
+                    bitmap = page.render(scale=width / page.get_width())
+                    image = bitmap.to_pil().convert("RGB")
+                    bitmap.close()
+                finally:
+                    page.close()
+                if image.size != (width, height):
+                    # The PDF page is the slide at its physical size; rounding can
+                    # leave the raster a pixel off the logical canvas.
+                    if abs(image.size[0] - width) > 2 or abs(image.size[1] - height) > 2:
+                        raise ValueError("svg_template_review_image_size_mismatch")
+                    image = image.resize((width, height), Image.LANCZOS)
+                output = BytesIO()
+                image.save(output, format="PNG")
+                images[page_index] = output.getvalue()
+        finally:
+            document.close()
+    return version, images
+
+
 def _compare_fixed_regions(source: bytes, rendered: bytes, frame):
     with Image.open(BytesIO(source)) as a, Image.open(BytesIO(rendered)) as b:
         source_image = a.convert("RGB")
@@ -310,6 +408,8 @@ async def prepare_source_review(session, package, source_path, operation_id, *, 
     versions = set()
     glyph_preview = package.schema_version == "svg-template-package/v3"
     rasterizer = None
+    renderer_kind = POWERPOINT_RENDERER if glyph_preview else source_preview_renderer()
+    libreoffice_pages = None
     if glyph_preview:
         if (not isinstance(captured_pdf, bytes) or not isinstance(capture_receipt, dict)
                 or capture_receipt.get("status") != "captured"
@@ -329,6 +429,10 @@ async def prepare_source_review(session, package, source_path, operation_id, *, 
                     raise ValueError("svg_template_review_environment_changed")
                 rasterizer = current_rasterizer
                 version = capture_receipt["producer_version"]
+            elif renderer_kind == LIBREOFFICE_RENDERER:
+                if libreoffice_pages is None:
+                    libreoffice_pages = await asyncio.to_thread(_render_source_libreoffice, Path(source_path), package)
+                version, source_image = libreoffice_pages[0], libreoffice_pages[1][frame.source_page]
             else:
                 version, source_image = await _render_source_isolated(Path(source_path), package, frame)
             image = await render_template_frame_for_review(frame)
@@ -338,6 +442,7 @@ async def prepare_source_review(session, package, source_path, operation_id, *, 
             versions.add(version)
         except Exception as error:
             safe_codes = {"svg_template_powerpoint_unavailable", "svg_template_powerpoint_fonts_unavailable", "svg_template_powerpoint_busy",
+                "svg_template_libreoffice_unavailable", "svg_template_libreoffice_render_failed",
                 "svg_template_powerpoint_ownership_unproven", "svg_template_source_digest_mismatch",
                 "svg_template_source_page_missing", "svg_template_review_image_size_mismatch",
                 "svg_template_review_region_invalid", "svg_template_review_regions_missing"}
@@ -374,7 +479,7 @@ async def prepare_source_review(session, package, source_path, operation_id, *, 
         entry = {"frame_id": frame.frame_id, "frame_digest": frame.digest,
             "font_manifest_digest": frame.font_manifest.digest,
             "source_environment_digest": artifact_digest({"system": platform.platform(),
-                "powerpoint_version": version, "font_manifest_digest": frame.font_manifest.digest}),
+                f"{renderer_kind}_version": version, "font_manifest_digest": frame.font_manifest.digest}),
             "source_image_digest": source_digest, "frame_image_digest": frame_digest,
             "source_image_ref": {"artifact_id": str(source_refs[frame.frame_id].artifact_id),
                                  "sha256": source_refs[frame.frame_id].sha256},
@@ -392,10 +497,14 @@ async def prepare_source_review(session, package, source_path, operation_id, *, 
                 raster_scale=frame.source_canvas.width_px / authority.physical_canvas_pt[0])
         frames.append(entry)
     evidence = {"schema_version": "svg-template-review/v1", "source_digest": package.source_digest,
-        "package_digest": package.digest, "renderer": {"kind": "powerpoint", "version": version,
-        "environment_digest": artifact_digest({"system": platform.platform(), "powerpoint_version": version,
+        "package_digest": package.digest, "renderer": {"kind": renderer_kind, "version": version,
+        "environment_digest": artifact_digest({"system": platform.platform(), f"{renderer_kind}_version": version,
             "font_manifest_digest": package.font_manifest.digest}),
         "font_manifest_digest": package.font_manifest.digest}, "frames": frames}
+    if renderer_kind == LIBREOFFICE_RENDERER:
+        # LibreOffice does not lay text out exactly like PowerPoint: the person
+        # approving the template is told the source preview is approximate.
+        evidence["renderer"]["approximate"] = True
     if glyph_preview:
         authority = package.frames[0].fixed_glyph_preview
         evidence.update(schema_version="svg-template-review/v3", source_review_domain="powerpoint-pdf/pdfium/v1")

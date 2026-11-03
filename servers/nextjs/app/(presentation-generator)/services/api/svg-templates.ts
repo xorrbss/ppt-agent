@@ -8,6 +8,7 @@ export interface SvgTemplatePin { templateId: string; revision: number; digest: 
 export interface SvgTemplateIssue { code?: string; reason_code?: string; message?: string; severity?: "blocked" | "review-required" }
 export interface SvgTemplateReviewEvidence {
   status?: string; reason?: string;
+  renderer?: { kind?: string; version?: string; approximate?: boolean };
   frames?: Array<{ frame_id: string; status?: string; reason?: string; frame_digest?: string; source_image_digest?: string; frame_image_digest?: string; font_manifest_digest?: string }>;
 }
 export interface SvgTemplateCard {

@@ -2661,6 +2661,7 @@
     "visualReviewIsRequiredToExportAn": "편집 가능한 PPTX(Hybrid)로 내보내려면 시각 검수가 필요합니다. 켜면 생성 시간이 약 두 배가 되고, 끄면 화면을 그대로 담는 Fidelity PPTX와 PDF만 내보낼 수 있습니다."
   },
   "uploadExtras": {
+    "approximateSourcePreview": "이 원본 미리보기는 LibreOffice로 만든 근사 렌더링입니다. PowerPoint 화면과 글자 위치·줄 간격이 조금 다를 수 있으니, 정확한 비교가 필요하면 Windows의 PowerPoint 환경에서 등록해 주세요.",
     "a4GenerationIsNotReadyForThe": "선택한 생성 방식과 회사 표준 조합은 아직 A4 생성이 준비되지 않았습니다. 선택한 방향은 유지됩니다.",
     "a4GenerationLimitation": "A4 생성 제한",
     "a4LayoutProportionPreviewForSlideValue": "{value0}장 A4 배치 비율 미리보기",

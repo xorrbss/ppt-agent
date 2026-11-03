@@ -106,7 +106,8 @@ def validate_frame_review(package: SvgTemplatePackage | dict, evidence: dict, *,
             or evidence.get("digest") != artifact_digest({k: v for k, v in evidence.items() if k != "digest"})):
         raise ValueError("svg_template_review_evidence_mismatch")
     renderer = evidence.get("renderer", {})
-    if (renderer.get("kind") != ("powerpoint-pdf" if v3 else "powerpoint") or not renderer.get("version")
+    if ((renderer.get("kind") != "powerpoint-pdf" if v3 else renderer.get("kind") not in {"powerpoint", "libreoffice"})
+            or not renderer.get("version")
             or not _DIGEST.fullmatch(renderer.get("environment_digest", ""))
             or renderer.get("font_manifest_digest") != evidence.get("analysis_font_manifest_digest", package.font_manifest.digest)):
         raise ValueError("svg_template_source_render_review_required")

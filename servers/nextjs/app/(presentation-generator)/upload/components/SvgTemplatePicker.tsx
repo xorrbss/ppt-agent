@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useTranslations } from "next-intl";
 import { useDispatch, useSelector } from "react-redux";
 import { Button } from "@/components/ui/button";
 import { notify } from "@/components/ui/sonner";
@@ -25,6 +26,7 @@ export default function SvgTemplatePicker({ config, onConfigChange, sourceConten
   sourceContentMode: boolean; hasCompanyMaster: boolean;
 }) {
   const dispatch = useDispatch();
+  const t = useTranslations("uploadExtras");
   const storedSelection = useSelector((state: RootState) => state.pptGenUpload.svgTemplateSelection);
   const selection = useMemo(() => storedSelection ?? (config.svgTemplatePin && config.svgTemplateMode ? {
     pin: config.svgTemplatePin, mode: config.svgTemplateMode, name: config.svgTemplateName ?? "저장된 내 템플릿", kind: config.svgTemplateKind ?? "framed" as const,
@@ -245,6 +247,7 @@ export default function SvgTemplatePicker({ config, onConfigChange, sourceConten
       <h4 className="text-sm font-semibold">{draft.template.name} · {stateLabels[draft.template.registrationState]}</h4><details className="text-xs text-slate-500"><summary className="cursor-pointer">작업 정보</summary><p>작업 ID: {draft.operationId}</p></details>
       <p className="text-xs">글꼴 준비 상태: {templateFontText(draft.template.fontState)}</p>{draft.errorCode ? <p role="alert" className="text-xs text-rose-700">{templateReason(draft.errorCode)}</p> : null}
       {[...(draft.template.issues ?? []), ...(draft.package?.issues ?? [])].map((issue, index) => <p className="text-xs text-amber-800" key={index}>{templateIssueText(issue)}</p>)}
+      {(draft.reviewEvidence ?? draft.review_evidence)?.renderer?.approximate ? <p role="status" className="text-xs text-amber-800">{t("approximateSourcePreview")}</p> : null}
       {(draft.reviewEvidence ?? draft.review_evidence)?.status === "blocked" ? <p role="alert" className="text-xs text-amber-800">{templateReason((draft.reviewEvidence ?? draft.review_evidence)?.reason)}</p> : null}
       {draft.package?.frames.map(frame => {
         const blockedReason = frameReviewBlockReason(draft, frame);

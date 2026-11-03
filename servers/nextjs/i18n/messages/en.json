@@ -2661,6 +2661,7 @@
     "visualReviewIsRequiredToExportAn": "Visual review is required to export an editable PPTX (Hybrid). Enabling it roughly doubles generation time; disabling it allows only screen-preserving Fidelity PPTX and PDF exports."
   },
   "uploadExtras": {
+    "approximateSourcePreview": "This source preview is an approximate LibreOffice rendering. Text position and line spacing can differ slightly from PowerPoint; register on Windows with PowerPoint when you need an exact comparison.",
     "a4GenerationIsNotReadyForThe": "A4 generation is not ready for the selected generation mode and company standard combination. The selected orientation is preserved.",
     "a4GenerationLimitation": "A4 generation limitation",
     "a4LayoutProportionPreviewForSlideValue": "A4 layout proportion preview for slide {value0}",
