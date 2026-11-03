@@ -40,7 +40,13 @@ _NUMERIC = {
     "fill-opacity",
     "stroke-opacity",
 }
-_COMMON = {"id", "fill", "stroke", "stroke-width", "opacity", "fill-opacity", "stroke-opacity", "transform"}
+_COMMON = {"id", "fill", "stroke", "stroke-width", "opacity", "fill-opacity", "stroke-opacity", "transform",
+           "stroke-linecap", "stroke-linejoin"}
+# Round caps and joins are admitted next to the SVG defaults. The converter maps
+# them to DrawingML (cap="rnd", <a:round/>), and every stroke-bounds check pads
+# a stroke by at least half its width on every side, which covers a round cap
+# or join. Square caps and bevel joins stay out: nothing measures them yet.
+_STROKE_LINE_VALUES = {"stroke-linecap": {"butt", "round"}, "stroke-linejoin": {"miter", "round"}}
 _TEXT = {"x", "y", "font-family", "font-size", "font-weight", "text-anchor"}
 ELEMENT_ATTRIBUTES = {
     "svg": {"width", "height", "viewBox"},
@@ -191,6 +197,9 @@ def validate_svg(
                         raise ValueError("svg_contract_path_arguments_invalid")
                 for number in re.findall(_NUMBER, value):
                     _numbers(number)
+            elif key in _STROKE_LINE_VALUES:
+                if value not in _STROKE_LINE_VALUES[key]:
+                    raise ValueError("svg_contract_unsupported_stroke_line:" + key)
             elif key == "font-family" and not re.fullmatch(r"[\w ,'-]{1,120}", value):
                 raise ValueError("svg_contract_invalid_font")
             elif key == "font-weight" and value not in {"normal", "bold", *map(str, range(100, 1000, 100))}:

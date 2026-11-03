@@ -90,6 +90,10 @@ def icon_group(icon: FlattenedIcon, *, x: float, y: float, width: float, height:
     attrs = {"id": element_id} if element_id else {}
     attrs.update({"transform": f"translate({_fmt(offset_x)},{_fmt(offset_y)})", "fill": "none",
                   "stroke": icon.color, "stroke-width": _fmt(max(_MIN_STROKE_WIDTH, icon.stroke_width * scale))})
+    if icon.line_cap != "butt":
+        attrs["stroke-linecap"] = icon.line_cap
+    if icon.line_join != "miter":
+        attrs["stroke-linejoin"] = icon.line_join
     group = ET.Element(f"{{{SVG_NS}}}g", attrs)
     for primitive in icon.primitives:
         ET.SubElement(group, f"{{{SVG_NS}}}{primitive['tag']}", _child_attributes(primitive, scale))

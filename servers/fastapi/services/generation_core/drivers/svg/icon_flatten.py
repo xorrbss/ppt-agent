@@ -47,11 +47,20 @@ class FlattenedIcon:
     color: str
     primitives: tuple[dict, ...]
     point_count: int
+    # The source root's cap/join, kept when the contract admits them (round);
+    # anything else falls back to the SVG defaults the contract always had.
+    line_cap: str = "butt"
+    line_join: str = "miter"
 
     def to_json(self) -> dict:
-        return {"view_width": self.view_width, "view_height": self.view_height,
-                "stroke_width": self.stroke_width, "color": self.color,
-                "primitives": [dict(item) for item in self.primitives], "point_count": self.point_count}
+        value = {"view_width": self.view_width, "view_height": self.view_height,
+                 "stroke_width": self.stroke_width, "color": self.color,
+                 "primitives": [dict(item) for item in self.primitives], "point_count": self.point_count}
+        if self.line_cap != "butt":
+            value["line_cap"] = self.line_cap
+        if self.line_join != "miter":
+            value["line_join"] = self.line_join
+        return value
 
     @classmethod
     def from_json(cls, value: dict) -> FlattenedIcon:
@@ -62,7 +71,14 @@ class FlattenedIcon:
                 item["points"] = [[float(x), float(y)] for x, y in item["points"]]
             primitives.append(item)
         return cls(float(value["view_width"]), float(value["view_height"]), float(value["stroke_width"]),
-                   normalize_color(value["color"]), tuple(primitives), int(value["point_count"]))
+                   normalize_color(value["color"]), tuple(primitives), int(value["point_count"]),
+                   line_cap=_line_value(value.get("line_cap"), "butt"),
+                   line_join=_line_value(value.get("line_join"), "miter"))
+
+
+def _line_value(value, default: str) -> str:
+    """``round`` when the source asked for it, else the SVG default (butt / miter)."""
+    return "round" if isinstance(value, str) and value.strip() == "round" else default
 
 
 def normalize_color(value: str) -> str:
@@ -163,7 +179,7 @@ class _Walker:
             clean.pop()
         length = sum(math.dist(p, q) for p, q in zip(clean, clean[1:], strict=False))
         if len(clean) < 2 or (stroke and not (closed and fill) and length < stroke / 2):
-            if stroke:  # a round-capped dot; the contract has no stroke-linecap
+            if stroke:  # a dot: a filled circle draws it whatever the cap
                 cx = sum(p[0] for p in clean) / len(clean)
                 cy = sum(p[1] for p in clean) / len(clean)
                 self._emit("circle", self.ink, None, cx=_r(cx), cy=_r(cy), r=_r(stroke / 2))
@@ -282,4 +298,6 @@ def flatten_icon_svg(svg_text: str, *, color: str, point_budget: int | None = IC
         raise IconFlattenBudgetExceeded(f"icon_point_budget_exceeded:{count}>{point_budget}")
     if not primitives:
         raise ValueError("icon_empty")
-    return FlattenedIcon(float(view[2]), float(view[3]), _r(icon_width), ink, tuple(primitives), count)
+    return FlattenedIcon(float(view[2]), float(view[3]), _r(icon_width), ink, tuple(primitives), count,
+                         line_cap=_line_value(root.get("stroke-linecap"), "butt"),
+                         line_join=_line_value(root.get("stroke-linejoin"), "miter"))
