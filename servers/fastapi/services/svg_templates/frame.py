@@ -1042,7 +1042,7 @@ def extract_template_package(pptx_path: str | Path, *, font_assets=None,
 
 # Public entrypoints kept together for callers; implementation stays separated.
 from services.svg_templates.frame_composition import (  # noqa: E402
-    adapt_frame, compose_frame_svg, validate_body_paint,
+    adapt_frame, compose_frame_svg as compose_frame_svg, validate_body_paint as validate_body_paint,
 )
 
 adapt_template_frame = adapt_frame

@@ -51,7 +51,7 @@ def claim_empty_powerpoint(application, *, started_at, identity_reader=None, inc
             raise ValueError("svg_template_powerpoint_ownership_unproven")
         for _ in range(20):
             matches = []
-            def visit(hwnd, _context):
+            def visit(hwnd, _context, matches=matches):
                 if win32gui.GetClassName(hwnd) == "PPTFrameClass" and marker in win32gui.GetWindowText(hwnd):
                     matches.append(hwnd)
                 return True

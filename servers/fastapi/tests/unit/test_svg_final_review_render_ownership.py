@@ -176,7 +176,7 @@ def test_checker_dependency_digest_binds_producer_validator_and_ownership(
     original_read = Path.read_bytes
     for dependency in (worker, helper):
         with monkeypatch.context() as changed:
-            changed.setattr(Path, "read_bytes", lambda path: original_read(path)
+            changed.setattr(Path, "read_bytes", lambda path, dependency=dependency: original_read(path)
                 + (b"\n# changed dependency\n" if path.resolve() == dependency else b""))
             assert office.checker_digest() != baseline
             assert not _current(claim, inputs, inputs["proof"])

@@ -70,9 +70,9 @@ async def _render_html_in_isolated_worker(  # noqa: ASYNC109
     if len(encoded) > 90 * 1024 * 1024:
         raise ValueError("svg_template_font_manifest_bytes_exceeded")
     with tempfile.TemporaryDirectory(prefix="presenton-render-font-") as temporary:
-        root = Path(temporary).resolve()
+        root = Path(await asyncio.to_thread(os.path.realpath, temporary))
         path = root / "font-manifest.json"
-        path.write_bytes(encoded)
+        await asyncio.to_thread(path.write_bytes, encoded)
         if os.name != "nt":
             os.chmod(path, 0o444)
         reference = {"name": "font-manifest.json", "sha256": "sha256:" + hashlib.sha256(encoded).hexdigest()}

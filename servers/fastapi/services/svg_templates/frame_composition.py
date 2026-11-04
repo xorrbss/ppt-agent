@@ -147,7 +147,7 @@ def adapt_frame(frame: SvgTemplateFrame, target_canvas: DocumentCanvasMetadata |
     # interior regions follow their actual corresponding elements.
     forbidden = []
     for original in frame.forbidden_regions:
-        candidates = [new.bounds for old, new in zip(frame.elements, elements) if old.bounds == original]
+        candidates = [new.bounds for old, new in zip(frame.elements, elements, strict=True) if old.bounds == original]
         if not candidates:
             raise ValueError("svg_template_adaptation_reservation_unresolved")
         forbidden.extend(candidates)

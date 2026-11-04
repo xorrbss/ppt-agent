@@ -267,7 +267,7 @@ async def preview_svg(presentation, slides, index, request, task, session):
             from services.svg_templates.generation import compose_template_page
             try:
                 compose_template_page(snapshot, final, template_page, allow_existing=True, source_manifest=contract)
-            except ValueError as error:
+            except ValueError:
                 reject(ValueError("svg_template_frame_change_requires_new_revision"), "template_frame_validation")
     elif local_edit:
         try:

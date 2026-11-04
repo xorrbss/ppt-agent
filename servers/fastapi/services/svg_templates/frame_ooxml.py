@@ -16,7 +16,7 @@ from models.svg_template_frame import HEADER_TEXT_KEYS, FrameRect, SvgTemplateAs
 from services.source_content.pptx_extraction_constants import NS, R_NS
 from services.source_content.pptx_geometry import _geometry
 from services.source_content.pptx_package_parts import _relationship_map
-from services.source_content.pptx_typography import PptxTypographyResolver, placeholder_of
+from services.source_content.pptx_typography import PptxTypographyResolver
 from services.source_content.security import secure_xml
 from services.svg_templates.frame_fonts import bytes_digest, font_asset_for, measure_text
 
@@ -376,7 +376,7 @@ class OoxmlFrameContext:
             raise ValueError("svg_template_text_anchor_unsupported")
         y = bounds.y + top + ({"t": 0, "ctr": .5, "b": 1}[anchor] * (available_height - total_height))
         group = svg_node("g")
-        for (runs, align), height in zip(lines, line_heights):
+        for (runs, align), height in zip(lines, line_heights, strict=True):
             width = sum(run[3] for run in runs)
             available_width = bounds.width - left - right
             if width > available_width + .1 or align not in {"l", "ctr", "r"}:

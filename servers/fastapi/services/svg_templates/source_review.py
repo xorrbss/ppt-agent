@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import asyncio
 import base64
-import hashlib
 import json
 import subprocess
 import sys
@@ -25,6 +24,7 @@ from services.svg_templates.frame_fonts import artifact_digest, bytes_digest, re
 import logging
 
 logger = logging.getLogger(__name__)
+_SERVICE_ROOT = str(Path(__file__).resolve().parents[2])
 
 def _require_installed_fonts(manifest) -> None:
     # PowerPoint resolves system-installed faces; never change the user's font registry.
@@ -188,7 +188,7 @@ async def _render_source_isolated(path, package, frame):
             "frame": frame.model_dump(mode="json"), "ownership_path": str(ownership)}
         options = {"stdin": asyncio.subprocess.PIPE, "stdout": asyncio.subprocess.PIPE,
                    "stderr": asyncio.subprocess.DEVNULL,
-                   "cwd": str(Path(__file__).resolve().parents[2])}
+                   "cwd": _SERVICE_ROOT}
         if os.name == "nt":
             options["creationflags"] = getattr(subprocess, "CREATE_NO_WINDOW", 0)
         process = await asyncio.create_subprocess_exec(sys.executable, "-m",

@@ -323,7 +323,6 @@ async def _refresh_template_pages(session, presentation, slides, snapshot):
     await ensure_snapshot_material(session, snapshot)
     from services.svg_templates.generation import template_page_context, compose_template_page, apply_template_body_quality
     from services.svg_master_furniture import master_furniture_receipt
-    from services.svg_contract import source_digest
     from services.document_canvas import DocumentCanvasMetadata, parse_canvas_metadata
     from services.authored_canvas import presentation_canvas_metadata
     from utils.hashing import canonical_json_digest

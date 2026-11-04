@@ -66,7 +66,7 @@ def validate_template_furniture_binding(root, receipt):
             or not binding.get("page_context") or len(binding.get("groups", [])) != 2):
         raise ValueError("svg_template_furniture_binding_mismatch")
     expected_ids = [BACKGROUND_ID, FOREGROUND_ID]
-    for xml, group_id in zip(binding["groups"], expected_ids):
+    for xml, group_id in zip(binding["groups"], expected_ids, strict=True):
         from services.source_content.security import secure_xml
         expected = secure_xml(xml.encode(), part_name="template-furniture.svg")
         matches = [node for node in root.iter() if node.get("id") == group_id]

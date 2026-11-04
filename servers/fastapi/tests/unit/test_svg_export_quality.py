@@ -123,7 +123,6 @@ def test_persisted_domains_are_connected_without_claiming_visual_or_native_accep
     import asyncio
     import uuid
     from copy import deepcopy
-    from pathlib import Path
     from types import SimpleNamespace
     from models.sql.presentation import PresentationModel
     from models.sql.slide import SlideModel
