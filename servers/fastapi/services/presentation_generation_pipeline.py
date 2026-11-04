@@ -46,6 +46,8 @@ from services.presentation_generation_staging import (
     _request_from_durable_payload,
 )
 from services.ppt_writing_policy import WRITING_POLICY_ID
+from utils.content_structure_policy import active_policy
+from utils.get_env_concurrency import get_content_structure_policy_scope_env
 from services.presentation_generation_completion import record_generation_completion
 from constants.presentation import (
     DEFAULT_ATTACHMENT_GENERATION_PROMPT,
@@ -1177,6 +1179,10 @@ async def generate_presentation_handler(
                         writing_policy=request.writing_policy,
                         common_header_mode=(getattr(request, "common_header_mode", None)
                             if resolve_generation_strategy(request) == "svg" else "free"),
+                        structure_policy=active_policy(
+                            svg=resolve_generation_strategy(request) == "svg",
+                            template_redesign=getattr(request, "svg_template_mode", None) == "template-redesign",
+                            scope=get_content_structure_policy_scope_env()),
                     ):
 
                         if isinstance(chunk, HTTPException):

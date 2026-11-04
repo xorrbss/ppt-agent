@@ -128,6 +128,16 @@ def get_svg_illustration_mode_env(settings: RuntimeSettings | None = None) -> st
     return value if value in SVG_ILLUSTRATION_MODES else "off"
 
 
+def get_content_structure_policy_scope_env(settings: RuntimeSettings | None = None) -> str:
+    """Which decks get the content structure policy (``utils/content_structure_policy.py``):
+    ``off`` (the default), ``template`` (a template-redesign deck) or ``svg`` (every svg deck).
+    Read when a deck is admitted and when its pages are authored."""
+    from utils.content_structure_policy import normalize_scope
+    from utils.get_env import get_setting_env
+
+    return normalize_scope(get_setting_env("CONTENT_STRUCTURE_POLICY_SCOPE", settings))
+
+
 SVG_ILLUSTRATION_PARTS = ("cover", "scene", "spots", "pairs", "pictograph")
 DEFAULT_SVG_ILLUSTRATION_PARTS = ("cover", "scene")
 

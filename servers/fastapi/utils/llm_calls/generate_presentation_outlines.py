@@ -13,6 +13,7 @@ from llmai.shared import (
 )
 
 from models.presentation_outline_model import PresentationOutlineModel
+from utils.content_structure_policy import StructurePolicy, outline_table_clause, outline_table_line
 from utils.ppt_writing_prompt import WRITING_POLICY_ID, writing_policy_prompt
 from utils.get_dynamic_models import outline_model
 from utils.get_env_programme import (
@@ -52,6 +53,7 @@ def get_system_prompt(
     writing_policy: str | None = None,
     language: str | None = None,
     common_header_mode: str = "free",
+    structure_policy: StructurePolicy | None = None,
 ):
     # Slide text has a FLOOR again (2026-09-05). The 08-19 rewrite turned the
     # "at least ~N words" floor into a per-bullet ceiling because dense outlines
@@ -144,6 +146,8 @@ def get_system_prompt(
         "Each slide content:\n"
         "   - Must have a ## title.\n"
         # "   - Must have content either in multiple bullet points or table or both.\n"
+        # (restored by the content structure policy: utils/content_structure_policy.py)
+        f"{outline_table_line(structure_policy)}"
         "   - Must be in Markdown format.\n"
         "   - Don't use **bold** and __italic__ text."
         "   - First slide title must be the same as the presentation title."
@@ -195,6 +199,8 @@ def get_system_prompt(
         )
     if writing_policy == WRITING_POLICY_ID:
         system += writing_policy_prompt(language=language)
+        # The writing policy's pipe rule must not forbid the pipes of a table.
+        system += outline_table_clause(structure_policy)
     return system
 
 
@@ -272,6 +278,7 @@ def get_messages(
     *,
     writing_policy: str | None = None,
     common_header_mode: str = "free",
+    structure_policy: StructurePolicy | None = None,
 ) -> list[Message]:
     return [
         SystemMessage(
@@ -283,6 +290,7 @@ def get_messages(
                 writing_policy=writing_policy,
                 language=language,
                 common_header_mode=common_header_mode,
+                structure_policy=structure_policy,
             ),
         ),
         UserMessage(
@@ -316,6 +324,7 @@ async def generate_ppt_outline(
     canvas_budget: Optional[CanvasBudget] = None,
     writing_policy: str | None = None,
     common_header_mode: str = "free",
+    structure_policy: StructurePolicy | None = None,
 ):
     model = get_model()
     canvas_scales = canvas_budget is not None and canvas_budget.factor < 1
@@ -416,6 +425,7 @@ async def generate_ppt_outline(
                 canvas_budget,
                 writing_policy=writing_policy,
                 common_header_mode=common_header_mode,
+                structure_policy=structure_policy,
             ),
             response_format=response_format,
             tools=([WebSearchTool()] if use_search_tool else None),

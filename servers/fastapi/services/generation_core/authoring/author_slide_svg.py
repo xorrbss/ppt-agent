@@ -708,10 +708,23 @@ def svg_author_rules(style_snapshot: dict, body_floor: float, *, new_copy: bool 
             + reference_caveat(width, height) + spatial_rules + native_grid_rules)
     if header_page is not None and header_page.get("applied"):
         rules = _common_header_author_rules(rules, style_snapshot, header_page)
+    rules = author_rules_with_structure_policy(rules, style_snapshot)
     if style_snapshot.get("svg_template") is not None:
         from services.svg_templates.generation import body_author_rules
         rules = body_author_rules(rules, style_snapshot)
     return rules
+
+
+def author_rules_with_structure_policy(rules: str, style_snapshot: dict) -> str:
+    """Refine the connector rule for a deck in the content structure policy's scope."""
+    from services.svg_templates.generation import template_selection
+    from utils.content_structure_policy import active_policy, author_rules as refine
+    from utils.get_env_concurrency import get_content_structure_policy_scope_env
+
+    selection = template_selection(style_snapshot) if style_snapshot.get("svg_template") is not None else None
+    redesign = bool(selection and selection.get("mode") == "template-redesign")
+    policy = active_policy(svg=True, template_redesign=redesign, scope=get_content_structure_policy_scope_env())
+    return refine(rules, policy, template_ids=redesign)
 
 
 def _common_header_author_rules(rules: str, snapshot: dict, binding: dict) -> str:
