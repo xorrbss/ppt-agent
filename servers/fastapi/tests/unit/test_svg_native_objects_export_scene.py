@@ -115,6 +115,11 @@ def _table_group(group_id: str, *, wrapper: str = "") -> str:
     x, y, width, height = TABLE_BOX
     parts = [f'<g id="{group_id}"><rect x="{x}" y="{y}" width="{width}" height="{height}" fill="#FFFFFF" '
              'stroke="#CCCCCC" stroke-width="1"/>']
+    # The drawn grid must fix every row and column boundary.
+    parts += [f'<line x1="{x + c * 200}" y1="{y}" x2="{x + c * 200}" y2="{y + height}" stroke="#CCCCCC"/>'
+              for c in (1, 2)]
+    parts += [f'<line x1="{x}" y1="{y + r * 50}" x2="{x + width}" y2="{y + r * 50}" stroke="#CCCCCC"/>'
+              for r in (1, 2, 3)]
     for r, row in enumerate(ROWS):
         for c, text in enumerate(row):
             parts.append(f'<text x="{x + c * 200 + 10}" y="{y + r * 50 + 32}" {FONT} fill="#111111">'
