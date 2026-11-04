@@ -145,7 +145,6 @@ def test_redesign_page_reorder_renumbers_footer_without_generic_pipeline(monkeyp
     assert slide.properties["image"] == "numbered.png"
     assert slide.content["svgReceipt"]["quality"]["verified"] is (not terminal)
     assert slide.content["svgReceipt"]["quality"]["classification"] == ("review_required" if terminal else "passed")
-    from utils.hashing import sha256_hex
     assert slide.content["svgReceipt"]["png_sha256"] == sha256_hex(b"png")
     assert "png_path" not in slide.content["svgReceipt"]
     for checker in (svg_authoring, svg_geometry_font):
