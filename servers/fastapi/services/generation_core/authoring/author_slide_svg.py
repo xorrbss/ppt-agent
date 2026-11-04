@@ -1018,6 +1018,10 @@ async def author_slide_svg(content: str, style_snapshot: dict, role: str, index:
         from services.svg_common_header import strip_system_common_header
 
         shown_previous_svg = strip_system_common_header(previous_svg)
+    if shown_previous_svg and style_snapshot.get("svg_template") is not None:
+        from services.svg_templates.frame_composition import strip_template_furniture
+
+        shown_previous_svg = strip_template_furniture(shown_previous_svg)
     prompt_previous_svg, previous_svg_compacted = outbound_previous_svg(shown_previous_svg, view_plan)
     previous_svg_shown = False
     if quality_policy is not None and active_correction:

@@ -310,6 +310,30 @@ def render_frame_svg(frame: SvgTemplateFrame, *, dynamic_values: dict | None = N
     return etree.tostring(root, encoding="unicode")
 
 
+def strip_template_furniture(svg: str) -> str:
+    """The body of a composed template page, for showing a page back to its author.
+
+    A repair prompt shows the model its previous page. Composed, that page also
+    carries the frame: preserved decoration as base64 pictures (hundreds of KB)
+    and svg-system-template IDs the body may not use. Shown as-is, repairs on the
+    real proposal deck copied system IDs, appended stray text after the SVG or
+    returned unrelated or empty bodies. Only the body group's children are kept,
+    on the same canvas. Anything that is not a composed template page is
+    returned unchanged.
+    """
+    try:
+        root = secure_xml(svg.encode(), part_name="previous-page.svg")
+    except Exception:
+        return svg
+    bodies = [child for child in root if child.get("id") == BODY_ID]
+    if len(bodies) != 1:
+        return svg
+    page = svg_node("svg", **{key: root.get(key) for key in ("width", "height", "viewBox") if root.get(key)})
+    for child in bodies[0]:
+        page.append(deepcopy(child))
+    return etree.tostring(page, encoding="unicode")
+
+
 @font_validation_scope()
 def compose_frame_svg(frame: SvgTemplateFrame | SvgTemplateFrameAdaptation, body_svg: str, *,
                       dynamic_values: dict, source_manifest: dict | None = None) -> str:

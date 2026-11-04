@@ -404,3 +404,22 @@ def test_the_body_background_reports_a_dark_cover_photo(tmp_path):
     light = extract_template_package(_deck(tmp_path / "plain.pptx", _band_and_footer),
                                      raster_renderer=_FakeRenderer()).frames[0]
     assert body_background(light)["tone"] == "light"
+
+
+def test_a_repair_sees_only_the_body_of_a_composed_template_page(tmp_path):
+    from services.svg_templates.frame_composition import compose_frame_svg, strip_template_furniture
+
+    package = extract_template_package(_deck(tmp_path / "deck.pptx", _band_and_footer), raster_renderer=_FakeRenderer())
+    frame = package.frames[0]
+    region = frame.body_region
+    body = ('<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720" viewBox="0 0 1280 720">'
+            f'<text id="body-claim" x="{region.x + 10}" y="{region.y + 40}" font-family="Pretendard" '
+            'font-weight="400" font-size="20" fill="#111111">본문 문장</text></svg>')
+    page = compose_frame_svg(frame, body, dynamic_values={})
+    assert "data:image/png;base64," in page and "svg-system-template-" in page
+    shown = strip_template_furniture(page)
+    assert "본문 문장" in shown and "body-claim" in shown
+    assert "data:image" not in shown and "svg-system-" not in shown
+    assert 'viewBox="0 0 1280 720"' in shown and len(shown) < len(page) / 2
+    # Anything else is shown unchanged.
+    assert strip_template_furniture(body) == body and strip_template_furniture("<not svg") == "<not svg"
