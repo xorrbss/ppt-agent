@@ -175,6 +175,45 @@ def push_down_container_font_attributes(root) -> int:
     return filled
 
 
+_UNPUSHABLE_FILLS = frozenset({"", "none", "transparent", "currentcolor", "inherit"})
+
+
+def _pushable_fill(value: str) -> bool:
+    text = value.strip().lower()
+    return text not in _UNPUSHABLE_FILLS and not text.startswith("url(")
+
+
+def push_down_container_fill(root) -> int:
+    """Give each <text> that has no fill the fill it inherits from its nearest svg/g (in place).
+
+    A model often writes the page's text colour once on a group and leaves it off the texts,
+    which is how SVG inheritance renders it, but the contract wants ``fill`` on every
+    ``<text>``. Measured on a real template deck (2026-11-04): after
+    :func:`push_down_container_font_attributes`, all 15 of the 20 failing author attempts that
+    still failed (``svg_contract_explicit_text_attributes_required``) lacked only ``fill``,
+    57 to 68 texts on a page, and the repair attempt repeated it. The nearest declaration
+    wins, so an inner ``none`` or paint server (``url(...)``) shadows an outer colour and
+    pushes nothing. The container keeps its own fill (it also paints shapes), so rendering is
+    unchanged. A page whose texts all carry a fill is a no-op, so no page accepted before this
+    existed changes; the producer and ``parse_author_response`` both call this, which keeps a
+    stored raw response replaying identically. Returns how many <text> elements received a fill.
+    """
+    filled = 0
+    stack = [(root, None)]
+    while stack:
+        node, inherited = stack.pop()
+        name = _tag(node)
+        if name in ("svg", "g"):
+            current = inherited
+            if "fill" in node.attrib:
+                current = node.attrib["fill"] if _pushable_fill(node.attrib["fill"]) else None
+            stack.extend((child, current) for child in reversed(list(node)))
+        elif name == "text" and "fill" not in node.attrib and inherited is not None:
+            _set_ordered(node, "fill", inherited)
+            filled += 1
+    return filled
+
+
 def _length(name: str, value: str) -> int:
     return 1 + len(name) + 2 + len(value) + 1
 

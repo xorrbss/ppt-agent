@@ -508,3 +508,47 @@ def test_an_explicit_page_is_a_no_op_and_a_grouped_one_replays_into_a_valid_page
     assert verdict(grouped) == "svg_contract_unsupported_attribute"
     replayed, receipt = parse_author_response(grouped, view=None, source_facts=None)
     assert receipt is None and verdict(ET.tostring(replayed, encoding="unicode")) == "ok"
+
+
+def test_a_group_fill_is_pushed_onto_texts_that_lack_one_and_the_group_keeps_it():
+    from services.svg_text_defaults import push_down_container_fill, push_down_container_font_attributes
+
+    svg = page('<g font-family="Pretendard" fill="#243B7C">'
+               '<rect x="0" y="0" width="10" height="10" fill="#EEEEEE"/>'
+               '<text x="10" y="20" font-size="16">a</text>'
+               '<text x="10" y="40" font-size="16" fill="#FF0000">b</text></g>')
+    root = ET.fromstring(svg)
+    assert verdict(svg) == "svg_contract_unsupported_attribute"
+    push_down_container_font_attributes(root)
+    assert push_down_container_fill(root) == 1
+    group = next(node for node in root.iter() if node.tag.endswith("}g"))
+    assert group.get("fill") == "#243B7C"  # shapes under the group keep painting with it
+    assert [t.get("fill") for t in elements(root, "text")] == ["#243B7C", "#FF0000"]  # own fill wins
+    assert verdict(ET.tostring(root, encoding="unicode")) == "ok"
+
+
+def test_the_nearest_fill_wins_and_a_none_or_paint_server_pushes_nothing():
+    from services.svg_text_defaults import push_down_container_fill
+
+    inner = ('<g fill="#111111"><g fill="#222222"><text x="1" y="2" font-family="F" font-size="14">a</text></g>'
+             '<g fill="none"><text x="1" y="9" font-family="F" font-size="14">b</text></g>'
+             '<g fill="url(#p)"><text x="1" y="9" font-family="F" font-size="14">c</text></g></g>')
+    root = ET.fromstring(page(inner))
+    assert push_down_container_fill(root) == 1
+    assert [t.get("fill") for t in elements(root, "text")] == ["#222222", None, None]
+
+
+def test_an_explicit_page_is_a_no_op_for_the_fill_push_down_and_replay_matches_the_producer():
+    from services.svg_author_output_view import parse_author_response
+    from services.svg_text_defaults import push_down_container_fill
+
+    explicit = page('<g fill="#111111"><text x="1" y="2" font-family="F" font-size="14" fill="#222222">a</text></g>')
+    root = ET.fromstring(explicit)
+    assert push_down_container_fill(root) == 0
+    assert ET.tostring(root, encoding="unicode") == ET.tostring(ET.fromstring(explicit), encoding="unicode")
+    # The pattern measured on real author responses: family and colour on a group, size on each text.
+    grouped = page('<g font-family="Pretendard" fill="#243B7C"><text x="1" y="2" font-size="14">a</text>'
+                   '<text x="1" y="30" font-size="14">b</text></g>')
+    assert verdict(grouped) == "svg_contract_unsupported_attribute"
+    replayed, receipt = parse_author_response(grouped, view=None, source_facts=None)
+    assert receipt is None and verdict(ET.tostring(replayed, encoding="unicode")) == "ok"

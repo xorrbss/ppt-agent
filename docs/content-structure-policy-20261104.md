@@ -52,10 +52,34 @@
 
 1. 정책은 기본 꺼짐으로 둔다. 켜려면 `CONTENT_STRUCTURE_POLICY_SCOPE=template`.
 2. 켜기 전에 템플릿 모드의 네이티브 표 작성을 고쳐야 한다. 표 페이지가 10 / 10 폴백이다. 우선 `native_requested_table_missing`의 원인(선언은 있는데 요구와 맞지 않는지)부터 본다.
-3. 속성 누락(`svg_contract_explicit_text_attributes_required`)은 표와 무관하게 많이 나온다. 모델이 텍스트마다 폰트 속성을 반복하지 않으려는 경향이므로, 루트에 공통 스타일을 선언하는 기존 방식(`services/svg_text_defaults.py`)이 이 경로에서 쓰이는지 확인한다.
+3. ~~속성 누락(`svg_contract_explicit_text_attributes_required`)~~ → 해결함. 아래 "텍스트 fill 내려주기" 참고.
 4. 정책을 끈 대조 실행으로 폴백 변동의 몫을 분리한다.
 5. 연결선은 근거 없는 화살표가 늘지 않는지(설계 문서 §12.1) 페이지별로 확인한 뒤에 켠다.
 
+## 텍스트 fill 내려주기 (속성 누락 폴백의 원인과 수정)
+
+`svg_contract_explicit_text_attributes_required`는 표와 무관하게 가장 흔한 폴백 원인이었다(정책을 끈 실행에서도 7페이지).
+실패한 저장 응답 20건에 기존 `push_down_container_font_attributes`(그룹의 폰트 속성을 텍스트로 내려줌)를 적용해 보니,
+**여전히 실패하는 15건이 모두 `fill`만 빠진 경우**였다(한 페이지에서 텍스트 12~68개). 모델이 `<g font-family=".." fill="#..">`로
+색을 한 번만 쓰고 텍스트에는 생략했는데(SVG 상속으로는 올바름), 서버가 `fill`은 내려주지 않았다. 재시도도 같은 습관을 반복했다.
+
+`services/svg_text_defaults.py`의 `push_down_container_fill`이 가장 가까운 `svg`/`g`의 fill을 fill이 없는 `<text>`에 복사한다.
+컨테이너의 fill은 그대로 두므로(도형도 칠한다) 렌더링은 같다. 가장 가까운 선언이 우선하고, 안쪽의 `none`이나 `url(...)`은
+바깥 색을 가린다. 모든 텍스트에 fill이 있는 페이지는 변화가 없다(이미 통과한 페이지는 바뀌지 않는다). 생성 시점과 저장 응답 재생
+(`parse_author_response`)이 같은 함수를 호출해 재생이 일치한다. 영수증에 `container_fill_pushed`로 기록한다.
+
+측정:
+- 오프라인: 속성 누락으로만 실패하던 응답 10건이 전부 통과했다.
+- 라이브(정책 꺼짐, 같은 입력, `text-heavy`): 속성 누락 실패 4~7건 → **0건**, 폴백 페이지 3~7개 → **1개**, 10페이지 중 5페이지가
+  재시도 없이 첫 시도에 통과했다. 페이지별 측정 품질은 10 / 10 통과(실패 0건)다.
+- 그런데 품질 게이트는 이 실행에서 0 통과 / 10 검토 필요였다. 모든 페이지가 `verified=False`였고, 원인은 덱 전체의
+  흐름 검토(`repetition_deck_flow`)가 전 페이지에서 "검토 불가"로 끝난 것이다(`designReview.flowUnreviewedPages`가 10개).
+  이 검토는 모델이 준 평가 문자열 중 하나라도 형식에 안 맞으면 통째로 버려지는 기존의 취약한 단계이고, 이번 수정과는 무관하다.
+  같은 입력의 이전 실행은 4개만 미검토였다. 이 단계의 실패율은 별도 과제다.
+
 ## 환경 메모
+
+- 넓은 범위의 pytest(수천 개)를 돌리면 로컬 PostgreSQL과 백엔드 프로세스가 같이 죽는다(이 세션에서 여러 번 재현). 라이브 실행과
+  pytest를 동시에 돌리지 말고, pytest 뒤에는 둘을 다시 띄운다.
 
 - 로컬 `public-artifacts` 저장소에서 등록한 템플릿의 저장 객체 파일이 시간이 지나면 사라져(`artifact.object_missing`, DB에는 행이 남음) 생성이 `svg_template_adaptation_material_unavailable`로 실패했다. 등록 직후 생성하면 재현되지 않는다. 원인은 조사하지 않았다.
