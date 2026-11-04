@@ -612,6 +612,8 @@ def test_feature_lifecycle_refcount_expiry_and_gc_fail_closed(
             self.no_autoflush = nullcontext()
             self.calls = []
             self.rows = []
+            # The retention schema probe is cached on the session; the double has no tables to inspect.
+            self.info = {"svg_template_retention_schema_available": True}
 
         def get_bind(self):
             return SimpleNamespace(dialect=SimpleNamespace(name=self.dialect))
