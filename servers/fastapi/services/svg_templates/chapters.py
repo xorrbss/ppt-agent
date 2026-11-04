@@ -103,7 +103,7 @@ def overlong_titles(frames, chapters: dict[str, str]) -> set[str]:
 def assign_chapters(outline, plan: list[tuple[int, str]], style: str) -> dict[str, str]:
     """Write ``{"number", "title"}`` on every outline page; returns ``{number: title}``.
 
-    Pages before the first chapter (the cover, a table of contents) get none.
+    The cover (the page before the first chapter) gets none.
     """
     starts = [start for start, _ in plan] + [len(outline.slides)]
     for slide in outline.slides[:plan[0][0]]:
@@ -123,12 +123,14 @@ async def plan_outline_chapters(request, outline) -> None:
     from utils.outline_utils import explicit_outline_title
 
     frames = chapter_frames(getattr(request, "_svg_template_selection", None))
-    if not frames or not outline.slides:
-        return
+    if not frames or len(outline.slides) < 2:
+        return  # a cover alone belongs to no chapter
     style = number_style(frames)
     existing = [getattr(slide, "chapter", None) for slide in outline.slides]
     kept = [chapter for chapter in existing if isinstance(chapter, dict)]
-    if kept:
+    # The cover may have no chapter; every other page must (a plan saved before the cover was
+    # left out gave the cover chapter one, and is kept as it was).
+    if all(isinstance(chapter, dict) for chapter in existing[1:]):
         # A resumed job or a caller-supplied outline: keep it, but it must still fit.
         titles = {chapter["number"]: chapter["title"] for chapter in kept}
         if overlong_titles(frames, titles):

@@ -155,6 +155,9 @@ def test_the_cover_belongs_to_no_chapter_and_the_first_body_page_starts_chapter_
     assert plan == [(1, "회사 개요"), (4, "수행 방안")]
     with pytest.raises(ValueError, match="svg_template_chapter_plan_invalid"):
         parse_template_chapters({"chapters": [{"start": 1, "title": "표지"}]}, 8, max_title_chars=8, max_chapters=9)
+    with pytest.raises(ValueError, match="svg_template_chapter_plan_invalid"):
+        # A page between the cover and the first chapter would have no chapter for its tab.
+        parse_template_chapters({"chapters": [{"start": 3, "title": "개요"}]}, 8, max_title_chars=8, max_chapters=9)
 
     outline = PresentationOutlineModel(slides=[SlideOutlineModel(content=f"# 쪽 {i}") for i in range(8)])
     titles = chapters.assign_chapters(outline, plan, "roman-unicode")
@@ -164,7 +167,7 @@ def test_the_cover_belongs_to_no_chapter_and_the_first_body_page_starts_chapter_
 
     messages = build_template_chapter_messages(["표지", "목차", "회사 개요"], max_title_chars=8,
                                                language="Korean", max_chapters=9)
-    assert "cover" in messages[0].content and "first body page" in messages[0].content
+    assert "cover" in messages[0].content and "starts at page 2" in messages[0].content
 
 
 def test_a_saved_plan_with_an_uncovered_cover_is_reused_not_planned_again(monkeypatch, tmp_path):
@@ -182,3 +185,25 @@ def test_a_saved_plan_with_an_uncovered_cover_is_reused_not_planned_again(monkey
     asyncio.run(chapters.plan_outline_chapters(request, outline))
     assert outline.slides[0].chapter is None
     assert outline.slides[1].chapter == {"number": "Ⅰ", "title": "개요"}
+
+
+def test_a_partly_planned_outline_is_planned_again_and_a_cover_alone_is_not_planned(monkeypatch, tmp_path):
+    package = extract_template_package(_chapter_deck(tmp_path / "deck.pptx"))
+    monkeypatch.setattr(chapters, "chapter_frames", lambda selection: list(package.frames))
+    calls = []
+
+    async def plan(page_titles, **kwargs):
+        calls.append(len(page_titles))
+        return [(1, "개요")]
+
+    import utils.llm_calls.plan_template_chapters as planner
+    monkeypatch.setattr(planner, "plan_template_chapters", plan)
+    request = SimpleNamespace(_svg_template_selection={"mode": "template-redesign"}, language="Korean")
+    outline = PresentationOutlineModel(slides=[SlideOutlineModel(content=f"# 쪽 {i}") for i in range(3)])
+    outline.slides[1].chapter = {"number": "Ⅰ", "title": "개요"}  # page 3 has none
+    asyncio.run(chapters.plan_outline_chapters(request, outline))
+    assert calls == [3] and outline.slides[2].chapter == {"number": "Ⅰ", "title": "개요"}
+
+    cover_only = PresentationOutlineModel(slides=[SlideOutlineModel(content="# 표지")])
+    asyncio.run(chapters.plan_outline_chapters(request, cover_only))
+    assert calls == [3] and cover_only.slides[0].chapter is None
