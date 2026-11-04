@@ -73,6 +73,10 @@ def test_no_field_or_null_needs_no_gate(monkeypatch):
 @pytest.mark.parametrize("arm", ["baseline", "brief_off"])
 def test_arm_round_trip_survives_gate_change_without_style_digest_change(monkeypatch, strategy, arm):
     monkeypatch.setenv("CANVAS_BENCH_ENABLED", "true")
+    # The header design plan draws a random seed per admitted request; pin it
+    # so the two requests compared here share one style identity.
+    from services import svg_common_header_design_plan
+    monkeypatch.setattr(svg_common_header_design_plan, "secrets", SimpleNamespace(token_hex=lambda n: "a" * (2 * n)))
     base = GeneratePresentationRequest(content="deck", strategy=strategy)
     request = GeneratePresentationRequest(content="deck", strategy=strategy, bench_speed_arm=arm)
     baseline_payload = _durable_request_payload(base)
