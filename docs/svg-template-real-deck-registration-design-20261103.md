@@ -317,3 +317,33 @@ Open:
   not rewrite the large row. PostgreSQL keeps unchanged large values out of
   line (TOAST), so the cluster profile is much less affected.
 
+## 9. Repair input and PostgreSQL measurement (2026-11-04)
+
+Correction to section 8: template repairs did receive the previous SVG
+(authoring profile v8), but it was the composed page, frame included: about
+0.7 MB of base64 decoration and `svg-system-template-*` IDs. Commit
+`1f110f011` shows a template page's repair only its body group, as the
+common header already is.
+
+Measured on local PostgreSQL 16 (the cluster profile; no lock failures), same
+deck and request, code at `097ab50d8`:
+
+| Run | Result | Quality gate | First drafts failing | Fallback pages | Export |
+|---|---|---|---|---|---|
+| p2-1 | completed, 490 s | passed, 10 / 10 | 3 (all repaired) | 0 | PPTX at the source EMU size |
+| p2-2 | completed, 520 s | passed, 10 / 10 | 2 (all repaired) | 0 | PPTX at the source EMU size |
+
+Earlier in the day, before the margin, contrast and repair-input changes: 5
+passed / 5 flagged and 6 fallback pages.
+
+Observed, not fixed:
+
+* That registration published 6 of 9 frames: the cover, page 2 and the
+  divider failed their review render (`svg_template_review_render_unavailable`)
+  during an 11-minute analysis, while the same frames render offline. Commit
+  `097ab50d8` now logs the cause.
+* Per-page source content became fixed furniture: every generated page shows
+  the chapter tab "I 회사소개" and "요구사항ID COM-001" from the frame's source
+  page. Review lets the person drop such elements; analysis does not yet tell
+  chapter-specific text from furniture.
+
