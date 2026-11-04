@@ -21,6 +21,7 @@ import json
 import logging
 import re
 
+from services.svg_templates.chapters import page_chapter
 from services.authored_checkpoint_errors import AuthoredStageError
 from services.generation_core.drivers.svg.attempt_cause import cause, dispatch_cause
 from services.generation_core.drivers.svg.native_declarations import bind_native_declarations
@@ -490,6 +491,7 @@ async def attempt_author(*, ctx, request, index, content, role, count, payload, 
                     writing_policy=getattr(request, "writing_policy", None),
                     language=getattr(request, "language", None),
                     correction_hint=hint,
+                    template_chapter=page_chapter(ctx, index),
                     receipt_attempt_ordinal=receipt_attempt_ordinal,
                     source_images={**offered_images, **vector_icons},
                     before_dispatch=before_dispatch,

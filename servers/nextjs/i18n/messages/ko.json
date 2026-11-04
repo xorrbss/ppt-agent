@@ -2792,7 +2792,8 @@
     "svgReferenceRegistrationRequiredBody": "선택한 디자인 참고 파일을 등록하거나 선택을 해제해 주세요.",
     "svgReferenceSelectionConflict": "디자인 참고 선택 확인",
     "svgReferenceSelectionConflictBody": "디자인 참고 파일, 등록 디자인, 회사 표준 중 하나만 선택해 주세요.",
-    "canvasTemplateLocked": "양식 기반 재디자인은 템플릿 원본 크기로만 생성합니다."
+    "canvasTemplateLocked": "양식 기반 재디자인은 템플릿 원본 크기로만 생성합니다.",
+    "chapterTabFilled": "장 탭: 번호와 장 이름은 생성되는 문서의 장 구성으로 채웁니다."
   },
   "authoredStyleSamples": {
     "allSlides": "전체 슬라이드 · {count}",

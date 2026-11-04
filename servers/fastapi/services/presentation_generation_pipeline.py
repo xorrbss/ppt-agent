@@ -1240,6 +1240,15 @@ async def generate_presentation_handler(
         if not preserve_header_title_source:
             presentation_outlines = strip_outline_citations(presentation_outlines)
 
+        if resolve_generation_strategy(request) == "svg" and getattr(request, "svg_template_pin", None) is not None:
+            # A template whose chapter tab names each chapter: the deck's pages
+            # get their own chapters before the outline is pinned for resume.
+            from services.svg_templates.chapters import plan_outline_chapters
+            try:
+                await plan_outline_chapters(request, presentation_outlines)
+            except ValueError as error:
+                raise HTTPException(status_code=422, detail=str(error)) from error
+
         if uniform_svg_header and not frozen_uniform_outline:
             if (not preserve_header_title_source
                     and any(slide.title_source_digest is not None

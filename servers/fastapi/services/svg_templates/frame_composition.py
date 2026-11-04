@@ -276,6 +276,7 @@ def _element_node(element, frame, values, *, require_dynamic):
             raise ValueError("svg_template_dynamic_value_invalid")
         asset = font_asset_for(frame.font_manifest, text.get("font-family"), int(text.get("font-weight", "400")))
         width, ascent, descent = measure_text(asset, value, float(text.get("font-size")))
+        width += float(text.get("letter-spacing", "0")) * len(value)
         x, y = float(text.get("x")), float(text.get("y"))
         region = element.text_region or element.bounds
         if element.text_align in {"l", "ctr", "r"}:

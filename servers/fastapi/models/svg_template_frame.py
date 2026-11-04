@@ -111,7 +111,7 @@ class SvgTemplateFrameElement(FrameModel):
     anchor_x: Literal["left", "right", "center"] = "left"
     anchor_y: Literal["top", "bottom", "center"] = "top"
     size_policy: Literal["physical-fixed", "aspect-locked", "span-between-anchors"] = "physical-fixed"
-    dynamic_key: Literal["title", "page_number", "section_number"] | None = None
+    dynamic_key: Literal["title", "page_number", "section_number", "chapter_number", "chapter_title"] | None = None
     font_asset_ids: tuple[str, ...] = ()
     text_region: FrameRect | None = None
     text_align: Literal["l", "ctr", "r"] = "l"

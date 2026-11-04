@@ -9,6 +9,7 @@ import xml.etree.ElementTree as ET
 from sqlalchemy import select, update
 from constants.user_messages import UserMessageKey, user_message
 from models.sql.slide import SlideModel
+from services.svg_templates.chapters import chapter_from_context
 from services.svg_templates.selection_material import template_package
 from services.authored_canvas import presentation_canvas_contract, presentation_canvas_metadata
 from services.authored_presentation_artifacts import _save_slide_pngs
@@ -52,8 +53,10 @@ def _template_context(presentation, slides, index):
     source = (target.content or {}).get("source")
     if not isinstance(source, str):
         raise ValueError("svg_template_page_context_missing")
-    context = template_page_context(snapshot, index, len(slides), source)
     receipt = (target.content or {}).get("svgReceipt") or {}
+    from services.svg_templates.chapters import chapter_from_context
+    context = template_page_context(snapshot, index, len(slides), source,
+                                    chapter=chapter_from_context(receipt.get("svg_template_page")))
     if context != receipt.get("svg_template_page"):
         raise ValueError("svg_template_page_context_changed")
     return snapshot, context
@@ -294,7 +297,9 @@ async def preview_svg(presentation, slides, index, request, task, session):
                 result = await author_slide_svg(source, snapshot, target.content.get("role", "content"), index, len(slides),
                                                 instructions=instruction, source_images=manifest,
                                                 **({"previous_svg": target.svg_content} if recovery_policy or template_page is not None else {}),
-                                                canonical_source_images=assets is not None, **physical_kwargs, **header_kwargs)
+                                                canonical_source_images=assets is not None, **physical_kwargs, **header_kwargs,
+                                                **({"template_chapter": chapter_from_context(template_page)}
+                                                   if template_page is not None else {}))
         except Exception as error:
             reject(error, "generation")
         if result.receipt.get("validation_error"):

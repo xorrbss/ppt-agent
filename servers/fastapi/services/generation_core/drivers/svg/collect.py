@@ -494,6 +494,8 @@ async def _generate_deck(
     timing.bind_outline_spans(request, spans)
     with spans.span("prepare_total"):
         ctx = await _prepare_generation(request, presentation_id, outline, session, job)
+    # Chapter tabs of a template show each page's outline chapter.
+    ctx.template_chapters = [getattr(slide, "chapter", None) for slide in outline.slides]
     timing.bind_runtime_provenance(request, ctx)
     from services.svg_generation_session import independent_generation
 

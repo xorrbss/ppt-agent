@@ -340,7 +340,9 @@ async def _refresh_template_pages(session, presentation, slides, snapshot):
         if type(old_index) is not int or type(old_count) is not int:
             raise ValueError("svg_template_page_change_requires_new_generation")
         try:
-            if template_page_context(snapshot, old_index, old_count, source) != old:
+            from services.svg_templates.chapters import chapter_from_context
+            chapter = chapter_from_context(old)
+            if template_page_context(snapshot, old_index, old_count, source, chapter=chapter) != old:
                 raise ValueError("svg_template_page_context_changed")
             old_manifest = {node.get("href"): {"required": True} for node in ET.fromstring(slide.svg_content).iter()
                 if node.tag.rsplit("}", 1)[-1] == "image" and node.get("href", "").startswith("source-slot-")}
@@ -356,7 +358,7 @@ async def _refresh_template_pages(session, presentation, slides, snapshot):
                     or proof.get("body_paint_measured") is not True
                     or (receipt.get("quality") or {}).get("measurement_complete") is not True):
                 raise ValueError("svg_template_preservation_unverified")
-            new = template_page_context(snapshot, index, len(slides), source)
+            new = template_page_context(snapshot, index, len(slides), source, chapter=chapter)
             if new["frame_id"] != old["frame_id"] or new["frame_digest"] != old["frame_digest"]:
                 raise ValueError("svg_template_page_frame_changed")
             if new == old:

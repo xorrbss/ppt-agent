@@ -20,13 +20,15 @@ class SlideOutlineModel(BaseModel):
     title: str | None = None
     title_source_digest: str | None = None
     common_header: dict | None = None
+    #: The page's chapter in a template with chapter tabs: {"number", "title"}.
+    chapter: dict | None = None
 
     @model_serializer(mode="wrap")
     def _serialize_optional_header(self, handler):
         # Old outlines must retain their original JSON/digest when no header
         # metadata was supplied, including through nested presentation dumps.
         result = handler(self)
-        for key in ("title", "title_source_digest", "common_header", "page_id"):
+        for key in ("title", "title_source_digest", "common_header", "page_id", "chapter"):
             if result.get(key) is None:
                 result.pop(key, None)
         return result

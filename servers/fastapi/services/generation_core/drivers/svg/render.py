@@ -432,7 +432,9 @@ async def _attempt_render(*, ctx, request, presentation_id, index, content, payl
     if ctx.snapshot.get("svg_template") is not None:
         from services.svg_templates.generation import template_page_context
         try:
-            template_page = template_page_context(ctx.snapshot, index, ctx.count, content)
+            from services.svg_templates.chapters import page_chapter
+            template_page = template_page_context(ctx.snapshot, index, ctx.count, content,
+                                                  chapter=page_chapter(ctx, index))
             saved_template_page = payload.get("svg_template_page")
             if saved_template_page is not None and saved_template_page != template_page:
                 raise ValueError("svg_template_page_context_changed")

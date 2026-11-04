@@ -375,3 +375,33 @@ cause; the long writer is not identified yet. The second run then failed with
 the interrupted run had already settled, which the non-idempotent provider
 guard refuses by design. PostgreSQL (section 9) is unaffected.
 
+## 11. Chapter tabs and per-page text slots (2026-11-04)
+
+Decided with the user: a template whose source deck changes a chapter tab per
+chapter (one layout per chapter: Ⅰ 회사소개 … Ⅵ 추가 제안) gets tabs filled with
+the generated deck's own chapters (option A), and per-page text such as
+"요구사항 ID COM-001" is page content, not furniture (option 2-a).
+
+* Per-page slots (`bcf3d9e99`): a slide-level text box is furniture only when
+  its slot (same box and place, text ignored) has one text across the deck.
+  The real deck's requirement-ID box has 46 values on 74 pages.
+* Chapter slots: across all layouts, a plain one-run text box at the same
+  slide position (centre within 8 px, height within 4 px; groups flattened,
+  so tabs kept inside a group match) with different texts on different
+  layouts is a chapter slot: `chapter_number` when two thirds of its values
+  are numbers (Ⅰ, 1, 01, I; an appendix "별첨" does not change that), else
+  `chapter_title`. On the real deck all six chapter frames get both fields.
+* Planning (`services/svg_templates/chapters.py`,
+  `utils/llm_calls/plan_template_chapters.py`): after the outline, one model
+  call groups consecutive pages into 2-9 chapters and names them within the
+  narrowest tab's character budget. Each name is measured in every chapter tab
+  with the frame's font (letter spacing included); a name that does not fit is
+  asked for once more with a smaller budget, then the deck fails with
+  `svg_template_chapter_title_too_long`. Numbers follow the source style.
+* The plan is stored on the outline pages (`SlideOutlineModel.chapter`,
+  omitted when absent), so a resumed job reuses it; saved pages carry their
+  chapter in their template page context, so page reordering keeps each
+  page's chapter. A frame with chapter fields and no chapter fails with
+  `svg_template_chapter_missing`.
+* Review shows "장 탭: 번호와 장 이름은 생성되는 문서의 장 구성으로 채웁니다."
+

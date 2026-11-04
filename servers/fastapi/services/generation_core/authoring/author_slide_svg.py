@@ -932,7 +932,8 @@ async def author_slide_svg(content: str, style_snapshot: dict, role: str, index:
                            header_page: dict | None = None,
                            author_attempt_identity: dict | None = None,
                            output_view: dict | None = None,
-                           source_facts: list | None = None) -> SvgAuthorResult:
+                           source_facts: list | None = None,
+                           template_chapter: dict | None = None) -> SvgAuthorResult:
     manifest = preflight_svg_source_images(source_images)
     # The job's pinned source output view (whole-page source authoring only): the model
     # reads and writes the compact form, and its response is restored to the canonical
@@ -953,7 +954,7 @@ async def author_slide_svg(content: str, style_snapshot: dict, role: str, index:
     template_page = None
     if style_snapshot.get("svg_template") is not None:
         from services.svg_templates.generation import template_page_context
-        template_page = template_page_context(style_snapshot, index, n, content, role)
+        template_page = template_page_context(style_snapshot, index, n, content, role, chapter=template_chapter)
     if source_grounded:
         visual_intent = enrich_visual_intent(content, role, index, visual_intent)
     previous_render_part = None

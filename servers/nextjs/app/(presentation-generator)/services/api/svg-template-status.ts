@@ -83,3 +83,7 @@ export function initialFontSubstitutions(pkg: SvgTemplateDraft["package"]): SvgT
   }
   return [...byFamily.values()].sort((a, b) => a.sourceFamily.localeCompare(b.sourceFamily));
 }
+
+/** Whether a frame's chapter tab is filled with the generated deck's own chapters. */
+export const frameHasChapterTab = (frame: SvgTemplateFrame) =>
+  (frame.dynamic_fields ?? []).some(field => field === "chapter_number" || field === "chapter_title");

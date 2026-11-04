@@ -70,3 +70,9 @@ test("the exact EMU selector resolves like the server's source slide canvas", as
   assert.deepEqual(savedSvgTemplateCanvas({ documentCanvas: sourceSlideCanvas(10907713, 7775575) }).svgCanvas,
     { width_emu: 10907713, height_emu: 7775575 });
 });
+
+test("a frame with chapter fields is shown as filled from the generated chapters", async () => {
+  const { frameHasChapterTab } = await import("./svg-template-status");
+  assert.equal(frameHasChapterTab({ frame_id: "f", dynamic_fields: ["chapter_title", "page_number"] } as SvgTemplateFrame), true);
+  assert.equal(frameHasChapterTab({ frame_id: "f", dynamic_fields: ["page_number"] } as SvgTemplateFrame), false);
+});

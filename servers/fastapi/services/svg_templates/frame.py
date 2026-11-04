@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from collections import Counter
 import json
+import re
 from pathlib import Path
 from zipfile import ZipFile
 
@@ -118,6 +119,98 @@ def _variable_slots(context, package, slides) -> set[str]:
                 continue
             texts.setdefault(_slot_key(shape, package, part), set()).add(_shape_text(shape))
     return {key for key, values in texts.items() if len(values) > 1}
+
+
+_CHAPTER_NUMBER = re.compile(r"^(?:[0-9]{1,2}|[\u2160-\u216B]|[IVXivx]{1,4})[.)]?$")
+
+
+def _simple_text(shape) -> str | None:
+    """The text of a one-paragraph, one-run shape (what a dynamic field can replace)."""
+    paragraphs = [paragraph for paragraph in shape.iterfind("p:txBody/a:p", NS)
+                  if "".join(text.text or "" for text in paragraph.iterfind(".//a:t", NS)).strip()]
+    if len(paragraphs) != 1:
+        return None
+    runs = [run for run in paragraphs[0] if etree.QName(run).localname in {"r", "fld", "br"}]
+    if len(runs) != 1 or etree.QName(runs[0]).localname != "r":
+        return None
+    return _shape_text(shape) or None
+
+
+class _ChapterSlots:
+    """Text-box slots shared by chapter layouts: ``key_for(bounds)`` -> dynamic key.
+
+    Chapter layouts are usually copies of one another, but PowerPoint gives
+    every copy its own creation id, may mark it user-drawn, some keep the tab
+    inside a group (child coordinates) and a longer name may get a wider box.
+    A slot is therefore matched by its centre on the slide (within 8 px) and
+    its height (within 4 px).
+    """
+
+    def __init__(self):
+        self.slots: list[tuple[float, float, float, str]] = []
+
+    @staticmethod
+    def _close(slot, bounds) -> bool:
+        x, y, height = slot[:3]
+        return (abs(x - (bounds.x + bounds.width / 2)) <= 8 and abs(y - (bounds.y + bounds.height / 2)) <= 8
+                and abs(height - bounds.height) <= 4)
+
+    def key_for(self, bounds) -> str | None:
+        if bounds is None:
+            return None
+        return next((slot[3] for slot in self.slots if self._close(slot, bounds)), None)
+
+    def add(self, bounds) -> str:
+        key = self.key_for(bounds)
+        if key is None:
+            key = f"slot-{len(self.slots)}"
+            self.slots.append((bounds.x + bounds.width / 2, bounds.y + bounds.height / 2, bounds.height, key))
+        return key
+
+
+def _layout_text_boxes(context, typography, part):
+    """``(shape, slide bounds)`` of every plain text box of a layout, groups flattened."""
+    from services.svg_templates.frame_ooxml import group_leaves, shape_bounds
+    for shape in _children(context.root(part)):
+        kind = etree.QName(shape).localname
+        if kind == "grpSp":
+            for leaf, bounds, failure in group_leaves(shape, context.scale):
+                if failure is None and etree.QName(leaf).localname == "sp":
+                    yield leaf, bounds
+        elif kind == "sp" and placeholder_of(shape) is None:
+            try:
+                yield shape, shape_bounds(shape, typography, part, context.scale)
+            except ValueError:
+                continue
+
+
+def _chapter_slots(context, package, typography):
+    """Layout text slots that name a chapter: ``(geometry, {slot key: dynamic key})``.
+
+    A deck with one layout per chapter (the real proposal deck: Ⅰ 회사소개 …
+    Ⅵ 추가 제안) puts each chapter's number and name in the same text box at
+    the same place on every chapter layout. Such a slot is chapter furniture
+    whose text the generated deck must replace with its own chapters, not the
+    source's. A number-like slot is ``chapter_number``, any other
+    ``chapter_title``.
+    """
+    texts: dict[str, dict[str, str]] = {}
+    geometry = _ChapterSlots()
+    layouts = sorted(name for name in package.namelist()
+                     if re.fullmatch(r"ppt/slideLayouts/slideLayout\d+\.xml", name))
+    for part in layouts:
+        for shape, bounds in _layout_text_boxes(context, typography, part):
+            text = _simple_text(shape)
+            if text is not None and bounds is not None:
+                texts.setdefault(geometry.add(bounds), {})[part] = text
+    slots = {}
+    for key, by_layout in texts.items():
+        values = list(by_layout.values())
+        if len(values) >= 2 and len(set(values)) >= 2:
+            # An appendix layout may say "별첨" where chapters say Ⅰ…Ⅵ.
+            numbers = sum(bool(_CHAPTER_NUMBER.match(value)) for value in values)
+            slots[key] = "chapter_number" if numbers * 3 >= len(values) * 2 else "chapter_title"
+    return geometry, slots
 
 
 def _background(context, ancestry, frame_id):
@@ -509,6 +602,10 @@ def extract_template_package(pptx_path: str | Path, *, font_assets=None,
         # Repetition is judged over the whole deck: more pages, better evidence.
         repeats = Counter(key for part in all_slides for key in {_repeat_key(shape, package, part) for shape in _children(context.root(part))})
         variable_slots = _variable_slots(context, package, all_slides)
+        chapter_geometry, chapter_keys = _chapter_slots(context, package, typography)
+
+        def chapter_slot(bounds):
+            return chapter_keys.get(chapter_geometry.key_for(bounds))
         pending, unavailable = [], set()
         for slide_part in slides:
             page_index = page_numbers[slide_part]
@@ -652,12 +749,17 @@ def extract_template_package(pptx_path: str | Path, *, font_assets=None,
                                     issues.append(FrameIssue(reason_code=failure, severity="blocked",
                                                              source_part=part, shape_id=shape_id(leaf)))
                                 continue
+                            leaf_key = (chapter_slot(leaf_bounds)
+                                        if "/slideLayouts/" in part and _simple_text(leaf) is not None else None)
                             _emit_fixed(context, runs, elements, issues, frame_id, part, leaf, leaf_bounds,
-                                        emu=_emu(leaf_bounds, context))
+                                        emu=_emu(leaf_bounds, context), dynamic_key=leaf_key)
                         continue
+                    dynamic_key = _DYNAMIC.get(ph.type) if ph else None
+                    if dynamic_key is None and "/slideLayouts/" in part and _simple_text(shape) is not None:
+                        dynamic_key = chapter_slot(bounds)
                     try:
                         element = context.emit(shape, part, element_id=f"svg-system-template-{frame_id}-fixed-{len(elements)}",
-                                               dynamic_key=_DYNAMIC.get(ph.type) if ph else None)
+                                               dynamic_key=dynamic_key)
                         if (element.kind == "rect" and bounds is not None and abs(bounds.x) <= .01 and abs(bounds.y) <= .01
                                 and abs(bounds.width - canvas.width_px) <= .01 and abs(bounds.height - canvas.height_px) <= .01):
                             paint = etree.fromstring(element.svg.encode()).get("fill", "none")
@@ -673,7 +775,7 @@ def extract_template_package(pptx_path: str | Path, *, font_assets=None,
                         if str(error) == "svg_template_text_shape_paint_unsupported" and runs.enabled:
                             _emit_fixed(context, runs, elements, issues, frame_id, part, shape, bounds,
                                         emu=None if own_transform else _emu(bounds, context),
-                                        dynamic_key=_DYNAMIC.get(ph.type) if ph else None)
+                                        dynamic_key=dynamic_key)
                         elif not runs.add(elements, part, shape, str(error), bounds=bounds,
                                           emu=None if own_transform else _emu(bounds, context)):
                             issues.append(FrameIssue(reason_code=str(error), severity="blocked", source_part=part, shape_id=shape_id(shape)))

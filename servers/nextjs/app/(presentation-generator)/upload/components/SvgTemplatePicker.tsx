@@ -10,7 +10,7 @@ import { resolveBackendAssetUrl } from "@/utils/api";
 import { PresentationGenerationApi } from "../../services/api/presentation-generation";
 import { SvgTemplatesApi, svgTemplateCanvas, type SvgTemplateCard, type SvgTemplateDraft, type SvgTemplateCapability, type SvgTemplateMode } from "../../services/api/svg-templates";
 import { AUTH_SESSION_EXPIRED_EVENT } from "../../services/api/api-error-handler";
-import { templateReason, templateIssueText, templateFontText, templateRoleText, templateOperationText, templateActionText, frameReviewBlockReason, rasterPreservationLines } from "../../services/api/svg-template-status";
+import { templateReason, templateIssueText, templateFontText, templateRoleText, templateOperationText, templateActionText, frameReviewBlockReason, rasterPreservationLines, frameHasChapterTab } from "../../services/api/svg-template-status";
 import SvgTemplateReview from "./SvgTemplateReview";
 import SvgTemplateFontSubstitutions from "./SvgTemplateFontSubstitutions";
 import type { PresentationConfig } from "../type";
@@ -267,6 +267,7 @@ export default function SvgTemplatePicker({ config, onConfigChange, sourceConten
         return <div key={frame.frame_id} className="rounded border p-2 text-sm"><label className="flex items-center gap-2"><input type="checkbox" disabled={Boolean(blockedReason)} checked={!blockedReason && selectedFrames.includes(frame.frame_id)} onChange={event => { setConfirmed(false); setSelectedFrames(previous => event.target.checked ? [...previous, frame.frame_id] : previous.filter(id => id !== frame.frame_id)); }} /> {templateRoleText(frame.role)} · 원본 {(frame.source_page ?? 0) + 1}장</label>{framePreview(frame)}
           {(frame.issues ?? []).map((issue, index) => <p className="mt-1 text-xs text-amber-800" key={index}>{templateIssueText(issue)}</p>)}
           {rasterPreservationLines(frame).map((line, index) => <p className="mt-1 text-xs text-slate-600" key={`raster-${index}`}>{line}</p>)}
+          {frameHasChapterTab(frame) ? <p className="mt-1 text-xs text-slate-600">{t("chapterTabFilled")}</p> : null}
           {blockedReason ? <p role="status" className="mt-1 text-xs text-amber-800">{blockedReason}</p> : null}
         </div>;
       })}
