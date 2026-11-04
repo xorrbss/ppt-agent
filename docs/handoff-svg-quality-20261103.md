@@ -76,13 +76,15 @@ Not adopted on purpose:
    renderer and dropped on failure; behind a flag until measured. Design notes
    in the conversation: reuse the AssetOffer scene slots
    (`SCENE_BBOX_HINT`), keep PPTX editability (custGeom).
-5. Former open items, all resolved on 2026-11-04:
+5. Former open items, reviewed on 2026-11-04:
    - The readback test `test_converter_patch_rebuild_matches_shipped_bytes`
-     failed because `chart-furniture.16` and `native-fixed-text.1` were edited
-     into the vendor tree without patch files. The baseline commit is in the
-     repository (and matches its manifest); the two edits are now
-     `chart-furniture-16.patch` and `native-fixed-text-1.patch` in
-     `compatibility/slide-master/`, and the manifest is rebuilt (LF endings).
+     still fails: `chart-furniture.16` and `native-fixed-text.1` were edited
+     into the vendor tree without patch files (the baseline commit is in the
+     repository and matches its manifest). A fix that adds the two patches
+     must also rebuild `vendor/slide_master/MANIFEST.json`, which changes
+     `converter_digest()` and so makes every stored svg export proof
+     re-verify as failed although the converter code is unchanged; it is held
+     on branch `wip/s2n` (`30ed896b8`) until that is decided.
    - `Today's Date` stays in the outline and content-brief user prompts on
      purpose. It sits in the user message, so it does not touch the cacheable
      system prefix; it is the only way the model learns the current year for
