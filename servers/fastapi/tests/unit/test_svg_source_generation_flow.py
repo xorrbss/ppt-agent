@@ -869,7 +869,7 @@ async def test_source_publish_rejects_missing_receipt_before_database_access():
     request = SimpleNamespace(_source_content_svg_reflow=True,
         _source_content_manifest=manifest_for([("text", {"text": "원문"})]))
     with pytest.raises(ValueError, match="svg_source_receipt"):
-        await generation._publish(request, uuid.uuid4(), None, "ko", None, None, None, None,
+        await generation._publish(request, uuid.uuid4(), None, "ko", None, None, {}, None,
             [({"svg_content": "<svg/>"}, None)])
 
 
