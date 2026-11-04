@@ -13,6 +13,9 @@ native tables, charts, icons) and, given the source text, how much of it survive
 ``register_template.py``). A variant that is a server setting (an environment switch) is measured by restarting
 the backend with it and running again under another ``--label``. The database is read directly for the
 per-page attempts; point ``--dsn`` (or ``EVAL_DATABASE_DSN``) at the backend's database.
+
+``--judge-references refs/`` also scores every deck against reference pages of the template with the vision
+judge in ``judge.py`` (``judge_<axis>`` and ``judge_overall`` fields, 1 to 5).
 """
 from __future__ import annotations
 
@@ -139,6 +142,14 @@ def run(args: argparse.Namespace) -> None:
     payload = json.loads(Path(args.payload).read_text(encoding="utf-8"))
     source = Path(args.source).read_text(encoding="utf-8") if args.source else None
     conn = _db(args.dsn)
+    judge = None
+    if args.judge_references:
+        from judge import Judge
+
+        chosen = [name.strip() for name in args.judge_ref_pages.split(",")] if args.judge_ref_pages else None
+        judge = Judge(Path(args.judge_references), chosen, model=args.judge_model, effort=args.judge_effort or None,
+                      temperature=args.judge_temperature, fallbacks=not args.judge_no_fallbacks,
+                      workers=args.judge_workers)
     runs: list[dict] = []
     with httpx.Client(base_url=args.base, timeout=120, headers=dict(h.split("=", 1) for h in args.header)) as client:
         for number in range(1, args.runs + 1):
@@ -157,6 +168,13 @@ def run(args: argparse.Namespace) -> None:
             if args.pptx:
                 parts = _export_parts(client, data["presentation_id"], data.get("export_operation_id"), 240)
                 record.update(package_objects(parts) if parts else {})
+            if judge is not None:
+                from judge import judge_presentation, print_deck, run_fields
+
+                judged = judge_presentation(conn, data["presentation_id"], judge,
+                                            Path(args.judge_renders) if args.judge_renders else None)
+                print_deck(f"run {number} judge", judged)
+                record.update(run_fields(judged), judge=judged)
             record.update(run=number, completed=True, seconds=round(seconds),
                           gate_passed=(data.get("quality_pages") or {}).get("passed"),
                           gate_flagged=(data.get("quality_pages") or {}).get("flagged"),
@@ -169,6 +187,10 @@ def run(args: argparse.Namespace) -> None:
     done = [item for item in runs if item.get("completed")]
     result = {"label": args.label, "runs": runs, "summary": summarize(done), "payload": args.payload,
               "completed_runs": len(done), "requested_runs": args.runs}
+    if judge is not None:
+        costs = [item["judge"]["cost_estimate_usd"] for item in done if "judge" in item]
+        result.update(judge_settings=judge.settings(),
+                      judge_cost_estimate_usd=None if None in costs else round(sum(costs), 4))
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
     (out / f"{args.label}.json").write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -209,6 +231,11 @@ def main() -> None:
     run_parser.add_argument("--dsn", default=os.environ.get("EVAL_DATABASE_DSN", DEFAULT_DSN))
     run_parser.add_argument("--header", action="append", default=[], help="extra request header, K=V (repeatable)")
     run_parser.add_argument("--timeout", type=float, default=1500, help="seconds to wait for one deck")
+    run_parser.add_argument("--judge-references", help="reference page PNGs: also score each deck with judge.py")
+    run_parser.add_argument("--judge-renders", help="keep the judged page PNGs here")
+    from judge import add_judge_options
+
+    add_judge_options(run_parser, prefix="judge-")
     run_parser.set_defaults(handler=run)
     compare_parser = sub.add_parser("compare", help="print two result files side by side")
     compare_parser.add_argument("a")
