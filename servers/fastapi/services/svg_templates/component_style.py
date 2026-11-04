@@ -32,8 +32,9 @@ from services.svg_templates.frame_ooxml import group_leaves, shape_bounds
 
 MIN_COUNT = 3
 MIN_PAGES = 2
-#: Body region tolerance: source shapes often touch the region's edge.
-_TOLERANCE_PX = 8.0
+#: Body region tolerance: source shapes often touch the region's edge (a key-message bar
+#: drawn right under the header band starts a few px above the computed region).
+_TOLERANCE_PX = 12.0
 _SKIPPED_PLACEHOLDERS = {"title", "ctrTitle", "subTitle", "sldNum", "ftr", "dt", "hdr"}
 _NUMBER = re.compile(r"^(?:[0-9]{1,2}|[A-Za-z]|[Ⅰ-Ⅻ]|[IVXivx]{1,4})[.)]?$")
 _SHAPES = {"rect": "rect", "flowChartProcess": "rect", "roundRect": "rounded", "flowChartAlternateProcess": "rounded",
@@ -249,6 +250,7 @@ def extract_component_style(context, slides, regions: dict) -> SvgTemplateCompon
             continue
         sampled += 1
         context.source_slide_part = part
+        items = []
         root = context.root(part)
         tree = root.find("p:cSld/p:spTree", NS)
         for top in (tree if tree is not None else ()):
@@ -265,9 +267,14 @@ def extract_component_style(context, slides, regions: dict) -> SvgTemplateCompon
                 if not _inside(bounds, region):
                     continue
                 try:
-                    _measure(context, shape, bounds, part, page, region.width, characters, variants, tables)
+                    item = _measure(context, shape, bounds, part, page, tables)
                 except _ERRORS:
                     continue
+                if item is not None:
+                    items.append(item)
+        _attach_overlay_text(items)
+        for item in items:
+            _register(item, page, region.width, characters, variants)
     if not sampled:
         return None
     components = []
@@ -309,7 +316,8 @@ def extract_component_style(context, slides, regions: dict) -> SvgTemplateCompon
                                      components=tuple(components), tables=tuple(table_styles))
 
 
-def _measure(context, shape, bounds, part, page, region_width, characters, variants, tables):
+def _measure(context, shape, bounds, part, page, tables):
+    """One body shape as an item to classify (tables are recorded directly), or ``None``."""
     local = etree.QName(shape).localname
     if local == "graphicFrame":
         measured = _table(context, shape, part)
@@ -326,9 +334,9 @@ def _measure(context, shape, bounds, part, page, region_width, characters, varia
                     entry[name][_round(text[0])] += 1
             if body_text is not None:
                 entry["body_styles"][body_text[1:]] += 1
-        return
+        return None
     if local not in {"sp", "cxnSp"}:
-        return
+        return None
     geometry = shape.find("p:spPr/a:prstGeom", NS)
     preset = geometry.get("prst") if geometry is not None else None
     shape_name = "line" if local == "cxnSp" or preset in _LINES else _SHAPES.get(preset)
@@ -336,46 +344,78 @@ def _measure(context, shape, bounds, part, page, region_width, characters, varia
     stroke, line = context.fill(shape, part, "line")
     stroke = _hex(stroke)
     text_context = context.typography.shape_context(shape, part_name=part)
-    first = None
-    text = "".join(item[2] for item in _runs(shape)).strip()
+    styles = []
     for run, paragraph, value in _runs(shape):
         style = _run_style(context, text_context, run, paragraph, part)
-        if style is None:
-            continue
-        first = first or style
-        if fill == "none" and stroke == "none":
-            # The ladder is the plain body text; text on a painted shape belongs to its component.
-            characters[(style[0], style[1], style[2])] += len(value)
+        if style is not None:
+            styles.append((style, len(value)))
+    item = {"shape_name": shape_name, "fill": fill, "stroke": stroke, "bounds": bounds,
+            "text": "".join(value[2] for value in _runs(shape)).strip(), "styles": styles,
+            "stroke_width": 0.0, "radius": 0.0, "overlay": False}
     if shape_name is None:
-        return
+        return item  # unknown geometry: its text still counts for the ladder when unpainted
     if shape_name == "line":
         ends = [line.find("a:" + name, NS) for name in ("headEnd", "tailEnd")] if line is not None else []
         if any(end is not None and end.get("type", "none") != "none" for end in ends):
-            return  # an arrow: a connector, not a divider
-    stroke_width = _round(float(line.get("w", "12700")) / context.scale, .5) if stroke != "none" and line is not None else 0.0
-    if stroke != "none" and stroke_width == 0:
-        stroke_width = .5
-    kind = _classify(shape_name, fill, stroke, text, bounds.width, bounds.height, region_width)
-    if kind is None:
-        return
-    radius = 0.0
+            return None  # an arrow: a connector, not a divider
+    if stroke != "none" and line is not None:
+        item["stroke_width"] = max(.5, _round(float(line.get("w", "12700")) / context.scale, .5))
     if shape_name == "rounded":
         guide = geometry.find("a:avLst/a:gd[@name='adj']", NS)
         formula = guide.get("fmla", "val 16667") if guide is not None else "val 16667"
         share = min(50000, max(0, int(formula[4:]))) / 100000 if formula.startswith("val ") else 16667 / 100000
-        radius = min(bounds.width, bounds.height) * share
+        item["radius"] = min(bounds.width, bounds.height) * share
         if share >= .45:
-            shape_name = "pill"
+            item["shape_name"] = "pill"
     elif shape_name == "circle":
-        radius = min(bounds.width, bounds.height) / 2
+        item["radius"] = min(bounds.width, bounds.height) / 2
+    return item
+
+
+def _painted(item) -> bool:
+    return item["fill"] != "none" or item["stroke"] != "none"
+
+
+def _attach_overlay_text(items) -> None:
+    """A text box drawn over a short painted shape is that shape's text (a bar or a chip whose
+    words sit in a separate box). Its text then describes the component, not the ladder."""
+    for index, item in enumerate(items):
+        if (not _painted(item) or item["text"] or item["shape_name"] in {None, "line"}
+                or item["bounds"].height > 110):
+            continue
+        box = item["bounds"]
+        for other in items[index + 1:]:
+            if _painted(other) or not other["styles"] or other["overlay"]:
+                continue
+            inner = other["bounds"]
+            cx, cy = inner.x + inner.width / 2, inner.y + inner.height / 2
+            if (box.x <= cx <= box.x + box.width and box.y <= cy <= box.y + box.height
+                    and inner.height <= box.height + 2):
+                item["text"], item["styles"] = other["text"], other["styles"]
+                other["overlay"] = True
+                break
+
+
+def _register(item, page, region_width, characters, variants) -> None:
+    if not _painted(item) and not item["overlay"]:
+        # The ladder is the plain body text; text on a painted shape belongs to its component.
+        for style, length in item["styles"]:
+            characters[style] += length
+    if item["shape_name"] is None or item["overlay"]:
+        return
+    bounds = item["bounds"]
+    kind = _classify(item["shape_name"], item["fill"], item["stroke"], item["text"],
+                     bounds.width, bounds.height, region_width)
+    if kind is None:
+        return
+    shape_name, fill, stroke, stroke_width = item["shape_name"], item["fill"], item["stroke"], item["stroke_width"]
     if kind == "divider":
         shape_name, fill = "line", "none"
         if stroke == "none":  # a hairline rectangle
-            stroke, stroke_width = _hex(context.fill(shape, part)[0]), _round(min(bounds.width, bounds.height), .5)
-    text_key = None
-    if text and first is not None:
-        text_key = (_round(first[0]), first[1], first[2])
-    key = (kind, shape_name, fill, stroke, stroke_width, _round(radius, 1), text_key)
+            stroke, stroke_width = item["fill"], _round(min(bounds.width, bounds.height), .5)
+    first = item["styles"][0][0] if item["text"] and item["styles"] else None
+    text_key = (_round(first[0]), first[1], first[2]) if first else None
+    key = (kind, shape_name, fill, stroke, stroke_width, _round(item["radius"], 1), text_key)
     entry = variants.setdefault(key, {"count": 0, "pages": set(), "widths": [], "heights": []})
     entry["count"] += 1
     entry["pages"].add(page)

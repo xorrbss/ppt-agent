@@ -20,6 +20,7 @@ from services.svg_templates.component_style import component_style_rules
 from services.svg_templates.frame import extract_template_package
 
 NAVY, BLUE, GREY, TINT = (0x1F, 0x2A, 0x5C), (0x00, 0x5E, 0xD0), (0xD5, 0xDB, 0xE1), (0xEE, 0xF2, 0xFB)
+MESSAGE = (0xE4, 0xEC, 0xF8)
 
 
 def _fill(shape, color, line=None):
@@ -64,9 +65,14 @@ def _deck(path, *, pages=3, chips_on=None):
                 _text(chip, f"0{index + 1}", 11, (255, 255, 255), bold=True)
             body = slide.shapes.add_textbox(left + Emu(100000), Emu(2200000), Emu(3000000), Emu(900000))
             _text(body, "Fictional body text for a card on this page.", 11, (0x4E, 0x5B, 0x6E))
-        panel = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, Emu(600000), Emu(3500000), Emu(10800000), Emu(900000))
+        panel = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, Emu(600000), Emu(3400000), Emu(10800000), Emu(900000))
         _fill(panel, TINT)
-        table = slide.shapes.add_table(3, 2, Emu(600000), Emu(4600000), Emu(6000000), Emu(1000000)).table
+        # A key-message bar whose words sit in a separate text box drawn over it.
+        bar = slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, Emu(600000), Emu(4450000), Emu(10800000), Emu(400000))
+        _fill(bar, MESSAGE)
+        words = slide.shapes.add_textbox(Emu(700000), Emu(4470000), Emu(9000000), Emu(360000))
+        _text(words, "Fictional key message", 13, NAVY, bold=True)
+        table = slide.shapes.add_table(3, 2, Emu(600000), Emu(4950000), Emu(6000000), Emu(600000)).table
         for row in range(3):
             for column in range(2):
                 cell = table.cell(row, column)
@@ -102,6 +108,10 @@ def test_recurring_body_components_are_measured_as_style(tmp_path):
     assert card.width_px is None and card.height_px is None  # an area's size is layout, not style
     assert found["accent_bar"].fill == "#1F2A5C"
     assert found["panel"].fill == "#EEF2FB"
+    bar = found["bar"]
+    assert (bar.fill, bar.text.colors, bar.text.weight) == ("#E4ECF8", ("#1F2A5C",), 700)
+    # The bar's words describe the bar, not the plain body text ladder.
+    assert all(abs(level.size_px - bar.text.size_px) > .1 for level in style.type_ladder)
     assert style.tables[0].header_fill == "#1F2A5C" and style.tables[0].header_text.colors == ("#FFFFFF",)
     assert style.tables[0].body_fill == "#FFFFFF" and style.tables[0].body_text.colors == ("#1F2A5C",)
     sizes = [level.size_px for level in style.type_ladder]
