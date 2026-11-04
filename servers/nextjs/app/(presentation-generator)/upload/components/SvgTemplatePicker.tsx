@@ -155,6 +155,23 @@ export default function SvgTemplatePicker({ config, onConfigChange, sourceConten
     }, 2000);
     return () => window.clearTimeout(timer);
   }, [preparation]);
+  // A draft that is still being analyzed has no result to show yet: follow it until the server leaves "analyzing".
+  const analyzingTemplateId = draft?.template.registrationState === "analyzing" ? draft.template.templateId : null;
+  useEffect(() => {
+    if (!analyzingTemplateId) return;
+    const owner = ownerEpoch.current;
+    if (!live(owner)) return;
+    const timer = window.setTimeout(() => {
+      SvgTemplatesApi.draft(analyzingTemplateId).then(result => {
+        if (!live(owner)) return;
+        setDraft(result);
+        if (result.template.registrationState === "analyzing") return;
+        setReviewDirty(false); setConfirmed(false); setRefresh(value => value + 1);
+        setSelectedFrames(result.package?.frames.filter(frame => !frameReviewBlockReason(result, frame)).map(frame => frame.frame_id) ?? []);
+      }).catch(() => { /* keep the manual "분석 상태 확인" button as the fallback */ });
+    }, 3000);
+    return () => window.clearTimeout(timer);
+  }, [analyzingTemplateId, draft]);
   const prepare = async () => {
     if (!selection || busy || !ownerAlive.current || available !== true) return;
     const owner = ownerEpoch.current;
