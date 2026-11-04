@@ -195,8 +195,11 @@ def push_down_container_fill(root) -> int:
     wins, so an inner ``none`` or paint server (``url(...)``) shadows an outer colour and
     pushes nothing. The container keeps its own fill (it also paints shapes), so rendering is
     unchanged. A page whose texts all carry a fill is a no-op, so no page accepted before this
-    existed changes; the producer and ``parse_author_response`` both call this, which keeps a
-    stored raw response replaying identically. Returns how many <text> elements received a fill.
+    existed changes. The producer and ``parse_author_response`` both call this, so a response
+    replays the same way under the same code. A response rejected before this function existed
+    (a text without ``fill`` that a group supplied) may now be accepted when replayed; the code
+    fingerprint in ``services/svg_partial_recovery.py``, which lists this file, refuses a partial
+    recovery across this change. Returns how many <text> elements received a fill.
     """
     filled = 0
     stack = [(root, None)]

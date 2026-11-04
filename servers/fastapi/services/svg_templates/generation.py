@@ -165,7 +165,9 @@ def template_page_context(snapshot: dict, index: int, count: int, content: str,
     from services.svg_templates.chapters import chapter_values, header_values
     values.update(chapter_values(frame, chapter))
     values.update(header_values(frame, title or "", chapter))
-    # The compiler measures actual font bytes; oversized bound titles fail before body spend.
+    # The render here still checks that the bound values can be drawn (fonts and glyphs, and
+    # chapter tabs, which fail when too long). An over-wide title or breadcrumb is shrunk and
+    # cut by _fit_header_text instead of failing, so it does not reach this check.
     render_frame_svg(frame, dynamic_values=values)
     adaptation = template_adaptations(selection)[frame.frame_id]
     result = {

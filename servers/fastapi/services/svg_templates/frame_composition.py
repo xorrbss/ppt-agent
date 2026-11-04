@@ -263,7 +263,10 @@ def trusted_frame_images(frame: SvgTemplateFrame) -> dict[str, str]:
 
 def _fit_header_text(asset, value, size, spacing, region_width):
     """A page's own header text must not fail the page for being long: shrink it to
-    60 % of the source size, then cut it with an ellipsis. Returns ``(value, size, width)``."""
+    60 % of the source size, then cut it with an ellipsis. Returns ``(value, size, width)``.
+    This is a behaviour change from before commit 98e41a0d9, when an over-wide dynamic title
+    failed the page with ``svg_template_dynamic_text_overflow`` before any body was authored;
+    chapter tab fields still fail that way."""
     def width_of(text, at):
         return measure_text(asset, text, at)[0] + spacing * len(text)
     floor = size * .6
