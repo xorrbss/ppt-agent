@@ -286,6 +286,7 @@ const nodes = [['parent', 'A '], ['child', '\u25b8'], ['parent', ' B'], [null, '
  textContent: value, parentElement: {closest: selector => qid ? {getAttribute: key => qid} : null}
 }));
 const NodeFilter = {SHOW_TEXT: 4};
+const isTrustedFontResourceText = () => false;
 let visits = 0;
 const document = {body: {}, createTreeWalker: (root, mode) => {
  if (root !== document.body || mode !== NodeFilter.SHOW_TEXT) throw Error('scope');
@@ -301,5 +302,5 @@ console.log(JSON.stringify({result, visits}));
     assert evidence == {"result": [{"qid": "parent", "text": "A "}, {"qid": "child", "text": "\u25b8"},
                                    {"qid": "parent", "text": " B"}], "visits": 5}
     assert "ordered_owned_text: orderedOwnedText()" in source
-    assert MEASUREMENT_CACHE_VERSION == "authored-measurement/v18-preserved-svg-whitespace"
-    assert DOM_METRICS_VERSION == "authored-dom-metrics-v30-preserved-svg-whitespace"
+    assert MEASUREMENT_CACHE_VERSION == "authored-measurement/v19-exclude-trusted-font-resource-text"
+    assert DOM_METRICS_VERSION == "authored-dom-metrics-v31-exclude-trusted-font-resource-text"

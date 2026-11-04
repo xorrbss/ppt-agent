@@ -103,7 +103,8 @@ def test_only_pinned_template_wrapper_materializes_one_fixed_variable_face():
           )
     profile = source_font_profile(spec)
     wrapper = svg_preview_html(svg, source_font_profile=profile)
-    admitted = Admitted('<html><head><meta content="font-src &#x27;none&#x27;"></head><body></body></html>')
+    # The worker derives the embedded markup from the admitted page, so it carries the svg.
+    admitted = Admitted(f'<html><head><meta content="font-src &#x27;none&#x27;"></head><body>{svg}</body></html>')
     materialized = materialize_trusted_svg_fonts(wrapper, admitted)
     assert materialized.html.count("data:font/ttf;base64,") == 1
     assert "font-weight:100 900" in materialized.html
