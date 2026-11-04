@@ -31,6 +31,8 @@ MAX_TEMPLATE_PAGES = 100
 #: Pages analysed when the request names none: page 1 and the first page of
 #: every other slide layout. A template is its furniture, not every page.
 DEFAULT_REPRESENTATIVE_PAGES = 12
+#: A default selection of a single page is topped up with evenly spaced ones to this many.
+_TOPPED_UP_PAGES = 4
 MAX_TEMPLATE_ASSET_BYTES = 80 * 1024 * 1024
 MAX_TEMPLATE_PACKAGE_BYTES = 64 * 1024 * 1024
 _DYNAMIC = {"title": "title", "ctrTitle": "title", "sldNum": "page_number"}
@@ -81,6 +83,17 @@ def _repeat_key(shape, package, part):
     copied = deepcopy(shape)
     for marker in copied.findall(".//p:cNvPr", NS):
         marker.attrib.clear()
+        # PowerPoint gives every shape of every slide its own creation id
+        # (``a16:creationId`` in ``a:extLst``): the same furniture is never
+        # byte-alike on two pages unless these are dropped.
+        for extension in marker.findall("a:extLst", NS):
+            marker.remove(extension)
+    # The width of an unwrapped text box is whatever the last editor measured
+    # for its text: the same label has a different one on every page.
+    unwrapped = copied.find("p:txBody/a:bodyPr", NS)
+    extent = copied.find("p:spPr/a:xfrm/a:ext", NS)
+    if unwrapped is not None and unwrapped.get("wrap") == "none" and extent is not None:
+        extent.attrib.pop("cx", None)
     relationships = _relationship_map(package, part)
     for blip in copied.findall(".//a:blip", NS):
         key = f"{{{R_NS}}}embed"
@@ -186,7 +199,9 @@ def _layout_text_boxes(context, typography, part):
 
 _PAGE_NUMBER_TEXT = re.compile(r"^\d{1,2}$")
 #: A header text at least this large (pt) and the largest of its page is its title.
-_MIN_TITLE_SIZE_PT = 18.0
+#: Below it a text is a label (a requirement ID, a date), not a page title.
+_MIN_TITLE_SIZE_PT = 12.0
+_TITLE_SIZE_PT = 18.0
 
 
 def _first_run_size(typography, part, shape):
@@ -277,7 +292,8 @@ def _header_text_slots(context, typography, package, slide_part, canvas, variabl
     so the compiler keeps the two a generated page can write as dynamic text,
     with the source's own face, size and colour:
 
-    * ``title``: the largest of the page's header texts, at least 18 pt;
+    * ``title``: the largest of the page's header texts, at least 18 pt (12 pt
+      within the top 15 % of the page) and not a bare page number;
     * ``breadcrumb`` and ``breadcrumb_number``: a group holding a number and a
       wider text (the chapter number and its path), where ``path_places``
       shows the deck writes at least two different paths at its place.
@@ -312,7 +328,11 @@ def _header_text_slots(context, typography, package, slide_part, canvas, variabl
             if bounds is None or bounds.y + bounds.height > limit:
                 continue
             size = _first_run_size(typography, slide_part, shape)
-            if size is not None and size >= _MIN_TITLE_SIZE_PT and _shape_text(shape):
+            # Under 18 pt a text is a title only at the very top of the page: lower
+            # down it is as likely a section heading of the body.
+            top_only = size is not None and size < _TITLE_SIZE_PT and bounds.y + bounds.height > canvas.height_px * .15
+            if (size is not None and size >= _MIN_TITLE_SIZE_PT and not top_only and _shape_text(shape)
+                    and not _PAGE_NUMBER_TEXT.match(_shape_text(shape))):
                 titles.append((size, bounds.width, shape))
             continue
         group = _path_group(context, shape, canvas)
@@ -613,6 +633,16 @@ def representative_pages(context, slides) -> tuple[int, ...]:
             layouts.add(layout)
         if len(chosen) >= DEFAULT_REPRESENTATIVE_PAGES:
             break
+    if len(chosen) == 1 < len(slides):
+        # A deck that keeps every page on one layout (exported from another
+        # tool) would give the cover alone, which has no furniture of its own:
+        # add evenly spaced pages so body pages are analysed too.
+        wanted = min(_TOPPED_UP_PAGES, len(slides))
+        for step in range(wanted):
+            page = round(step * (len(slides) - 1) / (wanted - 1))
+            if page not in chosen and len(chosen) < wanted:
+                chosen.append(page)
+        chosen.sort()
     return tuple(chosen)
 
 
@@ -853,9 +883,11 @@ def extract_template_package(pptx_path: str | Path, *, font_assets=None,
                             if band_bottom is not None and bounds.y >= band_bottom - 2:
                                 edge = False
                         preset = shape.find("p:spPr/a:prstGeom", NS)
+                        # Editors round a full-slide rectangle by a few hundred EMU
+                        # (12191760 on a 12192000 slide), so allow a pixel.
                         page_background = (preset is not None and preset.get("prst") == "rect"
-                            and abs(bounds.x) <= .01 and abs(bounds.y) <= .01
-                            and abs(bounds.width - canvas.width_px) <= .01 and abs(bounds.height - canvas.height_px) <= .01)
+                            and abs(bounds.x) <= 1 and abs(bounds.y) <= 1
+                            and abs(bounds.width - canvas.width_px) <= 1 and abs(bounds.height - canvas.height_px) <= 1)
                         # A picture covering the slide at the bottom of the
                         # slide's own paint order is its background (a cover or
                         # divider photo), not body content (design D-2).
@@ -928,8 +960,8 @@ def extract_template_package(pptx_path: str | Path, *, font_assets=None,
                     try:
                         element = context.emit(shape, part, element_id=f"svg-system-template-{frame_id}-fixed-{len(elements)}",
                                                dynamic_key=dynamic_key)
-                        if (element.kind == "rect" and bounds is not None and abs(bounds.x) <= .01 and abs(bounds.y) <= .01
-                                and abs(bounds.width - canvas.width_px) <= .01 and abs(bounds.height - canvas.height_px) <= .01):
+                        if (element.kind == "rect" and bounds is not None and abs(bounds.x) <= 1 and abs(bounds.y) <= 1
+                                and abs(bounds.width - canvas.width_px) <= 1 and abs(bounds.height - canvas.height_px) <= 1):
                             paint = etree.fromstring(element.svg.encode()).get("fill", "none")
                             if paint != "none" and any(previous.layer == "foreground" for previous in elements):
                                 issues.append(FrameIssue(reason_code="svg_template_background_z_order_unsupported",

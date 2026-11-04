@@ -90,11 +90,16 @@ def adapt_frame(frame: SvgTemplateFrame, target_canvas: DocumentCanvasMetadata |
             # A transparent text box is not painted furniture. Trim only empty
             # horizontal container space; the actual glyph coordinates below
             # keep their physical size and anchor-derived position unchanged.
+            # Vertically too: a footer box may hang a few pixels below the page
+            # (its text lies inside; the glyph check below decides).
             left = max(0, adapted_bounds.x)
             right = min(page.width, adapted_bounds.x + adapted_bounds.width)
-            if right <= left:
+            top = max(0, adapted_bounds.y)
+            bottom = min(page.height, adapted_bounds.y + adapted_bounds.height)
+            if right <= left or bottom <= top:
                 raise ValueError("svg_template_adaptation_fixed_element_does_not_fit")
-            adapted_bounds = adapted_bounds.model_copy(update={"x": left, "width": right - left})
+            adapted_bounds = adapted_bounds.model_copy(update={"x": left, "width": right - left,
+                                                               "y": top, "height": bottom - top})
         if not _inside(adapted_bounds, page):
             raise ValueError("svg_template_adaptation_fixed_element_does_not_fit")
         node = secure_xml(element.svg.encode(), part_name="frame-element.svg")

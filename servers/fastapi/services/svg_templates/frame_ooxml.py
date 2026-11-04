@@ -297,6 +297,8 @@ class OoxmlFrameContext:
             raise ValueError("svg_template_text_autofit_unsupported")
         left, right = body_layout["marginLeftEmu"] / self.scale, body_layout["marginRightEmu"] / self.scale
         top, bottom = body_layout["marginTopEmu"] / self.scale, body_layout["marginBottomEmu"] / self.scale
+        local_body = body.find("a:bodyPr", NS)
+        unwrapped = local_body is not None and local_body.get("wrap") == "none"
         lines = []
         used = set()
         for paragraph in paragraphs:
@@ -379,7 +381,9 @@ class OoxmlFrameContext:
         for (runs, align), height in zip(lines, line_heights, strict=True):
             width = sum(run[3] for run in runs)
             available_width = bounds.width - left - right
-            if width > available_width + .1 or align not in {"l", "ctr", "r"}:
+            # An unwrapped box never breaks its line: its stored width is only what
+            # the last editor measured, and a substituted face may run past it.
+            if (width > available_width + .1 and not unwrapped) or align not in {"l", "ctr", "r"}:
                 raise ValueError("svg_template_text_overflow")
             x = bounds.x + left + {"l": 0, "ctr": .5, "r": 1}[align] * (available_width - width)
             baseline = y + max(run[4] for run in runs)
@@ -405,6 +409,15 @@ class OoxmlFrameContext:
                 node.append(span)
             group.append(node)
             y += height
+        self.grown_bounds = None
+        if unwrapped:
+            # The box grows to the text it holds, on the side its alignment lets it run over.
+            overrun = max(sum(run[3] for run in runs) for runs, _ in lines) - (bounds.width - left - right)
+            if overrun > .1:
+                share = {"l": 0, "ctr": .5, "r": 1}[lines[0][1]]
+                bounds = FrameRect(x=bounds.x - overrun * share, y=bounds.y,
+                                   width=bounds.width + overrun, height=bounds.height)
+                self.grown_bounds = bounds
         region = FrameRect(x=bounds.x + left, y=bounds.y + top,
                            width=max(0, bounds.width - left - right), height=max(0, available_height))
         return group, tuple(sorted(used)), region, lines[0][1]
@@ -471,6 +484,7 @@ class OoxmlFrameContext:
                     if fill != "none" or stroke != "none":
                         raise ValueError("svg_template_text_shape_paint_unsupported")
                 node, used, text_region, text_align = self.text_svg(shape, part, bounds, dynamic_key)
+                bounds = self.grown_bounds or bounds
                 output_kind = "text"
             elif preset in {"rect", "roundRect", "line"} or kind == "cxnSp":
                 if preset not in {"rect", "roundRect", "line", None}:
