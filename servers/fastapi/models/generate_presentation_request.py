@@ -431,6 +431,20 @@ class GeneratePresentationRequest(BaseModel):
         return self
 
     @model_validator(mode="after")
+    def default_template_redesign_verbosity(self) -> "GeneratePresentationRequest":
+        # Template redesign decks carry the source deck's prose, so an omitted
+        # verbosity resolves to text-heavy here, at admission. The value is
+        # assigned (and so enters model_fields_set); the durable payload dumps
+        # it and a restored job sees an explicit value that is never re-defaulted.
+        if (
+            "verbosity" not in self.model_fields_set
+            and self.svg_template_pin is not None
+            and self.svg_template_mode == "template-redesign"
+        ):
+            self.verbosity = Verbosity.TEXT_HEAVY
+        return self
+
+    @model_validator(mode="after")
     def validate_source_content_mode(self) -> "GeneratePresentationRequest":
         if self.source_mode is None:
             if (
