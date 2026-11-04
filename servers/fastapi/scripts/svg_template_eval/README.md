@@ -8,6 +8,8 @@ input gave 3 to 7 fallback pages in a row. Three scripts, none of them part of t
 | `register_template.py` | Registers a PPTX as a published template through the API and prints its pin (upload, snapshot, framed registration, automatic font substitution, publish). Takes 5 to 8 minutes on a 100-page deck |
 | `run_eval.py run` | Sends one generation request N times and measures each deck (below) |
 | `run_eval.py compare` | Prints two result files side by side |
+| `run_eval.py matrix` | The same as `run` over input x template cells, R runs per cell, for one variant label |
+| `run_eval.py decide` | Paired verdict per metric of result B against result A (below) |
 | `judge.py` | Scores generated pages against reference pages of the template with a vision model (below) |
 
 `metrics.py` holds the pure metrics (unit-tested in `tests/unit/test_svg_template_eval_metrics.py`); the pure
@@ -110,3 +112,50 @@ and a plain black-on-white bullet page 1.2, so the scale has room on both sides 
 `inputs/structured_proposal_ko.txt` is a fictional proposal that states its sequences (numbered stages), tables
 (Markdown), layers and numbers, so a rule that draws flows or tables has something to draw from. Flattened text
 extracted from a real deck loses the sequences, which makes a connector rule look useless; do not judge one on it.
+
+`inputs/unstructured_report_ko.txt` is a fictional long running-prose report with no headings or lists (its sequences,
+comparisons and figures are implicit, so the outline step has to structure them), and `inputs/data_report_ko.txt` is a
+fictional data-heavy report (monthly, quarterly and per-plant series, two plain-text tables, KPIs). All three have a
+10-page target. `inputs/requests/<input>.json` is the matching `generate/async` body without a template pin or canvas;
+`request_builder.py` adds both (and an optional frame map) per template, with `inputs/<input>.txt` as the source of the
+`content` field (a unit test keeps the two equal).
+
+## Judging a change across inputs and templates (`matrix`, `decide`)
+
+One input and N=3 unpaired runs cannot tell a change from noise: the same input moves by whole fallback pages between
+runs and the judge moves about 0.2 per axis between calls. So a change is measured on a matrix of cells (input x
+template), the same cells for both variants, and compared per cell.
+
+A template manifest is a JSON file (relative paths resolve against it):
+`{"id": "ministry", "pin": "pin.json", "canvas_emu": [w, h], "frame_map": "frame_map.json"}` (`pin` and `frame_map`
+may also be inline objects; `canvas_emu` and `frame_map` are optional).
+
+```bash
+# variant A (backend as is), then restart the backend with the change and run B: same cells, same --runs, same judge
+.venv/bin/python scripts/svg_template_eval/run_eval.py matrix --templates tpl-a.json tpl-b.json \
+    --inputs structured_proposal_ko,unstructured_report_ko,data_report_ko --runs 3 --label A \
+    --pptx --judge-references refs/ --out results/        # add --dry-run to print the requests only
+.venv/bin/python scripts/svg_template_eval/run_eval.py matrix ... --label B --out results/
+.venv/bin/python scripts/svg_template_eval/run_eval.py decide results/A.json results/B.json [--json-out report.json]
+```
+
+Every run record carries its `cell` (`<input>__<template id>`). `decide`:
+
+1. averages the completed runs of each cell (a failed run is left out, a cell in one result only is warned about and left out);
+2. takes B - A per cell, which cancels the large differences between inputs and templates that unpaired means would carry
+   into the comparison (a page-heavy input has more fallbacks for both variants);
+3. takes the overall difference as the mean of the cell differences, so every cell weighs the same whatever its run count;
+4. names a verdict only when `|overall| > threshold` **and** more than half of the cells have the overall's sign
+   (`better` / `worse` after the metric's direction; `no difference` below the threshold; `inconsistent` when the mean
+   comes from a minority of cells). Metrics without a rule are `report only`.
+
+| Metric | Threshold | Better is | Why |
+|---|---|---|---|
+| `judge_<axis>`, `judge_overall` | 0.2 | higher | the judge's own movement between calls of the same deck |
+| `fallback_pages` | 0.5 | lower | a count of pages out of ten: less than half a page is not a change |
+| `first_try_ok` | 0.5 | higher | likewise |
+| everything else (`tables`, `flow_shapes`, `words_kept`, ...) | none | | counts of what exists, not a quality |
+
+The thresholds are a floor against noise, not a significance test: with few cells (three inputs x one template) a
+verdict is a strong hint to look at the pages, not proof. Use as many cells as the budget allows, keep the judge model,
+effort and references fixed between A and B, and use a fresh database per batch (see above).
