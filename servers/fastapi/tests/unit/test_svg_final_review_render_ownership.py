@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock
+import importlib.util
 import sys
 import uuid
 
@@ -19,6 +20,11 @@ from services.svg_export_release_gate import require_release_v1_receipt
 from services.workspace_operation_handler_registry import NonRetryableWorkspaceOperationError
 from utils.hashing import canonical_json_sha256, sha256_hex
 from workers import public_svg_pptx_render as office
+
+# The COM ownership proofs import the real pywintypes/win32 modules.
+_needs_pywin32 = pytest.mark.skipif(
+    importlib.util.find_spec("pythoncom") is None, reason="requires pywin32 (Windows)"
+)
 
 
 def test_export_never_activates_office_and_records_worker_spans(tmp_path, monkeypatch):
@@ -310,6 +316,7 @@ def test_render_timeout_terminates_the_job_and_reaps_the_child(tmp_path, monkeyp
     assert events.index("terminate-job") < events.index("job-close") < events.index("wait")
 
 
+@_needs_pywin32
 @pytest.mark.parametrize(
     "shared,fail,cleanup_error",
     [
@@ -414,6 +421,7 @@ def test_office_opens_only_after_containment_and_quits_only_owned_instance(
         assert events == ["assign", "open", "close", "quit", "job-terminate", "uninit"]
 
 
+@_needs_pywin32
 @pytest.mark.parametrize("fault", [
     None, "foreign_window", "duplicate_window", "missing_window", "restore", "nonempty",
     "before_open_creation", "before_export_window", "before_export_job", "before_close_window",
