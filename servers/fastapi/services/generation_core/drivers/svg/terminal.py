@@ -257,6 +257,25 @@ def _apply_substitute_header_quality(ctx, index, svg, quality):
     _apply_common_header_quality(quality, svg, contract, header_page, furniture)
 
 
+#: Share of the body region a background picture must cover to count as lying under the text.
+_BODY_PICTURE_SHARE = 0.15
+
+
+def _picture_under_body(frame) -> bool:
+    """Whether the template frame paints a picture (not only a flat colour) under the body region."""
+    region = frame.body_region
+    area = max(1e-9, region.width * region.height)
+    for element in frame.elements:
+        if element.layer != "background" or element.kind != "image":
+            continue
+        box = element.bounds
+        overlap = (max(0.0, min(box.x + box.width, region.x + region.width) - max(box.x, region.x))
+                   * max(0.0, min(box.y + box.height, region.y + region.height) - max(box.y, region.y)))
+        if overlap / area >= _BODY_PICTURE_SHARE:
+            return True
+    return False
+
+
 async def _template_fallback(*, ctx, request, index, content, payload, error, job, checkpoint, write_png):
     """Rescue a template-redesign page with a deterministic body inside the frame.
 
@@ -290,7 +309,8 @@ async def _template_fallback(*, ctx, request, index, content, payload, error, jo
         body = template_fallback_body_svg(content=content, width=ctx.canvas.width_px, height=ctx.canvas.height_px,
             body_region=context["body_region"], title_in_frame="title" in context["dynamic_fields"],
             title_face=title_face, body_face=body_face, style_snapshot=ctx.snapshot,
-            body_background=context.get("body_background"))
+            body_background=context.get("body_background"), role=ctx.roles[index],
+            body_photo=_picture_under_body(frame))
         svg = compose_template_page(ctx.snapshot, body, context)
         furniture = master_furniture_receipt(svg, ctx.snapshot, index=index, n=ctx.count,
             width=ctx.canvas.width_px, height=ctx.canvas.height_px, template_page_context=context)

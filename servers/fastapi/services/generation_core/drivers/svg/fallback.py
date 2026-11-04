@@ -311,6 +311,160 @@ def _page_colors(tokens: Mapping) -> tuple[str, str, str]:
     return background, text, accent
 
 
+_TABLE_LINE = re.compile(r"^\|.*\|$")
+_TABLE_RULE_CELL = re.compile(r"^:?-{2,}:?$")
+_TABLE_FONT_STEPS_PX = (18, 16, 14, 12, 11, 10, 9, 8, 7, 6, 5, 4)
+_TABLE_MIN_COLUMN_EM = 3.0
+#: Share of the text colour mixed into the page colour for the table's row bands.
+_TABLE_BAND_MIX = (0.06, 0.12)
+_TEXT_CONTRAST = 4.5
+
+
+def _mix(base: str, over: str, share: float) -> str:
+    """``base`` moved ``share`` of the way to ``over`` (both ``#RRGGBB``)."""
+    channels = [round(int(base[i:i + 2], 16) * (1 - share) + int(over[i:i + 2], 16) * share) for i in (1, 3, 5)]
+    return "#%02X%02X%02X" % tuple(channels)
+
+
+def _ink_on(fill: str, preferred: str) -> str:
+    """Text colour for ``fill``: ``preferred`` while it reads (4.5:1), else the stronger of white and near-black."""
+    if _contrast(preferred, fill) >= _TEXT_CONTRAST:
+        return preferred
+    return max(("#FFFFFF", _BODY_COLOR), key=lambda color: (_contrast(color, fill), color))
+
+
+def _table_rows(lines: Sequence[str]) -> list[list[str]] | None:
+    """The cell rows of a run of markdown table lines, or ``None`` when it is not a table.
+
+    The rule row (``| --- | --- |``) is syntax, not text, and is dropped; a
+    table needs a header and at least one more row.
+    """
+    rows = []
+    for line in lines:
+        cells = [cell.strip() for cell in line[1:-1].split("|")]
+        if all(_TABLE_RULE_CELL.match(cell) for cell in cells if cell) and any(cells):
+            continue
+        rows.append(cells)
+    if len(rows) < 2:
+        return None
+    width = max(len(row) for row in rows)
+    return [row + [""] * (width - len(row)) for row in rows]
+
+
+def _flow_items(bullets: Sequence[str]) -> list:
+    """Body lines in order, each run of markdown table lines folded into one row list."""
+    items: list = []
+    run: list[str] = []
+
+    def close() -> None:
+        if not run:
+            return
+        rows = _table_rows(run)
+        items.extend([rows] if rows else run)
+        run.clear()
+
+    for line in bullets:
+        if _TABLE_LINE.match(line):
+            run.append(line)
+        else:
+            close()
+            items.append(line)
+    close()
+    return items
+
+
+def _table_columns(rows: Sequence[Sequence[str]], width: float, font_px: int) -> list[float]:
+    natural = [max(_TABLE_MIN_COLUMN_EM, *(_text_em(row[column]) for row in rows)) for column in range(len(rows[0]))]
+    total = sum(natural)
+    return [width * value / total for value in natural]
+
+
+def _flow_place(items: Sequence, *, width: float, font_px: int) -> tuple[list[tuple], float]:
+    """Operations (relative y) and total height for ``items`` set at ``font_px`` in one column."""
+    line_height = font_px * _BODY_LINE_HEIGHT
+    prefix = _text_em(_BULLET_PREFIX) * font_px
+    ops: list[tuple] = []
+    cursor = 0.0
+    for item in items:
+        if isinstance(item, str):
+            for position, line in enumerate(_wrap(item, max_em=max(1.0, width - prefix) / font_px)):
+                ops.append(("line", cursor + font_px, position == 0, line))
+                cursor += line_height
+            continue
+        cursor += font_px * 0.4
+        columns = _table_columns(item, width, font_px)
+        pad = max(2.0, font_px * 0.5)
+        cells = []
+        for index, row in enumerate(item):
+            wrapped = [_wrap(text, max_em=max(1.0, column - 2 * pad) / font_px) for text, column in zip(row, columns, strict=True)]
+            height = 2 * pad * 0.6 + (max(len(lines) for lines in wrapped) - 1) * line_height + font_px * 1.25
+            cells.append((index, cursor, height, wrapped))
+            cursor += height
+        ops.append(("table", columns, pad, cells))
+        cursor += font_px * 0.4
+    return ops, cursor
+
+
+def _draw_flow(group: ET.Element, ops: Sequence[tuple], *, left: float, top: float, width: float, font_px: int,
+               font_family: str, text_color: str, accent: str, background: str, weight: str | None,
+               bold_weight: str) -> None:
+    line_height = font_px * _BODY_LINE_HEIGHT
+    prefix = _text_em(_BULLET_PREFIX) * font_px
+    for op in ops:
+        if op[0] == "line":
+            _kind, y, first, line = op
+            _text_node(group, x=left if first else left + prefix, y=top + y,
+                       text=(_BULLET_PREFIX if first else "") + line, font_px=font_px,
+                       font_family=font_family, fill=text_color, weight=weight)
+            continue
+        _kind, columns, pad, cells = op
+        for index, row_top, height, wrapped in cells:
+            fill = accent if index == 0 else _mix(background, text_color, _TABLE_BAND_MIX[index % 2])
+            ink = _ink_on(fill, text_color)
+            ET.SubElement(group, f"{{{SVG_NS}}}rect", {
+                "x": _fmt_px(left), "y": _fmt_px(top + row_top), "width": _fmt_px(width),
+                "height": _fmt_px(height), "fill": fill})
+            x = left
+            for lines, column in zip(wrapped, columns, strict=True):
+                for number, line in enumerate(lines):
+                    _text_node(group, x=x + pad, y=top + row_top + pad * 0.6 + font_px + number * line_height,
+                               text=line, font_px=font_px, font_family=font_family, fill=ink,
+                               weight=bold_weight if index == 0 else weight)
+                x += column
+
+
+def _draw_body(group: ET.Element, bullets: Sequence[str], *, left: float, top: float, width: float,
+               bottom: float, font_family: str, text_color: str, accent: str, background: str,
+               weight: str | None = None, bold_weight: str = "700") -> None:
+    """Every body line below ``top`` within ``width``: bullets, or a grid for a markdown table.
+
+    Without a table the lines take the largest size and fewest columns that
+    hold them; with one, a single column whose size is the largest that fits.
+    """
+    items = _flow_items(bullets)
+    if any(not isinstance(item, str) for item in items):
+        available = max(1.0, bottom - top)
+        for font_px in _TABLE_FONT_STEPS_PX:
+            ops, height = _flow_place(items, width=width, font_px=font_px)
+            if height <= available:
+                break
+        _draw_flow(group, ops, left=left, top=top, width=width, font_px=font_px, font_family=font_family,
+                   text_color=text_color, accent=accent, background=background, weight=weight,
+                   bold_weight=bold_weight)
+        return
+    font_px, columns, split = _body_layout(bullets, available_width=width, available_height=max(1.0, bottom - top))
+    column_width = (width - (columns - 1) * _COLUMN_GAP_PX) / columns
+    prefix_width_px = _text_em(_BULLET_PREFIX) * font_px
+    for column, lines in enumerate(split):
+        column_left = left + column * (column_width + _COLUMN_GAP_PX)
+        y = top + font_px
+        for first, line in lines:
+            _text_node(group, x=column_left if first else column_left + prefix_width_px, y=y,
+                       text=(_BULLET_PREFIX if first else "") + line, font_px=font_px,
+                       font_family=font_family, fill=text_color, weight=weight)
+            y += font_px * _BODY_LINE_HEIGHT
+
+
 def fallback_page_svg(*, content: str, role: str, index: int, count: int,
                        width: int, height: int, style_snapshot: dict | None,
                        header_page: dict | None = None) -> str:
@@ -344,8 +498,9 @@ def fallback_page_svg(*, content: str, role: str, index: int, count: int,
     })
     top = _body_top(style_snapshot, header_page)
     if str(role or "").strip().lower() == "cover":
-        _cover_body(group, title=title, bullets=bullets, top=top, width=width, height=height,
-                    title_font=title_font, body_font=body_font, text_color=text_color, accent=accent)
+        _cover_body(group, title=title, bullets=bullets, top=top, bottom=height - _BOTTOM_LIMIT_PX, left=_MARGIN_X,
+                    available_width=available_width, title_font=title_font, body_font=body_font,
+                    text_color=text_color, accent=accent, background=background)
         raw = ET.tostring(root, encoding="unicode")
         return finalize_svg(raw, index=index, n=count, width=width, height=height,
                             style_snapshot=style_snapshot, header_page=header_page)
@@ -367,19 +522,9 @@ def fallback_page_svg(*, content: str, role: str, index: int, count: int,
     cursor += _TITLE_FONT_PX + _GAP_TITLE_TO_BODY_PX
 
     if bullets:
-        max_y = height - _BOTTOM_LIMIT_PX
-        font_px, columns, split = _body_layout(
-            bullets, available_width=available_width, available_height=max(1, max_y - cursor))
-        column_width = (available_width - (columns - 1) * _COLUMN_GAP_PX) / columns
-        prefix_width_px = _text_em(_BULLET_PREFIX) * font_px
-        for column, lines in enumerate(split):
-            left = _MARGIN_X + column * (column_width + _COLUMN_GAP_PX)
-            y = cursor + font_px
-            for first, line in lines:
-                _text_node(group, x=left if first else left + prefix_width_px, y=y,
-                           text=(_BULLET_PREFIX if first else "") + line, font_px=font_px,
-                           font_family=body_font, fill=text_color)
-                y += font_px * _BODY_LINE_HEIGHT
+        _draw_body(group, bullets, left=_MARGIN_X, top=cursor, width=available_width,
+                   bottom=height - _BOTTOM_LIMIT_PX, font_family=body_font, text_color=text_color,
+                   accent=accent, background=background)
 
     raw = ET.tostring(root, encoding="unicode")
     return finalize_svg(raw, index=index, n=count, width=width, height=height,
@@ -392,7 +537,8 @@ _TEMPLATE_BODY_INSET_PX = 8
 
 def template_fallback_body_svg(*, content: str, width: int, height: int, body_region: Mapping,
                                title_in_frame: bool, title_face: Mapping, body_face: Mapping,
-                               style_snapshot: dict | None, body_background: Mapping | None = None) -> str:
+                               style_snapshot: dict | None, body_background: Mapping | None = None,
+                               role: str = "", body_photo: bool = False) -> str:
     """Deterministic body for a template-redesign page whose authored body failed.
 
     A full-canvas, transparent SVG whose only paint lies inside ``body_region``
@@ -401,6 +547,11 @@ def template_fallback_body_svg(*, content: str, width: int, height: int, body_re
     the frame shows it. ``title_face``/``body_face`` are faces of the frame's
     own font manifest (``family`` and ``weight``), so the composed page keeps
     the template's fonts. Element IDs start with ``body-`` as authored bodies do.
+
+    A cover keeps its cover shape (large title, subtitle lines) inside the
+    region. ``body_photo`` says the template paints a picture under the body:
+    the text then sits on a translucent panel whose colour is the opposite of
+    the text colour, so it reads over the brightest part of the picture.
     """
 
     tokens = (style_snapshot or {}).get("tokens", {})
@@ -421,75 +572,102 @@ def template_fallback_body_svg(*, content: str, width: int, height: int, body_re
     })
     group = ET.SubElement(root, f"{{{SVG_NS}}}g", {"id": "body-fallback"})
     cursor = top
-    if not title_in_frame and title:
-        ET.SubElement(group, f"{{{SVG_NS}}}rect", {
-            "id": "body-fallback-accent", "x": _fmt_px(left), "y": _fmt_px(cursor),
-            "width": str(_ACCENT_BAR_WIDTH), "height": str(_ACCENT_BAR_HEIGHT), "fill": accent,
-        })
-        cursor += _ACCENT_BAR_HEIGHT + _GAP_EYEBROW_TO_TITLE_PX
-        _text_node(group, x=left, y=cursor + title_px, text=title, font_px=title_px,
-                   font_family=str(title_face["family"]), fill=text_color, weight=str(title_face["weight"]))
-        cursor += title_px + _GAP_TITLE_TO_BODY_PX
-    if bullets:
-        font_px, columns, split = _body_layout(
-            bullets, available_width=available_width, available_height=max(1.0, bottom - cursor))
-        column_width = (available_width - (columns - 1) * _COLUMN_GAP_PX) / columns
-        prefix_width_px = _text_em(_BULLET_PREFIX) * font_px
-        for column, lines in enumerate(split):
-            column_left = left + column * (column_width + _COLUMN_GAP_PX)
-            y = cursor + font_px
-            for first, line in lines:
-                _text_node(group, x=column_left if first else column_left + prefix_width_px, y=y,
-                           text=(_BULLET_PREFIX if first else "") + line, font_px=font_px,
-                           font_family=str(body_face["family"]), fill=text_color,
-                           weight=str(body_face["weight"]))
-                y += font_px * _BODY_LINE_HEIGHT
+    if str(role or "").strip().lower() == "cover" and not title_in_frame and title:
+        _cover_body(group, title=title, bullets=bullets, top=top, bottom=bottom, left=left,
+                    available_width=available_width, title_font=str(title_face["family"]),
+                    body_font=str(body_face["family"]), text_color=text_color, accent=accent,
+                    title_weight=str(title_face["weight"]), body_weight=str(body_face["weight"]),
+                    background=tokens.get("background") or "#FFFFFF")
+    else:
+        if not title_in_frame and title:
+            ET.SubElement(group, f"{{{SVG_NS}}}rect", {
+                "id": "body-fallback-accent", "x": _fmt_px(left), "y": _fmt_px(cursor),
+                "width": str(_ACCENT_BAR_WIDTH), "height": str(_ACCENT_BAR_HEIGHT), "fill": accent,
+            })
+            cursor += _ACCENT_BAR_HEIGHT + _GAP_EYEBROW_TO_TITLE_PX
+            _text_node(group, x=left, y=cursor + title_px, text=title, font_px=title_px,
+                       font_family=str(title_face["family"]), fill=text_color, weight=str(title_face["weight"]))
+            cursor += title_px + _GAP_TITLE_TO_BODY_PX
+        if bullets:
+            _draw_body(group, bullets, left=left, top=cursor, width=available_width, bottom=bottom,
+                       font_family=str(body_face["family"]), text_color=text_color, accent=accent,
+                       background=tokens.get("background") or "#FFFFFF", weight=str(body_face["weight"]),
+                       bold_weight=str(title_face["weight"]))
+    if body_photo:
+        _scrim(group, text_color=text_color, region=body_region, left=left, width=available_width)
+    for number, node in enumerate(node for node in group.iter() if node.tag.endswith("}rect") and not node.get("id")):
+        node.set("id", f"body-fallback-shape-{number}")
     for number, node in enumerate(node for node in group.iter() if node.tag.endswith("}text")):
         node.set("id", f"body-fallback-text-{number}")
     return ET.tostring(root, encoding="unicode")
 
 
-def _cover_body(group: ET.Element, *, title: str, bullets: Sequence[str], top: int, width: int, height: int,
-                title_font: str, body_font: str, text_color: str, accent: str) -> None:
+_SCRIM_PAD_PX = 20
+_SCRIM_OPACITY_FOR_LIGHT_TEXT = 0.62
+_SCRIM_OPACITY_FOR_DARK_TEXT = 0.72
+
+
+def _scrim(group: ET.Element, *, text_color: str, region: Mapping, left: float, width: float) -> None:
+    """A translucent panel behind the text already drawn in ``group``, opposite in tone to the text.
+
+    Even the brightest (or darkest) pixel of a picture under it stays at about
+    4.5:1 or better against the text. Bounded to the body region.
+    """
+    nodes = [node for node in group.iter() if node.tag.endswith("}text")]
+    if not nodes:
+        return
+    ink_light = _contrast(text_color, "#000000") > _contrast(text_color, "#FFFFFF")
+    first = min(float(node.get("y")) - float(node.get("font-size")) for node in nodes)
+    last = max(float(node.get("y")) + float(node.get("font-size")) * 0.4 for node in nodes)
+    box_top, box_bottom = float(region["y"]), float(region["y"]) + float(region["height"])
+    box_left, box_right = float(region["x"]), float(region["x"]) + float(region["width"])
+    y = max(box_top, first - _SCRIM_PAD_PX)
+    x = max(box_left, left - _SCRIM_PAD_PX / 2)
+    panel = ET.Element(f"{{{SVG_NS}}}rect", {
+        "id": "body-fallback-scrim", "x": _fmt_px(x), "y": _fmt_px(y),
+        "width": _fmt_px(max(1.0, min(box_right, left + width + _SCRIM_PAD_PX / 2) - x)),
+        "height": _fmt_px(max(1.0, min(box_bottom, last + _SCRIM_PAD_PX) - y)),
+        "fill": "#000000" if ink_light else "#FFFFFF",
+        "fill-opacity": str(_SCRIM_OPACITY_FOR_LIGHT_TEXT if ink_light else _SCRIM_OPACITY_FOR_DARK_TEXT)})
+    group.insert(0, panel)
+
+
+def _cover_body(group: ET.Element, *, title: str, bullets: Sequence[str], top: float, bottom: float, left: float,
+                available_width: float, title_font: str, body_font: str, text_color: str, accent: str,
+                title_weight: str = "700", body_weight: str | None = None, background: str = "#FFFFFF") -> None:
     """A cover-shaped fallback: a large title in the middle band, the first lines as subtitle.
 
     Every outline line still appears: lines past the subtitle allowance are set
-    smaller below it, so the page never drops content.
+    smaller below it, so the page never drops content. The block is centred
+    between ``top`` and ``bottom`` and starts no higher than ``top``.
     """
-    available_width = max(1, width - 2 * _MARGIN_X)
-    title_lines = _wrap(title, max_em=max(1.0, available_width / _COVER_TITLE_FONT_PX))
+    title_px = max(16, min(_COVER_TITLE_FONT_PX, int((bottom - top) / 6)))
+    subtitle_px = max(12, min(_COVER_SUBTITLE_FONT_PX, int(title_px / 2)))
+    title_lines = _wrap(title, max_em=max(1.0, available_width / title_px))
     subtitle = list(bullets[:_COVER_SUBTITLE_LINES])
     rest = list(bullets[_COVER_SUBTITLE_LINES:])
-    block = (len(title_lines) * _COVER_TITLE_FONT_PX * 1.25 + _ACCENT_BAR_HEIGHT + _GAP_BAR_TO_LABEL_PX
-             + len(subtitle) * _COVER_SUBTITLE_FONT_PX * 1.5)
-    cursor = max(top, (height - block) / 2 - _COVER_TITLE_FONT_PX)
+    block = (len(title_lines) * title_px * 1.25 + _ACCENT_BAR_HEIGHT + _GAP_BAR_TO_LABEL_PX
+             + len(subtitle) * subtitle_px * 1.5)
+    cursor = max(top, top + (bottom - top - block) / 2 - title_px)
     for line in title_lines:
-        cursor += _COVER_TITLE_FONT_PX * 1.25
-        _text_node(group, x=_MARGIN_X, y=cursor, text=line, font_px=_COVER_TITLE_FONT_PX,
-                   font_family=title_font, fill=text_color, weight="700")
+        cursor += title_px * 1.25
+        _text_node(group, x=left, y=cursor, text=line, font_px=title_px,
+                   font_family=title_font, fill=text_color, weight=title_weight)
     cursor += _GAP_BAR_TO_LABEL_PX
     ET.SubElement(group, f"{{{SVG_NS}}}rect", {
-        "x": str(_MARGIN_X), "y": _fmt_px(cursor), "width": str(_ACCENT_BAR_WIDTH * 2),
+        "x": _fmt_px(left), "y": _fmt_px(cursor), "width": str(_ACCENT_BAR_WIDTH * 2),
         "height": str(_ACCENT_BAR_HEIGHT), "fill": accent,
     })
     cursor += _ACCENT_BAR_HEIGHT
     for line in subtitle:
-        for part in _wrap(line, max_em=max(1.0, available_width / _COVER_SUBTITLE_FONT_PX)):
-            cursor += _COVER_SUBTITLE_FONT_PX * 1.5
-            _text_node(group, x=_MARGIN_X, y=cursor, text=part, font_px=_COVER_SUBTITLE_FONT_PX,
-                       font_family=body_font, fill=text_color)
+        for part in _wrap(line, max_em=max(1.0, available_width / subtitle_px)):
+            cursor += subtitle_px * 1.5
+            _text_node(group, x=left, y=cursor, text=part, font_px=subtitle_px,
+                       font_family=body_font, fill=text_color, weight=body_weight)
     if rest:
-        max_y = height - _BOTTOM_LIMIT_PX
-        font_px, columns, split = _body_layout(rest, available_width=available_width,
-                                               available_height=max(1, max_y - cursor - _GAP_TITLE_TO_BODY_PX))
-        column_width = (available_width - (columns - 1) * _COLUMN_GAP_PX) / columns
-        start = cursor + _GAP_TITLE_TO_BODY_PX
-        for column, lines in enumerate(split):
-            left = _MARGIN_X + column * (column_width + _COLUMN_GAP_PX)
-            y = start + font_px
-            for _first, line in lines:
-                _text_node(group, x=left, y=y, text=line, font_px=font_px, font_family=body_font, fill=text_color)
-                y += font_px * _BODY_LINE_HEIGHT
+        _draw_body(group, rest, left=left, top=cursor + _GAP_TITLE_TO_BODY_PX, width=available_width,
+                   bottom=bottom, font_family=body_font, text_color=text_color, accent=accent,
+                   background=background, weight=body_weight)
 
 
 def _fmt_px(value: float) -> str:

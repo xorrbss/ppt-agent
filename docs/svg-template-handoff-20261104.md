@@ -168,3 +168,28 @@ Details and tables: `docs/content-structure-policy-20261104.md`.
 
 The real customer PPTX and its outputs stay out of the repository; API keys
 are never printed or committed; work stays on this branch.
+
+## 2026-11-04 Fallback pages follow the deck style (item 12)
+
+What the server-built fallback page did before this change (`services/generation_core/drivers/svg/fallback.py`,
+called from `drivers/svg/terminal.py`): in a plain svg deck it already used the style's background, palette,
+primary and fonts (`_page_colors`, `fallback_page_svg`) and had a cover shape; in template mode it
+(`_template_fallback` -> `template_fallback_body_svg`) already composed the body into the template frame, so the
+header band, title/path fields, footer and fonts came from the frame. Three gaps remained, seen on stored
+fallback pages of template decks:
+
+- a markdown table in the outline was printed as raw pipe lines (`| --- | --- |`) in both modes;
+- a template cover was a top-left bullet list, and its white text sat directly on the bright parts of the cover
+  picture;
+- there was no rule for text over a picture.
+
+Now: a run of markdown table lines becomes a grid (header row in the accent colour, banded rows mixed from the
+page and text colours, size chosen so every row fits, the rule row dropped; a lone `|` line stays text). A
+template cover keeps the cover shape (large title, subtitle lines) inside the body region. When the frame
+paints a picture under the body (`_picture_under_body`), the text sits on a translucent panel opposite in tone
+to the text (0.62 black for light text, 0.72 white for dark text), so the worst-case pixel stays at 4.5:1 or
+better. All text on a filled shape takes the preferred colour only while it reads at 4.5:1, else the stronger of
+white and near-black (`_ink_on`). No model call; same inputs give the same bytes; the page-number furniture and
+all receipts are unchanged. Tests: `tests/unit/test_svg_fallback_deck_style.py`.
+Open: the page-number text drawn by `finalize_svg` uses the style primary and can be low-contrast in a deck whose
+primary is close to its background; not changed here.
