@@ -10,6 +10,8 @@ native tables, charts, icons) and, given the source text, how much of it survive
     run_eval.py compare results/baseline.json results/with-policy.json
     run_eval.py matrix --templates tpl-a.json tpl-b.json --runs 3 --label baseline --out results/   # inputs x templates
     run_eval.py decide results/baseline.json results/with-policy.json                             # paired verdict
+    run_eval.py matrix ... --resume          # after a crash: keep the completed runs of the saved result, do the rest
+    run_eval.py recover --templates ... --label baseline --dsn ... --app-dir app/ --after-dsn <clone source>
 
 ``request.json`` is a ``POST /presentation/generate/async`` body (it carries the template pin from
 ``register_template.py``). A variant that is a server setting (an environment switch) is measured by restarting
@@ -36,6 +38,8 @@ import httpx
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from metrics import package_objects, retention, summarize, svg_structure  # noqa: E402
+from recovery import (atomic_write_json, load_existing, map_job_to_cell, newest_per_cell,  # noqa: E402
+                      plan_resume)
 
 API = "/api/v1/ppt"
 DEFAULT_DSN = "postgresql://postgres@127.0.0.1:5433/chap"
@@ -164,11 +168,49 @@ def _make_judge_for(args: argparse.Namespace, selection: dict | None, cache: dic
     return cache[key]
 
 
+def _deck_record(client: httpx.Client | None, conn, judge, args: argparse.Namespace, data: dict, source: str | None,
+                 cell: str | None, selection: dict | None, number: int, seconds: float, tag: str = "",
+                 parts: dict[str, str] | None = None) -> dict:
+    """The record of one completed generation (``data`` is the task's result data), measured from the database.
+    The PPTX parts come from ``parts`` when given, else from the API when ``--pptx`` is set."""
+    extra = {"cell": cell} if cell else {}
+    record = measure_deck(conn, data["presentation_id"])
+    texts = record.pop("_texts")
+    if source is not None:
+        kept = retention(source, texts)
+        record["words_kept"], record["numbers_kept"] = (round(kept["words"], 3), round(kept["numbers"], 3))
+    if parts is None and args.pptx and client is not None:
+        parts = _export_parts(client, data["presentation_id"], data.get("export_operation_id"), 240)
+    record.update(package_objects(parts) if parts else {})
+    if judge is not None:
+        from judge import judge_presentation, print_deck, run_fields
+
+        renders = Path(args.judge_renders) / cell if args.judge_renders and cell else (
+            Path(args.judge_renders) if args.judge_renders else None)
+        judged = judge_presentation(conn, data["presentation_id"], judge, renders)
+        print_deck(f"{tag}run {number} judge", judged)
+        record.update(run_fields(judged), judge=judged)
+        if selection is not None:
+            record["judge_anchors"] = {"references": selection["references"], "anchor_high": judge.anchor_names["high"],
+                                       "anchor_low": judge.anchor_names["low"], "sources": selection["sources"]}
+    record.update(run=number, completed=True, seconds=round(seconds),
+                  gate_passed=(data.get("quality_pages") or {}).get("passed"),
+                  gate_flagged=(data.get("quality_pages") or {}).get("flagged"),
+                  presentation_id=data["presentation_id"], **extra)
+    print(f"{tag}run {number}: {record['seconds']}s gate {record['gate_passed']}/{record['gate_flagged']} "
+          f"fallback {record['fallback_pages']} first-try {record['first_try_ok']}/{record['pages']} "
+          f"flow {record['pages_with_flow_shapes']} pages tables {record.get('tables', '-')} "
+          f"repairs {record['repair_causes']}", flush=True)
+    return record
+
+
 def _sample_runs(client: httpx.Client, conn, judge, args: argparse.Namespace, payload: dict, source: str | None,
-                 cell: str | None, selection: dict | None = None) -> list[dict]:
-    """``args.runs`` generations of one request, each measured; every record carries ``cell`` when given."""
+                 cell: str | None, selection: dict | None = None, first: int = 1, count: int | None = None,
+                 on_run=None) -> list[dict]:
+    """``count`` (default ``args.runs``) generations of one request numbered from ``first``, each measured; every
+    record carries ``cell`` when given. ``on_run(runs_so_far)`` is called after each run (to save progress)."""
     runs: list[dict] = []
-    for number in range(1, args.runs + 1):
+    for number in range(first, first + (args.runs if count is None else count)):
         tag = f"{cell} " if cell else ""
         status, state, seconds = _generate(client, payload, args.timeout)
         extra = {"cell": cell} if cell else {}
@@ -176,41 +218,16 @@ def _sample_runs(client: httpx.Client, conn, judge, args: argparse.Namespace, pa
             detail = (status or {}).get("error") or state
             print(f"{tag}run {number}: {state} {detail}", flush=True)
             runs.append({"run": number, "completed": False, "state": str(state), **extra})
-            continue
-        data = status["data"]
-        record = measure_deck(conn, data["presentation_id"])
-        texts = record.pop("_texts")
-        if source is not None:
-            kept = retention(source, texts)
-            record["words_kept"], record["numbers_kept"] = (round(kept["words"], 3), round(kept["numbers"], 3))
-        if args.pptx:
-            parts = _export_parts(client, data["presentation_id"], data.get("export_operation_id"), 240)
-            record.update(package_objects(parts) if parts else {})
-        if judge is not None:
-            from judge import judge_presentation, print_deck, run_fields
-
-            renders = Path(args.judge_renders) / cell if args.judge_renders and cell else (
-                Path(args.judge_renders) if args.judge_renders else None)
-            judged = judge_presentation(conn, data["presentation_id"], judge, renders)
-            print_deck(f"{tag}run {number} judge", judged)
-            record.update(run_fields(judged), judge=judged)
-            if selection is not None:
-                record["judge_anchors"] = {"references": selection["references"], "anchor_high": judge.anchor_names["high"],
-                                           "anchor_low": judge.anchor_names["low"], "sources": selection["sources"]}
-        record.update(run=number, completed=True, seconds=round(seconds),
-                      gate_passed=(data.get("quality_pages") or {}).get("passed"),
-                      gate_flagged=(data.get("quality_pages") or {}).get("flagged"),
-                      presentation_id=data["presentation_id"], **extra)
-        runs.append(record)
-        print(f"{tag}run {number}: {record['seconds']}s gate {record['gate_passed']}/{record['gate_flagged']} "
-              f"fallback {record['fallback_pages']} first-try {record['first_try_ok']}/{record['pages']} "
-              f"flow {record['pages_with_flow_shapes']} pages tables {record.get('tables', '-')} "
-              f"repairs {record['repair_causes']}", flush=True)
+        else:
+            runs.append(_deck_record(client, conn, judge, args, status["data"], source, cell, selection, number,
+                                     seconds, tag))
+        if on_run is not None:
+            on_run(runs)
     return runs
 
 
 def _write_result(args: argparse.Namespace, judge, runs: list[dict], requested: int, judges: dict | None = None,
-                  **extra) -> dict:
+                  quiet: bool = False, **extra) -> dict:
     done = [item for item in runs if item.get("completed")]
     result = {"label": args.label, "runs": runs, "summary": summarize(done),
               "completed_runs": len(done), "requested_runs": requested, **extra}
@@ -220,10 +237,9 @@ def _write_result(args: argparse.Namespace, judge, runs: list[dict], requested: 
                       judge_cost_estimate_usd=None if None in costs else round(sum(costs), 4))
     if judges:
         result["judge_settings_by_template"] = {name: item.settings() for name, item in judges.items()}
-    out = Path(args.out)
-    out.mkdir(parents=True, exist_ok=True)
-    (out / f"{args.label}.json").write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
-    print_summary(result)
+    atomic_write_json(Path(args.out) / f"{args.label}.json", result)
+    if not quiet:
+        print_summary(result)
     return result
 
 
@@ -237,7 +253,9 @@ def run(args: argparse.Namespace) -> None:
     conn = _db(args.dsn)
     judge = _make_judge(args)
     with _client(args) as client:
-        runs = _sample_runs(client, conn, judge, args, payload, source, None)
+        runs = _sample_runs(client, conn, judge, args, payload, source, None,
+                            on_run=lambda so_far: _write_result(args, judge, so_far, args.runs, quiet=True,
+                                                                payload=args.payload))
     _write_result(args, judge, runs, args.runs, payload=args.payload)
 
 
@@ -260,16 +278,116 @@ def matrix(args: argparse.Namespace) -> None:
     conn = _db(args.dsn)
     cache: dict = {}
     judges: dict = {}
-    runs: list[dict] = []
+    for cell in cells:
+        judge = _make_judge_for(args, cell["judge"], cache)
+        if judge is not None:
+            judges.setdefault(cell["template"], judge)
+    first = next(iter(judges.values()), None)
+    ids = [cell["cell"] for cell in cells]
+    requested = args.runs * len(cells)
+    kept: list[dict] = []
+    todo = {cell: (1, args.runs) for cell in ids}
+    if args.resume:
+        existing = load_existing(Path(args.out) / f"{args.label}.json", args.label)
+        if existing:
+            kept, todo = plan_resume(existing.get("runs", []), ids, args.runs)
+            print(f"resume: {len(kept)} completed runs kept, cells still to run: {sorted(todo) or 'none'}", flush=True)
+    runs: list[dict] = list(kept)
+
+    def save(extra_runs: list[dict], quiet: bool = True) -> None:
+        _write_result(args, first, runs + extra_runs, requested, judges=judges, cells=ids, quiet=quiet)
+
     with _client(args) as client:
         for cell in cells:
+            if cell["cell"] not in todo:
+                continue
+            start, count = todo[cell["cell"]]
             source = (INPUTS / f"{cell['input']}.txt").read_text(encoding="utf-8")
-            judge = _make_judge_for(args, cell["judge"], cache)
-            if judge is not None:
-                judges.setdefault(cell["template"], judge)
-            runs += _sample_runs(client, conn, judge, args, cell["payload"], source, cell["cell"], cell["judge"])
-    first = next(iter(judges.values()), None)
-    _write_result(args, first, runs, args.runs * len(cells), judges=judges, cells=[cell["cell"] for cell in cells])
+            runs += _sample_runs(client, conn, _make_judge_for(args, cell["judge"], cache), args, cell["payload"],
+                                 source, cell["cell"], cell["judge"], first=start, count=count, on_run=save)
+    save([], quiet=False)
+
+
+def _pptx_from_store(conn, app_dir: Path, presentation_id: str, operation_id: str | None) -> dict[str, str]:
+    """The slide XML parts of the deck's PPTX export read straight from the local artifact store under
+    ``app_dir`` ({} when there is none). The stored bytes are checked against the artifact's recorded sha256."""
+    import hashlib
+
+    with conn.cursor() as cursor:
+        cursor.execute(
+            "select a.storage_key, a.sha256 from workspace_artifacts a join workspace_operations o on o.id = a.operation_id"
+            " where a.presentation_id = %s and a.kind = 'export.pptx' and a.status = 'ready' and o.state = 'succeeded'"
+            " and (%s::text is null or o.id::text = %s) order by a.created_at desc limit 1",
+            (presentation_id, operation_id, operation_id))
+        row = cursor.fetchone()
+    if not row:
+        return {}
+    path = Path(app_dir) / "public-artifacts" / row[0]
+    if not path.is_file():
+        return {}
+    data = path.read_bytes()
+    if hashlib.sha256(data).hexdigest() != row[1]:
+        raise SystemExit(f"artifact {path} does not match its recorded sha256")
+    with zipfile.ZipFile(BytesIO(data)) as archive:
+        return {name: archive.read(name).decode("utf-8", "ignore") for name in archive.namelist()
+                if name.startswith("ppt/slides/slide")}
+
+
+def recover(args: argparse.Namespace) -> None:
+    """Rebuild the result file of a matrix whose process died, from the completed decks in the database."""
+    from request_builder import INPUTS, build_cells, judge_selection, list_inputs, load_template_spec
+
+    names = [name.strip() for name in args.inputs.split(",")] if args.inputs else list_inputs()
+    specs = [load_template_spec(path) for path in args.templates]
+    cells = build_cells(names, specs)
+    for cell in cells:
+        cell["judge"] = judge_selection(cell["spec"], args.judge_references, args.judge_anchor_high,
+                                        args.judge_anchor_low)
+    inputs = {name: (INPUTS / f"{name}.txt").read_text(encoding="utf-8") for name in names}
+    conn = _db(args.dsn)
+    after = args.after
+    if args.after_dsn:
+        with _db(args.after_dsn) as other, other.cursor() as cursor:
+            cursor.execute("select max(created_at) from presentations")
+            after = cursor.fetchone()[0]
+    elif after:
+        import datetime
+
+        after = datetime.datetime.fromisoformat(after)
+    with conn.cursor() as cursor:
+        cursor.execute(
+            "select j.presentation_id::text, j.request_payload, t.data, p.created_at, t.created_at, t.updated_at"
+            " from presentation_generation_jobs j join async_presentation_generation_tasks t on t.id = j.task_id"
+            " join presentations p on p.id = j.presentation_id"
+            " where j.state = 'published' and t.status = 'completed' order by p.created_at")
+        rows = cursor.fetchall()
+    candidates = []
+    for pid, payload, data, created, task_created, task_updated in rows:
+        cell = map_job_to_cell(payload, cells, inputs)
+        if cell and isinstance(data, dict) and data.get("presentation_id") == pid:
+            candidates.append({"cell": cell, "created_at": created, "data": data,
+                               "seconds": (task_updated - task_created).total_seconds()})
+    chosen = newest_per_cell(candidates, after)
+    print(f"recover: {len(rows)} completed decks, cutoff {after}, matched cells {sorted(chosen)}", flush=True)
+    cache: dict = {}
+    judges: dict = {}
+    runs: list[dict] = []
+    ids = [cell["cell"] for cell in cells]
+    for cell in cells:
+        judge = _make_judge_for(args, cell["judge"], cache)
+        if judge is not None:
+            judges.setdefault(cell["template"], judge)
+        item = chosen.get(cell["cell"])
+        if not item:
+            print(f"{cell['cell']}: nothing to recover", flush=True)
+            continue
+        parts = _pptx_from_store(conn, args.app_dir, item["data"]["presentation_id"],
+                                 item["data"].get("export_operation_id")) if args.app_dir else None
+        runs.append(_deck_record(None, conn, judge, args, item["data"], inputs[cell["input"]], cell["cell"],
+                                 cell["judge"], 1, item["seconds"], f"{cell['cell']} ", parts))
+        _write_result(args, next(iter(judges.values()), None), runs, args.runs * len(cells), judges=judges,
+                      cells=ids, quiet=True)
+    _write_result(args, next(iter(judges.values()), None), runs, args.runs * len(cells), judges=judges, cells=ids)
 
 
 def decide_command(args: argparse.Namespace) -> None:
@@ -341,6 +459,8 @@ def main() -> None:
     matrix_parser.add_argument("--runs", type=int, default=3, help="runs per cell")
     matrix_parser.add_argument("--label", required=True)
     matrix_parser.add_argument("--out", default="eval-results")
+    matrix_parser.add_argument("--resume", action="store_true",
+                               help="load the existing result file of this label and run only the cells still short")
     matrix_parser.add_argument("--dry-run", action="store_true", help="print the cells' requests and stop")
     matrix_parser.add_argument("--pptx", action="store_true")
     matrix_parser.add_argument("--base", default="http://127.0.0.1:8000")
@@ -351,6 +471,24 @@ def main() -> None:
     matrix_parser.add_argument("--judge-renders")
     add_judge_options(matrix_parser, prefix="judge-")
     matrix_parser.set_defaults(handler=matrix)
+    recover_parser = sub.add_parser("recover", help="rebuild the result file of a matrix from the completed decks "
+                                                    "already in the database (newest per cell)")
+    recover_parser.add_argument("--templates", nargs="+", required=True)
+    recover_parser.add_argument("--inputs")
+    recover_parser.add_argument("--runs", type=int, default=1, help="runs per cell the matrix asked for")
+    recover_parser.add_argument("--label", required=True)
+    recover_parser.add_argument("--out", default="eval-results")
+    recover_parser.add_argument("--app-dir", help="the backend's app-data directory: PPTX objects are read from its "
+                                                  "local artifact store (omit to skip them)")
+    recover_parser.add_argument("--after-dsn", help="database this one was cloned from: only decks newer than its "
+                                                    "newest presentation count")
+    recover_parser.add_argument("--after", help="ISO timestamp: only decks created after it count")
+    recover_parser.add_argument("--dsn", default=os.environ.get("EVAL_DATABASE_DSN", DEFAULT_DSN))
+    recover_parser.add_argument("--judge-references")
+    recover_parser.add_argument("--judge-renders")
+    recover_parser.set_defaults(pptx=False, header=[])
+    add_judge_options(recover_parser, prefix="judge-")
+    recover_parser.set_defaults(handler=recover)
     decide_parser = sub.add_parser("decide", help="paired verdict per metric of result B against result A")
     decide_parser.add_argument("a")
     decide_parser.add_argument("b")
