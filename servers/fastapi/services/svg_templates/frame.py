@@ -91,6 +91,35 @@ def _repeat_key(shape, package, part):
     return xml_digest(copied)
 
 
+def _slot_key(shape, package, part):
+    """``_repeat_key`` without the text: the same text box at the same place."""
+    from copy import deepcopy
+    copied = deepcopy(shape)
+    for text in copied.iterfind(".//a:t", NS):
+        text.text = ""
+    return _repeat_key(copied, package, part)
+
+
+def _shape_text(shape) -> str:
+    return "".join(text.text or "" for text in shape.iterfind(".//a:t", NS)).strip()
+
+
+def _variable_slots(context, package, slides) -> set[str]:
+    """Slide-level text slots whose text differs between slides of the deck.
+
+    A requirement-ID box drawn at one place on 74 pages with 46 different
+    values is page content, even where a value repeats on several pages, so it
+    must not become fixed furniture (the real proposal deck's "요구사항 ID").
+    """
+    texts: dict[str, set[str]] = {}
+    for part in slides:
+        for shape in _children(context.root(part)):
+            if shape.find(".//a:t", NS) is None or placeholder_of(shape) is not None:
+                continue
+            texts.setdefault(_slot_key(shape, package, part), set()).add(_shape_text(shape))
+    return {key for key, values in texts.items() if len(values) > 1}
+
+
 def _background(context, ancestry, frame_id):
     for part in ancestry:
         node = context.root(part).find("p:cSld/p:bg", NS)
@@ -479,6 +508,7 @@ def extract_template_package(pptx_path: str | Path, *, font_assets=None,
         context.font_manifest = font_manifest
         # Repetition is judged over the whole deck: more pages, better evidence.
         repeats = Counter(key for part in all_slides for key in {_repeat_key(shape, package, part) for shape in _children(context.root(part))})
+        variable_slots = _variable_slots(context, package, all_slides)
         pending, unavailable = [], set()
         for slide_part in slides:
             page_index = page_numbers[slide_part]
@@ -575,7 +605,10 @@ def extract_template_package(pptx_path: str | Path, *, font_assets=None,
                         page_background = page_background or (
                             runs.enabled and kind == "pic" and shape is _children(root)[0]
                             and bounds.width * bounds.height >= canvas.width_px * canvas.height_px * .7)
-                        fixed = page_background or (edge and (repeats[_repeat_key(shape, package, part)] >= 2 or len(all_slides) == 1))
+                        variable = (shape.find(".//a:t", NS) is not None
+                                    and _slot_key(shape, package, part) in variable_slots)
+                        fixed = page_background or (edge and not variable and (
+                            repeats[_repeat_key(shape, package, part)] >= 2 or len(all_slides) == 1))
                     if selected is not None:
                         fixed = part + "#" + shape_id(shape) in selected
                     if not fixed:

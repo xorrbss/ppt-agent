@@ -3,6 +3,8 @@
 Design: docs/svg-template-real-deck-registration-design-20261103.md.
 """
 
+import re
+
 import pytest
 from pptx import Presentation
 from pptx.dml.color import RGBColor
@@ -391,3 +393,27 @@ def test_the_author_gets_the_body_region_with_a_safety_margin():
     assert _inset(region, AUTHORING_MARGIN_PX) == {"x": 68, "y": 233, "width": 1144, "height": 611}
     # A stroked card the author aligns on the given edge stays inside the validated region.
     assert 68 - 1 >= region.x
+
+
+def test_a_text_slot_whose_value_changes_between_pages_is_page_content(tmp_path):
+    """The real deck's "요구사항 ID" box: one place, many values (some repeated)."""
+    deck = Presentation()
+    deck.slide_width, deck.slide_height = Emu(12192000), Emu(6858000)
+    for value in ("COM-001", "COM-001", "PRJ-002"):
+        slide = deck.slides.add_slide(deck.slide_layouts[6])
+        for placeholder in list(slide.placeholders):
+            placeholder._element.getparent().remove(placeholder._element)
+        for text, top in ((f"요구사항 ID {value}", 100000), ("ACME Proposal", 6300000)):
+            box = slide.shapes.add_textbox(Emu(457200), Emu(top), Emu(4000000), Emu(400000)).text_frame
+            box.auto_size = MSO_AUTO_SIZE.NONE
+            run = box.paragraphs[0].add_run()
+            run.text, run.font.size, run.font.name = text, Pt(11), "Pretendard"
+            run.font.color.rgb = RGBColor(80, 80, 80)
+    path = tmp_path / "deck.pptx"
+    deck.save(path)
+    package = extract_template_package(path)
+    for frame in package.frames:
+        fixed = ["".join(re.findall(r">([^<>]+)<", element.svg)) for element in frame.elements if element.kind == "text"]
+        assert fixed == ["ACME Proposal"], (frame.frame_id, fixed)
+        evidence = next(item for item in package.body_evidence if item.source_page == frame.source_page)
+        assert len(evidence.body_shape_ids) == 1
