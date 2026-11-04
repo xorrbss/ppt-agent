@@ -169,3 +169,78 @@ def test_author_rules_carry_the_styles_only_when_the_knob_is_on(tmp_path, monkey
     assert ("TEMPLATE COMPONENT STYLE" in rules) is (knob == "on")
     if knob == "on":
         assert rules.endswith(component_style_rules(style.model_dump(mode="json"), body_floor=14.0))
+
+
+def _level(size, weight, color, share):
+    return {"size_px": size, "weight": weight, "colors": [color], "share": share}
+
+
+def _component(kind, shape, fill, **extra):
+    return {"kind": kind, "shape": shape, "fill": fill, "stroke": "none", "stroke_width_px": 0.0, "radius_px": 0.0,
+            "count": 5, "pages": 3, **extra}
+
+
+def _stored(**extra):
+    """A synthetic stored component style: a source whose body text is set below the floor."""
+    return {"pages_sampled": 6, "type_ladder": [
+        _level(24, 700, "#102030", .08), _level(17, 700, "#102030", .14), _level(14, 700, "#102030", .05),
+        _level(12.5, 400, "#405060", .2), _level(11, 400, "#405060", .4), _level(9, 400, "#708090", .13)],
+        "components": [
+            _component("label", "rect", "#102030", height_px=24.0,
+                       text={"size_px": 11, "weight": 700, "colors": ["#FFFFFF"]}, pages=5),
+            _component("label", "pill", "#ABCDEF", height_px=20.0,
+                       text={"size_px": 10, "weight": 400, "colors": ["#102030"]}),
+            _component("step", "chevron", "#0055CC", height_px=30.0,
+                       text={"size_px": 12, "weight": 700, "colors": ["#FFFFFF"]}),
+            _component("panel", "rect", "#F0F2F4"), _component("panel", "rect", "#E0ECF8")],
+        "tables": [], **extra}
+
+
+def _ladder_line(rules):
+    return next(line for line in rules.splitlines() if line.startswith("- Body text levels"))
+
+
+def test_ladder_gives_heading_levels_and_body_and_drops_captions_below_the_floor():
+    rules = component_style_rules(_stored(), body_floor=14.2)
+    ladder = _ladder_line(rules)
+    # Largest first: the title level, the sub-heading, then the body (most characters) at the floor.
+    assert re.findall(r"(title|sub-heading|body|caption) ([0-9.]+)px", ladder) == [
+        ("title", "24"), ("sub-heading", "17"), ("body", "14.5")]
+    assert "body 14.5px weight 400 #405060" in ladder
+    # The 9, 11, 12.5 and 14 px source sizes are neither inflated into extra levels nor listed.
+    assert "caption" not in ladder and "No text smaller than the body" in ladder
+
+
+def test_ladder_keeps_a_caption_the_floor_allows():
+    rules = component_style_rules(_stored(), body_floor=8.0)
+    levels = re.findall(r"(title|sub-heading|body|caption) ([0-9.]+)px", _ladder_line(rules))
+    # A lighter level between body and sub-heading (12.5 px) is a body variant, not a heading.
+    assert levels == [("title", "24"), ("title", "17"), ("sub-heading", "14"), ("body", "11"), ("caption", "9")]
+    assert "No text smaller than the caption" in rules
+
+
+def test_one_look_per_component_kind_the_most_used_first():
+    rules = component_style_rules(_stored(), body_floor=14.2)
+    assert rules.count("- Label or tag:") == 1 and "fill #102030" in rules and "#ABCDEF" not in rules
+    assert rules.count("- Tinted panel") == 1 and "#F0F2F4" in rules and "#E0ECF8" not in rules
+
+
+def test_a_sequence_is_asked_for_as_separate_gapped_steps():
+    step = next(line for line in component_style_rules(_stored(), body_floor=14.2).splitlines()
+                if line.startswith("- Step shape"))
+    assert "one chevron per step" in step and "small gap" in step and "never one long bar" in step
+    # The step grows with its raised text (12 -> 14.5 px).
+    assert "text 14.5px" in step and "about 36px high" in step
+
+
+def test_rules_stay_within_the_budget_and_keep_the_layout_free(monkeypatch):
+    from services.svg_templates import component_style
+    full = component_style_rules(_stored(), body_floor=14.2)
+    assert len(full) <= component_style.RULES_BUDGET_CHARS
+    monkeypatch.setattr(component_style, "RULES_BUDGET_CHARS", len(full) - 1)
+    cut = component_style_rules(_stored(), body_floor=14.2)
+    assert len(cut) < len(full)
+    # The least telling line goes first; the ladder and the free-layout sentence always stay.
+    assert "Tinted panel" not in cut and "Step shape" in cut
+    assert "the layout stays free" in cut and "use a component only when the content calls for it" in cut
+    assert "- Body text levels" in cut

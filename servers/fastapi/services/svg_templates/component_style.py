@@ -41,7 +41,8 @@ _SHAPES = {"rect": "rect", "flowChartProcess": "rect", "roundRect": "rounded", "
            "ellipse": "circle", "flowChartConnector": "circle", "chevron": "chevron", "homePlate": "pentagon"}
 _LINES = {"line", "straightConnector1"}
 _KIND_ORDER = ("number_chip", "label", "bar", "step", "card", "panel", "accent_bar", "tile", "divider")
-#: Variants kept per kind: the most frequent, and a second one when it is common too.
+#: Variants kept per kind: the most frequent, and a second one when it is common too. The author
+#: rules show only the first (``component_style_rules``); the second stays in the stored vocabulary.
 _VARIANTS = {"number_chip": 1, "label": 2, "bar": 2, "step": 1, "card": 1, "panel": 2,
              "accent_bar": 1, "tile": 1, "divider": 1}
 _ERRORS = (ValueError, KeyError, TypeError, AttributeError, IndexError, ZeroDivisionError)
@@ -463,6 +464,18 @@ _LABELS = {
     "tile": "Tile or disc behind an icon or a short mark",
     "divider": "Divider line",
 }
+#: A sequence drawn as one long bar with a single arrow end read as one shape, not as steps.
+_STEP_SHAPES = {
+    name: f"one {label} per step (each its own polygon, side by side with a small gap; never one long bar"
+          " with a single arrow end)"
+    for name, label in (("chevron", "chevron"), ("pentagon", "pentagon arrow"))
+}
+#: The paragraph stays under this many characters (about 500 tokens); lines are dropped, least
+#: telling first, until it fits.
+RULES_BUDGET_CHARS = 2000
+_DROP_ORDER = ("divider", "tile", "accent_bar", "panel", "label", "step", "card", "bar", "number_chip", "table")
+#: Ladder levels closer than this to the body size after the floor read as the body size.
+_LEVEL_GAP = 1.08
 
 
 def _raised(text: dict | None, floor: float) -> tuple[dict | None, float]:
@@ -473,20 +486,34 @@ def _raised(text: dict | None, floor: float) -> tuple[dict | None, float]:
     return {**text, "size_px": raised}, raised / text["size_px"]
 
 
-def _ladder_at_floor(levels: list[dict], floor: float) -> list[dict]:
-    """Levels below the floor are drawn at it, so they merge into one level there; the merged
-    level keeps the weight and colours of its most used member."""
-    result = []
-    for level in levels:
-        level, _ = _raised(level, floor)
-        if result and result[-1]["size_px"] == level["size_px"]:
-            previous = result[-1]
-            main, other = (level, previous) if (level["share"] or 0) > (previous["share"] or 0) else (previous, level)
-            colors = list(dict.fromkeys((*main["colors"], *other["colors"])))[:2]
-            result[-1] = {**main, "colors": colors, "share": round((main["share"] or 0) + (other["share"] or 0), 2)}
-            continue
-        result.append(level)
-    return result
+def _ladder_roles(levels: list[dict], floor: float) -> list[tuple[str, dict]]:
+    """The body text levels by role, largest first: title levels, a sub-heading, the body and a
+    caption only when the source's caption size meets the floor.
+
+    The body is the level with the most characters, shown at the floor when the source sets it
+    smaller. A level that would land at the body size once raised merges into it, and a caption
+    the source sets below the floor is left out rather than inflated: every small source size
+    pushed up to the floor made all text one size, and cards looked half empty.
+    """
+    if not levels:
+        return []
+    body = max(levels, key=lambda level: ((level["share"] or 0), level["size_px"]))
+    shown, _ = _raised(body, floor)
+    above = sorted((level for level in levels if level["size_px"] > shown["size_px"] * _LEVEL_GAP),
+                   key=lambda level: level["size_px"])
+    # The sub-heading is the nearest heavier level above the body (a lighter one in between is a
+    # body variant); larger levels are title levels, the two largest kept.
+    heavier = [level for level in above if level["weight"] > body["weight"]] or above
+    roles = []
+    if heavier:
+        heading = heavier[0]
+        titles = [level for level in above if level["size_px"] > heading["size_px"] * _LEVEL_GAP][-2:]
+        roles = [("title", level) for level in reversed(titles)] + [("sub-heading", heading)]
+    roles.append(("body", shown))
+    captions = [level for level in levels if floor <= level["size_px"] < shown["size_px"] / _LEVEL_GAP]
+    if captions:
+        roles.append(("caption", max(captions, key=lambda level: ((level["share"] or 0), level["size_px"]))))
+    return roles
 
 
 def component_style_rules(style: dict | None, *, body_floor: float | None = None) -> str:
@@ -494,24 +521,33 @@ def component_style_rules(style: dict | None, *, body_floor: float | None = None
 
     Text the source sets below ``body_floor`` (the page's body text minimum, CSS px) is given
     at the floor, and a component around such text grows by the same factor, so the guidance
-    never asks for text the readability checks reject.
+    never asks for text the readability checks reject. One look per component kind (the most
+    used one; a second look read as noise), and the paragraph stays within ``RULES_BUDGET_CHARS``.
     """
     if not style:
         return ""
     style = SvgTemplateComponentStyle.model_validate(style).model_dump(mode="json")
     floor = float(body_floor or 0)
-    lines = []
+    lines: list[tuple[str, str]] = []
     if style["type_ladder"]:
-        levels = "; ".join(_text(level) for level in _ladder_at_floor(style["type_ladder"], floor))
-        lines.append(f"- Body text sizes, largest first: {levels}. Use these sizes, weights and colours for"
-                     " the matching levels (sub-heading, body, caption).")
+        roles = _ladder_roles(style["type_ladder"], floor)
+        levels = "; ".join(f"{role} {_text(level)}" for role, level in roles)
+        smallest = roles[-1][0]
+        lines.append(("ladder", f"- Body text levels, largest first: {levels}. No text smaller than the {smallest};"
+                                " a key figure may be larger."))
+    seen = set()
     for item in style["components"]:
+        if item["kind"] in seen:
+            continue
+        seen.add(item["kind"])
         text, factor = _raised(item.get("text"), floor)
         item = {**item, **{key: _round(item[key] * factor, 1) for key in ("width_px", "height_px") if item.get(key)}}
         words = f"; text {_text(text)}" if text else ""
-        lines.append(f"- {_LABELS[item['kind']]}: {_geometry(item)}, "
-                     f"{_paint(item['fill'], item['stroke'], item['stroke_width_px'])}{_size(item)}{words}.")
-    for table in style["tables"]:
+        geometry = (_STEP_SHAPES[item["shape"]] if item["kind"] == "step" and item["shape"] in _STEP_SHAPES
+                    else _geometry(item))
+        lines.append((item["kind"], f"- {_LABELS[item['kind']]}: {geometry}, "
+                                    f"{_paint(item['fill'], item['stroke'], item['stroke_width_px'])}{_size(item)}{words}."))
+    for table in style["tables"][:1]:
         parts = [f"header row fill {table['header_fill']}" if table["header_fill"] != "none" else "header row without fill"]
         if table.get("header_text"):
             parts.append(f"header text {_text(_raised(table['header_text'], floor)[0])}")
@@ -524,10 +560,19 @@ def component_style_rules(style: dict | None, *, body_floor: float | None = None
             parts.append(f"cell rules {table['rule_color']}")
         if table.get("body_text"):
             parts.append(f"cell text {_text(_raised(table['body_text'], floor)[0])}")
-        lines.append("- Table: " + ", ".join(parts) + ".")
+        lines.append(("table", "- Table: " + ", ".join(parts) + "."))
     if not lines:
         return ""
-    return ("\nTEMPLATE COMPONENT STYLE (measured from this template's own body pages; style only):"
+    head = ("\nTEMPLATE COMPONENT STYLE (measured from this template's own body pages; style only):"
             " the layout stays free. Choose positions, sizes of areas, counts and arrangement from this page's"
             " content, and use a component only when the content calls for it; never add one to imitate the"
-            " template. When you draw one of these components, give it this look:\n" + "\n".join(lines) + "\n")
+            " template. When you draw one of these components, give it this look:\n")
+
+    def paragraph():
+        return head + "\n".join(line for _, line in lines) + "\n"
+
+    for kind in _DROP_ORDER:
+        if len(paragraph()) <= RULES_BUDGET_CHARS:
+            break
+        lines = [entry for entry in lines if entry[0] != kind]
+    return paragraph() if len(paragraph()) <= RULES_BUDGET_CHARS and lines else ""
