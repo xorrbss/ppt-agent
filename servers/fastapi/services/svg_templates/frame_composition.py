@@ -383,14 +383,25 @@ def compose_frame_svg(frame: SvgTemplateFrame | SvgTemplateFrameAdaptation, body
     for index, node in enumerate(body.iter()):
         node_id = node.get("id")
         if node_id and not node_id.startswith("body-"):
-            raise ValueError("svg_template_body_namespace_required")
+            # The detail is the repair hint of the next attempt (attempt_cause keeps only the code).
+            raise ValueError(f"svg_template_body_namespace_required: id {node_id[:60]!r} must start with body-")
         node.set("id", node_id or f"body-node-{index}")
         if etree.QName(node).localname in {"text", "tspan"}:
             parent = node.getparent()
             family = node.get("font-family") or (parent.get("font-family") if parent is not None else None)
             weight = node.get("font-weight") or (parent.get("font-weight", "400") if parent is not None else "400")
             weight = {"normal": "400", "bold": "700"}.get(weight, weight)
-            asset = font_asset_for(frame.font_manifest, family or "", int(weight))
+            try:
+                asset = font_asset_for(frame.font_manifest, family or "", int(weight))
+            except ValueError as error:
+                # Measured 2026-11-04: a cover allowing only one bold face failed twice, because the
+                # retry saw the bare code and left some texts without font-weight (read as 400).
+                faces = ", ".join(sorted({f"{item.family} {item.weight}" for item in frame.font_manifest.assets}))
+                raise ValueError(
+                    f"svg_template_font_unavailable: a {etree.QName(node).localname} uses font-family"
+                    f" {(family or '')[:60]!r} weight {str(weight)[:12]}; this page has only the faces {faces}."
+                    " Give every text an explicit font-family and font-weight from these faces"
+                    " (a text without font-weight is weight 400).") from error
             from services.svg_templates.frame_fonts import verify_font_text
             verify_font_text(asset, "".join(node.itertext()))
     root = svg_node("svg", width=canvas.width_px, height=canvas.height_px,

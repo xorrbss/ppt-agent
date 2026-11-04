@@ -236,6 +236,10 @@ def body_author_rules(rules: str, snapshot: dict) -> str:
                           "reuse successful source arrangements when appropriate, but never substitute their content.")
     rules = rules.replace("Choose the title's position and visual weight from this page's message and evidence.",
                           "When template_page.dynamic_fields contains title, do not repeat that page title in the body. Otherwise compose a title inside the body.")
+    # The native table/chart rules name their group native-*-SLUG, which composition rejects
+    # here (svg_template_body_namespace_required: every body id starts with body-).
+    for kind in ("table", "chart"):
+        rules = rules.replace(f'id="native-{kind}-SLUG"', f'id="body-native-{kind}-SLUG"')
     return rules + "\n" + "\n".join(snapshot["composition_guidance"]) + (
         "\nThe template_page input is authoritative. Return one full-canvas SVG coordinate system,"
         " with all body paint strictly inside body_region and outside forbidden_regions."

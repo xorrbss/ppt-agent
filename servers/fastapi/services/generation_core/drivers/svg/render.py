@@ -462,6 +462,9 @@ async def _attempt_render(*, ctx, request, presentation_id, index, content, payl
                 source_manifest=template_source_manifest,
                 allow_existing=bool(cache_remeasurement or payload.get("cached_author_render")
                                     or allow_existing_common_header or allow_existing_template))
+            # The page publishes this composition of the drawing; its declarations follow it.
+            from services.generation_core.drivers.svg.native_declarations import rebind_native_declarations
+            rebind_native_declarations(payload, svg, final)
         elif ctx.source_reflow and (ctx.snapshot.get("common_header") or {}).get("version") == "svg-common-header/v2":
             from services.svg_source_layout import compose_source_common_header
             final, source_receipt = compose_source_common_header(
@@ -526,6 +529,9 @@ async def _attempt_render(*, ctx, request, presentation_id, index, content, payl
                     final, source_values=source_values, required_text=required_text,
                     protected_element_ids=(GROUP_ID, "svg-system-template-background", "svg-system-template-foreground"))
                 if substitutions:
+                    # The declarations (bound to ``before``) follow the text edit.
+                    from services.generation_core.drivers.svg.native_declarations import follow_visible_text_edits
+                    follow_visible_text_edits(payload, before, final)
                     payload["attempts"][-1]["writing_policy_substitution"] = {
                         "version": "svg-visible-symbol-substitution/v1",
                         "input_digest": sha256_hex(before.encode()),

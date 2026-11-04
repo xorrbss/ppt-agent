@@ -143,6 +143,12 @@ def extract_native_declarations(root: ET.Element) -> dict | None:
         if len(objects) >= _MAX_DECLARATIONS:
             _drop(dropped, node, kind, "native_declaration_limit")
             continue
+        if kind == "table":
+            # In place, before anything validates or stores the tree, so every replay of a
+            # raw response (author, partial recovery, page remake) folds identically.
+            from services.generation_core.drivers.svg.native_table import fold_wrapped_cell_lines
+
+            fold_wrapped_cell_lines(node, raw)
         objects.append({"id": node.get("id"), "kind": kind, "raw": raw})
     return {"objects": objects, "dropped": dropped}
 
@@ -191,6 +197,86 @@ def bind_native_declarations(payload: dict, svg: str | None, declarations: dict 
                             "dropped": list(declarations["dropped"])}
 
 
+def rebind_native_declarations(payload: dict, drawn_svg: str | None, composed_svg: str | None) -> bool:
+    """Carry the declarations bound to ``drawn_svg`` over to ``composed_svg``, its server composition.
+
+    A template-redesign page publishes ``compose_template_page(drawn)``: the body moves into
+    ``svg-system-template-body`` between the frame's layers and every id-less body node gets a
+    ``body-node-N`` id, so the composed page never has the drawing's digest. Measured
+    2026-11-04: every template page's declarations were dropped as ``native_declaration_stale_svg``
+    and its outline table reported ``native_requested_table_missing``. The caller passes only
+    the composition of exactly the drawing the record binds (checked here); any other SVG,
+    including a later correction of the composed page, still leaves the record stale.
+    Returns whether the record was moved.
+    """
+    record, current = bound_declarations(payload, drawn_svg)
+    digest = native_binding_digest(composed_svg)
+    if record is None or not current or digest is None:
+        return False
+    payload[PAYLOAD_KEY] = {**record, "svgDigest": digest}
+    return True
+
+
+def follow_visible_text_edits(payload: dict, before_svg: str | None, after_svg: str | None) -> bool:
+    """Carry the declarations bound to ``before_svg`` over a text-only server edit to ``after_svg``.
+
+    The writing policy's visible-symbol substitution
+    (``ppt_writing_visible.substitute_svg_visible_symbols``) rewrites text content after the
+    declarations were bound, and never an element or attribute. Measured 2026-11-04: one
+    substituted ``·`` on a page left both its table and chart ``native_declaration_stale_svg``.
+    A declared group's drawn text that changed is changed the same way in its JSON (every string
+    equal to the old drawn text, with its lines joined by a newline or a space), so the
+    declaration still says exactly what the group shows. Gives up (the record stays stale) when
+    the two pages differ in more than text, or one old text became two different new texts.
+    """
+    record, current = bound_declarations(payload, before_svg)
+    digest = native_binding_digest(after_svg)
+    if record is None or not current or digest is None:
+        return False
+    from services.generation_core.drivers.svg.native_geometry import normalize_text
+    from services.generation_core.drivers.svg.native_table import drawn_cell_text
+
+    try:
+        before, after = ET.fromstring(before_svg), ET.fromstring(after_svg)
+    except ET.ParseError:
+        return False
+    if [(node.tag, node.attrib) for node in before.iter()] != [(node.tag, node.attrib) for node in after.iter()]:
+        return False
+    by_id = {node.get("id"): (node, twin) for node, twin in zip(before.iter(), after.iter(), strict=True)
+             if node.get("id")}
+    objects = []
+    for item in record.get("objects") or []:
+        nodes = by_id.get(item.get("id"))
+        if nodes is None:
+            return False
+        mapping: dict[str, str] = {}
+        for old, new in zip(nodes[0].iter(), nodes[1].iter(), strict=True):
+            if old.tag.rsplit("}", 1)[-1] != "text":
+                continue
+            was, now = drawn_cell_text(old), drawn_cell_text(new)
+            for key, value in ((was, now), (normalize_text(was.replace("\n", " ")), normalize_text(now.replace("\n", " ")))):
+                if key != value:
+                    if mapping.setdefault(key, value) != value:
+                        return False
+
+        objects.append({**item, "raw": _replace_texts(item.get("raw"), mapping)} if mapping else item)
+    payload[PAYLOAD_KEY] = {**record, "objects": objects, "svgDigest": digest}
+    return True
+
+
+def _replace_texts(value, mapping: dict[str, str]):
+    """``value`` with every string whose normalized text is a key of ``mapping`` replaced."""
+    from services.generation_core.drivers.svg.native_geometry import normalize_cell
+
+    if isinstance(value, str):
+        return mapping.get(normalize_cell(value), value)
+    if isinstance(value, list):
+        return [_replace_texts(entry, mapping) for entry in value]
+    if isinstance(value, dict):
+        return {key: _replace_texts(entry, mapping) for key, entry in value.items()}
+    return value
+
+
 def bound_declarations(payload: dict, svg: str | None) -> tuple[dict | None, bool]:
     """``(record, current)``: the page's declaration record and whether it binds ``svg``."""
     record = payload.get(PAYLOAD_KEY)
@@ -202,5 +288,6 @@ def bound_declarations(payload: dict, svg: str | None) -> tuple[dict | None, boo
 __all__ = [
     "CHART_ATTRIBUTE", "NATIVE_CHARTS_OFFERED", "NATIVE_CHART_RULE", "NATIVE_TABLE_RULE", "PAYLOAD_KEY",
     "TABLE_ATTRIBUTE", "bind_native_declarations", "bound_declarations", "declaration_receipt",
-    "extract_native_declarations", "native_author_rules", "native_binding_digest",
+    "extract_native_declarations", "follow_visible_text_edits", "native_author_rules", "native_binding_digest",
+    "rebind_native_declarations",
 ]

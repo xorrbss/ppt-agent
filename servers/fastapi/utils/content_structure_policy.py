@@ -49,8 +49,17 @@ OUTLINE_TABLE_LINE = "   - Must have content either in multiple bullet points or
 #: Markdown table syntax is not a decorative pipe separator.
 TABLE_SYNTAX_CLAUSE = (
     " Markdown table pipes (|) that structure a table, and the table's separator row, are required syntax,"
-    " not decorative pipe separators. Keep source tabular data (key-value lists, comparisons, schedules,"
-    " layered structures) as Markdown tables."
+    " not decorative pipe separators. Keep source tabular data (the source's own tables, key-value lists,"
+    " comparisons, schedules) as Markdown tables. Keep a sequence of steps, a flow or a stack of layers as"
+    " its list, so that it can be drawn as a diagram, unless the source itself gives it as a table."
+    " When the source states one numeric series of at least three labelled values in one shared unit"
+    " (for example a headcount per role or an amount per year), also write that series on its own line of"
+    " the slide that presents those values, in plain text without backticks, in the form"
+    " chart: Label value unit, Label value unit."
+    " Use only values the source writes as numbers, with the source labels, values and unit exactly and no"
+    " comma inside a label; never compute a value (such as a duration from two dates). Never write a"
+    " chart line for values with different units or measures (for example a current-versus-target"
+    " comparison of different indicators)."
 )
 
 CONNECTOR_RULE = (
@@ -68,6 +77,13 @@ CONNECTOR_RULE = (
 TABLE_TEXT_CLAUSE = (
     " Every text inside a native table, each cell included, carries its own explicit x, y, font-family,"
     " font-size and fill like any other text; a header cell is bold and contrasts with the header fill."
+    # Measured 2026-11-04: a single-series chart declared the series name "headcount (persons)" but drew
+    # only its title, so the chart was dropped (native_chart_label_not_drawn) and the page fell back.
+    " A native chart's series name is drawn text inside its group: for a single series, declare the exact"
+    " drawn chart title as the series name, or draw the series name as a legend label; a declared chart"
+    " title is exactly the text drawn as the title."
+    " A page that holds both a native table and a native chart places them side by side or keeps the chart"
+    " compact, so that every table row stays inside the body."
 )
 TEMPLATE_TABLE_ID_CLAUSE = (
     " In this deck every authored id starts with body-, so name a native table or chart group"

@@ -193,6 +193,111 @@ def _drawn_line_separators(declared: str, lines) -> list[str] | None:
     return separators if position == len(declared) else None
 
 
+#: A wrapped cell's lines sit at most this many font sizes apart; the next table row is further.
+_FOLD_MAX_PITCH_EM = 1.8
+
+
+def drawn_cell_text(node) -> str:
+    """One ``<text>`` as the multiset check reads it: a tspan with its own ``y`` opens a line."""
+    lines, line_y = [node.text or ""], node.get("y")
+    for child in node:
+        if child.get("y") is not None and child.get("y") != line_y:
+            lines.append("")
+            line_y = child.get("y")
+        lines[-1] += "".join(child.itertext()) + (child.tail or "")
+    return normalize_cell("\n".join(lines))
+
+
+def fold_wrapped_cell_lines(group, raw: dict) -> int:
+    """Join a declared cell the model drew as one ``<text>`` per wrapped line into one text.
+
+    Measured on a template deck (2026-11-04, 12 of 20 table attempts on 6 of 10 table pages):
+    a long cell such as ``"OS, drivers, CUDA"`` was drawn as two adjacent texts at the same x
+    one line pitch apart (``"OS, drivers,"`` and ``"CUDA"``) while the JSON held the whole
+    cell. The table rule asks for one text per cell with tspan lines, so the text multiset
+    check (``native_table_text_unaccounted`` / ``_cell_drawn_twice``) dropped the table.
+
+    Only a table that check would reject is changed (some declared cell is drawn by no single
+    text). A run of adjacent, child-free sibling texts whose attributes are identical except
+    ``y``, at a rising uniform pitch of at most ``_FOLD_MAX_PITCH_EM`` font sizes, whose lines
+    spell such a cell (``_drawn_line_separators``: a wrap drops at most one space) becomes the
+    first text with one ``<tspan x y>`` per further line: the same glyphs at the same
+    positions. The JSON cell becomes the drawn lines joined by ``"\\n"``, the form the rule
+    documents. Grid, position and every other check still run on the result. ``group`` and
+    ``raw`` are changed in place; returns the number of cells folded.
+    """
+    rows = raw.get("rows")
+    if (not isinstance(rows, list) or not all(isinstance(row, list) for row in rows)
+            or not all(isinstance(cell, str) for row in rows for cell in row)):
+        return 0
+    namespace = group.tag[:group.tag.index("}") + 1] if group.tag.startswith("{") else ""
+    text_tag = namespace + "text"
+    drawn = Counter(drawn_cell_text(node) for node in group.iter(text_tag))
+    unmatched = Counter(cell for row in rows for cell in (normalize_cell(value) for value in row) if cell) - drawn
+    if not unmatched:
+        return 0
+
+    def line_metrics(node) -> tuple[float, float] | None:
+        """``(y, font-size)`` of a child-free, non-empty text, else ``None``."""
+        if node.tag != text_tag or len(node) or not (node.text or "").strip():
+            return None
+        try:
+            values = float(node.get("y")), float(node.get("font-size"))
+        except (TypeError, ValueError):
+            return None
+        return values if all(math.isfinite(value) for value in values) and values[1] > 0 else None
+
+    def style(node) -> dict:
+        return {name: value for name, value in node.attrib.items() if name != "y"}
+
+    folded = 0
+    for parent in [node for node in group.iter() if len(node)]:
+        children = list(parent)
+        index = 0
+        while index < len(children):
+            first = children[index]
+            metrics = line_metrics(first)
+            run, ys = [first], [metrics[0]] if metrics else []
+            for node in children[index + 1:] if metrics else ():
+                current = line_metrics(node)
+                if current is None or style(node) != style(first):
+                    break
+                pitch = current[0] - ys[-1]
+                if (not 0 < pitch <= _FOLD_MAX_PITCH_EM * metrics[1]
+                        or len(ys) > 1 and abs(pitch - (ys[1] - ys[0])) > 0.5):
+                    break
+                run.append(node)
+                ys.append(current[0])
+            match, lines = None, []
+            for end in range(len(run), 1, -1):
+                lines = [normalize_cell(node.text or "") for node in run[:end]]
+                match = next((cell for cell, count in unmatched.items()
+                              if count > 0 and _drawn_line_separators(cell, lines) is not None), None)
+                if match is not None:
+                    break
+            if match is None:
+                index += 1
+                continue
+            for node in run[1:len(lines)]:
+                tspan = first.makeelement(namespace + "tspan", {"x": first.get("x", "0"), "y": node.get("y")})
+                tspan.text = node.text
+                first.append(tspan)
+                parent.remove(node)
+            replaced = False
+            for row in rows:
+                for position, cell in enumerate(row):
+                    if normalize_cell(cell) == match:
+                        row[position], replaced = "\n".join(lines), True
+                        break
+                if replaced:
+                    break
+            unmatched[match] -= 1
+            folded += 1
+            children = list(parent)
+            index += 1
+    return folded
+
+
 def _place(texts, xs, ys, cells, spans=None, blocks=None) -> dict[tuple[int, int], DrawnText]:
     placed: dict[tuple[int, int], DrawnText] = {}
     for text in texts:
