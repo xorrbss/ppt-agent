@@ -383,6 +383,10 @@ def recover(args: argparse.Namespace) -> None:
             continue
         parts = _pptx_from_store(conn, args.app_dir, item["data"]["presentation_id"],
                                  item["data"].get("export_operation_id")) if args.app_dir else None
+        if args.app_dir and not parts and not args.allow_no_pptx:
+            print(f"{cell['cell']}: deck {item['data']['presentation_id']} has no finished PPTX export; left out "
+                  "(--allow-no-pptx keeps it without PPTX objects)", flush=True)
+            continue
         runs.append(_deck_record(None, conn, judge, args, item["data"], inputs[cell["input"]], cell["cell"],
                                  cell["judge"], 1, item["seconds"], f"{cell['cell']} ", parts))
         _write_result(args, next(iter(judges.values()), None), runs, args.runs * len(cells), judges=judges,
@@ -480,6 +484,9 @@ def main() -> None:
     recover_parser.add_argument("--out", default="eval-results")
     recover_parser.add_argument("--app-dir", help="the backend's app-data directory: PPTX objects are read from its "
                                                   "local artifact store (omit to skip them)")
+    recover_parser.add_argument("--allow-no-pptx", action="store_true",
+                                help="keep decks whose PPTX export never finished (default: leave them out so a "
+                                     "resume generates them again)")
     recover_parser.add_argument("--after-dsn", help="database this one was cloned from: only decks newer than its "
                                                     "newest presentation count")
     recover_parser.add_argument("--after", help="ISO timestamp: only decks created after it count")
