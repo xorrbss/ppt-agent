@@ -93,7 +93,7 @@ Details and tables: `docs/content-structure-policy-20261104.md`.
    header slots.
 6. An over-wide dynamic title used to fail the page; now it shrinks and is
    cut. Chapter tab fields still fail.
-7. Without a frame map every body page uses frame-2 (see Measurements).
+7. Without a frame map every body page used frame-2 (see Measurements). Now page 1 takes the cover frame and every other page the body frame showing most of title / chapter number / chapter name (then most dynamic fields, then largest body region, then source order), `automatic_frame_id` in `services/svg_templates/generation.py`; one frame for all body pages (the chapter frames are not varied per chapter), section frames are used only through a frame map.
 8. `test_source_publish_rejects_missing_receipt_before_database_access` and
    `test_feature_lifecycle_refcount_expiry_and_gc_fail_closed` fail on
    `'GuardSession' object has no attribute 'info'` in

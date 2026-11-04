@@ -120,6 +120,33 @@ def apply_template_snapshot(snapshot: dict, request) -> None:
     snapshot["digest"] = canonical_json_digest({key: value for key, value in snapshot.items() if key != "digest"}, allow_nan=True)
 
 
+_HEADER_KEYS = ("title", "chapter_number", "chapter_title")
+
+
+def automatic_frame_id(frames, index: int) -> str:
+    """The frame of a page the request's frame map does not name.
+
+    Page 1 takes the cover frame. Any other page takes the body frame that shows
+    most of the header fields (title, chapter number, chapter name), then most
+    dynamic fields, then has the largest body region; the first such frame in
+    source order wins a tie. The choice depends on the template only, so every
+    caller recomputes the same frame.
+    """
+    if index == 0:
+        cover = next((frame for frame in frames if frame["role"] == "cover"), None)
+        if cover is not None:
+            return cover["frame_id"]
+    bodies = [frame for frame in frames if frame["role"] == "body"] or list(frames)
+
+    def fit(frame) -> tuple:
+        fields = set(frame.get("dynamic_fields") or ())
+        region = frame.get("body_region") or {}
+        return (sum(key in fields for key in _HEADER_KEYS), len(fields),
+                float(region.get("width", 0)) * float(region.get("height", 0)))
+
+    return max(bodies, key=fit)["frame_id"]
+
+
 def page_frame(snapshot: dict, index: int, count: int, role: str | None = None) -> SvgTemplateFrame:
     selection = template_selection(snapshot)
     if selection is None or selection["mode"] != "template-redesign" or not 0 <= index < count:
@@ -128,8 +155,7 @@ def page_frame(snapshot: dict, index: int, count: int, role: str | None = None) 
     frames = package["frames"]
     selected_id = selection["frame_map"].get(str(index + 1))
     if selected_id is None:
-        desired = "cover" if index == 0 else "body"
-        selected_id = next((frame["frame_id"] for frame in frames if frame["role"] == desired), frames[0]["frame_id"])
+        selected_id = automatic_frame_id(frames, index)
     if selected_id not in adaptations:
         raise ValueError("svg_template_canvas_preparation_required")
     return SvgTemplateFrameAdaptation.model_validate(unpack_adaptation_fonts(
