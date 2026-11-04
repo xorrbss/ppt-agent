@@ -66,11 +66,15 @@ def retention(source: str, generated: str) -> dict:
             "numbers": len(numbers & found_numbers) / len(numbers) if numbers else None}
 
 
+_CHART_FRAME = re.compile(r"""graphicData\s+uri=["']http://schemas\.openxmlformats\.org/drawingml/2006/chart["']""")
+
+
 def package_objects(pptx_parts: dict[str, str]) -> dict:
     """Native tables and charts in an exported PPTX, from its slide XML parts (name -> text)."""
     slides = [text for name, text in pptx_parts.items() if re.fullmatch(r"ppt/slides/slide\d+\.xml", name)]
     return {"tables": sum(text.count("<a:tbl>") for text in slides),
-            "charts": sum(text.count("drawingml/2006/chart") for text in slides),
+            # One graphicData per chart frame; its c:chart child repeats the namespace (counted twice before).
+            "charts": sum(len(_CHART_FRAME.findall(text)) for text in slides),
             "pages_with_table": sum("<a:tbl>" in text for text in slides)}
 
 

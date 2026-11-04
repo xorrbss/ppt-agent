@@ -48,7 +48,9 @@ def test_retention_is_the_share_of_source_words_and_numbers_that_survive():
 
 def test_package_objects_count_native_tables_and_charts_from_slide_parts():
     parts = {"ppt/slides/slide1.xml": "<a:tbl></a:tbl> <a:tbl></a:tbl>",
-             "ppt/slides/slide2.xml": "graphicData uri='http://schemas.openxmlformats.org/drawingml/2006/chart'",
+             "ppt/slides/slide2.xml": ('<a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/chart">'
+                                       '<c:chart xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart"'
+                                       ' r:id="rId2"/></a:graphicData>'),
              "ppt/slides/slide3.xml": "<p:sp/>", "ppt/slideLayouts/slideLayout1.xml": "<a:tbl>"}
     assert metrics.package_objects(parts) == {"tables": 2, "charts": 1, "pages_with_table": 1}
 
