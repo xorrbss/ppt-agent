@@ -32,6 +32,12 @@ POLICY_ID = "content-structure-policy/v1"
 SCOPES = ("off", "template", "svg")
 DEFAULT_SCOPE = "off"
 
+#: Parts a deck in scope gets (``CONTENT_STRUCTURE_POLICY_PARTS``, a comma list): ``tables`` (the outline
+#: asks for Markdown tables, the author rules add the table cell and id clauses) and ``connectors`` (the
+#: connector rule replaces the "no arrows between independent items" sentence). Unset, empty or naming
+#: nothing known: both, which is what the policy meant before the parts could be switched separately.
+PARTS = ("tables", "connectors")
+
 #: The sentence of ``SVG_AUTHOR_RULES`` this policy refines (never edited in place:
 #: the constant is a durable digest input, so a deck in scope gets it replaced per call).
 ARROW_RULE = ("Do not add arrows or connecting lines between independent items. "
@@ -81,14 +87,24 @@ def normalize_scope(value: str | None) -> str:
     return scope if scope in SCOPES else DEFAULT_SCOPE
 
 
-def active_policy(*, svg: bool, template_redesign: bool, scope: str | None = None) -> StructurePolicy | None:
-    """The policy for a deck, or ``None`` when its mode is outside ``scope``."""
+def normalize_parts(value: str | tuple[str, ...] | None) -> tuple[str, ...]:
+    """The known parts named in ``value`` (a comma list or names), in :data:`PARTS` order;
+    both when it names none of them. Unknown names are ignored."""
+    items = value.split(",") if isinstance(value, str) else (value or ())
+    named = {item.strip().lower() for item in items}
+    return tuple(part for part in PARTS if part in named) or PARTS
+
+
+def active_policy(*, svg: bool, template_redesign: bool, scope: str | None = None,
+                  parts: str | tuple[str, ...] | None = None) -> StructurePolicy | None:
+    """The policy for a deck, or ``None`` when its mode is outside ``scope``.
+    ``parts`` picks tables and/or connectors (see :data:`PARTS`); unset means both."""
     scope = normalize_scope(scope)
-    if scope == "svg" and svg:
-        return StructurePolicy()
-    if scope == "template" and svg and template_redesign:
-        return StructurePolicy()
-    return None
+    in_scope = (scope == "svg" and svg) or (scope == "template" and svg and template_redesign)
+    if not in_scope:
+        return None
+    chosen = normalize_parts(parts)
+    return StructurePolicy(tables="tables" in chosen, connectors="connectors" in chosen)
 
 
 def outline_table_line(policy: StructurePolicy | None) -> str:

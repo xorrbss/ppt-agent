@@ -719,11 +719,13 @@ def author_rules_with_structure_policy(rules: str, style_snapshot: dict) -> str:
     """Refine the connector rule for a deck in the content structure policy's scope."""
     from services.svg_templates.generation import template_selection
     from utils.content_structure_policy import active_policy, author_rules as refine
-    from utils.get_env_concurrency import get_content_structure_policy_scope_env
+    from utils.get_env_concurrency import (
+        get_content_structure_policy_parts_env, get_content_structure_policy_scope_env)
 
     selection = template_selection(style_snapshot) if style_snapshot.get("svg_template") is not None else None
     redesign = bool(selection and selection.get("mode") == "template-redesign")
-    policy = active_policy(svg=True, template_redesign=redesign, scope=get_content_structure_policy_scope_env())
+    policy = active_policy(svg=True, template_redesign=redesign, scope=get_content_structure_policy_scope_env(),
+                           parts=get_content_structure_policy_parts_env())
     return refine(rules, policy, template_ids=redesign)
 
 

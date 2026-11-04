@@ -145,6 +145,17 @@ def get_content_structure_policy_scope_env(settings: RuntimeSettings | None = No
     return normalize_scope(get_setting_env("CONTENT_STRUCTURE_POLICY_SCOPE", settings))
 
 
+def get_content_structure_policy_parts_env(settings: RuntimeSettings | None = None) -> tuple[str, ...]:
+    """Which parts of the content structure policy a deck in its scope gets (comma list):
+    ``tables``, ``connectors``. Unset, empty or naming nothing known: both (the policy as it was
+    before the parts were split). Has no effect while the scope is ``off``. Internal, like the scope.
+    """
+    from utils.content_structure_policy import normalize_parts
+    from utils.get_env import get_setting_env
+
+    return normalize_parts(get_setting_env("CONTENT_STRUCTURE_POLICY_PARTS", settings))
+
+
 SVG_ILLUSTRATION_PARTS = ("cover", "scene", "spots", "pairs", "pictograph")
 DEFAULT_SVG_ILLUSTRATION_PARTS = ("cover", "scene")
 
