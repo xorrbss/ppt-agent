@@ -263,6 +263,15 @@ def _pages(pdf: bytes, width_px: int):
         document.close()
 
 
+def _page_count(pdf: bytes) -> int:
+    import pypdfium2 as pdfium
+    document = pdfium.PdfDocument(pdf)
+    try:
+        return len(document)
+    finally:
+        document.close()
+
+
 def recover_alpha(white, black):
     """RGBA uint8 array from renders of the same content on white and on black."""
     import numpy as np
@@ -312,14 +321,15 @@ def render_raster_requests(source_path, canvas, requests: list[RasterRequest]) -
     source = Path(source_path).read_bytes()
     with tempfile.TemporaryDirectory(prefix="svg-template-raster-") as raw:
         directory = Path(raw)
-        white = list(_pages(_convert(build_render_deck(source, requests, "FFFFFF"), directory, "white"),
-                            canvas.width_px))
-        black = list(_pages(_convert(build_render_deck(source, requests, "000000"), directory, "black"),
-                            canvas.width_px))
-    if len(white) != len(requests) or len(black) != len(requests):
+        white = _convert(build_render_deck(source, requests, "FFFFFF"), directory, "white")
+        black = _convert(build_render_deck(source, requests, "000000"), directory, "black")
+    if _page_count(white) != len(requests) or _page_count(black) != len(requests):
         raise ValueError("svg_template_raster_render_failed")
     results = {}
-    for request, on_white, on_black in zip(requests, white, black, strict=True):
+    # One page pair at a time: a float page is about 100 MB at 2x of a 1280 px canvas, and a deck
+    # with many runs held every page of both renders at once (11 GB for a 101-page deck's frames).
+    for request, on_white, on_black in zip(requests, _pages(white, canvas.width_px),
+                                           _pages(black, canvas.width_px), strict=True):
         if request.background_part is not None:
             rgba = np.dstack([on_white, np.full(on_white.shape[:2], 255.0)]).round().astype("uint8")
         else:
