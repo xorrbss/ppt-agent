@@ -602,7 +602,9 @@ _BAR = {"chartType": "bar", "categories": ["A"], "series": [{"name": "S", "value
     ({**_BAR, "title": "제목"}, "", "native_chart_label_not_drawn"),
     ({**_BAR, "chartType": "pie", "series": [{"name": "S", "values": [3]}, {"name": "S", "values": [4]}]},
      "", "native_chart_pie_series_invalid"),
-    ({**_BAR, "valueAxis": {"title": "억원"}}, "", "native_chart_json_invalid"),
+    # An axis title is a supported declaration, so an undrawn one is a missing label.
+    ({**_BAR, "valueAxis": {"title": "억원"}}, "", "native_chart_label_not_drawn"),
+    ({**_BAR, "valueAxis": {"title": 5}}, "", "native_chart_json_invalid"),
 ])
 def test_chart_declarations_the_drawing_does_not_support_are_dropped(spec, extra, reason):
     wire, summary, _ = _dropped(_small_chart(spec, extra))
