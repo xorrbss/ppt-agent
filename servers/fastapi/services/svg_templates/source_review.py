@@ -22,6 +22,10 @@ from utils.powerpoint_ownership import claim_empty_powerpoint, process_identity 
 from services.svg_templates.frame_fonts import artifact_digest, bytes_digest, resolve_font_manifest
 
 
+import logging
+
+logger = logging.getLogger(__name__)
+
 def _require_installed_fonts(manifest) -> None:
     # PowerPoint resolves system-installed faces; never change the user's font registry.
     if os.name != "nt":
@@ -445,6 +449,8 @@ async def prepare_source_review(session, package, source_path, operation_id, *, 
             prepared.append((frame, image, comparison))
             versions.add(version)
         except Exception as error:
+            # The public evidence keeps only a safe code; the operator log keeps the cause.
+            logger.warning("svg template review render failed frame=%s", frame.frame_id, exc_info=True)
             safe_codes = {"svg_template_powerpoint_unavailable", "svg_template_powerpoint_fonts_unavailable", "svg_template_powerpoint_busy",
                 "svg_template_libreoffice_unavailable", "svg_template_libreoffice_render_failed",
                 "svg_template_powerpoint_ownership_unproven", "svg_template_source_digest_mismatch",
