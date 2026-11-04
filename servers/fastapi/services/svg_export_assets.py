@@ -524,6 +524,11 @@ async def build_slide_export_assets(slide, *, service, session, claim, tenant_id
     if pointer is None:
         raise ValueError("svg_export_asset_fence_lost")
     binding = {"sourceManifest": envelope["sourceManifest"], "placementManifest": pointer.model_dump(mode="json", by_alias=True), "pageIndex": page_index, "slideRevision": revision}
+    if system_furniture and not source_preservation:
+        # The worker re-validates this page with the same furniture receipt the
+        # placement was just validated with; without it a template's own
+        # images (a logo, preserved decoration) read as unknown asset slots.
+        binding["systemFurniture"] = system_furniture
     if source_lineage is not None:
         from services.svg_asset_persistence import _persist_if_current
         lineage_pointer = await _persist_if_current(session, service, context=context, publication_name=f"svg-exp-{slide.id.hex[:16]}-source-lineage", revision=revision, kind="svg-export-source-lineage", payload=json.dumps(source_lineage, sort_keys=True, separators=(",", ":")).encode(), media_type="application/json")
