@@ -129,9 +129,7 @@ def adapt_frame(frame: SvgTemplateFrame, target_canvas: DocumentCanvasMetadata |
                 text_region = text_region.model_copy(update={"x": left, "width": right - left})
         if element.kind == "text" and not element.dynamic_key:
             for text in node.iter(f"{{{SVG_NS}}}text"):
-                asset = font_asset_for(frame.font_manifest, text.get("font-family"), int(text.get("font-weight", "400")))
-                run_width, ascent, descent = measure_text(asset, text.text or "", float(text.get("font-size")))
-                run_width += float(text.get("letter-spacing", "0")) * len(text.text or "")
+                run_width, ascent, descent = _line_extent(frame, text)
                 paint = FrameRect(x=float(text.get("x")), y=float(text.get("y")) - ascent,
                                   width=run_width, height=ascent + descent)
                 if not _inside(paint, text_region or adapted_bounds, tolerance=.5):
@@ -170,6 +168,21 @@ def adapt_frame(frame: SvgTemplateFrame, target_canvas: DocumentCanvasMetadata |
         adaptation_id="adapt-" + key[7:31], source_frame_digest=frame.digest,
         target_canvas=target, policy_digest=artifact_digest(_POLICY), frame=adapted, digest="")
     return result.model_copy(update={"digest": artifact_digest(result)})
+
+
+def _line_extent(frame: SvgTemplateFrame, text) -> tuple[float, float, float]:
+    """Width, ascent and descent of one fixed text line: its own run plus the
+    runs of its tspans, each in its own face, size and spacing."""
+    width = ascent = descent = 0.0
+    runs = [(text, text.text or "")] + [(span, span.text or "") for span in text.iter(f"{{{SVG_NS}}}tspan")]
+    for source, value in runs:
+        def attribute(name, default=None, source=source):
+            return source.get(name, text.get(name, default))
+        asset = font_asset_for(frame.font_manifest, attribute("font-family"), int(attribute("font-weight", "400")))
+        run_width, run_ascent, run_descent = measure_text(asset, value, float(attribute("font-size")))
+        width += run_width + float(attribute("letter-spacing", "0")) * len(value)
+        ascent, descent = max(ascent, run_ascent), max(descent, run_descent)
+    return width, ascent, descent
 
 
 def trusted_frame_images(frame: SvgTemplateFrame) -> dict[str, str]:

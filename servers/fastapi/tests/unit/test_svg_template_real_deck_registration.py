@@ -324,3 +324,38 @@ def test_a_generation_request_carries_the_exact_canvas_through_durable_replay():
     request._svg_style_snapshot = {"svg_template": copy.deepcopy(selection)}
     restored = _request_from_durable_payload(_durable_request_payload(request))
     assert request_canvas_metadata(restored) == request_canvas_metadata(request)
+
+
+def test_a_multi_run_fixed_line_exports_as_one_text_box(tmp_path):
+    """A slogan with differently coloured runs is one line: one SVG text with
+    tspans, one PPTX text box with several runs (no per-run boxes that a
+    viewer's own metrics can make overlap)."""
+    from zipfile import ZipFile
+
+    from services.svg_templates.frame import adapt_template_frame
+    from services.svg_templates.frame_composition import render_frame_svg
+    from workers.public_svg_pptx_convert import convert_pptx
+
+    def mutate(layout, box):
+        paragraph = box.text_frame.paragraphs[0]
+        second = paragraph.add_run()
+        second.text, second.font.size, second.font.name = " 에스넷시스템이 운영합니다.", Pt(12), "Pretendard"
+        second.font.color.rgb = RGBColor(200, 30, 30)
+        for run in paragraph.runs:
+            run.font._rPr.set("spc", "-50")
+
+    package = extract_template_package(_layout_deck(tmp_path / "deck.pptx", mutate))
+    frame = package.frames[0]
+    node = etree.fromstring(_texts(package)[0].svg.encode())
+    texts = node.findall(".//{http://www.w3.org/2000/svg}text")
+    assert len(texts) == 1 and len(texts[0].findall("{http://www.w3.org/2000/svg}tspan")) == 1
+    adapt_template_frame(frame, frame.source_canvas)
+
+    svg = render_frame_svg(frame)
+    source, target = tmp_path / "page.svg", tmp_path / "page.pptx"
+    source.write_text(svg, encoding="utf-8")
+    convert_pptx([source], target, [""], frame.source_canvas)
+    with ZipFile(target) as deck:
+        slide = deck.read("ppt/slides/slide1.xml").decode()
+    boxes = [box for box in slide.split("<p:sp>") if "Header text" in box or "에스넷" in box]
+    assert len(boxes) == 1 and "Header text" in boxes[0] and "에스넷시스템이" in boxes[0]

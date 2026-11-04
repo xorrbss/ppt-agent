@@ -143,6 +143,10 @@ def slide_number_field(shape) -> bool:
     return len(runs) == 1 and etree.QName(runs[0]).localname == "fld" and runs[0].get("type") == "slidenum"
 
 
+def _spacing(value: float) -> str:
+    return f"{value:.3f}".rstrip("0").rstrip(".") or "0"
+
+
 class OoxmlFrameContext:
     def __init__(self, package: ZipFile, typography: PptxTypographyResolver, canvas, font_manifest):
         self.package = package
@@ -375,14 +379,27 @@ class OoxmlFrameContext:
                 raise ValueError("svg_template_text_overflow")
             x = bounds.x + left + {"l": 0, "ctr": .5, "r": 1}[align] * (available_width - width)
             baseline = y + max(run[4] for run in runs)
-            for text, size, asset, run_width, _, _, color, spacing in runs:
-                node = svg_node("text", x=x, y=baseline, font_family=asset.family,
-                                font_weight=asset.weight, font_size=size, fill=color)
-                if spacing:
-                    node.set("letter-spacing", f"{spacing:.3f}".rstrip("0").rstrip("."))
-                node.text = text
-                group.append(node)
-                x += run_width
+            # One text per line: the runs of a line are tspans of it, so the
+            # PPTX export writes one text box with several runs that flow in
+            # the viewer's own metrics, instead of one box per run placed at
+            # measured offsets (which overlap when a viewer's advances differ).
+            text, size, asset, _, _, _, color, spacing = runs[0]
+            node = svg_node("text", x=x, y=baseline, font_family=asset.family,
+                            font_weight=asset.weight, font_size=size, fill=color)
+            if spacing:
+                node.set("letter-spacing", _spacing(spacing))
+            node.text = text
+            if len(runs) > 1:
+                # Spaces at run edges are measured; keep them as written.
+                node.set("{http://www.w3.org/XML/1998/namespace}space", "preserve")
+            for text, size, asset, _, _, _, color, spacing in runs[1:]:
+                span = svg_node("tspan", font_family=asset.family, font_weight=asset.weight,
+                                font_size=size, fill=color)
+                # Set explicitly: a tspan would otherwise inherit the first run's spacing.
+                span.set("letter-spacing", _spacing(spacing))
+                span.text = text
+                node.append(span)
+            group.append(node)
             y += height
         region = FrameRect(x=bounds.x + left, y=bounds.y + top,
                            width=max(0, bounds.width - left - right), height=max(0, available_height))
