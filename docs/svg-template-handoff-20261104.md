@@ -39,6 +39,27 @@ and what to do next.
   "intentional repetition" claim has no evidence.
 * `694afc673` evaluation tool `servers/fastapi/scripts/svg_template_eval/`.
 * `cbcc33716` comment fixes; `51f962d24` measurement notes.
+* Later the same day (stage 1-2 of the backlog, all measured N >= 3 with the
+  tool and the vision judge):
+  * `aacef5817` worker cache never evicts the artifact authority (open issue 1).
+  * `f452fd6bf` paired vision judge `scripts/svg_template_eval/judge.py`.
+  * `5ff5983e4` automatic frame choice without a frame map (open issue 7).
+  * `4cba6fb39` `CONTENT_STRUCTURE_POLICY_PARTS` (tables, connectors) splits
+    the policy; connectors alone: flow pages 0.3 -> 3 of 10, no invented
+    relations, an arrowhead reversed on 1 flow page in 9, cover font
+    fallbacks 0 -> 0.33 per deck; stays off.
+  * `b8f7df582` native tables and charts survive template composition (every
+    declaration used to be dropped as stale); with the policy on, table-only
+    pages fall back 1 in 33 (was 10 of 10) and decks carry 2-8 native tables,
+    but pages with a table and a chart fail (1 of 9 passed), fallbacks 1.3
+    per deck and the judge 3.3 vs 3.5; stays off.
+  * `893a721f1` template component style (`SVG_TEMPLATE_COMPONENT_STYLE`,
+    off; needs the template registered again): judge tone 4.20 -> 4.52,
+    overall 3.49 -> 3.64, fallbacks 0, first drafts accepted 9.3 -> 8.0 of 10.
+    `fd5e8d05d` registration of a large deck peaked at 11 GB (raster
+    preservation), now under 1 GB.
+  * Details: `docs/content-structure-policy-20261104.md`,
+    `docs/template-component-style-20261104.md`.
 
 ## Measurements
 
@@ -102,15 +123,14 @@ Details and tables: `docs/content-structure-policy-20261104.md`.
 ## Next, in order
 
 1. Have the user judge the latest deck in PowerPoint against the original.
-2. Split the policy into separate table and connector switches and measure
-   connectors alone with the structured input (N >= 3 with the tool).
-3. Fix native table authoring in template mode
-   (`native_requested_table_missing` and others).
-4. Pass the template's component styles (numbered chips, table header style,
-   callouts, KPI cards) as style guidance, never as fixed layouts.
-5. Then the scattered small first-draft failures: body outside region (5 of
-   30 pages), required text missing (3 of 30), symbol policy (2), font
-   glyphs (1).
+2. Stage 3 of the backlog: first-draft failures (cover
+   `svg_template_font_unavailable`, body outside region, arrowhead direction,
+   table plus chart on one page), generality on other decks, UI, fallback
+   page design, the cover as chapter one, outline page-count retry, earlier
+   residuals.
+3. Component style follow-ups before turning it on: two text levels instead
+   of forcing every small size up, gapped chevrons, one variant per kind,
+   then a same-session knob-off control.
 
 ## How to run a live test
 
