@@ -13,6 +13,7 @@ from utils.svg_template_fonts import (
 )
 from utils.svg_template_rules import resolve_source_template_style, template_snapshot
 from services.svg_renderer import materialize_trusted_svg_fonts, svg_preview_html
+from tests.support.windows_symbol_font import requires_windows_symbol_font
 
 
 @pytest.mark.parametrize("style_id", ["default", "osb-smart-banking", "screenshot-blue"])
@@ -72,6 +73,7 @@ def test_unsupported_selection_and_private_same_id_do_not_use_default():
         template_snapshot(spec, 1280, 905)
 
 
+@requires_windows_symbol_font
 def test_real_font_bytes_have_hangul_coverage_and_weighted_measurements():
     digest, payload = font_material(FONT_FAMILY, 800)
     assert digest == FONT_DIGEST and len(payload) > 1000

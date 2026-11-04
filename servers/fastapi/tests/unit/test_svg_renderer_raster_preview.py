@@ -23,6 +23,7 @@ import pytest
 from PIL import Image
 
 from services.svg_renderer import admit_preserved_raster_preview
+from tests.support.windows_symbol_font import requires_windows_symbol_font
 
 
 def _tiny_png_data_url() -> str:
@@ -128,6 +129,7 @@ def _measurement_identity(root):
             if n.get("id") is not None or n.get("data-qid") is not None]
 
 
+@requires_windows_symbol_font
 def test_template_symbols_materialize_only_after_worker_admission():
     from services.svg_renderer import svg_preview_html
     from utils.svg_template_fonts import template_font_faces, trusted_font_marker
@@ -155,6 +157,7 @@ def test_template_symbols_materialize_only_after_worker_admission():
         assert f"font-family:'{family}';font-style:normal;font-weight:{weight};" in admitted.html
 
 
+@requires_windows_symbol_font
 def test_template_fallback_binding_and_author_family_fail_closed():
     from services.svg_renderer import svg_preview_html
     from utils.svg_template_fonts import trusted_font_marker
@@ -170,6 +173,7 @@ def test_template_fallback_binding_and_author_family_fail_closed():
             svg_preview_html(unsafe, width=400, height=120, source_font_profile=trusted_font_marker())
 
 
+@requires_windows_symbol_font
 def test_template_no_fallback_keeps_one_face_and_raster_symbols_keep_measurement_owners():
     from services.svg_renderer import svg_preview_html
     from utils.svg_template_fonts import trusted_font_marker
@@ -187,6 +191,7 @@ def test_template_no_fallback_keeps_one_face_and_raster_symbols_keep_measurement
     assert "Segoe UI Symbol" in admitted.html
 
 
+@requires_windows_symbol_font
 def test_template_quality_proves_canonical_and_measured_fallback_through_metric_codec(monkeypatch):
     from services.svg_renderer import render_svg_with_metrics
     from utils.hashing import sha256_prefixed
@@ -218,6 +223,7 @@ def test_template_quality_proves_canonical_and_measured_fallback_through_metric_
     assert result.quality["passed"] is True
 
 
+@requires_windows_symbol_font
 @pytest.mark.parametrize("case,missing", [
     ("ordered", False), ("missing_glyph", True), ("unmeasured_owner", True),
     ("legacy_reordered", True), ("legacy_complete", False),
