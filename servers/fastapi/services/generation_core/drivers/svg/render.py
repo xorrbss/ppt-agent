@@ -229,8 +229,65 @@ def template_region_hint(quality: dict) -> str | None:
         "instruction": "Keep this page's content and composition. Move or inset only the listed elements, and the"
                        " elements aligned with them, until their full painted extent, including half of each"
                        " stroke-width, lies at least 2px inside body_region and clear of forbidden_regions."
+                       " past_edge_px is how far each painted box runs past that edge: move a text by at least"
+                       " that much plus 4px, or wrap it or widen its column, working its width out with"
+                       " template_text_metrics."
                        " Preserve every word, number and item; never delete, hide, clip or shrink text."},
         ensure_ascii=False, separators=(",", ":"))[:3000]
+
+
+def text_overlap_witnesses(quality: dict, *, limit: int = 4) -> list[dict]:
+    """What each ``text_overlap`` pair is, for the repair prompt: the two texts, their sizes,
+    the colliding measured boxes and how far they run into each other.
+
+    The failure names only measurement ids (``svg-17``), which the author never wrote. Measured
+    2026-11-04 on 24 template decks: of 15 overlapping pairs, 6 were one label drawn twice, 4 a
+    text wider than the author had allowed, 3 a note panel over a chart's labels, 1 two chart
+    value labels, 1 two stacked lines 1.7 px too close. Reads the
+    stored measurement only; never changes the page or the gate."""
+    from services.svg_text_overlap import OVERLAP_THRESHOLD_PX, comparison_fragments
+
+    elements = {item.get("qid"): item for item in (quality.get("browser_metrics") or {}).get("elements") or []
+                if isinstance(item, dict)}
+    pairs = [pair for failure in quality.get("failures", []) if isinstance(failure, dict)
+             and failure.get("kind") == "text_overlap" for pair in failure.get("pairs", [])
+             if isinstance(pair, list) and len(pair) == 2]
+    witnesses = []
+    for first_qid, second_qid in pairs:
+        first, second = elements.get(first_qid), elements.get(second_qid)
+        if not first or not second:
+            continue
+        for a, _basis in comparison_fragments(first):
+            hit = None
+            for b, _other in comparison_fragments(second):
+                try:
+                    dx = min(a["x"] + a["width"], b["x"] + b["width"]) - max(a["x"], b["x"])
+                    dy = min(a["y"] + a["height"], b["y"] + b["height"]) - max(a["y"], b["y"])
+                except (KeyError, TypeError):
+                    continue
+                if dx > OVERLAP_THRESHOLD_PX and dy > OVERLAP_THRESHOLD_PX:
+                    hit = (b, dx, dy)
+                    break
+            if hit is None:
+                continue
+            b, dx, dy = hit
+            texts = [" ".join(str(item.get("owned_text") or "").split())[:40] for item in (first, second)]
+            witnesses.append({"texts": texts, "font_sizes": [first.get("font_size"), second.get("font_size")],
+                "ink_boxes": [{key: round(float(box[key]), 1) for key in ("x", "y", "width", "height")} for box in (a, b)],
+                "overlap_px": {"x": round(dx, 1), "y": round(dy, 1)}, "same_text": texts[0] == texts[1]})
+            break
+        if len(witnesses) == limit:
+            break
+    return witnesses
+
+
+TEXT_OVERLAP_INSTRUCTION = (
+    "Each text_overlap witness is two texts whose measured glyph ink meets: overlap_px is how far"
+    " the boxes run into each other. Separate them by at least that much plus 4px (move one, wrap"
+    " it, or move the row or column it belongs to), working text widths out with"
+    " template_text_metrics when given; when same_text is true the label is drawn twice, so keep"
+    " only one copy (inside its native table or chart group when it has one)."
+)
 
 
 def _common_header_body_repair_hint(quality, contract):
@@ -888,6 +945,13 @@ async def _attempt_render(*, ctx, request, presentation_id, index, content, payl
                 "instruction": "Repair only the smallest failing region, preserving every word, number, unit, relation and page count. Enlarge space or reflow related objects together. Never shrink fonts, hide or delete content. If local repair cannot fit, freely recompose this same page on the exact canvas; if still impossible, fail with physical_space_insufficient."}, ensure_ascii=False)[:3000]
         else:
             hint = json.dumps(measured(), ensure_ascii=False)[:3000]
+        overlap_witnesses = text_overlap_witnesses(measured())
+        if overlap_witnesses:
+            # Whatever branch wrote the hint, name the overlapping texts first (the failure
+            # itself names only measurement ids).
+            hint = (json.dumps({"kind": "text_overlap_witnesses", "witnesses": overlap_witnesses,
+                "instruction": TEXT_OVERLAP_INSTRUCTION}, ensure_ascii=False, separators=(",", ":"))
+                + "\n" + hint)[:3000]
         if writing_hint:
             hint = (writing_hint + "\n" + hint)[:3000]
         payload["repair_hint"] = hint

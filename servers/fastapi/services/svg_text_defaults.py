@@ -183,21 +183,26 @@ def _pushable_fill(value: str) -> bool:
     return text not in _UNPUSHABLE_FILLS and not text.startswith("url(")
 
 
-#: Shapes whose zero size SVG defines as "rendering disabled" (rect width/height, circle r).
-_ZERO_SIZE_ATTRIBUTES = {"rect": ("width", "height"), "circle": ("r",)}
+#: Elements whose zero size SVG defines as "rendering disabled" (rect and image width/height,
+#: circle r).
+_ZERO_SIZE_ATTRIBUTES = {"rect": ("width", "height"), "circle": ("r",), "image": ("width", "height")}
 
 
 def drop_zero_size_shapes(root) -> int:
-    """Remove every ``<rect>`` with a zero width or height and every ``<circle>`` with a zero
-    radius (in place); return how many were removed.
+    """Remove every ``<rect>`` or ``<image>`` with a zero width or height and every
+    ``<circle>`` with a zero radius (in place); return how many were removed.
 
     SVG renders nothing for them, not even a stroke ("a computed value of zero disables
     rendering of the element"), but the contract requires positive sizes
     (``svg_contract_positive_required``) because the PPTX converter cannot draw a zero-size
     shape. Measured 2026-11-04 on 250 template pages: 4 first drafts were rejected only for
-    such a shape (``height="0"`` spacers and accent bars) and needed a whole new draft. A
-    negative or non-numeric size is left for the validator. No page accepted before this
-    existed holds one, so every accepted page is a no-op; the producer and
+    such a shape (``height="0"`` spacers and accent bars) and needed a whole new draft. On 24
+    later template decks 3 more first drafts held an offered icon as
+    ``<image href="source-slot-..." width="0" height="0">``, which the icon flattener leaves
+    for the validator (``svg_source_image_unknown_slot``). A dropped icon counts as not shown,
+    so a required one still fails (``svg_required_source_image_missing``, or the unused
+    vector icon check). A negative or non-numeric size is left for the validator. No page
+    accepted before this existed holds one, so every accepted page is a no-op; the producer and
     ``parse_author_response`` both call this, and the code fingerprint in
     ``services/svg_partial_recovery.py`` lists this file (see :func:`push_down_container_fill`).
     """
@@ -214,6 +219,151 @@ def drop_zero_size_shapes(root) -> int:
             if zero:
                 parent.remove(child)
                 removed += 1
+    return removed
+
+
+#: Text this small draws no legible glyph (a ``font-size="1"`` spacer dot is 0.3 px wide).
+_PLACEHOLDER_FONT_SIZE_PX = 2.0
+
+
+def _inherited(node, name: str, parents: dict, default: str | None) -> str | None:
+    while node is not None:
+        if name in node.attrib:
+            return node.attrib[name].strip()
+        node = parents.get(node)
+    return default
+
+
+def _number_or_none(value: str | None) -> float | None:
+    try:
+        return float(value) if value is not None else None
+    except ValueError:
+        return None
+
+
+def _paints_nothing(node, parents: dict) -> bool:
+    """No fill and no stroke, own or inherited (SVG defaults: fill black, stroke none)."""
+    return (_inherited(node, "fill", parents, "black") == "none"
+            and _inherited(node, "stroke", parents, "none") == "none")
+
+
+def drop_unrendered_marks(root) -> int:
+    """Remove marks that SVG draws nothing for and that carry no content (in place).
+
+    * a ``<path>`` with neither fill nor stroke, own or inherited: its geometry is never
+      painted, so its ``d`` does not matter (one first draft wrote
+      ``<path d="M940 312 A0 0 0 0 1 940 312" fill="none"/>`` in a donut chart, rejected as
+      ``svg_contract_linear_path_only``);
+    * an empty ``<style>`` or ``<defs>`` (no child, no text): one draft wrote ``<style></style>``
+      (``svg_contract_unsupported_element``);
+    * a ``<text>`` without any letter or digit (a spacer such as ``.``) that is invisible or
+      illegible: no fill and no stroke (``svg_contract_invisible_text``), or, when it holds a
+      non-space character, ``opacity`` or ``fill-opacity`` 0 on the text itself
+      (``text_hidden``) or a font-size of at most 2 px (``small_body_text``). Measured
+      2026-11-04 on 24 template decks (240 pages): 4 first drafts failed only for such a ``.``
+      placeholder.
+
+    Nothing visible changes, and no word or number can be removed (a text with a letter or
+    digit is never touched, so an invisible real text still fails as before). A non-numeric
+    size or opacity is left for the validator. Called by the producer and
+    ``parse_author_response`` right after :func:`drop_zero_size_shapes`. Every page accepted
+    before this existed is a no-op: each mark removed here failed the contract or the
+    browser checks (the whitespace-only spacers with a fill that accepted pages hold, such as
+    ``<text font-size="1" fill="#0E1116"> </text>``, are kept).
+    """
+    parents = {child: parent for parent in root.iter() for child in parent}
+    removed = 0
+    for node in list(root.iter()):
+        parent = parents.get(node)
+        if parent is None:
+            continue
+        name = _tag(node)
+        drop = False
+        if name == "path":
+            drop = not len(node) and _paints_nothing(node, parents)
+        elif name in ("style", "defs"):
+            drop = not len(node) and not (node.text or "").strip()
+        elif name == "text":
+            content = "".join(node.itertext())
+            if not any(char.isalnum() for char in content):
+                size = _number_or_none(_inherited(node, "font-size", parents, None))
+                opacities = [_number_or_none(node.get(key)) for key in ("opacity", "fill-opacity")]
+                # A whitespace-only text already passes when it has a fill (it is not body
+                # paint, see apply_template_body_quality); only its contract failure is new here.
+                drop = _paints_nothing(node, parents) or bool(content.strip()) and (
+                    any(value == 0 for value in opacities)
+                    or (size is not None and 0 < size <= _PLACEHOLDER_FONT_SIZE_PX))
+        if drop:
+            parent.remove(node)
+            removed += 1
+    return removed
+
+
+def _same_baseline_text_key(node, parents: dict) -> tuple[str, float] | None:
+    """``(compact text, absolute baseline y)`` of a ``<text>``, or ``None`` when unknown."""
+    import re
+
+    y = _number_or_none(node.get("y"))
+    if y is None:
+        return None
+    current = node
+    while current is not None:
+        transform = current.get("transform")
+        if transform:
+            match = re.fullmatch(r"\s*translate\(\s*([-+0-9.eE]+)(?:[\s,]+([-+0-9.eE]+))?\s*\)\s*", transform)
+            shift = _number_or_none(match.group(2)) if match and match.group(2) else (0.0 if match else None)
+            if shift is None:
+                return None
+            y += shift
+        current = parents.get(current)
+    text = "".join("".join(node.itertext()).split())
+    return (text, y) if text else None
+
+
+def drop_duplicate_native_table_headers(root) -> int:
+    """Remove header labels written a second time outside their native table (in place).
+
+    A ``data-native-table`` group draws its header cells itself. Measured 2026-11-04 on 24
+    template decks: 3 first drafts (3 of the 9 ``text_overlap`` failures) drew a header band
+    outside the group with its labels, then the same labels again inside the group on the
+    same baseline (exactly on top, or 4-6 px to the side), so each label overlapped its own
+    copy. A ``<text>`` outside every native table group is removed when its text equals a
+    header-row cell of a table (``headerRows``, default 1) and a ``<text>`` inside that group
+    with the same text sits on the same baseline (within 1 px, ``translate`` included): the
+    label is still drawn by the table, which the PPTX export turns into the native table. A
+    label on another baseline, or with any other wording, is left as it is. Runs before the
+    declarations are extracted, in the producer and in ``parse_author_response`` alike.
+    """
+    import json
+
+    parents = {child: parent for parent in root.iter() for child in parent}
+    groups = [node for node in root.iter() if _tag(node) == "g" and "data-native-table" in node.attrib]
+    if not groups:
+        return 0
+    inside: set = set()
+    header_marks: list[tuple[str, float]] = []
+    for group in groups:
+        texts = [node for node in group.iter() if _tag(node) == "text"]
+        inside.update(texts)
+        try:
+            declaration = json.loads(group.attrib["data-native-table"])
+            rows = declaration["rows"]
+            header_rows = int(declaration.get("headerRows", 1))
+            headers = {"".join(str(cell).split()) for row in rows[:max(0, header_rows)] for cell in row}
+        except (ValueError, TypeError, KeyError, AttributeError):
+            continue
+        for node in texts:
+            key = _same_baseline_text_key(node, parents)
+            if key is not None and key[0] in headers:
+                header_marks.append(key)
+    removed = 0
+    for node in list(root.iter()):
+        if _tag(node) != "text" or node in inside:
+            continue
+        key = _same_baseline_text_key(node, parents)
+        if key is not None and any(key[0] == text and abs(key[1] - y) <= 1.0 for text, y in header_marks):
+            parents[node].remove(node)
+            removed += 1
     return removed
 
 

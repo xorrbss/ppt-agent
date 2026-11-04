@@ -358,19 +358,37 @@ BODY_LIMIT_RULES = (
     " or recompose rather than letting the last row or a closing note run past bottom."
     " required_literals, when given, are the figures the page is checked for character by character:"
     " show each exactly as written there, never in another format (a date or unit rewritten in a"
-    " shorter notation counts as missing)."
+    " shorter notation counts as missing, and so does a chart value or table cell that drops the"
+    " unit written in required_literals and leaves it to an axis or column caption)."
+) + (
+    " template_text_metrics, when given, holds each face's advance widths in em (multiply by"
+    " font-size): a text is about font-size x the sum of its characters' advances wide, plus"
+    " letter-spacing per character. Work this width out before placing a text and keep it at"
+    " least 8px clear of the edge of the card, cell or column that holds it, of the next text on"
+    " the same line and of right; with text-anchor middle half the width lies left of x, with end"
+    " all of it. Large figures and long labels in narrow columns are where drafts ran over. Glyph"
+    " ink reaches ink_above_baseline_em x font-size above a baseline and ink_below_baseline_em x"
+    " font-size below it: the next line's baseline lies at least the upper line's ink below plus"
+    " the lower line's ink above plus 4px below the previous baseline."
 )
 
 
 def template_prompt_facts(context: dict | None, content: str, *, quality_policy: dict | None = None,
-                          source_preserved: bool = False) -> dict:
-    """What the author prompt shows of a template page: its context, the body edges and the
+                          source_preserved: bool = False, snapshot: dict | None = None) -> dict:
+    """What the author prompt shows of a template page: its context, the body edges, the
     figures the page's required-text check looks for (``render.py``), so a draft does not
-    reformat them. Measured 2026-11-04: two template covers wrote a source date in a shorter
-    notation and failed ``required_text_missing``. Prompt only: none of it is a digest input."""
+    reformat them, and (with ``snapshot``) the advance widths and ink extents of the page's
+    faces. Measured 2026-11-04: two template covers wrote a source date in a shorter notation
+    and failed ``required_text_missing``; on 24 later decks 6 of the 12 first drafts that failed
+    ``text_overlap`` or ``svg_template_body_outside_allowed_region`` drew a text wider than the
+    author had allowed (large figures, long labels in a narrow column, labels centred near the
+    right edge) and one stacked two lines 1.7 px too close. Prompt only: none of it is a digest
+    input."""
     if not context:
         return {}
     facts = {"template_page": context, "template_body_edges": template_body_edges(context)}
+    if snapshot is not None:
+        facts["template_text_metrics"] = template_text_metrics(snapshot, context)
     if not source_preserved:
         from services.svg_presentation_checkpoint import _required_numeric_claims
         literals = _required_numeric_claims(content, quality_policy=quality_policy)
@@ -389,13 +407,21 @@ def template_exemplar_facts(snapshot: dict, context: dict | None, content: str, 
     from utils.get_env_concurrency import get_svg_template_body_exemplars_env
     if not context or source_preserved or get_svg_template_body_exemplars_env() != "on":
         return {}
-    frame = page_frame(snapshot, context["page_index"], context["page_count"])
+    frame = context_frame(snapshot, context)
     if frame.role != "body":
         return {}
     from services.svg_templates.body_composition import page_exemplars
     exemplars = page_exemplars(template_package(template_selection(snapshot)).get("body_composition"), content,
                                floor=float(body_floor or 0))
     return {"template_exemplars": exemplars} if exemplars else {}
+
+
+def template_text_metrics(snapshot: dict, context: dict) -> list[dict]:
+    """:func:`face_text_metrics` of every face the page's frame offers (prompt only)."""
+    from services.svg_templates.frame_fonts import face_text_metrics
+
+    frame = context_frame(snapshot, context)
+    return [face_text_metrics(asset) for asset in frame.font_manifest.assets]
 
 
 def template_body_edges(context: dict) -> dict:
@@ -509,9 +535,22 @@ def apply_template_body_quality(quality: dict, svg: str, snapshot: dict, context
                        if box.x < region.x - .5 or box.y < region.y - .5
                        or box.x + box.width > region.x + region.width + .5
                        or box.y + box.height > region.y + region.height + .5]
+            def past(box):
+                # How far the painted box runs past each edge it crosses, so a repair knows the
+                # distance (measured 2026-11-04: a 38px figure ran 59px past right, labels
+                # centred near the right edge 1-2px, a closing text 7px).
+                amounts = {"left": region.x - box.x, "top": region.y - box.y,
+                           "right": box.x + box.width - region.x - region.width,
+                           "bottom": box.y + box.height - region.y - region.height}
+                return {edge: round(value, 1) for edge, value in amounts.items() if value > .5}
+
+            def text_of(owner):
+                value = " ".join("".join(owner.itertext()).split())
+                return {"text": value[:80]} if value else {}
             failure.update(body_region=region.model_dump(mode="json"), elements=[
-                {"qid": qids[owner], "id": owner.get("id"),
-                 "box": {key: round(getattr(box, key), 1) for key in ("x", "y", "width", "height")}}
+                {"qid": qids[owner], "id": owner.get("id"), "tag": owner.tag.rsplit("}", 1)[-1], **text_of(owner),
+                 "box": {key: round(getattr(box, key), 1) for key in ("x", "y", "width", "height")},
+                 "past_edge_px": past(box)}
                 for owner, box in outside[:8]])
         failures.append(failure)
     quality.setdefault("failures", []).extend(failures)

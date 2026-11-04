@@ -996,7 +996,7 @@ async def author_slide_svg(content: str, style_snapshot: dict, role: str, index:
         from services.svg_templates.generation import template_page_context, template_prompt_facts
         template_page = template_page_context(style_snapshot, index, n, content, role, chapter=template_chapter)
         template_facts = template_prompt_facts(template_page, content, quality_policy=quality_policy,
-                                               source_preserved=source_preserved)
+                                               source_preserved=source_preserved, snapshot=style_snapshot)
     if source_grounded:
         visual_intent = enrich_visual_intent(content, role, index, visual_intent)
     previous_render_part = None
@@ -1289,13 +1289,20 @@ async def author_slide_svg(content: str, style_snapshot: dict, role: str, index:
     fonts_pushed = 0
     fills_pushed = 0
     shapes_dropped = 0
+    marks_dropped = 0
+    headers_dropped = 0
     if not re.search(r"<!|<\?", svg):
         try:
             root = ET.fromstring(svg)
-            # Shapes SVG does not render (zero size); replayed by parse_author_response.
-            from services.svg_text_defaults import drop_zero_size_shapes
+            # Shapes SVG does not render (zero size), invisible placeholder marks and header
+            # labels a native table draws itself; replayed by parse_author_response.
+            from services.svg_text_defaults import (
+                drop_duplicate_native_table_headers, drop_unrendered_marks, drop_zero_size_shapes,
+            )
 
             shapes_dropped = drop_zero_size_shapes(root)
+            marks_dropped = drop_unrendered_marks(root)
+            headers_dropped = drop_duplicate_native_table_headers(root)
             if view_plan is None or view_plan.text_props is None:
                 # A font attribute written on svg/g goes onto its texts; replayed
                 # identically by svg_author_output_view.parse_author_response.
@@ -1368,5 +1375,7 @@ async def author_slide_svg(content: str, style_snapshot: dict, role: str, index:
                if view_plan is not None else {}),
             **({"container_font_attributes_pushed": fonts_pushed} if fonts_pushed else {}),
             **({"container_fill_pushed": fills_pushed} if fills_pushed else {}),
-            **({"zero_size_shapes_dropped": shapes_dropped} if shapes_dropped else {})},
+            **({"zero_size_shapes_dropped": shapes_dropped} if shapes_dropped else {}),
+            **({"unrendered_marks_dropped": marks_dropped} if marks_dropped else {}),
+            **({"duplicate_table_headers_dropped": headers_dropped} if headers_dropped else {})},
             native_declarations=declarations)

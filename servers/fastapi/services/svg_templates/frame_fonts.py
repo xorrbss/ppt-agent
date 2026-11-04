@@ -181,6 +181,62 @@ def measure_text(asset: SvgTemplateFontAsset, text: str, size: float) -> tuple[f
     return float(font.getlength(text)) / 4, ascent / 4, descent / 4
 
 
+#: Samples for :func:`face_text_metrics` (characters a face lacks are skipped).
+_HANGUL_SAMPLE = "가각간갈감강개거건것게고과관구국군그근기나내년노는다대도동되된들라로를마만말매며모문미바발방보부분사상서선성세소수시아안야어업에여연영예오와요우운원위으은을음의이인일자장재전정제조주중지진차참처체초추카타통파하한해했행현화회후"
+_SYMBOL_SAMPLE = "%→~·,.()/:+-"
+_TEXT_METRICS_CACHE: dict = {}
+
+
+def face_text_metrics(asset: SvgTemplateFontAsset) -> dict:
+    """Advance widths and glyph ink extents of one template face, in em, for the author prompt.
+
+    ``advance_em``: the widest Hangul syllable and digit of a common sample, the average Latin
+    lower- and upper-case letter and the space; ``symbol_advance_em``: common figure symbols;
+    ``ink_above_baseline_em`` / ``ink_below_baseline_em``: how far glyph ink of the sample
+    reaches above and below the baseline. Read from the face bytes (the browser draws the same
+    advances: measured 2026-11-04, a 38 px "52일 -> 44일" in a 700 face is 215.2 px in the
+    font and in the page's browser metrics). Characters the face lacks are left out.
+    """
+    key = (asset.digest, asset.collection_index)
+    cached = _TEXT_METRICS_CACHE.get(key)
+    if cached is not None:
+        return cached
+    content = verify_font_asset(asset)
+    with TTFont(BytesIO(content), fontNumber=asset.collection_index, lazy=True) as font:
+        cmap = frozenset((font.getBestCmap() or {}).keys())
+    size = 1000
+    face = ImageFont.truetype(BytesIO(content), size, index=asset.collection_index)
+
+    def present(sample):
+        return [char for char in sample if ord(char) in cmap]
+
+    def advances(sample):
+        return [face.getlength(char) / size for char in present(sample)]
+
+    def rounded(value):
+        return round(value, 3)
+    widths = {
+        "hangul_max": advances(_HANGUL_SAMPLE), "digit_max": advances("0123456789"),
+        "latin_lower_average": advances("abcdefghijklmnopqrstuvwxyz"),
+        "latin_upper_average": advances("ABCDEFGHIJKLMNOPQRSTUVWXYZ"), "space": advances(" "),
+    }
+    advance = {name: rounded(max(values) if name.endswith("max") or name == "space" else sum(values) / len(values))
+               for name, values in widths.items() if values}
+    symbols = {char: rounded(face.getlength(char) / size) for char in present(_SYMBOL_SAMPLE)}
+    above, below = 0.0, 0.0
+    for sample in (present(_HANGUL_SAMPLE[:40]), present("0123456789%"), present("AHbdfhklgjpqy(),")):
+        if sample:
+            _left, top, _right, bottom = face.getbbox("".join(sample), anchor="ls")
+            above, below = max(above, -top / size), max(below, bottom / size)
+    result = {"family": asset.family, "weight": asset.weight, "advance_em": advance,
+              "symbol_advance_em": symbols, "ink_above_baseline_em": rounded(above),
+              "ink_below_baseline_em": rounded(below)}
+    if len(_TEXT_METRICS_CACHE) >= 64:
+        _TEXT_METRICS_CACHE.clear()
+    _TEXT_METRICS_CACHE[key] = result
+    return result
+
+
 def bundled_font_assets() -> tuple[SvgTemplateFontAsset, ...]:
     from services.svg_trusted_fonts import FONT_FAMILY, read_trusted_pretendard_faces
     assets = []
