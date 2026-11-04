@@ -2,6 +2,7 @@
 from contextlib import contextmanager
 from io import BytesIO
 import json
+import os
 from pathlib import Path
 import sys
 from types import SimpleNamespace
@@ -141,6 +142,7 @@ def test_child_quits_before_window_destruction_and_rejects_lost_ownership(tmp_pa
         assert events.count("quit") == int(fault == "quit")
 
 
+@pytest.mark.skipif(os.name != "nt", reason="capture_source_pdf only runs on Windows (PowerPoint)")
 @pytest.mark.parametrize("child_delta", [
     {}, {"com_cleanup": "owned_job_fallback"}, {"cleanup_failure": {}},
     {"status": "failed_no_retry", "failure_class": "SharedPowerPointInstance"},
