@@ -76,13 +76,23 @@ Not adopted on purpose:
    renderer and dropped on failure; behind a flag until measured. Design notes
    in the conversation: reuse the AssetOffer scene slots
    (`SCENE_BBOX_HINT`), keep PPTX editability (custGeom).
-5. Known open items: the readback test
-   `test_converter_patch_rebuild_matches_shipped_bytes` fails because older
-   vendor edits (`chart-furniture.16`, `native-fixed-text.1`, `table.py`)
-   have no patch file and the upstream baseline commit is not in the repo;
-   `Today's Date` is still passed to the outline and content-brief prompts;
-   the fake-LLM harness has no canned infographic plan (an extended copy was
-   written during this round but not committed).
+5. Former open items, all resolved on 2026-11-04:
+   - The readback test `test_converter_patch_rebuild_matches_shipped_bytes`
+     failed because `chart-furniture.16` and `native-fixed-text.1` were edited
+     into the vendor tree without patch files. The baseline commit is in the
+     repository (and matches its manifest); the two edits are now
+     `chart-furniture-16.patch` and `native-fixed-text-1.patch` in
+     `compatibility/slide-master/`, and the manifest is rebuilt (LF endings).
+   - `Today's Date` stays in the outline and content-brief user prompts on
+     purpose. It sits in the user message, so it does not touch the cacheable
+     system prefix; it is the only way the model learns the current year for
+     "this year" or recency phrasing, and removal would also change the
+     byte-pinned `tests/fixtures/outline_prompt_baseline/user_prompts.json`.
+     The system prompt already forbids using it as the presentation date
+     (`test_generate_presentation_outlines.py`). Revisit only if a measured
+     determinism or cache problem appears.
+   - The fake-LLM harness now answers the infographic plan call
+     (`tests/unit/test_fake_llm_infographic_plan.py`).
 
 ## Verifying changes
 
