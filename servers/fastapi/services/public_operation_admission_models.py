@@ -21,6 +21,9 @@ from services.source_images.budget import SOURCE_IMAGE_PHYSICAL_CALL_LIMIT
 
 
 CONTENT_BRIEF_RETRY_REQUESTS = 1
+# The outline page-count retry has its own allowance so it never takes a slot
+# from the per-slide validation retries.
+OUTLINE_RETRY_REQUESTS = 1
 PUBLIC_PHASE2_DEFAULT_POLICY_VERSION = PUBLIC_DEFAULT_POLICY_VERSION
 _TERMINAL_STATES = frozenset(
     {"succeeded", "failed", "cancelled", "budget_exhausted", "deadline_exceeded"}
@@ -92,8 +95,10 @@ class ProviderRequestPlan:
 
     @property
     def retry_request_limit(self) -> int:
-        """One bounded validation retry per authored slide."""
+        """One bounded validation retry per authored slide, plus the dedicated
+        content brief and outline page-count retries."""
         return (self.slide_count + CONTENT_BRIEF_RETRY_REQUESTS
+                + OUTLINE_RETRY_REQUESTS
                 + max(0, self.header_design_budget - 2)
                 + max(0, self.representative_body_budget - 1))
 

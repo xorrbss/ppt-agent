@@ -187,7 +187,7 @@ def test_public_admission_enforces_principal_quota_and_provider_hard_caps(
                 vqa_budget=1,
             )
             assert plan.initial_request_limit == 9
-            assert plan.retry_request_limit == 3
+            assert plan.retry_request_limit == 4
             five_slide_plan = plan_provider_requests(
                 slide_count=5,
                 image_budget=5,
@@ -195,7 +195,7 @@ def test_public_admission_enforces_principal_quota_and_provider_hard_caps(
                 vqa_budget=0,
             )
             assert five_slide_plan.initial_request_limit == 19
-            assert five_slide_plan.retry_request_limit == 6
+            assert five_slide_plan.retry_request_limit == 7
 
             async with maker() as session, session.begin():
                 with pytest.raises(
@@ -222,7 +222,7 @@ def test_public_admission_enforces_principal_quota_and_provider_hard_caps(
                     request_plan=plan,
                 )
                 assert first.planned_request_limit == 9
-                assert first.retry_request_limit == 4
+                assert first.retry_request_limit == 5
                 assert first.policy_version == "public-default/v6"
                 with pytest.raises(PublicAdmissionRejected) as rejected:
                     await admit_public_operation(
@@ -499,7 +499,7 @@ def test_phase2_sqlite_lifecycle_is_contract_only(monkeypatch, tmp_path: Path) -
                 assert replay.id == admitted.id
                 assert replay.deadline_at == admitted.deadline_at == fixed_deadline
                 assert admitted.fence == 1
-                assert admitted.retry_request_limit == 3
+                assert admitted.retry_request_limit == 4
 
             lease_hash = "c" * 64
             async with maker() as session, session.begin():
@@ -559,3 +559,24 @@ def test_phase2_sqlite_lifecycle_is_contract_only(monkeypatch, tmp_path: Path) -
             await engine.dispose()
 
     asyncio.run(scenario())
+
+
+def test_outline_retry_has_its_own_allowance_beside_slide_retries() -> None:
+    from services.public_operation_admission_models import (
+        CONTENT_BRIEF_RETRY_REQUESTS,
+        OUTLINE_RETRY_REQUESTS,
+    )
+
+    for slides in (1, 5, 12):
+        plan = plan_provider_requests(
+            slide_count=slides, image_budget=0, repair_budget=0, vqa_budget=0
+        )
+        # One outline retry plus the maximum slide validation retries (one per
+        # slide) and the content brief retry all fit at once.
+        needed = OUTLINE_RETRY_REQUESTS + slides + CONTENT_BRIEF_RETRY_REQUESTS
+        assert OUTLINE_RETRY_REQUESTS == 1
+        assert plan.retry_request_limit >= needed
+        # Slide retries keep every slot when the outline retry is used.
+        assert plan.retry_request_limit - OUTLINE_RETRY_REQUESTS >= (
+            slides + CONTENT_BRIEF_RETRY_REQUESTS
+        )
