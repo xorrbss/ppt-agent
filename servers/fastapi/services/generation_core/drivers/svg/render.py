@@ -215,6 +215,23 @@ def _apply_common_header_quality(quality, svg, contract, binding, furniture_rece
         quality.setdefault("failures", []).extend(failures)
 
 
+_TEMPLATE_REGION_FAILURES = ("svg_template_body_outside_allowed_region", "svg_template_body_intersects_reserved_region")
+
+
+def template_region_hint(quality: dict) -> str | None:
+    """A template page whose body paint left its region is moved, not rewritten:
+    a generic retry dropped required text on the real deck."""
+    failures = [failure for failure in quality.get("failures", []) if failure.get("kind") in _TEMPLATE_REGION_FAILURES]
+    if not failures:
+        return None
+    return json.dumps({"kind": "svg_template_body_region_repair", "failures": failures[:4],
+        "instruction": "Keep this page's content and composition. Move or inset only the listed elements, and the"
+                       " elements aligned with them, until their full painted extent, including half of each"
+                       " stroke-width, lies at least 2px inside body_region and clear of forbidden_regions."
+                       " Preserve every word, number and item; never delete, hide, clip or shrink text."},
+        ensure_ascii=False, separators=(",", ":"))[:3000]
+
+
 def _common_header_body_repair_hint(quality, contract):
     """Give the bounded author correction the measured reservation witnesses."""
     failures = quality.get("failures", [])
@@ -838,6 +855,8 @@ async def _attempt_render(*, ctx, request, presentation_id, index, content, payl
             hint = json.dumps({"kind": "timeline_caption_bar_ink_overlap",
                 "instruction": "Preserve every source date, duration and dependency. Wrap the task caption in its explanation area and adjust the explanation and bars together until all caption glyphs are clear of the bars. Do not hide, clip or shrink required text.",
                 "witnesses": timeline_collisions[:3]}, ensure_ascii=False)[:3000]
+        elif template_region_hint(rendered.quality):
+            hint = template_region_hint(rendered.quality)
         elif header_body_hint:
             hint = header_body_hint
             repair_cause = static_cause(validation_error="svg_common_header_body_intrusion")

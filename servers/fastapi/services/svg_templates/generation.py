@@ -185,6 +185,9 @@ def body_author_rules(rules: str, snapshot: dict) -> str:
     return rules + "\n" + "\n".join(snapshot["composition_guidance"]) + (
         "\nThe template_page input is authoritative. Return one full-canvas SVG coordinate system,"
         " with all body paint strictly inside body_region and outside forbidden_regions."
+        " Paint includes strokes: a stroke extends half its stroke-width beyond the shape's geometry,"
+        " so keep every shape, line and card at least half its stroke-width plus 2px inside body_region;"
+        " never align a stroked edge exactly on a body_region edge."
         " Use transparent space outside the body; do not add a full-canvas background."
         " All authored element IDs must start with body-. Never use svg-system- IDs."
         " Preserve every required fact and number. template_page.font_faces is authoritative for this page;"

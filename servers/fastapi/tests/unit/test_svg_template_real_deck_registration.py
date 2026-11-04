@@ -359,3 +359,26 @@ def test_a_multi_run_fixed_line_exports_as_one_text_box(tmp_path):
         slide = deck.read("ppt/slides/slide1.xml").decode()
     boxes = [box for box in slide.split("<p:sp>") if "Header text" in box or "에스넷" in box]
     assert len(boxes) == 1 and "Header text" in boxes[0] and "에스넷시스템이" in boxes[0]
+
+
+def test_a_template_body_region_failure_gets_a_move_only_repair_hint():
+    import json as _json
+
+    from services.generation_core.drivers.svg.render import template_region_hint
+    assert template_region_hint({"failures": [{"kind": "text_overlap"}]}) is None
+    failure = {"kind": "svg_template_body_outside_allowed_region",
+               "body_region": {"x": 64, "y": 229, "width": 1152, "height": 619},
+               "elements": [{"qid": "svg-40", "id": "body-node-37", "box": {"x": 63, "y": 689, "width": 1154, "height": 2}}]}
+    hint = _json.loads(template_region_hint({"failures": [failure, {"kind": "text_overlap"}]}))
+    assert hint["kind"] == "svg_template_body_region_repair" and hint["failures"] == [failure]
+    assert "stroke-width" in hint["instruction"] and "never delete" in hint["instruction"]
+
+
+def test_template_body_rules_name_the_stroke_extent():
+    from services.svg_templates.generation import body_author_rules
+    from utils.hashing import canonical_json_digest
+    selection = {"schema_version": "svg-template-selection/v1", "mode": "template-redesign",
+                 "template_pin": {"templateId": "t", "revision": 1, "digest": "sha256:" + "a" * 64}}
+    selection["digest"] = canonical_json_digest(selection)
+    rules = body_author_rules("rules", {"svg_template": selection, "composition_guidance": []})
+    assert "half its stroke-width plus 2px inside body_region" in rules
