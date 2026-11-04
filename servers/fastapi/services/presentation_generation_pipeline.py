@@ -1221,6 +1221,16 @@ async def generate_presentation_handler(
                         continue
                     raise HTTPException(status_code=400, detail=error.detail) from None
 
+            if not request.web_search:
+                # A chart line may carry only values the source writes (web search brings its own
+                # sources, which this text does not hold). The reason is logged by the guard.
+                from services.outline_chart_grounding import ground_outline_charts
+
+                presentation_outlines, _dropped_charts = ground_outline_charts(
+                    presentation_outlines,
+                    "\n".join(part for part in (request.content, additional_context, request.instructions) if part),
+                )
+
             total_outlines = len(presentation_outlines.slides)
 
         else:
