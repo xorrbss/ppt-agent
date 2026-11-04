@@ -361,3 +361,23 @@ def test_the_check_runs_only_with_the_connector_policy(monkeypatch):
     assert policy.connectors and not policy.tables and redesign is False
     monkeypatch.setenv("CONTENT_STRUCTURE_POLICY_PARTS", "tables")
     assert not author_slide_svg.deck_structure_policy({})[0].connectors
+
+
+# --- generated body ids never repeat an id the drawing copied ---------------------------
+
+def test_generated_body_ids_skip_ids_the_drawing_already_uses(tmp_path):
+    from services.svg_templates.frame_composition import compose_frame_svg
+
+    frame = _frame(tmp_path, {400, 700})
+    region = frame.body_region
+    # Node 1 has no id (it would become body-node-1); node 2 copied "body-node-1" from a previous page.
+    body = (f'<svg xmlns="{NS}" width="1280" height="720" viewBox="0 0 1280 720">'
+            f'<rect x="{region.x + 10}" y="{region.y + 10}" width="100" height="40" fill="#EEEEEE"/>'
+            f'<rect id="body-node-1" x="{region.x + 10}" y="{region.y + 60}" width="100" height="40" fill="#DDDDDD"/>'
+            f'<rect x="{region.x + 10}" y="{region.y + 110}" width="100" height="40" fill="#CCCCCC"/>'
+            f'<text id="body-t" x="{region.x + 10}" y="{region.y + 200}" font-family="Pretendard" font-size="20"'
+            ' fill="#111111">본문</text></svg>')
+    composed = compose_frame_svg(frame, body, dynamic_values={})
+    group = next(node for node in ET.fromstring(composed) if node.get("id") == "svg-system-template-body")
+    ids = [node.get("id") for node in group]
+    assert ids == ["body-node-1-1", "body-node-1", "body-node-3", "body-t"]

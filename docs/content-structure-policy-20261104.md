@@ -246,3 +246,12 @@ CONTENT_STRUCTURE_POLICY_PARTS=connectors`로 N=3 이상 다시 잰다.
   pytest를 동시에 돌리지 말고, pytest 뒤에는 둘을 다시 띄운다.
 
 - 로컬 `public-artifacts` 저장소에서 등록한 템플릿의 저장 객체 파일이 시간이 지나면 사라져(`artifact.object_missing`, DB에는 행이 남음) 생성이 `svg_template_adaptation_material_unavailable`로 실패했다. 등록 직후 생성하면 재현되지 않는다. 원인은 조사하지 않았다.
+
+## 화살촉 방향 검사 (2026-11-04 추가)
+
+연결선 정책이 켜진 덱에서만 `connector_arrowheads_reversed`(배치 실패, 재시도 힌트에 각 화살촉 좌표와 두 항목, 꼭짓점을 둘 쪽)를
+더한다(`services/generation_core/drivers/svg/connector_direction.py`). 한 줄(행 또는 열)에서 두 상자 사이에 놓인 작은 삼각형이
+2개 이상이고 그 **모두가** 읽는 순서와 소스 순서 둘 다에서 앞선 항목을 가리킬 때만 실패다. 되돌아가는 화살표 하나, 정방향이 섞인 줄,
+소스가 아래 계층부터 적은 위쪽 흐름은 통과한다. 저장된 최종 250페이지와 모든 저장 초안에서 앞에서 눈으로 찾은 2페이지(5단계 행,
+4계층 열)와 아직 몰랐던 1페이지(표·차트 덱의 5활동 행)만 잡았고 오탐은 없었다. 라이브 측정(`connectors-checked`)은 제공자 크레딧이
+떨어져 하지 못했다. 자세한 내용과 첫 초안 실패 분류는 `docs/svg-template-first-draft-20261104.md`.

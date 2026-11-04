@@ -386,12 +386,23 @@ def compose_frame_svg(frame: SvgTemplateFrame | SvgTemplateFrameAdaptation, body
     validate_svg(body_svg, width=canvas.width_px, height=canvas.height_px,
                  allow_system_page_number=False, source_manifest=source_manifest)
     body = secure_xml(body_svg.encode(), part_name="body.svg")
+    # A repair is shown its previous composed page, whose id-less nodes had become body-node-N,
+    # and copies some of those ids onto a drawing whose nodes sit at other positions. Measured
+    # 2026-11-04: a retry then got a generated id equal to a copied one, failed
+    # svg_contract_invalid_id (duplicate) and the page fell back. A generated id skips taken ones.
+    taken = {node.get("id") for node in body.iter() if node.get("id")}
     for index, node in enumerate(body.iter()):
         node_id = node.get("id")
         if node_id and not node_id.startswith("body-"):
             # The detail is the repair hint of the next attempt (attempt_cause keeps only the code).
             raise ValueError(f"svg_template_body_namespace_required: id {node_id[:60]!r} must start with body-")
-        node.set("id", node_id or f"body-node-{index}")
+        if not node_id:
+            node_id, suffix = f"body-node-{index}", 0
+            while node_id in taken:
+                suffix += 1
+                node_id = f"body-node-{index}-{suffix}"
+            taken.add(node_id)
+        node.set("id", node_id)
         if etree.QName(node).localname in {"text", "tspan"}:
             parent = node.getparent()
             family = node.get("font-family") or (parent.get("font-family") if parent is not None else None)

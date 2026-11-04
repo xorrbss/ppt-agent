@@ -60,6 +60,10 @@ and what to do next.
     preservation), now under 1 GB.
   * Details: `docs/content-structure-policy-20261104.md`,
     `docs/template-component-style-20261104.md`.
+  * First-draft failures (stage 3, item 9): 52 of 250 stored first drafts classified; fixes for the
+    cover's only-bold face, whitespace spacers, zero-size shapes, generated id collisions, body edges,
+    checked figures and the text minimum in the prompt, and an arrowhead direction check with the
+    connector policy. Live only 2 decks (provider credit ran out): `docs/svg-template-first-draft-20261104.md`.
 
 ## Measurements
 
