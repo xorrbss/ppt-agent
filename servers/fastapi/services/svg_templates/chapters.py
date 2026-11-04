@@ -101,8 +101,13 @@ def overlong_titles(frames, chapters: dict[str, str]) -> set[str]:
 
 
 def assign_chapters(outline, plan: list[tuple[int, str]], style: str) -> dict[str, str]:
-    """Write ``{"number", "title"}`` on every outline page; returns ``{number: title}``."""
+    """Write ``{"number", "title"}`` on every outline page; returns ``{number: title}``.
+
+    Pages before the first chapter (the cover, a table of contents) get none.
+    """
     starts = [start for start, _ in plan] + [len(outline.slides)]
+    for slide in outline.slides[:plan[0][0]]:
+        slide.chapter = None
     titles = {}
     for position, (start, title) in enumerate(plan):
         number = format_number(position, style)
@@ -122,9 +127,10 @@ async def plan_outline_chapters(request, outline) -> None:
         return
     style = number_style(frames)
     existing = [getattr(slide, "chapter", None) for slide in outline.slides]
-    if all(isinstance(chapter, dict) for chapter in existing):
+    kept = [chapter for chapter in existing if isinstance(chapter, dict)]
+    if kept:
         # A resumed job or a caller-supplied outline: keep it, but it must still fit.
-        titles = {chapter["number"]: chapter["title"] for chapter in existing}
+        titles = {chapter["number"]: chapter["title"] for chapter in kept}
         if overlong_titles(frames, titles):
             raise ValueError("svg_template_chapter_title_too_long")
         return
@@ -175,11 +181,16 @@ def header_values(frame: SvgTemplateFrame, title: str, chapter: dict | None) -> 
     return values
 
 
-def chapter_values(frame: SvgTemplateFrame, chapter: dict | None) -> dict[str, str]:
-    """The chapter fields a frame shows, from the page's chapter; empty when it shows none."""
+def chapter_values(frame: SvgTemplateFrame, chapter: dict | None, *, cover: bool = False) -> dict[str, str]:
+    """The chapter fields a frame shows, from the page's chapter; empty when it shows none.
+
+    The cover (``cover=True``) belongs to no chapter, so its chapter tab stays empty.
+    """
     fields = set(CHAPTER_KEYS) & set(frame.dynamic_fields)
     if not fields:
         return {}
+    if cover and not chapter:
+        return {key: "" for key in fields}
     if not isinstance(chapter, dict) or not chapter.get("number") or not chapter.get("title"):
         raise ValueError("svg_template_chapter_missing")
     return {"chapter_number": str(chapter["number"]), "chapter_title": str(chapter["title"])}

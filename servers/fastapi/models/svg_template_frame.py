@@ -102,7 +102,8 @@ class SvgTemplateRasterPreservation(FrameModel):
 #: Dynamic text that replaces a page's own header text (title, path) as a whole.
 HEADER_TEXT_KEYS = frozenset({"title", "breadcrumb", "breadcrumb_number"})
 #: Header slots a page may leave empty (the element is then not drawn).
-OPTIONAL_HEADER_KEYS = frozenset({"breadcrumb", "breadcrumb_number"})
+#: The cover belongs to no chapter, so its chapter tab may be empty too.
+OPTIONAL_HEADER_KEYS = frozenset({"breadcrumb", "breadcrumb_number", "chapter_number", "chapter_title"})
 
 
 class SvgTemplateFrameElement(FrameModel):

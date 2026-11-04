@@ -189,7 +189,7 @@ def template_page_context(snapshot: dict, index: int, count: int, content: str,
     values = {"title": title or "", "page_number": str(index + 1),
               "section_number": section.group(1) if section else ""}
     from services.svg_templates.chapters import chapter_values, header_values
-    values.update(chapter_values(frame, chapter))
+    values.update(chapter_values(frame, chapter, cover=index == 0))
     values.update(header_values(frame, title or "", chapter))
     # The render here still checks that the bound values can be drawn (fonts and glyphs, and
     # chapter tabs, which fail when too long). An over-wide title or breadcrumb is shrunk and

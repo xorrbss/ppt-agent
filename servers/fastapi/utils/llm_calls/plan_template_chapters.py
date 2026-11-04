@@ -45,8 +45,10 @@ class _Plan(BaseModel):
 def build_template_chapter_messages(page_titles: Sequence[str], *, max_title_chars: int,
                                     language: str | None, max_chapters: int) -> list:
     rules = (
-        f"Make 2 to {max_chapters} chapters (fewer when the deck is short), each covering consecutive pages. "
-        "The first chapter starts at page 1. A chapter name is a short noun phrase naming what its pages "
+        "Page 1 is the cover: it belongs to no chapter. Pages before the first chapter belong to no chapter "
+        "either, so the first chapter starts at the first body page, and a table of contents page, if there is "
+        f"one, comes before it. Make 2 to {max_chapters} chapters (fewer when the deck is short), each covering "
+        "consecutive body pages. A chapter name is a short noun phrase naming what its pages "
         f"share, at most {max_title_chars} characters including spaces, in {language or 'the pages’ language'}. "
         "Do not number the names; the template numbers the chapters."
     )
@@ -58,11 +60,14 @@ def build_template_chapter_messages(page_titles: Sequence[str], *, max_title_cha
 
 def parse_template_chapters(content: object, page_count: int, *, max_title_chars: int,
                             max_chapters: int) -> list[tuple[int, str]]:
-    """``[(0-based start index, title)]``; raises ValueError for any invalid plan."""
+    """``[(0-based start index, title)]``; raises ValueError for any invalid plan.
+
+    Page 1 (index 0) is the cover, so the first chapter starts at index 1 or later.
+    """
     plan = _Plan.model_validate(content)
     chapters = [(chapter.start - 1, " ".join(chapter.title.split())) for chapter in plan.chapters]
     starts = [start for start, _ in chapters]
-    if (not chapters or len(chapters) > max_chapters or starts[0] != 0
+    if (not chapters or len(chapters) > max_chapters or starts[0] < 1
             or any(not 0 <= start < page_count for start in starts)
             or any(later <= earlier for earlier, later in zip(starts, starts[1:], strict=False))
             or any(not title or len(title) > max_title_chars for _, title in chapters)):

@@ -47,12 +47,12 @@ def test_chapter_tabs_are_detected_across_chapter_layouts(tmp_path):
 
 
 def test_a_chapter_plan_must_cover_the_deck_in_order():
-    content = {"chapters": [{"start": 1, "title": "제안 개요"}, {"start": 4, "title": "수행 방안"}]}
-    assert parse_template_chapters(content, 8, max_title_chars=8, max_chapters=9) == [(0, "제안 개요"), (3, "수행 방안")]
-    for bad in ({"chapters": []}, {"chapters": [{"start": 2, "title": "가"}]},
+    content = {"chapters": [{"start": 2, "title": "제안 개요"}, {"start": 4, "title": "수행 방안"}]}
+    assert parse_template_chapters(content, 8, max_title_chars=8, max_chapters=9) == [(1, "제안 개요"), (3, "수행 방안")]
+    for bad in ({"chapters": []}, {"chapters": [{"start": 1, "title": "가"}]},
                 {"chapters": [{"start": 1, "title": "가"}, {"start": 1, "title": "나"}]},
-                {"chapters": [{"start": 1, "title": "가"}, {"start": 9, "title": "나"}]},
-                {"chapters": [{"start": 1, "title": "아주 긴 장 이름입니다"}]}):
+                {"chapters": [{"start": 2, "title": "가"}, {"start": 9, "title": "나"}]},
+                {"chapters": [{"start": 2, "title": "아주 긴 장 이름입니다"}]}):
         with pytest.raises(ValueError, match="svg_template_chapter_plan_invalid"):
             parse_template_chapters(bad, 8, max_title_chars=8, max_chapters=9)
 
@@ -65,16 +65,18 @@ def test_numbers_follow_the_source_style():
 
 def test_every_page_gets_its_chapter_and_a_saved_page_keeps_it(tmp_path):
     outline = PresentationOutlineModel(slides=[SlideOutlineModel(content=f"# 쪽 {i}") for i in range(5)])
-    titles = chapters.assign_chapters(outline, [(0, "제안 개요"), (2, "수행 방안")], "roman-unicode")
+    titles = chapters.assign_chapters(outline, [(1, "제안 개요"), (3, "수행 방안")], "roman-unicode")
     assert titles == {"Ⅰ": "제안 개요", "Ⅱ": "수행 방안"}
-    assert [slide.chapter["number"] for slide in outline.slides] == ["Ⅰ", "Ⅰ", "Ⅱ", "Ⅱ", "Ⅱ"]
+    assert outline.slides[0].chapter is None
+    assert [slide.chapter["number"] for slide in outline.slides[1:]] == ["Ⅰ", "Ⅰ", "Ⅱ", "Ⅱ"]
     # Outlines without chapters keep their old JSON (and digests).
     assert "chapter" not in SlideOutlineModel(content="x").model_dump()
 
     package = extract_template_package(_chapter_deck(tmp_path / "deck.pptx"))
     frame = package.frames[0]
-    values = chapters.chapter_values(frame, outline.slides[2].chapter)
+    values = chapters.chapter_values(frame, outline.slides[3].chapter)
     assert values == {"chapter_number": "Ⅱ", "chapter_title": "수행 방안"}
+    assert chapters.chapter_values(frame, None, cover=True) == {"chapter_number": "", "chapter_title": ""}
     with pytest.raises(ValueError, match="svg_template_chapter_missing"):
         chapters.chapter_values(frame, None)
     assert chapters.chapter_from_context({"dynamic_values": values}) == {"number": "Ⅱ", "title": "수행 방안"}
@@ -99,18 +101,19 @@ def test_planning_retries_once_with_a_smaller_budget_then_fails(monkeypatch, tmp
 
     import utils.llm_calls.plan_template_chapters as planner
     monkeypatch.setattr(planner, "plan_template_chapters", plan)
-    outline = PresentationOutlineModel(slides=[SlideOutlineModel(content="# 하나"), SlideOutlineModel(content="# 둘")])
+    outline = PresentationOutlineModel(slides=[SlideOutlineModel(content="# 표지"), SlideOutlineModel(content="# 하나"),
+                                               SlideOutlineModel(content="# 둘")])
     request = SimpleNamespace(_svg_template_selection={"mode": "template-redesign"}, language="Korean")
     with pytest.raises(ValueError, match="svg_template_chapter_title_too_long"):
         asyncio.run(chapters.plan_outline_chapters(request, outline))
     assert len(calls) == 2 and calls[1] < calls[0]
 
     async def short(titles, *, max_title_chars, language):
-        return [(0, "개요"), (1, "방안")]
+        return [(1, "개요"), (2, "방안")]
 
     monkeypatch.setattr(planner, "plan_template_chapters", short)
     asyncio.run(chapters.plan_outline_chapters(request, outline))
-    assert [slide.chapter for slide in outline.slides] == [{"number": "Ⅰ", "title": "개요"},
+    assert [slide.chapter for slide in outline.slides] == [None, {"number": "Ⅰ", "title": "개요"},
                                                           {"number": "Ⅱ", "title": "방안"}]
 
 
@@ -138,5 +141,44 @@ def test_the_outline_preflight_fills_chapter_tabs_from_the_outline(tmp_path):
     outline = PresentationOutlineModel(slides=[SlideOutlineModel(content=f"# 쪽 {i}") for i in range(3)])
     with pytest.raises(ValueError, match="svg_template_chapter_missing"):
         preflight_template_outline(snapshot, outline)
-    chapters.assign_chapters(outline, [(0, "개요"), (2, "방안")], "roman-unicode")
+    chapters.assign_chapters(outline, [(1, "개요"), (2, "방안")], "roman-unicode")
     preflight_template_outline(snapshot, outline)
+
+
+def test_the_cover_belongs_to_no_chapter_and_the_first_body_page_starts_chapter_one():
+    """Page 1 is the cover: a plan that starts a chapter there is invalid, and the
+    first body page (page 2 here) starts chapter Ⅰ."""
+    from utils.llm_calls.plan_template_chapters import build_template_chapter_messages
+
+    content = {"chapters": [{"start": 2, "title": "회사 개요"}, {"start": 5, "title": "수행 방안"}]}
+    plan = parse_template_chapters(content, 8, max_title_chars=8, max_chapters=9)
+    assert plan == [(1, "회사 개요"), (4, "수행 방안")]
+    with pytest.raises(ValueError, match="svg_template_chapter_plan_invalid"):
+        parse_template_chapters({"chapters": [{"start": 1, "title": "표지"}]}, 8, max_title_chars=8, max_chapters=9)
+
+    outline = PresentationOutlineModel(slides=[SlideOutlineModel(content=f"# 쪽 {i}") for i in range(8)])
+    titles = chapters.assign_chapters(outline, plan, "roman-unicode")
+    assert titles == {"Ⅰ": "회사 개요", "Ⅱ": "수행 방안"}
+    assert outline.slides[0].chapter is None
+    assert [slide.chapter["number"] for slide in outline.slides[1:]] == ["Ⅰ"] * 3 + ["Ⅱ"] * 4
+
+    messages = build_template_chapter_messages(["표지", "목차", "회사 개요"], max_title_chars=8,
+                                               language="Korean", max_chapters=9)
+    assert "cover" in messages[0].content and "first body page" in messages[0].content
+
+
+def test_a_saved_plan_with_an_uncovered_cover_is_reused_not_planned_again(monkeypatch, tmp_path):
+    package = extract_template_package(_chapter_deck(tmp_path / "deck.pptx"))
+    monkeypatch.setattr(chapters, "chapter_frames", lambda selection: list(package.frames))
+
+    async def never(*args, **kwargs):
+        raise AssertionError("a saved chapter plan is not planned again")
+
+    import utils.llm_calls.plan_template_chapters as planner
+    monkeypatch.setattr(planner, "plan_template_chapters", never)
+    outline = PresentationOutlineModel(slides=[SlideOutlineModel(content="# 표지"), SlideOutlineModel(content="# 하나")])
+    chapters.assign_chapters(outline, [(1, "개요")], "roman-unicode")
+    request = SimpleNamespace(_svg_template_selection={"mode": "template-redesign"}, language="Korean")
+    asyncio.run(chapters.plan_outline_chapters(request, outline))
+    assert outline.slides[0].chapter is None
+    assert outline.slides[1].chapter == {"number": "Ⅰ", "title": "개요"}
