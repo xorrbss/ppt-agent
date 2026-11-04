@@ -131,7 +131,14 @@ def get_svg_illustration_mode_env(settings: RuntimeSettings | None = None) -> st
 def get_content_structure_policy_scope_env(settings: RuntimeSettings | None = None) -> str:
     """Which decks get the content structure policy (``utils/content_structure_policy.py``):
     ``off`` (the default), ``template`` (a template-redesign deck) or ``svg`` (every svg deck).
-    Read when a deck is admitted and when its pages are authored."""
+    Read when a deck is admitted and when its pages are authored.
+
+    Internal, opt-in knob deliberately outside ``constants/settings_registry.json``
+    (like ``SVG_ILLUSTRATION_MODE``): the registry holds managed/public settings, and
+    this one is experimental and off by default, because turning it on measured worse (see
+    ``docs/content-structure-policy-20261104.md``). It is accounted for in
+    ``tests/support/internal_env_names.py``, and resolves as a process-start env value.
+    """
     from utils.content_structure_policy import normalize_scope
     from utils.get_env import get_setting_env
 
