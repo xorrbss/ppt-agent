@@ -325,6 +325,7 @@ async def generate_ppt_outline(
     writing_policy: str | None = None,
     common_header_mode: str = "free",
     structure_policy: StructurePolicy | None = None,
+    is_retry: bool = False,
 ):
     model = get_model()
     canvas_scales = canvas_budget is not None and canvas_budget.factor < 1
@@ -440,6 +441,11 @@ async def generate_ppt_outline(
             client,
             disconnect_checker=disconnect_checker,
             inactivity_timeout_seconds=120,
+            # The page-count retry runs inside the caller's outline usage
+            # scope, so it needs its own semantic slot or it would reopen the
+            # terminal provider row the short first outline left behind.
+            is_retry=is_retry,
+            semantic_slot_suffix=".outline-retry" if is_retry else "",
             **generate_kwargs,
         ):
             if getattr(event, "type", None) == "content":

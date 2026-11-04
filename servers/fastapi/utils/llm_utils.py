@@ -806,9 +806,20 @@ async def stream_generate_events(
     *,
     disconnect_checker: Optional[DisconnectChecker] = None,
     inactivity_timeout_seconds: Optional[float] = None,
+    is_retry: bool = False,
+    semantic_slot_suffix: str = "",
     **kwargs: Any,
 ) -> AsyncGenerator[Any, None]:
-    """Admit exactly one provider stream before its first network byte."""
+    """Admit exactly one provider stream before its first network byte.
+
+    The stream's durable identity is its semantic slot inside the active usage
+    scope, so a caller that deliberately streams the same stage twice (the
+    outline's page-count retry) passes ``is_retry`` and a ``semantic_slot_suffix``,
+    exactly as ``generate_structured_with_schema_retries`` callers do. Without
+    the suffix the second stream reopens the first one's terminal row and, for a
+    provider that cannot replay, is refused with
+    ``public_provider_terminal_replay_unsupported``.
+    """
 
     timer = ProviderCallTimer()
     completion: object | None = None
@@ -818,7 +829,8 @@ async def stream_generate_events(
     outcome = "succeeded"
     try:
         async with provider_call_admission(
-            semantic_slot="stream.primary",
+            is_retry=is_retry,
+            semantic_slot=f"stream.primary{semantic_slot_suffix}",
             provider=provider,
             model=model,
             provider_idempotency_capable=supports_provider_idempotency(

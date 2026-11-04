@@ -1187,6 +1187,8 @@ async def generate_presentation_handler(
                             template_redesign=getattr(request, "svg_template_mode", None) == "template-redesign",
                             scope=get_content_structure_policy_scope_env(),
                             parts=get_content_structure_policy_parts_env()),
+                        # The count retry is its own logical provider call.
+                        is_retry=outline_attempt > 0,
                     ):
 
                         if isinstance(chunk, HTTPException):
