@@ -166,8 +166,19 @@ class OoxmlFrameContext:
         record = self.font_substitutions.get(family.casefold())
         if record is not None:
             self.substituted_families.add(family.casefold())
-            return record.target_family, record.target_weight
+            return record.target_family, self.substitute_weight(record, bold)
         return family, 700 if bold else 400
+
+    def substitute_weight(self, record, bold: bool) -> int:
+        """A substitution names one weight per source family; bold text of the family keeps its
+        emphasis through the substitute's bold face, where the substitute has one."""
+        if bold and record.target_weight < 700:
+            try:
+                font_asset_for(self.font_manifest, record.target_family, 700)
+                return 700
+            except ValueError:
+                pass
+        return record.target_weight
 
     def root(self, part):
         return secure_xml(self.package.read(part), part_name=part)

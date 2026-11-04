@@ -59,7 +59,7 @@ def _weight(context, family: str, bold: bool) -> int:
     """The face the deck draws with, through the explicit substitutions (no side effect)."""
     record = context.font_substitutions.get(family.casefold())
     if record is not None:
-        return record.target_weight
+        return context.substitute_weight(record, bold)
     return 700 if bold else 400
 
 

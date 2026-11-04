@@ -166,3 +166,25 @@ def test_a_deck_with_one_layout_analyses_body_pages_too():
 
     slides = [f"ppt/slides/slide{index}.xml" for index in range(1, 16)]
     assert representative_pages(_Context, slides) == (0, 5, 9, 14)
+
+
+def test_a_substituted_family_keeps_bold_and_a_page_may_use_both_weights(tmp_path):
+    """One substitution names one weight for the source family; its bold text and the page's body
+    must still have Pretendard's bold face (a registered deck failed 6 of 6 pages on weight 700)."""
+    def build(deck, index):
+        slide = _blank(deck)
+        _text(slide.shapes, "Fictional Corp", 457200, 300000, 4000000, 12)  # regular
+        bold = _text(slide.shapes, "Fictional Corp | Confidential", 457200, 6300000, 4000000, 12)
+        bold.text_frame.paragraphs[0].runs[0].font.bold = True
+        for box in slide.shapes:
+            for run in box.text_frame.paragraphs[0].runs:
+                run.font.name = "Fictional Sans"
+
+    path = _deck(tmp_path, build)
+    substitution = [{"source_family": "Fictional Sans", "target_family": "Pretendard", "target_weight": 400}]
+    package = extract_template_package(path, font_substitutions=substitution)
+    for frame in package.frames:
+        weights = {int(match) for element in frame.elements if element.kind == "text"
+                   for match in re.findall(r'font-weight="(\d+)"', element.svg)}
+        assert weights == {400, 700}, weights
+        assert {asset.weight for asset in frame.font_manifest.assets} >= {400, 700}

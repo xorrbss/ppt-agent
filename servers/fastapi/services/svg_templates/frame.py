@@ -1026,8 +1026,10 @@ def extract_template_package(pptx_path: str | Path, *, font_assets=None,
                 body_region=body_region, forbidden_regions=tuple(forbidden),
                 dynamic_fields=tuple(sorted({e.dynamic_key for e in elements if e.dynamic_key})),
                 font_manifest=build_font_manifest(tuple(asset for asset in font_manifest.assets
+                    # Every face of the families the page draws with, not only the
+                    # weights its own furniture uses: its body text needs a bold too.
                     if not observed[slide_part] or any(family.casefold() in {name.casefold() for name in (asset.family, *asset.family_aliases)}
-                           and weight == asset.weight for family, weight in observed[slide_part])),
+                           for family, _ in observed[slide_part])),
                     required_families=tuple(required_families)),
                 issues=tuple(issues), digest="")
             frames.append(frame)
