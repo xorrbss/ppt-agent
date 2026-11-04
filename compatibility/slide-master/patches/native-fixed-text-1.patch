@@ -1,0 +1,34 @@
+--- a/servers/fastapi/vendor/slide_master/svg_to_pptx/conversion_context.py
++++ b/servers/fastapi/vendor/slide_master/svg_to_pptx/conversion_context.py
+@@ -27,6 +27,8 @@
+     # Exact font metrics supplied by the caller. Without it, single-line text
+     # frames are sized from the per-character estimate alone.
+     text_advance: TextAdvance | None = field(default=None, compare=False)
++    # Trusted invocation-local source-layout adapter; SVG attributes cannot enable it.
++    native_fixed_text: Callable | None = field(default=None, compare=False)
+ 
+     def __post_init__(self):
+         values = (self.width_units, self.height_units, self.width_emu, self.height_emu)
+@@ -34,6 +36,8 @@
+             raise ValueError("svg_conversion_context_invalid")
+         if self.text_advance is not None and not callable(self.text_advance):
+             raise ValueError("svg_conversion_context_invalid")
++        if self.native_fixed_text is not None and (self.legacy or not callable(self.native_fixed_text)):
++            raise ValueError("svg_conversion_context_invalid")
+         aspect_error = abs(
+             self.width_emu * self.height_units - self.height_emu * self.width_units
+         )
+--- a/servers/fastapi/vendor/slide_master/svg_to_pptx/drawingml/elements.py
++++ b/servers/fastapi/vendor/slide_master/svg_to_pptx/drawingml/elements.py
+@@ -2226,6 +2226,11 @@
+ 
+ def convert_text(elem: ET.Element, ctx: ConvertContext) -> ShapeResult | None:
+     """Convert SVG <text> to DrawingML text shape with multi-run support."""
++    native = current_conversion_context().native_fixed_text
++    if native is not None:
++        owned = native(elem, ctx)
++        if owned is not None:
++            return owned
+     x = ctx_x(svg_length_x(elem.get('x'), ctx), ctx)
+     y = ctx_y(svg_length_y(elem.get('y'), ctx), ctx)
+     font_size = (

@@ -57,6 +57,16 @@ the `xfrm-bounds.1` suffix and the new `utils.py` hash, which changes
 `svg_export_version_mismatch`. `CONVERTER_VERSION` is not extended: it feeds a
 160-character identity field that the longer string would overflow.
 
+`chart-furniture.16` (native chart manual layouts, per-series data labels,
+title bold/alignment, table paragraph spacing, soft breaks and cell padding)
+and `native-fixed-text.1` (the trusted fixed-text adapter on the conversion
+context) were originally edited into the vendor tree without a patch file, so
+the readback test could not reverse the chain. They are now recorded as
+`chart-furniture-16.patch` and `native-fixed-text-1.patch`, applied between
+`text-advance-1.patch` and `xfrm-bounds-1.patch` to match the shipped version
+string. Any new vendor edit needs a patch file and a `PATCHES` entry in
+`rebuild.py`; the manifest is generated with LF line endings.
+
 Bundle producers import the worker's converter version and current manifest
 digest. Old bundles are rejected with `svg_export_version_mismatch`; reconstruct
 an export request under the current producer rather than silently executing an
