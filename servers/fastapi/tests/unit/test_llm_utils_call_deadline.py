@@ -150,6 +150,10 @@ def _structured(client, **overrides):
     )
 
 
+def _timeout_fields(timeout):
+    return {"connect": timeout.connect, "read": timeout.read, "write": timeout.write, "pool": timeout.pool}
+
+
 def test_call_deadline_reaches_the_transport_and_pins_max_retries(monkeypatch):
     monkeypatch.setenv("LLM", "ollama")
     client = _BlockingClient()
@@ -160,7 +164,12 @@ def test_call_deadline_reaches_the_transport_and_pins_max_retries(monkeypatch):
     assert result == {"result": "ok"}
     # The caller's deadline replaces the generic 360 s guard, and the SDK may
     # not silently replay a bounded call after its timeout.
-    assert client.cloned_options == {"max_retries": 0, "timeout": httpx.Timeout(12.5)}
+    # The transport gets the deadline remaining when the request starts, which
+    # a fine-grained monotonic clock reports a hair under the nominal value.
+    assert client.cloned_options["max_retries"] == 0
+    assert set(client.cloned_options) == {"max_retries", "timeout"}
+    assert _timeout_fields(client.cloned_options["timeout"]) == pytest.approx(
+        _timeout_fields(httpx.Timeout(12.5)), abs=0.05)
 
 
 def test_without_a_caller_deadline_the_generic_guard_stays(monkeypatch):
@@ -170,9 +179,9 @@ def test_without_a_caller_deadline_the_generic_guard_stays(monkeypatch):
 
     asyncio.run(_structured(client))
 
-    assert client.cloned_options == {
-        "timeout": httpx.Timeout(connect=30.0, read=360.0, write=60.0, pool=30.0)
-    }
+    assert set(client.cloned_options) == {"timeout"}
+    assert _timeout_fields(client.cloned_options["timeout"]) == pytest.approx(
+        _timeout_fields(httpx.Timeout(connect=30.0, read=360.0, write=60.0, pool=30.0)), abs=0.05)
 
 
 def test_timed_out_call_is_not_running_when_the_retry_starts(monkeypatch):
