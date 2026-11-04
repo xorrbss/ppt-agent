@@ -150,8 +150,22 @@ def _make_judge(args: argparse.Namespace):
     return judge_from_options(args.judge_references, options)
 
 
+def _make_judge_for(args: argparse.Namespace, selection: dict | None, cache: dict):
+    """The judge of one cell's selection (built once per distinct references + anchors), or None."""
+    if selection is None:
+        return None
+    key = (selection["references"], tuple(selection["anchor_high"]), tuple(selection["anchor_low"]))
+    if key not in cache:
+        from judge import judge_from_options
+
+        options = {k[len("judge_"):]: v for k, v in vars(args).items() if k.startswith("judge_")}
+        options.update(anchor_high=",".join(selection["anchor_high"]), anchor_low=",".join(selection["anchor_low"]))
+        cache[key] = judge_from_options(selection["references"], options)
+    return cache[key]
+
+
 def _sample_runs(client: httpx.Client, conn, judge, args: argparse.Namespace, payload: dict, source: str | None,
-                 cell: str | None) -> list[dict]:
+                 cell: str | None, selection: dict | None = None) -> list[dict]:
     """``args.runs`` generations of one request, each measured; every record carries ``cell`` when given."""
     runs: list[dict] = []
     for number in range(1, args.runs + 1):
@@ -180,6 +194,9 @@ def _sample_runs(client: httpx.Client, conn, judge, args: argparse.Namespace, pa
             judged = judge_presentation(conn, data["presentation_id"], judge, renders)
             print_deck(f"{tag}run {number} judge", judged)
             record.update(run_fields(judged), judge=judged)
+            if selection is not None:
+                record["judge_anchors"] = {"references": selection["references"], "anchor_high": judge.anchor_names["high"],
+                                           "anchor_low": judge.anchor_names["low"], "sources": selection["sources"]}
         record.update(run=number, completed=True, seconds=round(seconds),
                       gate_passed=(data.get("quality_pages") or {}).get("passed"),
                       gate_flagged=(data.get("quality_pages") or {}).get("flagged"),
@@ -192,7 +209,8 @@ def _sample_runs(client: httpx.Client, conn, judge, args: argparse.Namespace, pa
     return runs
 
 
-def _write_result(args: argparse.Namespace, judge, runs: list[dict], requested: int, **extra) -> dict:
+def _write_result(args: argparse.Namespace, judge, runs: list[dict], requested: int, judges: dict | None = None,
+                  **extra) -> dict:
     done = [item for item in runs if item.get("completed")]
     result = {"label": args.label, "runs": runs, "summary": summarize(done),
               "completed_runs": len(done), "requested_runs": requested, **extra}
@@ -200,6 +218,8 @@ def _write_result(args: argparse.Namespace, judge, runs: list[dict], requested: 
         costs = [item["judge"]["cost_estimate_usd"] for item in done if "judge" in item]
         result.update(judge_settings=judge.settings(),
                       judge_cost_estimate_usd=None if None in costs else round(sum(costs), 4))
+    if judges:
+        result["judge_settings_by_template"] = {name: item.settings() for name, item in judges.items()}
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
     (out / f"{args.label}.json").write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -223,24 +243,33 @@ def run(args: argparse.Namespace) -> None:
 
 def matrix(args: argparse.Namespace) -> None:
     """One variant label over input x template cells, ``--runs`` runs per cell (cell id on every run record)."""
-    from request_builder import INPUTS, build_cells, list_inputs, load_template_spec
+    from request_builder import INPUTS, build_cells, judge_selection, list_inputs, load_template_spec
 
     names = [name.strip() for name in args.inputs.split(",")] if args.inputs else list_inputs()
     specs = [load_template_spec(path) for path in args.templates]
     cells = build_cells(names, specs)
+    for cell in cells:
+        cell["judge"] = judge_selection(cell["spec"], args.judge_references, args.judge_anchor_high,
+                                        args.judge_anchor_low)
     if args.dry_run:
         for cell in cells:
             print(cell["cell"], json.dumps({k: v for k, v in cell["payload"].items() if k != "content"},
                                            ensure_ascii=False))
+            print("   judge", json.dumps(cell["judge"], ensure_ascii=False) if cell["judge"] else "none")
         return
     conn = _db(args.dsn)
-    judge = _make_judge(args)
+    cache: dict = {}
+    judges: dict = {}
     runs: list[dict] = []
     with _client(args) as client:
         for cell in cells:
             source = (INPUTS / f"{cell['input']}.txt").read_text(encoding="utf-8")
-            runs += _sample_runs(client, conn, judge, args, cell["payload"], source, cell["cell"])
-    _write_result(args, judge, runs, args.runs * len(cells), cells=[cell["cell"] for cell in cells])
+            judge = _make_judge_for(args, cell["judge"], cache)
+            if judge is not None:
+                judges.setdefault(cell["template"], judge)
+            runs += _sample_runs(client, conn, judge, args, cell["payload"], source, cell["cell"], cell["judge"])
+    first = next(iter(judges.values()), None)
+    _write_result(args, first, runs, args.runs * len(cells), judges=judges, cells=[cell["cell"] for cell in cells])
 
 
 def decide_command(args: argparse.Namespace) -> None:
@@ -306,7 +335,8 @@ def main() -> None:
     run_parser.set_defaults(handler=run)
     matrix_parser = sub.add_parser("matrix", help="one variant over input x template cells, R runs per cell")
     matrix_parser.add_argument("--templates", nargs="+", required=True,
-                               help="template manifests (JSON: id, pin, canvas_emu, optional frame_map)")
+                               help="template manifests (JSON: id, pin, canvas_emu, optional frame_map, optional judge "
+                                    "{references, anchor_high, anchor_low} that overrides the --judge-* flags)")
     matrix_parser.add_argument("--inputs", help="comma-separated input names (default: every inputs/requests/*.json)")
     matrix_parser.add_argument("--runs", type=int, default=3, help="runs per cell")
     matrix_parser.add_argument("--label", required=True)

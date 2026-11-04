@@ -203,6 +203,15 @@ A template manifest is a JSON file (relative paths resolve against it):
 `{"id": "ministry", "pin": "pin.json", "canvas_emu": [w, h], "frame_map": "frame_map.json"}` (`pin` and `frame_map`
 may also be inline objects; `canvas_emu` and `frame_map` are optional).
 
+A manifest may also carry the template's own judge settings, because references and anchors belong to one template:
+`"judge": {"references": "refs/", "anchor_high": ["ref-009.png", "ref-066.png"], "anchor_low": "anchors/low.png"}`
+(paths relative to the manifest; `anchor_high` and `anchor_low` take a path or a list). `matrix` judges a cell with its
+template's `judge` block where it gives a key and with the global `--judge-references`, `--judge-anchor-high`,
+`--judge-anchor-low` flags for a key it omits; a template without a `judge` block uses the flags alone, and a cell with no
+references from either source is not judged. Every judged run record carries `judge_anchors` (references, anchor names
+and, per key, whether it came from the `template` or the `global` flags), and the result file lists
+`judge_settings_by_template`. Compare variants only with the same manifests. `--dry-run` prints the selection per cell.
+
 ```bash
 # variant A (backend as is), then restart the backend with the change and run B: same cells, same --runs, same judge
 .venv/bin/python scripts/svg_template_eval/run_eval.py matrix --templates tpl-a.json tpl-b.json \
