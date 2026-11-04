@@ -14,6 +14,7 @@ import asyncio
 import json
 import math
 
+from services.svg_templates.selection_material import template_package
 from services.authored_checkpoint_errors import AuthoredStageError
 from services.generation_core.drivers.svg.attempt_cause import static_cause
 from services.svg_presentation_checkpoint import _required_numeric_claims
@@ -651,7 +652,7 @@ async def _attempt_render(*, ctx, request, presentation_id, index, content, payl
                                                         if raster_authorized_measurement else {}),
                                                      **({"source_font_profile": font_profile}
                                                         if font_profile else {}),
-                                                     **({"font_manifest": ctx.snapshot["svg_template"]["package"]["font_manifest"]}
+                                                     **({"font_manifest": template_package(ctx.snapshot["svg_template"])["font_manifest"]}
                                                         if template_page is not None else {}),
                                                      **({"fixed_glyph_preview": fixed_glyph_preview}
                                                         if fixed_glyph_preview is not None else {}),

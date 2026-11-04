@@ -10,16 +10,19 @@ from fastapi import HTTPException
 
 from models.svg_template_frame import SvgTemplateFrame, SvgTemplateFrameAdaptation
 from models.svg_template_codec import unpack_adaptation_fonts
+from services.svg_templates.selection_material import (
+    SELECTION_SCHEMA_V1, SELECTION_SCHEMAS, compact_selection, template_adaptations, template_package,
+)
 from utils.hashing import canonical_json_digest
 
-SELECTION_SCHEMA = "svg-template-selection/v1"
+SELECTION_SCHEMA = SELECTION_SCHEMA_V1
 
 
 def template_selection(snapshot: dict | None) -> dict | None:
     selection = (snapshot or {}).get("svg_template")
     if selection is None:
         return None
-    if (not isinstance(selection, dict) or selection.get("schema_version") != SELECTION_SCHEMA
+    if (not isinstance(selection, dict) or selection.get("schema_version") not in SELECTION_SCHEMAS
             or selection.get("digest") != canonical_json_digest(
                 {key: value for key, value in selection.items() if key != "digest"})):
         raise ValueError("svg_template_execution_snapshot_invalid")
@@ -74,6 +77,10 @@ async def prepare_template_request(request, session) -> None:
                     or adapted.target_canvas != canvas):
                 raise HTTPException(409, "svg_template_adaptation_conflict")
     selection["digest"] = canonical_json_digest(selection)
+    # New admissions store the material by reference (v2); a job frozen with
+    # an inline v1 selection keeps replaying against the same v1 form.
+    if frozen is None or frozen.get("schema_version") != SELECTION_SCHEMA_V1:
+        selection = compact_selection(selection)
     if frozen is not None and frozen != selection:
         raise HTTPException(409, "svg_template_execution_snapshot_conflict")
     request._svg_template_selection = deepcopy(frozen or selection)
@@ -94,7 +101,7 @@ def apply_template_snapshot(snapshot: dict, request) -> None:
     snapshot["common_guidance"] = {}
     snapshot["overrides"] = {}
     if selection["mode"] == "template-redesign":
-        manifest = selection["package"]["font_manifest"]
+        manifest = template_package(selection)["font_manifest"]
         families = list(dict.fromkeys(asset["family"] for asset in manifest["assets"]))
         if not families:
             raise ValueError("svg_template_fonts_missing")
@@ -117,15 +124,16 @@ def page_frame(snapshot: dict, index: int, count: int, role: str | None = None) 
     selection = template_selection(snapshot)
     if selection is None or selection["mode"] != "template-redesign" or not 0 <= index < count:
         raise ValueError("svg_template_page_context_invalid")
-    frames = selection["package"]["frames"]
+    package, adaptations = template_package(selection), template_adaptations(selection)
+    frames = package["frames"]
     selected_id = selection["frame_map"].get(str(index + 1))
     if selected_id is None:
         desired = "cover" if index == 0 else "body"
         selected_id = next((frame["frame_id"] for frame in frames if frame["role"] == desired), frames[0]["frame_id"])
-    if selected_id not in selection["adaptations"]:
+    if selected_id not in adaptations:
         raise ValueError("svg_template_canvas_preparation_required")
     return SvgTemplateFrameAdaptation.model_validate(unpack_adaptation_fonts(
-        selection["adaptations"][selected_id], selection["package"])).frame
+        adaptations[selected_id], package)).frame
 
 
 #: Margin between the region the author is given and the region a page is validated against.
@@ -154,7 +162,7 @@ def template_page_context(snapshot: dict, index: int, count: int, content: str,
               "section_number": section.group(1) if section else ""}
     # The compiler measures actual font bytes; oversized bound titles fail before body spend.
     render_frame_svg(frame, dynamic_values=values)
-    adaptation = selection["adaptations"][frame.frame_id]
+    adaptation = template_adaptations(selection)[frame.frame_id]
     result = {
         "schema_version": "svg-template-page/v1", "page_index": index, "page_count": count,
         "frame_id": frame.frame_id, "frame_digest": frame.digest,
@@ -169,7 +177,7 @@ def template_page_context(snapshot: dict, index: int, count: int, content: str,
         "font_families": list(dict.fromkeys(asset.family for asset in frame.font_manifest.assets)),
         "font_faces": [{"family": asset.family, "weight": asset.weight, "face": asset.face}
                        for asset in frame.font_manifest.assets],
-        "source_body_evidence": [item for item in selection["package"].get("body_evidence", [])
+        "source_body_evidence": [item for item in template_package(selection).get("body_evidence", [])
                                  if item["source_page"] == frame.source_page],
         "body_background": body_background(frame),
     }

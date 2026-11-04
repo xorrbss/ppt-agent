@@ -1189,9 +1189,13 @@ async def execute_svg_workspace_export(context, *, presentation, admission, sess
         font_manifest = None
         system_furniture = None
         if isinstance(template_selection, dict) and template_selection.get("mode") == "template-redesign":
-            if not isinstance(template_selection, dict) or not isinstance(template_selection.get("package"), dict):
+            from services.svg_templates.selection_material import ensure_selection_material, template_package
+            async with session_factory() as material_session:
+                await ensure_selection_material(material_session, template_selection)
+            package = template_package(template_selection)
+            if not isinstance(package, dict):
                 raise PublicExportOperationError("svg_template_font_manifest_missing")
-            font_manifest = template_selection["package"].get("font_manifest")
+            font_manifest = package.get("font_manifest")
             if font_manifest is None:
                 raise PublicExportOperationError("svg_template_font_manifest_missing")
             if source_preservation is not None:

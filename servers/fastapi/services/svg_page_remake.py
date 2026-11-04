@@ -9,6 +9,7 @@ import xml.etree.ElementTree as ET
 from sqlalchemy import select, update
 from constants.user_messages import UserMessageKey, user_message
 from models.sql.slide import SlideModel
+from services.svg_templates.selection_material import template_package
 from services.authored_canvas import presentation_canvas_contract, presentation_canvas_metadata
 from services.authored_presentation_artifacts import _save_slide_pngs
 from services.svg_contract import finalize_svg, source_digest
@@ -180,6 +181,8 @@ async def preview_svg(presentation, slides, index, request, task, session):
         raise ValueError("svg_page_remake_source_changed")
     if local_edit:
         _local_svg_supported(presentation, target)
+    from services.svg_templates.selection_material import ensure_snapshot_material
+    await ensure_snapshot_material(session, (presentation.theme.get("svg", {}) or {}).get("styleSnapshot"))
     snapshot, template_page = _template_context(presentation, slides, index)
     from services.svg_document_mutations import read_svg_slide_assets, rebound_placement, materialize_rebound_svg
     assets = await read_svg_slide_assets(session, presentation, target)
@@ -328,7 +331,7 @@ async def preview_svg(presentation, slides, index, request, task, session):
             readability_policy=readability_policy,
             materialized_svg=render_source if render_source != final else None,
             instructions=instruction,
-            **({"font_manifest": snapshot["svg_template"]["package"]["font_manifest"]} if template_page is not None else {}),
+            **({"font_manifest": template_package(snapshot["svg_template"])["font_manifest"]} if template_page is not None else {}),
             **({"timeline_ink_probe": True} if v7_source else {}),
             **({"required_text": _required_numeric_claims(source)} if local_edit else {}),
             **({"system_furniture": furniture} if furniture is not None else {}),
@@ -406,6 +409,8 @@ async def publish_svg_candidate(session, presentation, slides, index, task, *, s
         _json_cas_predicate, version_service,
     )
     target = slides[index]
+    from services.svg_templates.selection_material import ensure_snapshot_material
+    await ensure_snapshot_material(session, (presentation.theme.get("svg", {}) or {}).get("styleSnapshot"))
     frozen_snapshot, template_page = _template_context(presentation, slides, index)
     header_page = _common_header_page(presentation, slides, index)
     data = task.data or {}
@@ -505,7 +510,7 @@ async def publish_svg_candidate(session, presentation, slides, index, task, *, s
         readability_policy=readability_policy,
         materialized_svg=render_source if render_source != svg else None,
         instructions=data.get("instruction"),
-        **({"font_manifest": frozen_snapshot["svg_template"]["package"]["font_manifest"]} if template_page is not None else {}),
+        **({"font_manifest": template_package(frozen_snapshot["svg_template"])["font_manifest"]} if template_page is not None else {}),
         **({"required_text": _required_numeric_claims((target.content or {}).get("source", ""))} if local_edit else {}),
         **({"timeline_ink_probe": True} if _v7_source_profile(presentation.theme.get("svg", {}).get("styleSnapshot", {})) else {}),
         **({"system_furniture": furniture} if furniture is not None else {}),

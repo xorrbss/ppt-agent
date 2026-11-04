@@ -68,6 +68,8 @@ async def _prepare_quality_recovery_review(session, presentation, slides, reques
         # unavailable): review this deck under the generation that published it.
         from services.svg_quality_recovery_review import generation_source_parent
         source_parent = await generation_source_parent(session, presentation)
+    from services.svg_templates.selection_material import ensure_snapshot_material
+    await ensure_snapshot_material(session, ((presentation.theme or {}).get("svg") or {}).get("styleSnapshot"))
     prepared = prepare_saved_review(presentation, slides,
         _positions(request, len(slides)) if request.scope != "all" else [],
         [_review_png(slide) for slide in slides], operation_id=operation_id, owner_scope=owner_scope,

@@ -3,6 +3,7 @@ from copy import deepcopy
 import logging
 from sqlalchemy import select
 from models.sql.slide import SlideModel
+from services.svg_templates.selection_material import template_package
 from services.authored_canvas import presentation_canvas_contract
 from services.authored_presentation_artifacts import _save_slide_pngs
 from services.svg_contract import finalize_svg
@@ -315,6 +316,8 @@ def validate_saved_template_pages(snapshot, slides):
 async def _refresh_template_pages(session, presentation, slides, snapshot):
     """Rebind page numbers only when each original frame remains the same."""
     import xml.etree.ElementTree as ET
+    from services.svg_templates.selection_material import ensure_snapshot_material
+    await ensure_snapshot_material(session, snapshot)
     from services.svg_templates.generation import template_page_context, compose_template_page, apply_template_body_quality
     from services.svg_master_furniture import master_furniture_receipt
     from services.svg_contract import source_digest
@@ -371,7 +374,7 @@ async def _refresh_template_pages(session, presentation, slides, snapshot):
             furniture = master_furniture_receipt(final, snapshot, index=index, n=len(slides),
                 width=canvas.width_px, height=canvas.height_px, template_page_context=new)
             capture = await render_svg_with_metrics(final, width=canvas.width_px, height=canvas.height_px,
-                font_manifest=snapshot["svg_template"]["package"]["font_manifest"],
+                font_manifest=template_package(snapshot["svg_template"])["font_manifest"],
                 readability_policy=receipt.get("readability_policy"), instructions=presentation.instructions,
                 **({"physical_canvas": physical} if isinstance(physical, DocumentCanvasMetadata) else {}))
             apply_template_body_quality(capture.quality, final, snapshot, new)

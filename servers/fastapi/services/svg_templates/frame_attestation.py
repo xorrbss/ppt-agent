@@ -113,8 +113,10 @@ def template_image_manifest(snapshot):
     selection = (snapshot or {}).get("svg_template", {})
     if selection.get("mode") != "template-redesign":
         return result
-    for value in selection.get("adaptations", {}).values():
-        adaptation = SvgTemplateFrameAdaptation.model_validate(unpack_adaptation_fonts(value, selection["package"]))
+    from services.svg_templates.selection_material import template_adaptations, template_package
+    package = template_package(selection)
+    for value in template_adaptations(selection).values():
+        adaptation = SvgTemplateFrameAdaptation.model_validate(unpack_adaptation_fonts(value, package))
         if artifact_digest(adaptation) != adaptation.digest:
             raise ValueError("svg_template_adaptation_digest_mismatch")
         result.update(trusted_frame_images(adaptation.frame))

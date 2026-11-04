@@ -38,6 +38,7 @@ from __future__ import annotations
 from copy import deepcopy
 import logging
 
+from services.svg_templates.selection_material import template_package
 from services.authored_checkpoint_errors import AuthoredStageError
 from services.generation_core.quality.flag_classification import FAILURE_PLACEHOLDER_OUTCOME
 from services.generation_core.quality.page_failure_kind import (
@@ -294,7 +295,7 @@ async def _template_fallback(*, ctx, request, index, content, payload, error, jo
             rendered = await render_svg_with_metrics(
                 svg, width=ctx.canvas.width_px, height=ctx.canvas.height_px,
                 instructions=request.instructions, required_text=_required_numeric_claims(content),
-                font_manifest=ctx.snapshot["svg_template"]["package"]["font_manifest"],
+                font_manifest=template_package(ctx.snapshot["svg_template"])["font_manifest"],
                 **({"system_furniture": furniture} if furniture is not None else {}), **ctx.physical_kwargs)
         apply_template_body_quality(rendered.quality, svg, ctx.snapshot, context)
     except (ValueError, TypeError, KeyError, IndexError):

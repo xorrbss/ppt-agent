@@ -123,16 +123,23 @@ async def resolve_fixed_glyph_slide_preview(
     # authority used by generation recovery. Recheck the owner-scoped version.
     current = await resolve_template_selection(session, pin=selection["template_pin"],
         mode="template-redesign", canvas=selection["canvas"], allow_archived=True)
-    if (current.get("version_id") != selection.get("version_id")
-            or current.get("package") != selection.get("package")
-            or current.get("adaptations") != selection.get("adaptations")):
+    from services.svg_templates.selection_material import (
+        SELECTION_SCHEMA_V1, ensure_selection_material, material_key, template_adaptations, template_package,
+    )
+    if selection.get("schema_version") == SELECTION_SCHEMA_V1:
+        unchanged = (current.get("package") == selection.get("package")
+                     and current.get("adaptations") == selection.get("adaptations"))
+    else:
+        unchanged = material_key(current) == selection.get("material_key")
+    if current.get("version_id") != selection.get("version_id") or not unchanged:
         raise ValueError("svg_template_glyph_frozen_pin_mismatch")
+    await ensure_selection_material(session, selection)
     frame_id = marker.get("frameId")
-    raw_adaptation = selection["adaptations"].get(frame_id)
+    raw_adaptation = template_adaptations(selection).get(frame_id)
     if not isinstance(raw_adaptation, dict):
         raise ValueError("svg_template_glyph_frame_missing")
     adaptation = SvgTemplateFrameAdaptation.model_validate(unpack_adaptation_fonts(
-        raw_adaptation, selection["package"]))
+        raw_adaptation, template_package(selection)))
     frame = adaptation.frame
     authority = frame.fixed_glyph_preview
     if (authority is None or frame.frame_id != frame_id
