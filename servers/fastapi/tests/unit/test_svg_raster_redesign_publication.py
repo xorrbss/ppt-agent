@@ -114,6 +114,7 @@ def test_redesign_page_reorder_renumbers_footer_without_generic_pipeline(monkeyp
     monkeypatch.setattr(svg_raster_renumber, "_rebind_screen_placement",
                         AsyncMock(side_effect=lambda *a, **k: ({**a[4], "rebound": True}, None)))
     canvas = SimpleNamespace(width_px=1188, height_px=840)
+    from utils.hashing import sha256_hex
     monkeypatch.setattr(mutations, "presentation_canvas_contract", lambda _theme: canvas)
     monkeypatch.setattr(mutations, "finalize_svg", _forbidden("finalize_svg"))
     monkeypatch.setattr(
@@ -121,7 +122,7 @@ def test_redesign_page_reorder_renumbers_footer_without_generic_pipeline(monkeyp
     capture = AsyncMock(side_effect=lambda svg, **kwargs: SimpleNamespace(png=b"png", quality={
         "source_digest": source_digest(svg), "renderer_version": SVG_RENDERER_VERSION,
         "contract_version": SVG_CONTRACT_VERSION, "measurement_complete": True,
-        "geometry_passed": True, "passed": True,
+        "geometry_passed": True, "passed": True, "png_digest": "sha256:" + sha256_hex(b"png"),
         "trusted_font_materialization": {"worker_materialized": True},
     }))
     monkeypatch.setattr("services.svg_renderer.render_svg_with_metrics", capture)
