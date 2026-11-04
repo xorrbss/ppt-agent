@@ -244,11 +244,20 @@ def test_a_series_name_that_is_not_drawn_drops_the_chart():
     assert wire is None and summary["dropped"][0]["reason"] == "native_chart_label_not_drawn"
 
 
+def test_a_chart_title_drawn_outside_the_group_drops_the_chart():
+    chart = _bar_chart("역할별 인원 (명)")
+    title = ('<text x="68" y="296" font-family="Noto Sans KR" font-size="16" font-weight="bold" fill="#243B7C">'
+             '역할별 인원 (명)</text>')
+    payload, _, _ = _authored(title + chart.replace(title, ""))
+    wire, summary = page_native_objects(payload, pt_per_px=0.75)
+    assert wire is None and summary["dropped"][0]["reason"] == "native_chart_label_not_drawn"
+
+
 def test_the_policy_author_clause_names_the_chart_series_rule():
     from utils.content_structure_policy import StructurePolicy, author_rules
 
     rules = author_rules("rules", StructurePolicy(), template_ids=True)
-    assert "declare the exact drawn chart title as the series name" in rules
+    assert "declare the exact drawn chart title as the" in rules and "inside the" in rules
     assert author_rules("rules", None) == "rules"
 
 

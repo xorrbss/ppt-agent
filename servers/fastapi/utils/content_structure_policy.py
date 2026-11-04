@@ -77,11 +77,11 @@ CONNECTOR_RULE = (
 TABLE_TEXT_CLAUSE = (
     " Every text inside a native table, each cell included, carries its own explicit x, y, font-family,"
     " font-size and fill like any other text; a header cell is bold and contrasts with the header fill."
-    # Measured 2026-11-04: a single-series chart declared the series name "headcount (persons)" but drew
-    # only its title, so the chart was dropped (native_chart_label_not_drawn) and the page fell back.
-    " A native chart's series name is drawn text inside its group: for a single series, declare the exact"
-    " drawn chart title as the series name, or draw the series name as a legend label; a declared chart"
-    " title is exactly the text drawn as the title."
+    # Measured 2026-11-04 (native_chart_label_not_drawn, the page fell back): a single-series chart declared
+    # a series name it never drew, and after a first clause the model drew the title outside the group.
+    " Every text a native chart declares (its title, each category, each series name) is drawn inside the"
+    " chart's own group, not beside it: for a single series, declare the exact drawn chart title as the"
+    " series name, or draw the series name as a legend label in the group."
     " A page that holds both a native table and a native chart places them side by side or keeps the chart"
     " compact, so that every table row stays inside the body."
 )
