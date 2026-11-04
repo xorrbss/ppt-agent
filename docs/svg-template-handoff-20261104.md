@@ -18,7 +18,7 @@ and what to do next.
 | Chapter tabs filled from generated chapters | Verified live on the real deck; `svg_template_chapter_missing` did not recur |
 | Header title and path slots | Done (`98e41a0d9`, `7d80815e7`); checked on one real deck only |
 | Content structure policy (tables, connectors) | Implemented, opt-in, **off by default** (`CONTENT_STRUCTURE_POLICY_SCOPE`) |
-| Evaluation tool | `servers/fastapi/scripts/svg_template_eval/` (see its README) |
+| Evaluation tool | `servers/fastapi/scripts/svg_template_eval/` (see its README); paired vision judge `judge.py` (`f452fd6bf`) |
 
 ## What changed this session
 
@@ -76,12 +76,13 @@ Details and tables: `docs/content-structure-policy-20261104.md`.
 
 ## Open issues
 
-1. A published template's stored files can disappear from the local artifact
-   store: all 9 adaptation artifacts of the newest template had retention
-   bindings, yet 3 files were gone. Byte-identical material from
-   re-registering the same deck shares one content-addressed object; deleting
-   an older sibling's file is suspected, not confirmed. Possibly a production
-   bug.
+1. Resolved (`aacef5817`): published template files vanished from the local
+   artifact store because the fake-LLM harness hands workers
+   `PUBLIC_WORKER_OBJECT_STORE_ROOT` (the real `public-artifacts` root) and
+   the worker's transport cache evicted every file there older than its TTL
+   (3600 s). The trusted transport never passes that variable, so the default
+   deployment was not affected. A store damaged before the fix needs a fresh
+   database and app-data directory, or the template registered again.
 2. A broad pytest run killed the local PostgreSQL and backend processes
    several times.
 3. The flow review fix (`4b4852323`) is unit-tested only; the rejection is
@@ -93,18 +94,21 @@ Details and tables: `docs/content-structure-policy-20261104.md`.
 6. An over-wide dynamic title used to fail the page; now it shrinks and is
    cut. Chapter tab fields still fail.
 7. Without a frame map every body page uses frame-2 (see Measurements).
+8. `test_source_publish_rejects_missing_receipt_before_database_access` and
+   `test_feature_lifecycle_refcount_expiry_and_gc_fail_closed` fail on
+   `'GuardSession' object has no attribute 'info'` in
+   `services/svg_templates/retention.py`; not caused by this session's changes.
 
 ## Next, in order
 
-1. Root-cause the template file loss (open issue 1; possible production bug).
-2. Have the user judge the latest deck in PowerPoint against the original.
-3. Split the policy into separate table and connector switches and measure
+1. Have the user judge the latest deck in PowerPoint against the original.
+2. Split the policy into separate table and connector switches and measure
    connectors alone with the structured input (N >= 3 with the tool).
-4. Fix native table authoring in template mode
+3. Fix native table authoring in template mode
    (`native_requested_table_missing` and others).
-5. Pass the template's component styles (numbered chips, table header style,
+4. Pass the template's component styles (numbered chips, table header style,
    callouts, KPI cards) as style guidance, never as fixed layouts.
-6. Then the scattered small first-draft failures: body outside region (5 of
+5. Then the scattered small first-draft failures: body outside region (5 of
    30 pages), required text missing (3 of 30), symbol policy (2), font
    glyphs (1).
 
@@ -131,6 +135,10 @@ Details and tables: `docs/content-structure-policy-20261104.md`.
   `svgTemplatePin`, `svgTemplateMode: template-redesign`, `svgCanvas` (EMU),
   optionally `svgTemplateFrameMap`, `export_as: pptx` -> download the export
   artifact from the workspace timeline.
+* Vision judge baseline (contact sheet of eight original body pages, three
+  judgements of one baseline deck): overall 3.46, 3.48, 3.54 (each axis moved
+  at most 0.2); the other two baseline decks 3.40 and 3.52; held-out original
+  pages 4.7; a plain bullet page 1.2.
 * To judge a generation change over several runs use
   `servers/fastapi/scripts/svg_template_eval/` (README there).
 * LibreOffice renders of exported PPTX need the deck's font installed
