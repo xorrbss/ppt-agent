@@ -101,8 +101,8 @@ def test_structured_table_cells_are_verbatim_in_the_native_table(tmp_path):
 def test_native_table_failure_falls_back_to_grid_with_evidence(tmp_path, monkeypatch):
     original = export_scene.converter_payload
 
-    def broken(item):
-        payload = original(item)
+    def broken(item, **kwargs):
+        payload = original(item, **kwargs)
         payload["header_rows"] = 99  # rejected by the converter's table schema
         return payload
 
