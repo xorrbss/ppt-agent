@@ -345,7 +345,7 @@ def preflight_template_outline(snapshot: dict, outline) -> None:
     if any(int(key) > count for key in selection["frame_map"]):
         raise ValueError("svg_template_frame_map_invalid")
     for index, slide in enumerate(outline.slides):
-        template_page_context(snapshot, index, count, slide.content)
+        template_page_context(snapshot, index, count, slide.content, chapter=getattr(slide, "chapter", None))
 
 
 def validate_template_publication(snapshot: dict, pages, outline) -> None:
@@ -355,7 +355,8 @@ def validate_template_publication(snapshot: dict, pages, outline) -> None:
     page_frame(snapshot, 0, len(pages))
     for index, (payload, _png) in enumerate(pages):
         validate_template_publication_page(snapshot, payload, index=index, count=len(pages),
-                                           content=outline.slides[index].content)
+                                           content=outline.slides[index].content,
+                                           chapter=getattr(outline.slides[index], "chapter", None))
         if page_frame(snapshot, index, len(pages)).schema_version == "svg-template-frame/v3":
             from services.svg_presentation_checkpoint import _read_png
             from services.svg_templates.frame_fonts import bytes_digest
@@ -365,11 +366,11 @@ def validate_template_publication(snapshot: dict, pages, outline) -> None:
 
 
 def validate_template_publication_page(snapshot: dict, payload: dict, *, index: int, count: int,
-                                       content: str) -> None:
+                                       content: str, chapter: dict | None = None) -> None:
     """Share the intact page proof between terminal keep and deck publication."""
     from services.svg_master_furniture import master_furniture_receipt
     canvas = page_frame(snapshot, 0, count).source_canvas
-    expected = template_page_context(snapshot, index, count, content)
+    expected = template_page_context(snapshot, index, count, content, chapter=chapter)
     if expected != payload.get("svg_template_page"):
         raise ValueError("svg_template_publication_context_mismatch")
     svg = payload["svg_content"]

@@ -104,8 +104,10 @@ async def rescue_terminal_page(*, ctx, request, index, content, payload, error, 
         intact = svg is not None
         if intact:
             try:
+                from services.svg_templates.chapters import page_chapter
                 validate_template_publication_page(ctx.snapshot, {**payload, "svg_content": svg},
-                                                   index=index, count=ctx.count, content=content)
+                                                   index=index, count=ctx.count, content=content,
+                                                   chapter=page_chapter(ctx, index))
             except (ValueError, TypeError, KeyError, IndexError):
                 intact = False
         if not intact:

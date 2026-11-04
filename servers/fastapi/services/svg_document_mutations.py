@@ -306,7 +306,10 @@ def validate_saved_template_pages(snapshot, slides):
         pages.append(({**deepcopy(content.get("svgReceipt") or {}), "svg_content": slide.svg_content,
                        **({"svgAssetManifest": deepcopy(content["svgAssetManifest"])}
                           if "svgAssetManifest" in content else {})}, None))
-        outline.append(SimpleNamespace(content=source))
+        # A saved page keeps the chapter it was published with.
+        from services.svg_templates.chapters import chapter_from_context
+        outline.append(SimpleNamespace(content=source, chapter=chapter_from_context(
+            (content.get("svgReceipt") or {}).get("svg_template_page"))))
     try:
         validate_template_publication(snapshot, pages, SimpleNamespace(slides=outline))
     except (ValueError, KeyError, TypeError) as error:

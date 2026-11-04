@@ -112,3 +112,31 @@ def test_planning_retries_once_with_a_smaller_budget_then_fails(monkeypatch, tmp
     asyncio.run(chapters.plan_outline_chapters(request, outline))
     assert [slide.chapter for slide in outline.slides] == [{"number": "Ⅰ", "title": "개요"},
                                                           {"number": "Ⅱ", "title": "방안"}]
+
+
+def _selection_snapshot(package):
+    from services.svg_templates.frame import adapt_template_frame
+    from utils.hashing import canonical_json_digest
+
+    dumped = package.model_dump(mode="json", by_alias=True)
+    adaptations = {frame.frame_id: adapt_template_frame(frame, frame.source_canvas).model_dump(mode="json", by_alias=True)
+                   for frame in package.frames}
+    selection = {"template_pin": {"templateId": "t", "revision": 1, "digest": "sha256:" + "a" * 64},
+                 "mode": "template-redesign", "package": dumped, "style_projection": {}, "adaptations": adaptations,
+                 "source_snapshot_id": "s", "version_id": "v", "schema_version": "svg-template-selection/v1",
+                 "frame_map": {}, "canvas": dumped["source_canvas"]}
+    selection["digest"] = canonical_json_digest(selection)
+    return {"svg_template": selection}
+
+
+def test_the_outline_preflight_fills_chapter_tabs_from_the_outline(tmp_path):
+    """A live run failed with svg_template_chapter_missing: the preflight built
+    page contexts without the outline's chapters."""
+    from services.svg_templates.generation import preflight_template_outline
+
+    snapshot = _selection_snapshot(extract_template_package(_chapter_deck(tmp_path / "deck.pptx")))
+    outline = PresentationOutlineModel(slides=[SlideOutlineModel(content=f"# 쪽 {i}") for i in range(3)])
+    with pytest.raises(ValueError, match="svg_template_chapter_missing"):
+        preflight_template_outline(snapshot, outline)
+    chapters.assign_chapters(outline, [(0, "개요"), (2, "방안")], "roman-unicode")
+    preflight_template_outline(snapshot, outline)
