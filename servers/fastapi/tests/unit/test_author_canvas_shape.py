@@ -32,7 +32,7 @@ from utils.llm_calls.author_prompt_profile import (
     author_prompt_profile_scope,
 )
 from services.generation_core.authoring.author_slide import Brand, build_design_system
-from services.generation_core.authoring.author_slide_svg import svg_author_rules
+from services.generation_core.authoring.author_slide_svg import free_composition_canvas_clause, svg_author_rules
 
 BASELINE_DIR = Path(__file__).resolve().parents[1] / "fixtures" / "prompt_16x9_baseline"
 MODES = ("template", "companyStandard", "none")
@@ -238,8 +238,9 @@ def test_portrait_output_matches_the_old_table_except_the_two_fixed_misses(h, pr
 def test_svg_rules_carry_the_shape_clause(size):
     w, h = size
     rules = svg_author_rules({"canvas": {"width": w, "height": h}}, 16)
-    assert rules.endswith(composition_clause(w, h) + reference_caveat(w, h))
-    assert rules.count(COMPOSITION_MARKER) == 1
+    # The svg author gets the free-composition clause, not the shape-class one.
+    assert rules.endswith(free_composition_canvas_clause(w, h) + reference_caveat(w, h))
+    assert rules.count(COMPOSITION_MARKER) == 0
 
 
 def test_svg_rules_carry_no_clause_for_the_baseline():
