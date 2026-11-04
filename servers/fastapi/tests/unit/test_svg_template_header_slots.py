@@ -57,6 +57,55 @@ def _deck(path, *, title_runs=False):
     return path
 
 
+def _path_deck(path, paths):
+    """One page per ``(number, path runs)``: a title and a number + path group in the header."""
+    deck = Presentation()
+    deck.slide_width, deck.slide_height = Emu(12192000), Emu(6858000)
+    for index, (number, runs) in enumerate(paths):
+        slide = deck.slides.add_slide(deck.slide_layouts[6])
+        for placeholder in list(slide.placeholders):
+            placeholder._element.getparent().remove(placeholder._element)
+        _text(slide.shapes, f"Page title {index}", 457200, 900000, 9000000, 24, color=(0, 0, 0))
+        group = slide.shapes.add_group_shape()
+        _text(group.shapes, number, 457200, 560000, 300000, 12, color=(0, 0, 0))
+        _text(group.shapes, "".join(runs), 900000, 560000, 7000000, 12, color=(0, 0, 0), runs=runs)
+    deck.save(path)
+    return path
+
+
+def test_a_number_and_text_group_alike_on_every_page_is_not_a_path(tmp_path):
+    """A constant section label drawn alike on every page is not a path to overwrite.
+
+    It is classified as it was before header paths were recognised: a
+    slide-level group the frame does not hold, left as the page's own source.
+    """
+    package = extract_template_package(_path_deck(tmp_path / "deck.pptx", [("7", ["Section label"])] * 3))
+    for frame, evidence in zip(package.frames, package.body_evidence, strict=True):
+        assert not {"breadcrumb", "breadcrumb_number"} & set(frame.dynamic_fields), frame.frame_id
+        assert "title" in frame.dynamic_fields
+        assert not any(element.dynamic_key and _drawn(element) in {"7", "Section label"} for element in frame.elements)
+        assert evidence.body_kinds == ("grpSp",)
+
+
+def test_a_path_shared_by_pages_with_different_runs_is_still_dynamic(tmp_path):
+    """Pages of one section share a path, and PowerPoint may split it into different runs.
+
+    Neither the text-free slot key (page 2's runs give it a slot of its own)
+    nor the repeat key (pages 1 and 3 repeat each other) can see that.
+    """
+    paths = [("1", ["Plan › Scope"]), ("1", ["Plan ", "› ", "Scope"]), ("1", ["Plan › Scope"]),
+             ("2", ["Build › Schedule"])]
+    package = extract_template_package(_path_deck(tmp_path / "deck.pptx", paths))
+    assert len(package.frames) == 4
+    for frame, evidence in zip(package.frames, package.body_evidence, strict=True):
+        assert {"breadcrumb", "breadcrumb_number"} <= set(frame.dynamic_fields), frame.frame_id
+        assert "grpSp" not in evidence.body_kinds  # the frame holds the path group
+
+
+def _drawn(element):
+    return "".join(re.findall(r">([^<>]+)<", element.svg))
+
+
 def _texts(frame):
     return {element.dynamic_key or "fixed": "".join(re.findall(r">([^<>]+)<", element.svg))
             for element in frame.elements if element.kind == "text"}

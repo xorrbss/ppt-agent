@@ -204,7 +204,71 @@ def _first_run_size(typography, part, shape):
     return None
 
 
-def _header_text_slots(context, typography, package, slide_part, canvas, variable_slots, repeats, deck_pages):
+#: Two pages draw a path group at the same place when its leaves lie within this many px.
+_PATH_PLACE_TOLERANCE_PX = 4.0
+
+
+def _path_group(context, shape, canvas):
+    """``(number leaf, path leaf, place)`` of a header group holding a number and one other text.
+
+    ``place`` is the slide geometry of the two leaves, without the path's
+    width (a longer path may get a wider box) and without any text or run, so
+    the same group can be found on other pages whatever they write in it.
+    """
+    if (etree.QName(shape).localname != "grpSp" or placeholder_of(shape) is not None
+            or shape.find(".//a:t", NS) is None):
+        return None
+    try:
+        found = [(leaf, box) for leaf, box, failure in group_leaves(shape, context.scale)
+                 if failure is None and box is not None]
+    except ValueError:
+        return None
+    if not found or max(box.y + box.height for _, box in found) > canvas.height_px * .25:
+        return None
+    texts = [(leaf, box) for leaf, box in found if leaf.find(".//a:t", NS) is not None and _shape_text(leaf)]
+    numbers = [(leaf, box) for leaf, box in texts if _PAGE_NUMBER_TEXT.match(_shape_text(leaf))]
+    paths = [(leaf, box) for leaf, box in texts if not _PAGE_NUMBER_TEXT.match(_shape_text(leaf))]
+    if len(numbers) != 1 or len(paths) != 1:
+        return None
+    (number, number_box), (path, path_box) = numbers[0], paths[0]
+    place = (number_box.x, number_box.y, number_box.width, number_box.height,
+             path_box.x, path_box.y, path_box.height)
+    return number, path, place
+
+
+def _same_place(first, second) -> bool:
+    return all(abs(a - b) <= _PATH_PLACE_TOLERANCE_PX for a, b in zip(first, second, strict=True))
+
+
+def _path_places(context, slides, canvas) -> list[tuple[tuple[float, ...], set[tuple[str, str]]]]:
+    """Every place of the deck's header path groups, with the texts drawn there.
+
+    A path is page content only where the deck writes different paths at its
+    place. One written alike on every page (a constant section label) is not a
+    path and is classified as before this check existed: a slide-level group
+    has no bounds of its own, so it stays body design evidence. ``_slot_key``/``_repeat_key`` cannot tell: pages of one
+    section share the path, and PowerPoint splits the same text into
+    different runs page to page, so the real proposal deck gives one path
+    group a different key on each page. Places are therefore matched by leaf
+    geometry and texts compared as visible text, runs joined.
+    """
+    places: list[tuple[tuple[float, ...], set[tuple[str, str]]]] = []
+    for part in slides:
+        for shape in _children(context.root(part)):
+            group = _path_group(context, shape, canvas)
+            if group is None:
+                continue
+            number, path, place = group
+            texts = next((texts for known, texts in places if _same_place(known, place)), None)
+            if texts is None:
+                texts = set()
+                places.append((place, texts))
+            texts.add((_shape_text(number), _shape_text(path)))
+    return places
+
+
+def _header_text_slots(context, typography, package, slide_part, canvas, variable_slots, repeats, deck_pages,
+                       path_places):
     """The page-specific header texts of a slide that a generated page can fill.
 
     The real proposal deck puts each page's title, a path (``3 | 프로젝트 수행전략
@@ -215,7 +279,8 @@ def _header_text_slots(context, typography, package, slide_part, canvas, variabl
 
     * ``title``: the largest of the page's header texts, at least 18 pt;
     * ``breadcrumb`` and ``breadcrumb_number``: a group holding a number and a
-      wider text (the chapter number and its path).
+      wider text (the chapter number and its path), where ``path_places``
+      shows the deck writes at least two different paths at its place.
 
     Anything else in the band that varies (the requirement ID) stays page
     content, as before. Returns ``(leaf id -> dynamic key, ids of the
@@ -234,8 +299,8 @@ def _header_text_slots(context, typography, package, slide_part, canvas, variabl
         if shape.find(".//a:t", NS) is None:
             continue
         # A title is page content: its text differs between pages, or no other
-        # page repeats it. (A path group is recognised by its shape below: pages
-        # of one section share its text, and its runs may differ page to page.)
+        # page repeats it. (A path group is judged by ``path_places`` below:
+        # pages of one section share its text, and its runs may differ.)
         if kind == "sp" and (_slot_key(shape, package, slide_part) not in variable_slots
                              and repeats[_repeat_key(shape, package, slide_part)] >= 2):
             continue
@@ -250,19 +315,13 @@ def _header_text_slots(context, typography, package, slide_part, canvas, variabl
             if size is not None and size >= _MIN_TITLE_SIZE_PT and _shape_text(shape):
                 titles.append((size, bounds.width, shape))
             continue
-        try:
-            found = [(leaf, box) for leaf, box, failure in group_leaves(shape, context.scale)
-                     if failure is None and box is not None]
-        except ValueError:
+        group = _path_group(context, shape, canvas)
+        if group is None:
             continue
-        if not found or max(box.y + box.height for _, box in found) > limit:
-            continue
-        leaves = [leaf for leaf, _ in found if leaf.find(".//a:t", NS) is not None and _shape_text(leaf)]
-        numbers = [leaf for leaf in leaves if _PAGE_NUMBER_TEXT.match(_shape_text(leaf))]
-        paths = [leaf for leaf in leaves if leaf not in numbers]
-        if len(numbers) == 1 and len(paths) == 1:
-            roles[shape_id(numbers[0])] = "breadcrumb_number"
-            roles[shape_id(paths[0])] = "breadcrumb"
+        number, path, place = group
+        if any(_same_place(known, place) and len(texts) >= 2 for known, texts in path_places):
+            roles[shape_id(number)] = "breadcrumb_number"
+            roles[shape_id(path)] = "breadcrumb"
             holders.add(shape_id(shape))
     if titles:
         _, _, title = max(titles, key=lambda item: (item[0], item[1]))
@@ -689,6 +748,7 @@ def extract_template_package(pptx_path: str | Path, *, font_assets=None,
         # Repetition is judged over the whole deck: more pages, better evidence.
         repeats = Counter(key for part in all_slides for key in {_repeat_key(shape, package, part) for shape in _children(context.root(part))})
         variable_slots = _variable_slots(context, package, all_slides)
+        path_places = _path_places(context, all_slides, canvas)
         chapter_geometry, chapter_keys = _chapter_slots(context, package, typography)
 
         def chapter_slot(bounds):
@@ -747,7 +807,7 @@ def extract_template_package(pptx_path: str | Path, *, font_assets=None,
             latent_visible = _latent_placeholder_visibility(context, ancestry)
             header_roles, header_holders = _header_text_slots(
                 context, typography, package, slide_part, canvas, variable_slots, repeats,
-                len(all_slides))
+                len(all_slides), path_places)
             for part in reversed(ancestry):
                 root = context.root(part)
                 slide_root = context.root(slide_part)
