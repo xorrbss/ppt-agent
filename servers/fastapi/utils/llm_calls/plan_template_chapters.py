@@ -64,7 +64,7 @@ def parse_template_chapters(content: object, page_count: int, *, max_title_chars
     starts = [start for start, _ in chapters]
     if (not chapters or len(chapters) > max_chapters or starts[0] != 0
             or any(not 0 <= start < page_count for start in starts)
-            or any(later <= earlier for earlier, later in zip(starts, starts[1:]))
+            or any(later <= earlier for earlier, later in zip(starts, starts[1:], strict=False))
             or any(not title or len(title) > max_title_chars for _, title in chapters)):
         raise ValueError("svg_template_chapter_plan_invalid")
     return chapters
