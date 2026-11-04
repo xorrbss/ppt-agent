@@ -392,7 +392,7 @@ _TEMPLATE_BODY_INSET_PX = 8
 
 def template_fallback_body_svg(*, content: str, width: int, height: int, body_region: Mapping,
                                title_in_frame: bool, title_face: Mapping, body_face: Mapping,
-                               style_snapshot: dict | None) -> str:
+                               style_snapshot: dict | None, body_background: Mapping | None = None) -> str:
     """Deterministic body for a template-redesign page whose authored body failed.
 
     A full-canvas, transparent SVG whose only paint lies inside ``body_region``
@@ -404,6 +404,9 @@ def template_fallback_body_svg(*, content: str, width: int, height: int, body_re
     """
 
     tokens = (style_snapshot or {}).get("tokens", {})
+    if body_background:
+        # The text sits on the template's own paint (a cover photo), not on tokens.background.
+        tokens = {**tokens, "background": body_background["mean_color"]}
     _background, text_color, accent = _page_colors(tokens)
     inset = _TEMPLATE_BODY_INSET_PX
     left = float(body_region["x"]) + inset

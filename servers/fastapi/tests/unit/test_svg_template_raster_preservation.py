@@ -373,3 +373,34 @@ def test_decoration_with_an_unknown_box_is_never_merged(tmp_path):
     renderer = _FakeRenderer()
     extract_template_package(_deck(tmp_path / "deck.pptx", build), raster_renderer=renderer)
     assert [len(request.shapes) for request in renderer.requests] == [1, 1]
+
+
+def test_the_body_background_reports_a_dark_cover_photo(tmp_path):
+    from services.generation_core.drivers.svg.fallback import template_fallback_body_svg
+    from services.svg_templates.frame_composition import body_background
+
+    class _DarkPhoto(_FakeRenderer):
+        def __call__(self, path, canvas, requests):
+            self.requests.extend(requests)
+            output = BytesIO()
+            Image.new("RGB", (64, 36), (8, 30, 70)).save(output, format="JPEG")
+            return {request.key: RasterResult(data=output.getvalue(), media_type="image/jpeg", x=0, y=0,
+                                              width=1280, height=720, renderer="fake", renderer_version="1",
+                                              approximate=True) for request in requests}
+
+    def build(slide, add, deck):
+        deck.slide_layouts[6].background.fill.gradient()
+        _solid(add(slide.shapes.add_shape(MSO_SHAPE.RECTANGLE, 0, Emu(6600000), Emu(_WIDTH), Emu(100000))))
+
+    frame = extract_template_package(_deck(tmp_path / "deck.pptx", build), raster_renderer=_DarkPhoto()).frames[0]
+    background = body_background(frame)
+    assert background["tone"] == "dark" and background["text_color"] == "#FFFFFF"
+    svg = template_fallback_body_svg(content="# 제목\n- 첫째 항목", width=1280, height=720,
+        body_region=frame.body_region.model_dump(), title_in_frame=False,
+        title_face={"family": "Pretendard", "weight": 700}, body_face={"family": "Pretendard", "weight": 400},
+        style_snapshot={"tokens": {"background": "#FFFFFF", "palette": ["#222222"]}}, body_background=background)
+    assert 'fill="#FFFFFF"' in svg and 'fill="#222222"' not in svg
+
+    light = extract_template_package(_deck(tmp_path / "plain.pptx", _band_and_footer),
+                                     raster_renderer=_FakeRenderer()).frames[0]
+    assert body_background(light)["tone"] == "light"

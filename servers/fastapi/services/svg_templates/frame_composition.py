@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import base64
+import re
 from copy import deepcopy
 
 from lxml import etree
@@ -183,6 +184,71 @@ def _line_extent(frame: SvgTemplateFrame, text) -> tuple[float, float, float]:
         width += run_width + float(attribute("letter-spacing", "0")) * len(value)
         ascent, descent = max(ascent, run_ascent), max(descent, run_descent)
     return width, ascent, descent
+
+
+def _relative_luminance(rgb) -> float:
+    def channel(value):
+        value = value / 255
+        return value / 12.92 if value <= 0.03928 else ((value + 0.055) / 1.055) ** 2.4
+    red, green, blue = (channel(float(value)) for value in rgb)
+    return 0.2126 * red + 0.7152 * green + 0.0722 * blue
+
+
+def body_background(frame: SvgTemplateFrame) -> dict:
+    """The template paint under the body region, for choosing legible body colours.
+
+    Background-layer elements are composited in paint order over white: a
+    solid rect that covers the region replaces the colour; a background image
+    contributes its own pixels inside the region (alpha-blended). The result is
+    the region's mean colour and the body text colour (white or near-black)
+    with the stronger contrast against it.
+    """
+    import numpy as np
+    from io import BytesIO
+    from PIL import Image
+
+    region = frame.body_region
+    mean = np.array([255.0, 255.0, 255.0])
+    for element in frame.elements:
+        if element.layer != "background":
+            continue
+        node = secure_xml(element.svg.encode(), part_name="frame-element.svg")
+        box = element.bounds
+        covers = (box.x <= region.x + .5 and box.y <= region.y + .5
+                  and box.x + box.width >= region.x + region.width - .5
+                  and box.y + box.height >= region.y + region.height - .5)
+        if element.kind == "rect" and covers:
+            fill = node.get("fill", "")
+            if re.fullmatch(r"#[0-9A-Fa-f]{6}", fill):
+                mean = np.array([int(fill[i:i + 2], 16) for i in (1, 3, 5)], dtype=float)
+        elif element.kind == "image":
+            image_node = next(node.iter(f"{{{SVG_NS}}}image"), None)
+            href = image_node.get("href", "") if image_node is not None else ""
+            if not href.startswith("data:image/") or box.width <= 0 or box.height <= 0:
+                continue
+            with Image.open(BytesIO(base64.b64decode(href.split(",", 1)[1], validate=True))) as decoded:
+                pixels = np.asarray(decoded.convert("RGBA"), dtype=float)
+            height, width = pixels.shape[:2]
+            left = int(max(0, (region.x - box.x) / box.width * width))
+            right = int(min(width, (region.x + region.width - box.x) / box.width * width))
+            top = int(max(0, (region.y - box.y) / box.height * height))
+            bottom = int(min(height, (region.y + region.height - box.y) / box.height * height))
+            if right <= left or bottom <= top:
+                continue
+            crop = pixels[top:bottom, left:right]
+            alpha = crop[..., 3:4] / 255
+            blended = (crop[..., :3] * alpha + mean * (1 - alpha)).reshape(-1, 3).mean(axis=0)
+            # The part of the region the image does not cover keeps the colour beneath.
+            overlap = (max(0.0, min(box.x + box.width, region.x + region.width) - max(box.x, region.x))
+                       * max(0.0, min(box.y + box.height, region.y + region.height) - max(box.y, region.y)))
+            share = min(1.0, overlap / max(1e-9, region.width * region.height))
+            mean = blended * share + mean * (1 - share)
+    luminance = _relative_luminance(mean)
+    contrast_white = 1.05 / (luminance + 0.05)
+    contrast_dark = (luminance + 0.05) / (_relative_luminance((17, 17, 17)) + 0.05)
+    return {"mean_color": "#%02X%02X%02X" % tuple(int(round(value)) for value in mean),
+            "tone": "dark" if contrast_white > contrast_dark else "light",
+            "text_color": "#FFFFFF" if contrast_white > contrast_dark else "#111111"}
 
 
 def trusted_frame_images(frame: SvgTemplateFrame) -> dict[str, str]:

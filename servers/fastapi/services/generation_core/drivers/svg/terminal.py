@@ -285,7 +285,8 @@ async def _template_fallback(*, ctx, request, index, content, payload, error, jo
         title_face = min(faces, key=lambda face: abs(face["weight"] - 700))
         body = template_fallback_body_svg(content=content, width=ctx.canvas.width_px, height=ctx.canvas.height_px,
             body_region=context["body_region"], title_in_frame="title" in context["dynamic_fields"],
-            title_face=title_face, body_face=body_face, style_snapshot=ctx.snapshot)
+            title_face=title_face, body_face=body_face, style_snapshot=ctx.snapshot,
+            body_background=context.get("body_background"))
         svg = compose_template_page(ctx.snapshot, body, context)
         furniture = master_furniture_receipt(svg, ctx.snapshot, index=index, n=ctx.count,
             width=ctx.canvas.width_px, height=ctx.canvas.height_px, template_page_context=context)

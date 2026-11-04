@@ -134,7 +134,7 @@ def template_page_context(snapshot: dict, index: int, count: int, content: str,
     if selection is None or selection["mode"] != "template-redesign":
         return None
     from utils.outline_utils import explicit_outline_title
-    from services.svg_templates.frame_composition import render_frame_svg
+    from services.svg_templates.frame_composition import body_background, render_frame_svg
 
     frame = page_frame(snapshot, index, count, role)
     title = explicit_outline_title(content)
@@ -159,6 +159,7 @@ def template_page_context(snapshot: dict, index: int, count: int, content: str,
                        for asset in frame.font_manifest.assets],
         "source_body_evidence": [item for item in selection["package"].get("body_evidence", [])
                                  if item["source_page"] == frame.source_page],
+        "body_background": body_background(frame),
     }
     result["digest"] = canonical_json_digest(result)
     return result
@@ -188,6 +189,9 @@ def body_author_rules(rules: str, snapshot: dict) -> str:
         " Paint includes strokes: a stroke extends half its stroke-width beyond the shape's geometry,"
         " so keep every shape, line and card at least half its stroke-width plus 2px inside body_region;"
         " never align a stroked edge exactly on a body_region edge."
+        " template_page.body_background is the template paint under the body (a dark photo on a cover or"
+        " divider): text drawn directly on it uses body_background.text_color or another colour with at"
+        " least 4.5:1 contrast to body_background.mean_color; a card behind text may set its own contrast."
         " Use transparent space outside the body; do not add a full-canvas background."
         " All authored element IDs must start with body-. Never use svg-system- IDs."
         " Preserve every required fact and number. template_page.font_faces is authoritative for this page;"
