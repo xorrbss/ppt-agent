@@ -347,3 +347,31 @@ Observed, not fixed:
   page. Review lets the person drop such elements; analysis does not yet tell
   chapter-specific text from furniture.
 
+## 10. Template material by reference (2026-11-04)
+
+Commit `a862b3715`: new admissions store a v2 template selection (pin, version
+id, canvas, frame map, style projection, `material_key`) and load the package
+and adaptations per process through the verified template loader
+(`services/svg_templates/selection_material.py`). v1 selections stay valid.
+The SVG unit suites (3,163 tests) fail identically before and after (209
+pre-existing failures).
+
+Live on SQLite with the same deck:
+
+| Row | Before | After |
+|---|---|---|
+| `presentation_generation_jobs.request_payload` | 15.4 MB | 13 KB |
+| `presentation_generation_jobs.svg_style_snapshot` | 15.4 MB | 10 KB |
+| `workspace_operations.request_payload` | 15.4 MB | 15 KB |
+| `presentations.theme` | 16.5 MB | 255 B (before publication) |
+
+The first generation still ended with `database is locked`, now on
+`UPDATE public_provider_logical_calls` (provider-call reconciliation) while
+ten pages author in parallel. Connections wait 30 s
+(`services/database.py`), so another transaction held SQLite's single write
+lock for longer than that. Large rows made this worse but were not its only
+cause; the long writer is not identified yet. The second run then failed with
+`public_provider_terminal_replay_unsupported`: its retry reused provider calls
+the interrupted run had already settled, which the non-idempotent provider
+guard refuses by design. PostgreSQL (section 9) is unaffected.
+
