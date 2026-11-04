@@ -1026,6 +1026,10 @@ async def author_slide_svg(content: str, style_snapshot: dict, role: str, index:
     readability_policy = style_snapshot.get("readability_policy")
     if readability_policy is not None:
         body_floor = max(body_floor, svg_quality_font_floor(readability_policy))
+    if template_page is not None:
+        from services.svg_templates.generation import template_exemplar_facts
+        template_facts.update(template_exemplar_facts(style_snapshot, template_page, content, body_floor=body_floor,
+                                                      source_preserved=source_preserved))
     # ``kind`` is present only for planned AssetOffer slots, so a deck of
     # source images alone sends the same prompt as before offers existed.
     offered = {k: {"description": v.get("description", ""), "required": v.get("required", False),

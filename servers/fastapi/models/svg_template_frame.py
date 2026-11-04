@@ -198,6 +198,90 @@ class SvgTemplateComponentStyle(FrameModel):
     tables: tuple[SvgTemplateTableStyle, ...] = Field(default=(), max_length=2)
 
 
+#: Content kinds of a body page, shared by source pages and outline pages
+#: (``services/svg_templates/body_composition.py``).
+BODY_CONTENT_KINDS = ("table", "chart", "flow", "hierarchy", "kpi", "cards", "picture", "list")
+_ContentKind = Literal["table", "chart", "flow", "hierarchy", "kpi", "cards", "picture", "list"]
+
+
+class SvgTemplateExemplarText(FrameModel):
+    """A text's look and amount; never its characters."""
+    size_px: float = Field(gt=0, le=400)
+    weight: int = Field(ge=100, le=900)
+    color: str = Field(pattern=_HEX)
+    #: Paragraphs and characters of the source text (counts only).
+    paragraphs: int = Field(ge=1, le=200)
+    chars: int = Field(ge=1, le=20000)
+    #: The source text is a bare item number ("01", "2.", "A"): drawn as a number, not words.
+    numbered: bool = False
+    #: The source text starts with an item number followed by words (a heading "01 ...").
+    lead_number: bool = False
+
+
+class SvgTemplateExemplarItem(FrameModel):
+    """One element of a source body page: kind, box relative to the body region, paint, text amount."""
+    kind: Literal["text", "bar", "label", "chip", "step", "card", "panel", "mark", "tile", "divider",
+                  "line", "arrow", "shape", "table", "chart", "picture", "icon"]
+    x: int
+    y: int
+    w: int = Field(ge=0)
+    h: int = Field(ge=0)
+    fill: str | None = Field(default=None, pattern=_HEX)
+    stroke: str | None = Field(default=None, pattern=_HEX)
+    text: SvgTemplateExemplarText | None = None
+    #: Tables: rows, columns, header fill, the header and body cell text.
+    rows: int | None = Field(default=None, ge=1, le=200)
+    cols: int | None = Field(default=None, ge=1, le=60)
+    header_fill: str | None = Field(default=None, pattern=_HEX)
+    header_text: SvgTemplateExemplarText | None = None
+    #: Charts: the plot type.
+    chart: Literal["bar", "line", "pie", "doughnut", "area", "scatter", "radar", "other"] | None = None
+
+    @model_serializer(mode="wrap")
+    def serialize_compact(self, handler):
+        # An outline has many items; fields that do not apply are left out.
+        return {key: value for key, value in handler(self).items() if value is not None}
+
+
+class SvgTemplateBodyExemplar(FrameModel):
+    """A source body page as a structural outline: what it contains and how it fills the body."""
+    source_page: int = Field(ge=0)
+    region_width: int = Field(gt=0)
+    region_height: int = Field(gt=0)
+    kinds: tuple[_ContentKind, ...] = Field(min_length=1, max_length=8)
+    sections: int = Field(ge=0, le=20)
+    text_items: int = Field(ge=0)
+    items: tuple[SvgTemplateExemplarItem, ...] = Field(min_length=1, max_length=160)
+
+
+class SvgTemplateCompositionGrammar(FrameModel):
+    """How the template's body pages are composed, as distributions over its content pages."""
+    pages_sampled: int = Field(ge=1)
+    #: Share of pages that open the body with a key-message bar across the content width.
+    key_message_bar: float = Field(ge=0, le=1)
+    #: Share of pages whose sections start with a numbered sub-heading (a chip or "01 ...").
+    numbered_headings: float = Field(ge=0, le=1)
+    #: (lower quartile, median, upper quartile) per page.
+    sections: tuple[int, int, int]
+    content_kinds_per_page: tuple[int, int, int]
+    text_items: tuple[int, int, int]
+    #: Median share of the body area under text, tables, charts, figures and step shapes.
+    ink_coverage: float = Field(ge=0, le=1)
+    #: Median lowest element bottom, as a share of the body height.
+    bottom_reach: float = Field(ge=0, le=1.5)
+    #: Share of pages showing each content kind, most common first.
+    kind_shares: tuple[tuple[_ContentKind, float], ...] = ()
+    #: Character-weighted body text sizes (90th percentile, median, 10th percentile), px.
+    text_sizes: tuple[float, float, float]
+
+
+class SvgTemplateBodyComposition(FrameModel):
+    """Page composition grammar and exemplar outlines (``services/svg_templates/body_composition.py``)."""
+    schema_version: Literal["svg-template-body-composition/v1"] = "svg-template-body-composition/v1"
+    grammar: SvgTemplateCompositionGrammar
+    exemplars: tuple[SvgTemplateBodyExemplar, ...] = Field(default=(), max_length=12)
+
+
 class SvgTemplateFrame(FrameModel):
     schema_version: Literal["svg-template-frame/v1", "svg-template-frame/v2", "svg-template-frame/v3"] = "svg-template-frame/v1"
     frame_id: str
@@ -250,6 +334,7 @@ class SvgTemplatePackage(FrameModel):
     font_substitutions: tuple[SvgTemplateFontSubstitution, ...] = ()
     unavailable_fonts: tuple[SvgTemplateUnavailableFont, ...] = ()
     component_style: SvgTemplateComponentStyle | None = None
+    body_composition: SvgTemplateBodyComposition | None = None
     digest: str
 
     @model_validator(mode="after")
@@ -279,6 +364,8 @@ class SvgTemplatePackage(FrameModel):
             value.pop("unavailable_fonts", None)
         if self.component_style is None:
             value.pop("component_style", None)
+        if self.body_composition is None:
+            value.pop("body_composition", None)
         if "frames" in value and "font_manifest" in value:
             return pack_package_fonts(value)
         return value

@@ -199,6 +199,23 @@ def get_svg_illustration_timeout_seconds_env(
     )
 
 
+def get_svg_template_body_exemplars_env(settings: RuntimeSettings | None = None) -> str:
+    """How much of a template's body composition a template-redesign author sees
+    (``SVG_TEMPLATE_BODY_EXEMPLARS``): ``on`` the composition grammar in the rules and one or two
+    exemplar outlines of the template's own body pages per body page, ``grammar`` the grammar only,
+    ``off`` (unset or unknown) neither.
+
+    Guidance only (``services/svg_templates/body_composition.py``), never a layout. Internal knob read
+    when a page is authored, listed in ``tests/support/internal_env_names.py``.
+    """
+    from utils.get_env import get_setting_env
+
+    value = (get_setting_env("SVG_TEMPLATE_BODY_EXEMPLARS", settings) or "").strip().lower()
+    if value in {"on", "true", "1"}:
+        return "on"
+    return "grammar" if value == "grammar" else "off"
+
+
 def get_svg_template_component_style_env(settings: RuntimeSettings | None = None) -> bool:
     """Whether a template-redesign deck's author rules carry the template's body component styles
     (``SVG_TEMPLATE_COMPONENT_STYLE``: ``on`` / ``off``; unset or unknown: off).

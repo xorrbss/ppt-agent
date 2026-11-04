@@ -297,12 +297,17 @@ def body_author_rules(rules: str, snapshot: dict, *, body_floor: float | None = 
     selection = template_selection(snapshot)
     if not selection or selection["mode"] != "template-redesign":
         return rules
-    from utils.get_env_concurrency import get_svg_template_component_style_env
+    from utils.get_env_concurrency import get_svg_template_body_exemplars_env, get_svg_template_component_style_env
     component_rules = ""
     if get_svg_template_component_style_env():
         from services.svg_templates.component_style import component_style_rules
         component_rules = component_style_rules(template_package(selection).get("component_style"),
                                                 body_floor=body_floor)
+    composition = get_svg_template_body_exemplars_env()
+    if composition != "off":
+        from services.svg_templates.body_composition import composition_rules
+        component_rules += composition_rules(template_package(selection).get("body_composition"),
+                                             body_floor=body_floor, exemplars=composition == "on")
     rules = rules.replace(
         "Never create a page number or use id svg-system-page-number. Reserve the bottom-right 64x36 area for the system footer.",
         "Do not author any system page number, header, footer or logo. The template owns their exact regions.",
@@ -372,6 +377,25 @@ def template_prompt_facts(context: dict | None, content: str, *, quality_policy:
         if literals:
             facts["required_literals"] = literals
     return facts
+
+
+def template_exemplar_facts(snapshot: dict, context: dict | None, content: str, *,
+                            body_floor: float | None = None, source_preserved: bool = False) -> dict:
+    """``template_exemplars`` for a body page when ``SVG_TEMPLATE_BODY_EXEMPLARS`` is ``on``: one or
+    two outlines of the template's own body pages matching the page's content kinds
+    (``services/svg_templates/body_composition.py``). They carry no source characters. Prompt only:
+    not a digest input. Empty for a cover or section frame, for a source-preserving page and for a
+    template registered without body composition."""
+    from utils.get_env_concurrency import get_svg_template_body_exemplars_env
+    if not context or source_preserved or get_svg_template_body_exemplars_env() != "on":
+        return {}
+    frame = page_frame(snapshot, context["page_index"], context["page_count"])
+    if frame.role != "body":
+        return {}
+    from services.svg_templates.body_composition import page_exemplars
+    exemplars = page_exemplars(template_package(template_selection(snapshot)).get("body_composition"), content,
+                               floor=float(body_floor or 0))
+    return {"template_exemplars": exemplars} if exemplars else {}
 
 
 def template_body_edges(context: dict) -> dict:
