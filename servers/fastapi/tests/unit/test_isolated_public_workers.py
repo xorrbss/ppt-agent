@@ -333,6 +333,123 @@ ConvertTo-Json -InputObject $results -Depth 5 -Compress
     assert executions == [operation_id, operation_id]
 
 
+def test_worker_never_evicts_the_artifact_authority_named_by_the_legacy_root(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Regression test for published template material vanishing from the
+    local artifact store.
+
+    A dispatcher that runs the worker without staging (the fake-LLM harness)
+    hands the child the controller's authority root as
+    ``PUBLIC_WORKER_OBJECT_STORE_ROOT``. The worker used that root as its own
+    transport cache: writing one export output evicted every authority object
+    older than the cache TTL, including content-addressed material that newer
+    rows still referenced, and reading an aged input deleted that input.
+    """
+
+    from models.sql.artifact_keys import artifact_storage_key
+    from models.sql.public_artifact import ArtifactRef as ProductArtifactRef
+    from services.artifact_store import LocalDevelopmentArtifactObjectStore
+
+    authority_root = tmp_path / "public-artifacts"
+    authority = LocalDevelopmentArtifactObjectStore(authority_root)
+    owner_id = uuid.UUID("10000000-0000-4000-8000-000000000001")
+    tenant_id = "tenant-a"
+    aged = time.time() - 2 * 3600
+
+    def authority_object(payload: bytes, *, kind: str, media_type: str) -> ProductArtifactRef:
+        digest = hashlib.sha256(payload).hexdigest()
+        reference = ProductArtifactRef(
+            artifact_id=uuid.uuid4(), owner_id=owner_id, tenant_id=tenant_id,
+            kind=kind, sha256=digest, size_bytes=len(payload), media_type=media_type,
+            storage_key=artifact_storage_key(owner_id=owner_id, tenant_id=tenant_id, digest=digest),
+            created_by_operation_id=uuid.uuid4(), retention_class="published",
+        )
+        asyncio.run(authority.put_bytes(reference, payload))
+        return reference
+
+    # Template material an older registration wrote first; a newer published
+    # template's row points at the same content-addressed object.
+    material_payload = b'{"adaptation":"frame-6"}'
+    material = authority_object(material_payload, kind="source-manifest",
+                                media_type="application/json")
+    os.utime(authority._path(material), (aged, aged))
+    signing_key = b"h" * 32
+    key_file = tmp_path / "capability.key"
+    key_file.write_bytes(signing_key)
+    environment = {
+        **worker_environment("export", {
+            "PATH": os.environ.get("PATH", ""),
+            "PUBLIC_TRUSTED_WORKER_LOCAL_POLICY": "development",
+            "PUBLIC_TRUSTED_WORKER_SANDBOX_BACKEND": "linux-local",
+            "PUBLIC_WORKER_CAPABILITY_KEY_FILE": str(key_file),
+        }, trusted_dispatch=True),
+        # Exactly what scripts/fake_llm_e2e/fake_llm_backend.py adds.
+        "PUBLIC_WORKER_OBJECT_STORE_ROOT": str(authority_root),
+        "PUBLIC_WORKER_ARTIFACT_CACHE_MAX_BYTES": "2147483648",
+        "PUBLIC_WORKER_ARTIFACT_CACHE_TTL_SECONDS": "3600",
+        "PPT_WORKER_OUTPUT_LIMIT_BYTES": "536870912",
+    }
+
+    def run_export(bundle: ProductArtifactRef, bundle_payload: bytes, deck: bytes) -> dict:
+        operation_id = uuid.uuid4()
+        job_input = ArtifactRef(
+            artifact_id=bundle.artifact_id, owner_id=owner_id, tenant_id=tenant_id,
+            kind="export-bundle", sha256=bundle.sha256, size_bytes=bundle.size_bytes,
+            media_type=bundle.media_type, storage_key=bundle.storage_key,
+            created_by_operation_id=operation_id, retention_class="staged",
+        )
+
+        async def execute(job, store):
+            assert store.read(job.input_artifact) == bundle_payload
+            return store.put(
+                deck, source=job.input_artifact, operation_id=job.operation_id,
+                kind="presentation-pptx", media_type="application/vnd.ms-powerpoint",
+            )
+
+        job = IsolatedWorkerJob(
+            role="export", operation_id=operation_id,
+            attempt_token="attempt-token-1234567890", fencing_token=1,
+            input_digest=job_input.sha256, input_artifact=job_input,
+            capability="pending", deadline_epoch_seconds=int(time.time()) + 300,
+        )
+        job = replace(job, capability=issue_worker_capability(
+            job, signing_key=signing_key, ttl_seconds=120,
+        ))
+        stdin = io.BytesIO(json.dumps(job.to_wire()).encode("utf-8"))
+        stdout = io.BytesIO()
+        with monkeypatch.context() as patch:
+            patch.setattr(os, "environ", dict(environment))
+            patch.setattr(public_worker_runtime, "sys", SimpleNamespace(
+                stdin=SimpleNamespace(buffer=stdin), stdout=SimpleNamespace(buffer=stdout),
+            ))
+            patch.setattr(public_worker_runtime, "_REPLAY_GUARD", CapabilityReplayGuard())
+            exit_code = asyncio.run(public_worker_runtime.run_worker("export", execute))
+        result = json.loads(stdout.getvalue())
+        assert exit_code == 0 and result["ok"] is True, result["errorCode"]
+        output = ArtifactRef.from_wire(result["outputArtifact"])
+        assert (authority_root / output.storage_key).read_bytes() == deck
+        return result
+
+    # A fresh export bundle: writing the deck must not evict the aged material.
+    fresh_payload = b'{"bundle":"fresh export input"}'
+    fresh = authority_object(fresh_payload, kind="export-bundle",
+                             media_type="application/vnd.presenton.export-bundle+json")
+    run_export(fresh, fresh_payload, b"exported deck")
+    assert asyncio.run(authority.read_bytes(material)) == material_payload
+    # The authority's objects keep their own timestamps.
+    assert authority._path(material).stat().st_mtime == pytest.approx(aged)
+
+    # An aged export bundle is an authority object, not an expired cache entry.
+    aged_payload = b'{"bundle":"aged export input"}'
+    aged_bundle = authority_object(aged_payload, kind="export-bundle",
+                                   media_type="application/vnd.presenton.export-bundle+json")
+    os.utime(authority._path(aged_bundle), (aged, aged))
+    run_export(aged_bundle, aged_payload, b"second exported deck")
+    assert asyncio.run(authority.read_bytes(aged_bundle)) == aged_payload
+    assert asyncio.run(authority.read_bytes(material)) == material_payload
+
+
 @pytest.fixture
 def worker_cache_limits(monkeypatch: pytest.MonkeyPatch) -> None:
     """The transport cache budget the launcher supplies to a real worker."""

@@ -36,9 +36,17 @@ class LocalContentAddressedStore:
         input_root: pathlib.Path,
         output_root: pathlib.Path | None = None,
         active_deadline_epoch_seconds: float | None = None,
+        authority_root: pathlib.Path | None = None,
     ) -> None:
+        """``authority_root`` names the durable artifact store when the launcher
+        handed this worker its root. Objects there are shared by every artifact
+        row with the same bytes, so this cache never expires, touches or evicts
+        a file under it; only the authority's own lifecycle may delete one."""
+
         resolved_output = input_root if output_root is None else output_root
         if not input_root.is_absolute() or not resolved_output.is_absolute():
+            raise PublicWorkerExecutionError("public_worker_store_root_not_absolute")
+        if authority_root is not None and not authority_root.is_absolute():
             raise PublicWorkerExecutionError("public_worker_store_root_not_absolute")
         try:
             self.max_cache_bytes = int(
@@ -60,6 +68,9 @@ class LocalContentAddressedStore:
             raise PublicWorkerExecutionError("public_worker_active_deadline_invalid")
         self.input_root = input_root.resolve(strict=False)
         self.output_root = resolved_output.resolve(strict=False)
+        self._authority_root = (
+            None if authority_root is None else authority_root.resolve(strict=False)
+        )
         self._operation_scoped = self.input_root != self.output_root
         self._active_deadline_epoch_seconds = active_deadline_epoch_seconds
         # Per-store (one worker job) read counters for the single end-of-job log line.
@@ -82,11 +93,20 @@ class LocalContentAddressedStore:
         ):
             raise PublicWorkerExecutionError("public_worker_artifact_expired")
 
+    def _cache_owned(self, path: pathlib.Path) -> bool:
+        """False for a file of the artifact authority: never this cache's entry."""
+
+        return self._authority_root is None or not path.is_relative_to(self._authority_root)
+
     def _entries(self) -> list[tuple[pathlib.Path, float, int]]:
         entries: list[tuple[pathlib.Path, float, int]] = []
+        if not self._cache_owned(self.output_root):
+            return entries
         for path in self.output_root.rglob("*"):
             try:
                 if path.is_symlink() or not path.is_file() or path.name.startswith("."):
+                    continue
+                if not self._cache_owned(path):
                     continue
                 stat = path.stat()
             except OSError:
@@ -141,7 +161,12 @@ class LocalContentAddressedStore:
             stat = path.stat()
         except OSError as error:
             raise PublicWorkerExecutionError("public_worker_artifact_unavailable") from error
-        if not self._attempt_active() and time.time() - stat.st_mtime > self.ttl_seconds:
+        is_output = is_output and self._cache_owned(path)
+        if (
+            not self._attempt_active()
+            and self._cache_owned(path)
+            and time.time() - stat.st_mtime > self.ttl_seconds
+        ):
             if is_output:
                 try:
                     path.unlink(missing_ok=True)
@@ -274,7 +299,8 @@ class LocalContentAddressedStore:
                 os.replace(temporary, path)
         finally:
             temporary.unlink(missing_ok=True)
-        os.utime(path, None)
+        if self._cache_owned(path):
+            os.utime(path, None)
         if not self._attempt_active():
             self._evict(protected=path)
         reference = ArtifactRef(

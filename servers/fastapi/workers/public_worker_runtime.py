@@ -250,6 +250,11 @@ async def run_worker(role: WorkerRole, executor: WorkerExecutor) -> int:
                     pathlib.Path(input_root_value),
                     pathlib.Path(output_root_value),
                     active_deadline_epoch_seconds=job.deadline_epoch_seconds,
+                    # The legacy name is the controller's artifact authority. The
+                    # trusted transport never passes it; a launcher that does
+                    # (the fake-LLM harness) shares the real store, which the
+                    # worker cache must never expire or evict.
+                    authority_root=pathlib.Path(legacy_root) if legacy_root else None,
                 ),
             )
         )
