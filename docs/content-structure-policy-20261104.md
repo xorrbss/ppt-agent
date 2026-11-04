@@ -97,9 +97,12 @@
   주장하면서 근거 문장을 비웠거나 해당 페이지의 비교 근거가 없었던 경우다(`services/generation_core/quality/vision_advisory.py`의
   두 곳). 11-02 `beaec83f8`이 증거 문자열 길이만 보정하고 의미 검사는 계속 거절하도록 남겨 둔 부분이다
   (`tests/unit/test_vision_evidence_bounds.py`의 "stays a semantic rejection").
-- 빈도는 9개 중 1개이고 저장된 모델 원본 응답이 없어서 재현하지 못했다. 고친다면 "근거 없는 의도적 반복 주장은 그 페이지의 흐름만
-  검토 불가로 두고 나머지 검토를 살린다"가 가능하다. 근거 없이 통과시키지 않으므로 느슨해지지 않지만 위 테스트의 기대값이 바뀐다.
-  결정이 필요해서 고치지 않았다.
+- 빈도는 첫 9개 덱 중 1개였고, 이후 3회 중 1회에서 다시 나타났다. 저장된 모델 원본 응답이 없어서 같은 응답을 재현하지는 못했다.
+- 수정: 근거 없는 의도적 반복 주장은 **그 페이지(그룹)의 흐름만 `unreviewed`로 두고 나머지 검토를 살린다**
+  (`vision_advisory.py`의 두 파서, 메모 `intentionalEvidence`가 `evidenceNormalization`에 기록된다). 근거 없이 통과시키지 않으므로
+  더 느슨해지지 않고 영향 범위만 줄어든다. 근거와 비교 기준이 있는 주장은 이전처럼 받아들인다. 11-02 `beaec83f8`이 남긴
+  `test_vision_evidence_bounds.py`의 "stays a semantic rejection" 기대값은 새 동작으로 바꾸고 두 파서 각각 테스트를 추가했다.
+  라이브에서 이 거절은 드물게만 나와서 수정 효과를 직접 재현해 확인하지는 못했다.
 
 ## 환경 메모
 

@@ -291,13 +291,33 @@ def test_global_semantic_and_blank_evidence_failures_still_reject():
     assert vision._parse_baseline_review(over_retained, slide_count=3, context=context,
         rejection_reasons=reasons) is None
     assert reasons == ["global_retained_coverage"]
-    # intentional finding with blank source evidence stays a semantic rejection.
-    blank_intentional = _legacy_global_payload(LONG_WORDS, "")
-    blank_intentional["findings"][0]["intentional"] = True
-    reasons = []
-    assert vision._parse_baseline_review(blank_intentional, slide_count=3, context=context,
-        rejection_reasons=reasons) is None
-    assert reasons == ["global_intentional_evidence"]
+
+
+def test_an_intentional_claim_without_source_evidence_leaves_only_its_pages_unreviewed():
+    """It cannot pass its pages, but it no longer discards every other page's verdict
+    (measured: one such claim left all 10 pages of a deck flow-unreviewed)."""
+    payload = _legacy_global_payload("Clear and readable.", "")
+    payload["findings"][0]["intentional"] = True
+    notes, reasons = [], []
+    review = vision._parse_baseline_review(payload, slide_count=3, context=_legacy_global_context(),
+        rejection_reasons=reasons, evidence_notes=notes)
+    assert review is not None and reasons == []
+    verdicts = {page["index"]: page["axes"]["repetition_deck_flow"]["verdict"] for page in review["pages"]}
+    assert verdicts == {0: "unreviewed", 1: "unreviewed", 2: "passed"}
+    assert review["deckFlow"]["evaluated"] is False
+    (group,) = review["deckFlow"]["repetitionGroups"]
+    assert group["intentional"] is False and group["retainedPages"] == [] and group["pages"] == [0, 1]
+    assert notes == ["intentionalEvidence"]
+    # A claim that does carry source evidence and a comparison basis is accepted as before.
+    proven = _legacy_global_payload("Clear and readable.", "The source repeats this layout on purpose.")
+    proven["findings"][0]["intentional"] = True
+    proven["findings"][0]["axis"] = _axis("passed", "none", "none", "Repeated on purpose, clear.")
+    context = _legacy_global_context()
+    context["composition"]["pages"] = [{"comparisonBasis": ["same layout"]}] * 3
+    accepted = vision._parse_baseline_review(proven, slide_count=3, context=context)
+    assert accepted is not None
+    assert {p["axes"]["repetition_deck_flow"]["verdict"] for p in accepted["pages"]} == {"passed"}
+    assert accepted["deckFlow"]["repetitionGroups"][0]["intentional"] is True
 
 
 def _server_global_context():
@@ -325,6 +345,25 @@ def test_server_global_review_normalises_page_evidence_and_keeps_every_verdict()
     assert all(_within_bounds(page["axes"]["repetition_deck_flow"]["visibleEvidence"]) for page in review["pages"])
     assert all(0 < len(group["sourceEvidence"]) <= 160 for group in review["deckFlow"]["repetitionGroups"])
     assert len(notes) == 6 and sorted(set(notes)) == ["sourceEvidence", "visibleEvidence"]
+
+
+def test_server_global_review_unproven_intent_leaves_only_that_page_unreviewed():
+    context = _server_global_context()
+    payload = _server_global_payload(context, "Clear and readable.", "")
+    group = next(iter(payload["variantReview"]))
+    key = next(iter(payload["variantReview"][group]))
+    payload["variantReview"][group][key]["intentional"] = True  # no source evidence, no comparison basis
+    notes, reasons = [], []
+    review = vision._parse_baseline_review(payload, slide_count=3, context=context, rejection_reasons=reasons,
+        evidence_notes=notes)
+    assert review is not None and reasons == []
+    claimed = int(key[5:]) - 1
+    verdicts = {page["index"]: page["axes"]["repetition_deck_flow"]["verdict"] for page in review["pages"]}
+    assert verdicts[claimed] == "unreviewed"
+    assert {verdict for index, verdict in verdicts.items() if index != claimed} == {"passed"}
+    assert review["deckFlow"]["evaluated"] is False
+    assert not any(g["intentional"] for g in review["deckFlow"]["repetitionGroups"])
+    assert "intentionalEvidence" in notes
 
 
 def test_server_global_review_partition_mismatch_still_rejects_with_long_evidence():

@@ -481,6 +481,11 @@ def _reject_design_review(rejection_reasons, reason):
 _EVIDENCE_MAX_CHARS = 160
 _EVIDENCE_MAX_WORDS = 14
 
+#: An "intentional repetition" claim without source evidence leaves its pages' flow unreviewed.
+_UNPROVEN_INTENT_NOTE = "intentionalEvidence"
+_UNPROVEN_INTENT_AXIS = dict(verdict="unreviewed", severity="none",
+                             visibleEvidence="Intentional repetition lacks source evidence.", repairScope="none")
+
 
 def _bounded_text(value, field, notes, *, max_words=_EVIDENCE_MAX_WORDS, allow_blank=False):
     """Bring one model-written evidence string inside its published bounds.
@@ -968,13 +973,16 @@ def _parse_global_review(payload, *, slide_count, context, rejection_reasons=Non
             observations = context["composition"]["pages"]
             if finding["intentional"] and (not finding["sourceEvidence"].strip()
                     or any(not observations[index].get("comparisonBasis") for index in indices)):
-                if rejection_fields is not None and not rejection_fields:
-                    blank_source = not finding["sourceEvidence"].strip()
-                    missing_basis = any(not observations[index].get("comparisonBasis") for index in indices)
-                    rejection_fields["reviewTarget"] = "priorReview" if prior else "deckReview"
-                    rejection_fields["intentionalFailureMask"] = int(blank_source) | (int(missing_basis) << 1)
-                _reject_design_review(rejection_reasons, "global_intentional_evidence")
-                return None
+                # An "intentional repetition" claim with no source evidence cannot pass its pages, but it
+                # must not discard every other page's verdict either (measured: one such claim left all 10
+                # pages of a deck flow-unreviewed). Only this group's pages stay unreviewed.
+                if evidence_notes is not None:
+                    evidence_notes.append(_UNPROVEN_INTENT_NOTE)
+                for index in indices:
+                    assignments[index] = dict(_UNPROVEN_INTENT_AXIS)
+                groups.append(dict(pages=indices, intentional=False, retainedPages=[],
+                    sourceEvidence=finding["sourceEvidence"], visibleEvidence=axis["visibleEvidence"]))
+                continue
             groups.append(dict(pages=indices, intentional=finding["intentional"],
                 retainedPages=retained, sourceEvidence=finding["sourceEvidence"],
                     visibleEvidence=axis["visibleEvidence"]))
@@ -1037,12 +1045,17 @@ def _parse_server_global_review(payload, *, slide_count, context, rejection_reas
                                           rejection_reasons=rejection_reasons, evidence_notes=evidence_notes)
                 if axes is None:
                     return None
-                if item["intentional"] and (not source_evidence.strip()
-                        or not context["composition"]["pages"][index].get("comparisonBasis")):
-                    return _reject_design_review(rejection_reasons, "global_intentional_evidence")
                 axis = axes["repetition_deck_flow"]
+                unproven = item["intentional"] and (not source_evidence.strip()
+                        or not context["composition"]["pages"][index].get("comparisonBasis"))
+                if unproven:
+                    # See the finding form above: only this page stays unreviewed.
+                    if evidence_notes is not None:
+                        evidence_notes.append(_UNPROVEN_INTENT_NOTE)
+                    axis = dict(_UNPROVEN_INTENT_AXIS)
+                    axes = {"repetition_deck_flow": axis}
                 pages.append(dict(index=index, evaluated=axis["verdict"] != "unreviewed", axes=axes, issues=[]))
-                repetitions.append(dict(pages=[index], intentional=item["intentional"],
+                repetitions.append(dict(pages=[index], intentional=item["intentional"] and not unproven,
                     retainedPages=[index] if axis["verdict"] == "passed" else [],
                     sourceEvidence=source_evidence, visibleEvidence=axis["visibleEvidence"]))
         return dict(pages=sorted(pages, key=lambda page: page["index"]),
