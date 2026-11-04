@@ -35,3 +35,14 @@ def test_unparseable_answer_keeps_the_parse_cause():
         parse_outline_response("{not json", 3)
     assert caught.value.detail == OUTLINE_PARSE_FAILED
     assert caught.value.cause is not None
+
+
+def test_a_short_outline_retry_names_the_exact_count():
+    import json
+
+    from utils.outline_utils import outline_count_correction
+    previous = json.dumps({"slides": [{"content": "a"}] * 9})
+    note = outline_count_correction("Use formal tone.", 10, previous)
+    assert note.startswith("Use formal tone.\n\n")
+    assert "returned 9 slides" in note and "exactly 10 slides" in note
+    assert "returned 0 slides" in outline_count_correction(None, 10, "not json")

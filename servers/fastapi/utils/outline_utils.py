@@ -99,6 +99,17 @@ class OutlineResponseError(ValueError):
         self.cause = cause
 
 
+def outline_count_correction(instructions: str | None, n_slides: int | None, previous: str) -> str:
+    """Instructions for the one retry of an outline that came back short."""
+    try:
+        returned = len(dict(dirtyjson.loads(previous)).get("slides") or ())
+    except Exception:
+        returned = 0
+    note = (f"The previous outline returned {returned} slides. Return exactly {n_slides} slides: keep every"
+            " topic the content lists and give each its own slide; do not merge or drop topics.")
+    return f"{instructions}\n\n{note}" if instructions else note
+
+
 def parse_outline_response(
     text: str, n_slides_to_generate: int | None
 ) -> PresentationOutlineModel:

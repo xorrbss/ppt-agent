@@ -208,7 +208,9 @@ from utils.llm_calls.outline_canvas_budget import budget_for_canvas_contract
 from utils.llm_utils import message_content_to_text
 from utils.outline_citations import strip_outline_citations
 from utils.outline_utils import (
+    OUTLINE_SLIDE_COUNT_SHORT,
     OutlineResponseError,
+    outline_count_correction,
     get_no_of_outlines_to_generate_for_n_slides,
     parse_outline_response,
 )
@@ -1148,55 +1150,64 @@ async def generate_presentation_handler(
                     instructions=request.instructions,
                 )
 
-            presentation_outlines_text = ""
-            outline_started = time.monotonic()
-            with provider_usage_scope(
-                job_id=(generation_job.id if generation_job is not None else None),
-                operation="authored_generation",
-                stage="outline",
-                attempt_number=(generation_job.attempt_number if generation_job else 0),
-                workspace_operation_id=(generation_job.workspace_operation_id
-                    if generation_job is not None and generation_job.request_payload.get("_svg_partial_recovery") else None),
-            ):
-                async for chunk in generate_ppt_outline(
-                    request.content,
-                    n_slides_to_generate,
-                    language_to_use,
-                    outline_context,
-                    request.tone.value,
-                    request.verbosity.value,
-                    request.instructions,
-                    request.include_title_slide,
-                    request.web_search,
-                    request.include_table_of_contents,
-                    canvas_budget=canvas_budget,
-                    writing_policy=request.writing_policy,
-                    common_header_mode=(getattr(request, "common_header_mode", None)
-                        if resolve_generation_strategy(request) == "svg" else "free"),
+            outline_instructions = request.instructions
+            for outline_attempt in range(2):
+                presentation_outlines_text = ""
+                outline_started = time.monotonic()
+                with provider_usage_scope(
+                    job_id=(generation_job.id if generation_job is not None else None),
+                    operation="authored_generation",
+                    stage="outline",
+                    attempt_number=(generation_job.attempt_number if generation_job else 0),
+                    workspace_operation_id=(generation_job.workspace_operation_id
+                        if generation_job is not None and generation_job.request_payload.get("_svg_partial_recovery") else None),
                 ):
+                    async for chunk in generate_ppt_outline(
+                        request.content,
+                        n_slides_to_generate,
+                        language_to_use,
+                        outline_context,
+                        request.tone.value,
+                        request.verbosity.value,
+                        outline_instructions,
+                        request.include_title_slide,
+                        request.web_search,
+                        request.include_table_of_contents,
+                        canvas_budget=canvas_budget,
+                        writing_policy=request.writing_policy,
+                        common_header_mode=(getattr(request, "common_header_mode", None)
+                            if resolve_generation_strategy(request) == "svg" else "free"),
+                    ):
 
-                    if isinstance(chunk, HTTPException):
-                        raise chunk
+                        if isinstance(chunk, HTTPException):
+                            raise chunk
 
-                    if not presentation_outlines_text:
-                        outline_spans.set(
-                            "outline_first_chunk",
-                            (time.monotonic() - outline_started) * 1000,
-                        )
-                    presentation_outlines_text += chunk
-            outline_spans.set(
-                "outline_total", (time.monotonic() - outline_started) * 1000
-            )
-            outline_post_started = time.monotonic()
-
-            try:
-                presentation_outlines = parse_outline_response(
-                    presentation_outlines_text, n_slides_to_generate
+                        if not presentation_outlines_text:
+                            outline_spans.set(
+                                "outline_first_chunk",
+                                (time.monotonic() - outline_started) * 1000,
+                            )
+                        presentation_outlines_text += chunk
+                outline_spans.set(
+                    "outline_total", (time.monotonic() - outline_started) * 1000
                 )
-            except OutlineResponseError as error:
-                if error.cause is not None:
-                    traceback.print_exc()
-                raise HTTPException(status_code=400, detail=error.detail) from None
+                outline_post_started = time.monotonic()
+
+                try:
+                    presentation_outlines = parse_outline_response(
+                        presentation_outlines_text, n_slides_to_generate
+                    )
+                    break
+                except OutlineResponseError as error:
+                    if error.cause is not None:
+                        traceback.print_exc()
+                    # A short outline is asked for once more with the exact
+                    # count; pages are never invented to fill it.
+                    if outline_attempt == 0 and error.detail == OUTLINE_SLIDE_COUNT_SHORT:
+                        outline_instructions = outline_count_correction(
+                            request.instructions, n_slides_to_generate, presentation_outlines_text)
+                        continue
+                    raise HTTPException(status_code=400, detail=error.detail) from None
 
             total_outlines = len(presentation_outlines.slides)
 
