@@ -128,6 +128,15 @@ def page_frame(snapshot: dict, index: int, count: int, role: str | None = None) 
         selection["adaptations"][selected_id], selection["package"])).frame
 
 
+#: Margin between the region the author is given and the region a page is validated against.
+AUTHORING_MARGIN_PX = 4.0
+
+
+def _inset(box, margin: float) -> dict:
+    return {"x": box.x + margin, "y": box.y + margin,
+            "width": max(0.0, box.width - 2 * margin), "height": max(0.0, box.height - 2 * margin)}
+
+
 def template_page_context(snapshot: dict, index: int, count: int, content: str,
                           role: str | None = None) -> dict | None:
     selection = template_selection(snapshot)
@@ -152,8 +161,11 @@ def template_page_context(snapshot: dict, index: int, count: int, content: str,
         "adaptation_id": adaptation["adaptation_id"], "adaptation_digest": adaptation["digest"],
         "dynamic_values": values, "dynamic_fields": list(frame.dynamic_fields),
         "content_digest": canonical_json_digest({"content": content}),
-        "body_region": frame.body_region.model_dump(mode="json"),
-        "forbidden_regions": [box.model_dump(mode="json") for box in frame.forbidden_regions],
+        # The author gets the frame's regions with a safety margin; pages are
+        # still validated against the frame's own. Drafts drew stroked cards
+        # exactly on the region edge and painted half the stroke outside it.
+        "body_region": _inset(frame.body_region, AUTHORING_MARGIN_PX),
+        "forbidden_regions": [_inset(box, -AUTHORING_MARGIN_PX) for box in frame.forbidden_regions],
         "font_families": list(dict.fromkeys(asset.family for asset in frame.font_manifest.assets)),
         "font_faces": [{"family": asset.family, "weight": asset.weight, "face": asset.face}
                        for asset in frame.font_manifest.assets],

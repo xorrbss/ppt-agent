@@ -382,3 +382,12 @@ def test_template_body_rules_name_the_stroke_extent():
     selection["digest"] = canonical_json_digest(selection)
     rules = body_author_rules("rules", {"svg_template": selection, "composition_guidance": []})
     assert "half its stroke-width plus 2px inside body_region" in rules
+
+
+def test_the_author_gets_the_body_region_with_a_safety_margin():
+    from models.svg_template_frame import FrameRect
+    from services.svg_templates.generation import AUTHORING_MARGIN_PX, _inset
+    region = FrameRect(x=64, y=229, width=1152, height=619)
+    assert _inset(region, AUTHORING_MARGIN_PX) == {"x": 68, "y": 233, "width": 1144, "height": 611}
+    # A stroked card the author aligns on the given edge stays inside the validated region.
+    assert 68 - 1 >= region.x
