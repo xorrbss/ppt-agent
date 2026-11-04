@@ -14,7 +14,8 @@ Every ``quality.failures[*].kind`` the producers emit is listed below:
 (physical readability), ``generation_core/drivers/svg/render.py``,
 ``.../svg/embed_assets.py``, ``.../svg/native_requirements.py``,
 ``.../svg/source_classification_association.py``,
-``.../svg/source_paint_occlusion.py``, ``.../svg/timeline_ink_guard.py`` and
+``.../svg/source_paint_occlusion.py``, ``.../svg/timeline_ink_guard.py``,
+``.../svg/connector_direction.py`` and
 ``services/svg_common_header_export_evidence.py``. A kind this module does not
 know is **content**: the conservative side, because the fallback page drops
 nothing while a kept page might have.
@@ -67,6 +68,8 @@ LAYOUT_FAILURE_KINDS = frozenset({
     "dense_content",
     "writing_policy_visible_symbols",
     "timeline_caption_bar_ink_overlap",
+    # An arrowhead drawn backwards: every element is there, its direction is wrong.
+    "connector_arrowheads_reversed",
     "asset_icon_omitted",
     "provider_repair_unavailable",
     "svg_common_header_measurement_unavailable",

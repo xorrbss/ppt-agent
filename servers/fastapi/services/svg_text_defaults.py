@@ -183,6 +183,40 @@ def _pushable_fill(value: str) -> bool:
     return text not in _UNPUSHABLE_FILLS and not text.startswith("url(")
 
 
+#: Shapes whose zero size SVG defines as "rendering disabled" (rect width/height, circle r).
+_ZERO_SIZE_ATTRIBUTES = {"rect": ("width", "height"), "circle": ("r",)}
+
+
+def drop_zero_size_shapes(root) -> int:
+    """Remove every ``<rect>`` with a zero width or height and every ``<circle>`` with a zero
+    radius (in place); return how many were removed.
+
+    SVG renders nothing for them, not even a stroke ("a computed value of zero disables
+    rendering of the element"), but the contract requires positive sizes
+    (``svg_contract_positive_required``) because the PPTX converter cannot draw a zero-size
+    shape. Measured 2026-11-04 on 250 template pages: 4 first drafts were rejected only for
+    such a shape (``height="0"`` spacers and accent bars) and needed a whole new draft. A
+    negative or non-numeric size is left for the validator. No page accepted before this
+    existed holds one, so every accepted page is a no-op; the producer and
+    ``parse_author_response`` both call this, and the code fingerprint in
+    ``services/svg_partial_recovery.py`` lists this file (see :func:`push_down_container_fill`).
+    """
+    removed = 0
+    for parent in list(root.iter()):
+        for child in list(parent):
+            names = _ZERO_SIZE_ATTRIBUTES.get(_tag(child))
+            if not names or len(child):
+                continue
+            try:
+                zero = any(float(child.get(name, "nan")) == 0 for name in names)
+            except ValueError:
+                continue
+            if zero:
+                parent.remove(child)
+                removed += 1
+    return removed
+
+
 def push_down_container_fill(root) -> int:
     """Give each <text> that has no fill the fill it inherits from its nearest svg/g (in place).
 

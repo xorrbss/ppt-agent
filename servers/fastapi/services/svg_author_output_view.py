@@ -230,10 +230,13 @@ def parse_author_response(raw, *, view, source_facts):
     """
     from services.svg_contract import normalize_svg_response
 
-    from services.svg_text_defaults import push_down_container_fill, push_down_container_font_attributes
+    from services.svg_text_defaults import (
+        drop_zero_size_shapes, push_down_container_fill, push_down_container_font_attributes)
 
     plan = output_view_plan(view, source_facts)
     root = ET.fromstring(normalize_svg_response(raw))
+    # The producer drops shapes SVG does not render (zero size) before anything else, too.
+    drop_zero_size_shapes(root)
     if plan is None or plan.text_props is None:
         # The producer restores container font attributes and fill the same way.
         push_down_container_font_attributes(root)

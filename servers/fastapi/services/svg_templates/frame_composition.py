@@ -11,7 +11,8 @@ from models.document_canvas import DocumentCanvasMetadata
 from models.svg_template_frame import (HEADER_TEXT_KEYS, OPTIONAL_HEADER_KEYS, FrameRect, SvgTemplateFrame,
                                        SvgTemplateFrameAdaptation)
 from services.source_content.security import secure_xml
-from services.svg_templates.frame_fonts import artifact_digest, bytes_digest, font_asset_for, measure_text, resolve_font_manifest, font_validation_scope
+from services.svg_templates.frame_fonts import (artifact_digest, bytes_digest, font_asset_for, font_validation_scope,
+                                                matched_font_asset, measure_text, resolve_font_manifest)
 from services.svg_templates.frame_ooxml import SVG_NS, svg_node
 from utils.svg_validation import validate_svg
 
@@ -396,9 +397,20 @@ def compose_frame_svg(frame: SvgTemplateFrame | SvgTemplateFrameAdaptation, body
             family = node.get("font-family") or (parent.get("font-family") if parent is not None else None)
             weight = node.get("font-weight") or (parent.get("font-weight", "400") if parent is not None else "400")
             weight = {"normal": "400", "bold": "700"}.get(weight, weight)
+            asset, error = None, None
             try:
                 asset = font_asset_for(frame.font_manifest, family or "", int(weight))
-            except ValueError as error:
+            except ValueError as missing:
+                # A weight this page lacks, of a family it has: write the face the browser's font
+                # matching draws for it anyway (frame_fonts.matched_font_asset), so the page, its
+                # measurement and the PPTX agree. Measured 2026-11-04: 10 of 25 template covers (a
+                # cover frame with only Pretendard 700) failed their first draft on regular-weight
+                # text, and 3 fell back after the retry failed the same way.
+                error = missing
+                asset = matched_font_asset(frame.font_manifest, family or "", weight)
+                if asset is not None:
+                    node.set("font-weight", str(asset.weight))
+            if asset is None:
                 # Measured 2026-11-04: a cover allowing only one bold face failed twice, because the
                 # retry saw the bare code and left some texts without font-weight (read as 400).
                 faces = ", ".join(sorted({f"{item.family} {item.weight}" for item in frame.font_manifest.assets}))

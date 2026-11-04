@@ -259,8 +259,52 @@ def body_author_rules(rules: str, snapshot: dict, *, body_floor: float | None = 
         " All authored element IDs must start with body-. Never use svg-system- IDs."
         " Preserve every required fact and number. template_page.font_faces is authoritative for this page;"
         " choose only its exact families and weights, even when global font tokens suggest a different face."
+        + BODY_LIMIT_RULES +
         " This body boundary also applies to correction, quality recovery and free composition instructions."
     ) + component_rules
+
+
+#: Measured 2026-11-04 on 250 template pages: 10 first drafts wrote regular text on a cover whose only
+#: face is bold (``svg_template_font_unavailable``), and 9 put a footnote line or the last card a few
+#: pixels below the body (``svg_template_body_outside_allowed_region``: text baselines at 860-868 and
+#: card bottoms at 850-857 under a bottom edge of 844, given only as y 187.0049 and height 656.9951).
+BODY_LIMIT_RULES = (
+    " A text without font-weight is weight 400, so on a page whose font_faces have no weight 400 give"
+    " every text one of the listed weights."
+    " template_body_edges gives body_region's edges in whole canvas pixels (left, top, right, bottom):"
+    " every shape ends at or above bottom (its y plus its height), and so does every text line, whose"
+    " glyphs reach about a quarter of its font-size below its baseline y; nothing passes right."
+    " Plan the body's rows from top to bottom before drawing; when they do not fit, tighten spacing"
+    " or recompose rather than letting the last row or a closing note run past bottom."
+    " required_literals, when given, are the figures the page is checked for character by character:"
+    " show each exactly as written there, never in another format (a date or unit rewritten in a"
+    " shorter notation counts as missing)."
+)
+
+
+def template_prompt_facts(context: dict | None, content: str, *, quality_policy: dict | None = None,
+                          source_preserved: bool = False) -> dict:
+    """What the author prompt shows of a template page: its context, the body edges and the
+    figures the page's required-text check looks for (``render.py``), so a draft does not
+    reformat them. Measured 2026-11-04: two template covers wrote a source date in a shorter
+    notation and failed ``required_text_missing``. Prompt only: none of it is a digest input."""
+    if not context:
+        return {}
+    facts = {"template_page": context, "template_body_edges": template_body_edges(context)}
+    if not source_preserved:
+        from services.svg_presentation_checkpoint import _required_numeric_claims
+        literals = _required_numeric_claims(content, quality_policy=quality_policy)
+        if literals:
+            facts["required_literals"] = literals
+    return facts
+
+
+def template_body_edges(context: dict) -> dict:
+    """``body_region`` as whole-pixel edges inside it, for the author prompt (not a digest input)."""
+    region = context["body_region"]
+    return {"left": math.ceil(region["x"] - 1e-6), "top": math.ceil(region["y"] - 1e-6),
+            "right": math.floor(region["x"] + region["width"] + 1e-6),
+            "bottom": math.floor(region["y"] + region["height"] + 1e-6)}
 
 
 def compose_template_page(snapshot: dict, svg: str, context: dict, *, allow_existing=False,
@@ -318,6 +362,12 @@ def apply_template_body_quality(quality: dict, svg: str, snapshot: dict, context
     for node in body.iter():
         tag = node.tag.rsplit("}", 1)[-1]
         if tag in {"svg", "g"}:
+            continue
+        if tag in {"text", "tspan"} and not "".join(node.itertext()).strip():
+            # Whitespace draws no glyph (the contract admits no text decoration), and the browser
+            # measures such a text as an empty box at the canvas origin, outside every body
+            # region. Measured 2026-11-04 (250 template pages): 4 first drafts were outside the
+            # region only by such a text (font-size 1 spacers), 3 of them with no other failure.
             continue
         item = measurements.get(qids[node])
         if item is None:

@@ -116,6 +116,48 @@ def font_asset_for(manifest: SvgTemplateFontManifest, family: str, weight: int) 
     raise ValueError("svg_template_font_unavailable")
 
 
+def css_matched_weight(desired: int, available) -> int | None:
+    """The weight a browser draws for ``desired`` from the ``available`` weights of one family.
+
+    CSS Fonts 4 font-weight matching: a desired weight from 400 to 500 tries the weights up to
+    500 upwards, then the lighter ones downwards, then the heavier ones upwards; below 400 tries
+    the lighter (equal) ones downwards first, then the heavier ones upwards; above 500 tries the
+    heavier (equal) ones upwards first, then the lighter ones downwards. ``None`` when nothing
+    is available.
+    """
+    weights = sorted(set(available))
+    if not weights:
+        return None
+    if 400 <= desired <= 500:
+        order = ([w for w in weights if desired <= w <= 500]
+                 + [w for w in reversed(weights) if w < desired] + [w for w in weights if w > 500])
+    elif desired < 400:
+        order = [w for w in reversed(weights) if w <= desired] + [w for w in weights if w > desired]
+    else:
+        order = [w for w in weights if w >= desired] + [w for w in reversed(weights) if w < desired]
+    return order[0]
+
+
+def matched_font_asset(manifest: SvgTemplateFontManifest, family: str,
+                       weight: str) -> SvgTemplateFontAsset | None:
+    """The face of ``family`` a browser draws, unaltered, for a numeric ``weight`` the manifest
+    lacks (:func:`css_matched_weight`); ``None`` when the family has no face here, the weight
+    is not a number, or a bold weight (600 and up) would match only a lighter face: a browser
+    synthesises bold there, so the regular face is not what it draws and the page keeps failing."""
+    try:
+        desired = int(weight)
+    except (TypeError, ValueError):
+        return None
+    if not 1 <= desired <= 1000:
+        return None
+    faces = {asset.weight: asset for asset in manifest.assets
+             if family.casefold() in {name.casefold() for name in (asset.family, *asset.family_aliases)}}
+    chosen = css_matched_weight(desired, faces)
+    if chosen is None or (desired >= 600 and chosen < 600):
+        return None
+    return faces[chosen]
+
+
 def verify_font_text(asset: SvgTemplateFontAsset, text: str) -> None:
     content = verify_font_asset(asset)
     cache = _FONT_VALIDATION_CACHE.get()

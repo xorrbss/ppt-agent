@@ -666,6 +666,21 @@ def _llm_source_content_view(content):
                         "total_omitted_bytes": total}}
 
 
+def _floor_rounding_clause(body_floor: float) -> str:
+    """For a fractional minimum, the smallest half pixel that meets it.
+
+    Measured 2026-11-04 on template pages whose minimum was 14.1581 px: 2 first drafts wrote
+    font-size 14, rounding the minimum down, and failed ``physical_font_too_small``. An
+    integer or half-pixel minimum keeps the sentence unchanged.
+    """
+    if not math.isfinite(body_floor):
+        return ""
+    rounded = math.ceil(body_floor * 2 - 1e-9) / 2
+    if abs(rounded - body_floor) < 1e-9:
+        return ""
+    return f" (write font-size {rounded:g} or larger; a size rounded down below the minimum fails)"
+
+
 def svg_author_rules(style_snapshot: dict, body_floor: float, *, new_copy: bool = False,
                      header_page: dict | None = None, source_preserved: bool = False) -> str:
     canvas = style_snapshot.get("canvas") or {}
@@ -703,7 +718,7 @@ def svg_author_rules(style_snapshot: dict, body_floor: float, *, new_copy: bool 
             SVG_SOURCE_PAGE_NUMBER_RULES,
         )
     rules = (author_rules
-            + native_rules + f"\nBody text minimum: {body_floor:g} CSS px. "
+            + native_rules + f"\nBody text minimum: {body_floor:g} CSS px{_floor_rounding_clause(body_floor)}. "
             "Honor explicit user typography constraints.\n" + free_composition_canvas_clause(width, height)
             + reference_caveat(width, height) + spatial_rules + native_grid_rules)
     if header_page is not None and header_page.get("applied"):
@@ -715,10 +730,11 @@ def svg_author_rules(style_snapshot: dict, body_floor: float, *, new_copy: bool 
     return rules
 
 
-def author_rules_with_structure_policy(rules: str, style_snapshot: dict) -> str:
-    """Refine the connector rule for a deck in the content structure policy's scope."""
+def deck_structure_policy(style_snapshot: dict):
+    """``(policy, template_redesign)`` for an svg deck: the content structure policy in force
+    (``None`` outside its scope) and whether the deck is a template redesign."""
     from services.svg_templates.generation import template_selection
-    from utils.content_structure_policy import active_policy, author_rules as refine
+    from utils.content_structure_policy import active_policy
     from utils.get_env_concurrency import (
         get_content_structure_policy_parts_env, get_content_structure_policy_scope_env)
 
@@ -726,6 +742,14 @@ def author_rules_with_structure_policy(rules: str, style_snapshot: dict) -> str:
     redesign = bool(selection and selection.get("mode") == "template-redesign")
     policy = active_policy(svg=True, template_redesign=redesign, scope=get_content_structure_policy_scope_env(),
                            parts=get_content_structure_policy_parts_env())
+    return policy, redesign
+
+
+def author_rules_with_structure_policy(rules: str, style_snapshot: dict) -> str:
+    """Refine the connector rule for a deck in the content structure policy's scope."""
+    from utils.content_structure_policy import author_rules as refine
+
+    policy, redesign = deck_structure_policy(style_snapshot)
     return refine(rules, policy, template_ids=redesign)
 
 
@@ -967,9 +991,12 @@ async def author_slide_svg(content: str, style_snapshot: dict, role: str, index:
     validate_common_header_binding(style_snapshot.get("common_header"), header_page, index=index, count=n,
                                    **({} if source_preserved else {"content": content}))
     template_page = None
+    template_facts: dict = {}
     if style_snapshot.get("svg_template") is not None:
-        from services.svg_templates.generation import template_page_context
+        from services.svg_templates.generation import template_page_context, template_prompt_facts
         template_page = template_page_context(style_snapshot, index, n, content, role, chapter=template_chapter)
+        template_facts = template_prompt_facts(template_page, content, quality_policy=quality_policy,
+                                               source_preserved=source_preserved)
     if source_grounded:
         visual_intent = enrich_visual_intent(content, role, index, visual_intent)
     previous_render_part = None
@@ -1014,7 +1041,7 @@ async def author_slide_svg(content: str, style_snapshot: dict, role: str, index:
                                            "instructions": instructions or "", "source_content": prompt_source,
                                            "correction": outbound_correction_hint(correction_hint, view_plan) or "",
                                            "source_images": offered,
-                                           **({"template_page": template_page} if template_page else {}),
+                                           **template_facts,
                                            **({"common_header": {"page": header_page,
                                                "body_box": style_snapshot["common_header"]["body_box"],
                                                "content_top_px": style_snapshot["common_header"].get(
@@ -1257,9 +1284,14 @@ async def author_slide_svg(content: str, style_snapshot: dict, role: str, index:
     output_view_inbound = None
     fonts_pushed = 0
     fills_pushed = 0
+    shapes_dropped = 0
     if not re.search(r"<!|<\?", svg):
         try:
             root = ET.fromstring(svg)
+            # Shapes SVG does not render (zero size); replayed by parse_author_response.
+            from services.svg_text_defaults import drop_zero_size_shapes
+
+            shapes_dropped = drop_zero_size_shapes(root)
             if view_plan is None or view_plan.text_props is None:
                 # A font attribute written on svg/g goes onto its texts; replayed
                 # identically by svg_author_output_view.parse_author_response.
@@ -1331,5 +1363,6 @@ async def author_slide_svg(content: str, style_snapshot: dict, role: str, index:
             **({"output_view": output_view_receipt(view_plan, output_view_inbound)}
                if view_plan is not None else {}),
             **({"container_font_attributes_pushed": fonts_pushed} if fonts_pushed else {}),
-            **({"container_fill_pushed": fills_pushed} if fills_pushed else {})},
+            **({"container_fill_pushed": fills_pushed} if fills_pushed else {}),
+            **({"zero_size_shapes_dropped": shapes_dropped} if shapes_dropped else {})},
             native_declarations=declarations)

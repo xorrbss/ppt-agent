@@ -284,10 +284,13 @@ def test_composition_errors_name_what_to_change(tmp_path):
                 'font-size="20" fill="#111111">본문 문장</text></svg>')
 
     compose_frame_svg(frame, body('id="body-claim" font-weight="400"'), dynamic_values={})
+    # A missing weight of a face the page has is drawn as the browser would (test_svg_template_first_draft);
+    # a family the page does not have still fails, naming the faces it has.
     with pytest.raises(ValueError) as error:
-        compose_frame_svg(frame, body('id="body-claim" font-weight="900"'), dynamic_values={})
+        compose_frame_svg(frame, body('id="body-claim" font-weight="900"').replace("Pretendard", "Noto Serif"),
+                          dynamic_values={})
     message = str(error.value)
-    assert message.startswith("svg_template_font_unavailable: a text uses font-family 'Pretendard' weight 900;")
+    assert message.startswith("svg_template_font_unavailable: a text uses font-family 'Noto Serif' weight 900;")
     assert "Pretendard 400" in message and "explicit font-family and font-weight" in message
     with pytest.raises(ValueError) as error:
         compose_frame_svg(frame, body('id="native-table-x" font-weight="400"'), dynamic_values={})

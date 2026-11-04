@@ -718,6 +718,13 @@ async def _attempt_render(*, ctx, request, presentation_id, index, content, payl
         from services.svg_templates.generation import apply_template_body_quality
         apply_template_body_quality(rendered.quality, final, ctx.snapshot, template_page)
     if not (ctx.source_reflow or ctx.raster_reconstruction):
+        from services.generation_core.authoring.author_slide_svg import deck_structure_policy
+        structure_policy, _redesign = deck_structure_policy(ctx.snapshot)
+        if structure_policy is not None and structure_policy.connectors:
+            # Only where the connector rule invites arrows (they are rare without it).
+            from services.generation_core.drivers.svg.connector_direction import apply_connector_direction_quality
+            apply_connector_direction_quality(rendered.quality, final, content)
+    if not (ctx.source_reflow or ctx.raster_reconstruction):
         from services.authored_canvas import request_canvas_metadata
         from services.generation_core.drivers.svg.native_publish import canvas_point_per_px
         from services.generation_core.drivers.svg.native_requirements import apply_requested_native_quality
