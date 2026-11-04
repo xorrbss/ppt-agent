@@ -218,10 +218,16 @@ def template_page_context(snapshot: dict, index: int, count: int, content: str,
     return result
 
 
-def body_author_rules(rules: str, snapshot: dict) -> str:
+def body_author_rules(rules: str, snapshot: dict, *, body_floor: float | None = None) -> str:
     selection = template_selection(snapshot)
     if not selection or selection["mode"] != "template-redesign":
         return rules
+    from utils.get_env_concurrency import get_svg_template_component_style_env
+    component_rules = ""
+    if get_svg_template_component_style_env():
+        from services.svg_templates.component_style import component_style_rules
+        component_rules = component_style_rules(template_package(selection).get("component_style"),
+                                                body_floor=body_floor)
     rules = rules.replace(
         "Never create a page number or use id svg-system-page-number. Reserve the bottom-right 64x36 area for the system footer.",
         "Do not author any system page number, header, footer or logo. The template owns their exact regions.",
@@ -254,7 +260,7 @@ def body_author_rules(rules: str, snapshot: dict) -> str:
         " Preserve every required fact and number. template_page.font_faces is authoritative for this page;"
         " choose only its exact families and weights, even when global font tokens suggest a different face."
         " This body boundary also applies to correction, quality recovery and free composition instructions."
-    )
+    ) + component_rules
 
 
 def compose_template_page(snapshot: dict, svg: str, context: dict, *, allow_existing=False,

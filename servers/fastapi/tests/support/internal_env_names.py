@@ -94,6 +94,7 @@ INTERNAL_ENV_NAMES: MappingProxyType[str, str] = MappingProxyType(
         "SVG_ILLUSTRATION_MODE": "SVG asset stage pictures: off, vector (model-drawn SVG) or hybrid.",
         "CONTENT_STRUCTURE_POLICY_SCOPE": "Tables/connectors policy scope: off (default), template or svg; experimental.",
         "CONTENT_STRUCTURE_POLICY_PARTS": "Content structure policy parts in scope: tables,connectors (unset = both).",
+        "SVG_TEMPLATE_COMPONENT_STYLE": "Template body component styles in template-redesign author rules: on/off.",
         "SVG_ILLUSTRATION_PARTS": "Model-drawn picture kinds in vector mode: cover,scene,spots,pairs,pictograph.",
         "SVG_ILLUSTRATION_TIMEOUT_SECONDS": "Per-illustration timeout for the SVG asset stage.",
         "SVG_SOURCE_OUTPUT_VIEW": "Source-restyle author output view pinned at admission (off, v1, stage list).",

@@ -147,6 +147,56 @@ class SvgTemplateBodyEvidence(FrameModel):
     usage: Literal["design-evidence-only"] = "design-evidence-only"
 
 
+_HEX = r"^(none|#[0-9A-F]{6})$"
+
+
+class SvgTemplateTextStyle(FrameModel):
+    """Text of a body component, or one level of the body type-size ladder."""
+    size_px: float = Field(gt=0, le=400)
+    weight: int = Field(ge=100, le=900)
+    colors: tuple[str, ...] = Field(min_length=1, max_length=2)
+    #: Share of the measured body characters (ladder levels only).
+    share: float | None = Field(default=None, ge=0, le=1)
+
+
+class SvgTemplateComponent(FrameModel):
+    """How one recurring body component of the template looks. Style, never a position."""
+    kind: Literal["number_chip", "label", "bar", "step", "card", "panel", "accent_bar", "tile", "divider"]
+    shape: Literal["rect", "rounded", "pill", "circle", "chevron", "pentagon", "line"]
+    fill: str = Field(pattern=_HEX)
+    stroke: str = Field(pattern=_HEX)
+    stroke_width_px: float = Field(ge=0, le=100)
+    radius_px: float = Field(ge=0, le=1000)
+    #: Typical size, given only for components whose size is part of their look (chips, tiles, marks).
+    width_px: float | None = Field(default=None, gt=0)
+    height_px: float | None = Field(default=None, gt=0)
+    text: SvgTemplateTextStyle | None = None
+    count: int = Field(ge=1)
+    pages: int = Field(ge=1)
+
+
+class SvgTemplateTableStyle(FrameModel):
+    header_fill: str = Field(pattern=_HEX)
+    header_text: SvgTemplateTextStyle | None = None
+    body_fill: str = Field(pattern=_HEX)
+    band_fill: str | None = Field(default=None, pattern=_HEX)
+    #: The first column's fill when it differs from the body cells (a row-header column).
+    row_header_fill: str | None = Field(default=None, pattern=_HEX)
+    rule_color: str | None = Field(default=None, pattern=_HEX)
+    body_text: SvgTemplateTextStyle | None = None
+    count: int = Field(ge=1)
+    pages: int = Field(ge=1)
+
+
+class SvgTemplateComponentStyle(FrameModel):
+    """The template's body component vocabulary (``services/svg_templates/component_style.py``)."""
+    schema_version: Literal["svg-template-component-style/v1"] = "svg-template-component-style/v1"
+    pages_sampled: int = Field(ge=1)
+    type_ladder: tuple[SvgTemplateTextStyle, ...] = Field(default=(), max_length=6)
+    components: tuple[SvgTemplateComponent, ...] = Field(default=(), max_length=16)
+    tables: tuple[SvgTemplateTableStyle, ...] = Field(default=(), max_length=2)
+
+
 class SvgTemplateFrame(FrameModel):
     schema_version: Literal["svg-template-frame/v1", "svg-template-frame/v2", "svg-template-frame/v3"] = "svg-template-frame/v1"
     frame_id: str
@@ -198,6 +248,7 @@ class SvgTemplatePackage(FrameModel):
     registration_state: Literal["review-required", "failed"] = "review-required"
     font_substitutions: tuple[SvgTemplateFontSubstitution, ...] = ()
     unavailable_fonts: tuple[SvgTemplateUnavailableFont, ...] = ()
+    component_style: SvgTemplateComponentStyle | None = None
     digest: str
 
     @model_validator(mode="after")
@@ -225,6 +276,8 @@ class SvgTemplatePackage(FrameModel):
             value.pop("font_substitutions", None)
         if not self.unavailable_fonts:
             value.pop("unavailable_fonts", None)
+        if self.component_style is None:
+            value.pop("component_style", None)
         if "frames" in value and "font_manifest" in value:
             return pack_package_fonts(value)
         return value

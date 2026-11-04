@@ -1002,6 +1002,13 @@ def extract_template_package(pptx_path: str | Path, *, font_assets=None,
             evidence.append(SvgTemplateBodyEvidence(source_page=page_index, source_part=slide_part,
                 source_digest=xml_digest(context.root(slide_part)), body_shape_ids=tuple(body_ids),
                 body_bounds=tuple(body_bounds), body_kinds=tuple(body_kinds)))
+        # Body component styles over every page whose layout has a body frame (style only).
+        regions = {}
+        for state, frame in zip(pending, frames, strict=True):
+            if frame.role == "body":
+                regions.setdefault(context.related(state["slide_part"], "/slideLayout"), frame.body_region)
+        from services.svg_templates.component_style import extract_component_style
+        component_style = extract_component_style(context, all_slides, regions)
         # The manifest records every required family, including unresolved ones.
         font_manifest = build_font_manifest(font_manifest.assets,
             required_families=tuple({family for frame in frames for family in frame.font_manifest.required_families}))
@@ -1023,6 +1030,7 @@ def extract_template_package(pptx_path: str | Path, *, font_assets=None,
         compiler_version="ooxml-frame/2" if native_fixed_text_layout else "ooxml-frame/1",
         source_digest=source_digest, source_canvas=canvas, frames=tuple(frames),
         body_evidence=tuple(evidence), assets=assets, font_manifest=font_manifest,
+        component_style=component_style,
         issues=tuple(package_issues), registration_state="review-required", digest="")
     total_bytes = 0
     for chunk in json.JSONEncoder(ensure_ascii=False, separators=(",", ":")).iterencode(result.model_dump(mode="json")):

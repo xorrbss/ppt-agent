@@ -197,3 +197,18 @@ def get_svg_illustration_timeout_seconds_env(
     return _optional_positive_int_setting(
         "SVG_ILLUSTRATION_TIMEOUT_SECONDS", settings
     )
+
+
+def get_svg_template_component_style_env(settings: RuntimeSettings | None = None) -> bool:
+    """Whether a template-redesign deck's author rules carry the template's body component styles
+    (``SVG_TEMPLATE_COMPONENT_STYLE``: ``on`` / ``off``; unset or unknown: off).
+
+    Style only (chip, label, bar, card, panel, table header looks and the type-size ladder,
+    ``services/svg_templates/component_style.py``), never a layout. Internal knob read when a page
+    is authored, listed in ``tests/support/internal_env_names.py``; see
+    ``docs/template-component-style-20261104.md`` for the measurement behind the default.
+    """
+    from utils.get_env import get_setting_env
+
+    value = (get_setting_env("SVG_TEMPLATE_COMPONENT_STYLE", settings) or "").strip().lower()
+    return value in {"on", "true", "1"}

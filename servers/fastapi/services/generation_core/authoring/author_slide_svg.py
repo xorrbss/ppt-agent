@@ -711,7 +711,7 @@ def svg_author_rules(style_snapshot: dict, body_floor: float, *, new_copy: bool 
     rules = author_rules_with_structure_policy(rules, style_snapshot)
     if style_snapshot.get("svg_template") is not None:
         from services.svg_templates.generation import body_author_rules
-        rules = body_author_rules(rules, style_snapshot)
+        rules = body_author_rules(rules, style_snapshot, body_floor=body_floor)
     return rules
 
 
