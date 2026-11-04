@@ -22,8 +22,10 @@ density-expansion path.
 - **LLM clients** (`fake_llm_backend.py`): `llmai.get_client` returns
   `FakeClient`. Schema calls get a minimal valid instance, the outline gets
   numbered Korean slides, SVG author calls get a plain page with that slide's
-  text, and every response carries a usage block so provider receipts and
-  setup accounting see a complete call.
+  text, the deck-scoped infographic plan gets a figure for every content
+  slide (labels copied from that slide's own lines; cover, section, agenda and
+  closing pages stay quiet), and every response carries a usage block so provider
+  receipts and setup accounting see a complete call.
 - **Worker dispatcher**: `SubprocessDispatcher` runs the export/render worker
   command as a plain child process. The real trusted executor needs Windows
   job objects (`windows-local`), a Linux process session (`linux-local`,
