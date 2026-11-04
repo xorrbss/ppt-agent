@@ -255,3 +255,12 @@ CONTENT_STRUCTURE_POLICY_PARTS=connectors`로 N=3 이상 다시 잰다.
 소스가 아래 계층부터 적은 위쪽 흐름은 통과한다. 저장된 최종 250페이지와 모든 저장 초안에서 앞에서 눈으로 찾은 2페이지(5단계 행,
 4계층 열)와 아직 몰랐던 1페이지(표·차트 덱의 5활동 행)만 잡았고 오탐은 없었다. 라이브 측정(`connectors-checked`)은 제공자 크레딧이
 떨어져 하지 못했다. 자세한 내용과 첫 초안 실패 분류는 `docs/svg-template-first-draft-20261104.md`.
+
+## 파이프 예외 확정 (2026-11-04)
+
+정책 소유자가 파이프 예외를 확정했다. 작성 정책(`ppt-writing-policy/v1`, `utils/ppt_writing_prompt.py`)은 파이프 구분자를 쓰지 말라고 하지만, 마크다운 표 문법의 파이프는 예외다.
+
+- **범위: 아웃라인의 마크다운 표뿐이다.** 표 구조를 만드는 파이프와 구분선 행만 허용한다.
+- **조건: 내용 구조 정책의 `tables` 부분이 켜져 있을 때만** 적용한다(`CONTENT_STRUCTURE_POLICY_SCOPE`가 범위 안이고 `tables` 부분이 포함된 경우). 꺼져 있으면 예외도 없다.
+- **슬라이드 텍스트에는 여전히 파이프를 쓸 수 없다.** 표는 네이티브 표로 그려지므로 파이프가 슬라이드에 도달하지 않는다. 작성 정책 검사(`services/ppt_writing_policy.py`의 `PIPE_SEPARATOR`)는 그대로 파이프를 잡는다.
+- **위치:** 예외 문장은 `utils/content_structure_policy.py`의 `TABLE_SYNTAX_CLAUSE`에 있다. 작성 정책 뒤에 붙는 문장이며, 아웃라인 프롬프트에만 들어간다.

@@ -46,7 +46,7 @@ ARROW_RULE = ("Do not add arrows or connecting lines between independent items. 
 #: The outline instruction commented out upstream, restored for decks in scope.
 OUTLINE_TABLE_LINE = "   - Must have content either in multiple bullet points or table or both.\n"
 
-#: Markdown table syntax is not a decorative pipe separator.
+#: Markdown table syntax is not a decorative pipe separator. The exception is confirmed policy (2026-11-04): see docs/content-structure-policy-20261104.md, "파이프 예외 확정 (2026-11-04)".
 TABLE_SYNTAX_CLAUSE = (
     " Markdown table pipes (|) that structure a table, and the table's separator row, are required syntax,"
     " not decorative pipe separators. Keep source tabular data (the source's own tables, key-value lists,"
