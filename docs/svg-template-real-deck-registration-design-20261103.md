@@ -238,3 +238,45 @@ Pretendard weights (3.4 follow-up).
 | 4 | 3.4 font substitution (compiler, API, review picker) | 3 h |
 | 5 | 3.5 canvas lock | 2 h |
 | 6 | 4 live test and record | 3 h |
+
+## 7. Live test result (2026-11-04)
+
+The real deck, uploaded unmodified, through the API on Linux (LibreOffice
+renderer, real LLM, SQLite profile):
+
+| Check | Result |
+|---|---|
+| registration | 9 default frames (pages 1, 2, 3, 5, 19, 25, 50, 55, 101). First analysis: only `svg_template_font_unavailable` blocks, 1–5 decoration images per frame. With the suggested substitutions (Paperlogy 4/5 → Pretendard 400, 6/7/8 → 700, both Latin and Hangul family names), 0 blocked issues. Two analyses took 4.6 min. |
+| review | raster elements and substitutions listed; publication of all 9 frames succeeds |
+| canvas lock | 16:9, A4 and 302.99 × 215.99 mm are `svg_template_canvas_locked`; `{widthEmu: 10907713, heightEmu: 7775575}` is `available` with no preparation step |
+| generation | 10 pages, completed in 517 s, quality gate `review_required` (4 passed, 6 flagged) |
+| export | PPTX slide size 10,907,713 × 7,775,575 EMU, equal to the source; preserved decoration exported as pictures, all body and fixed text as text |
+
+Defects the live test found and fixed on the way (each with a regression
+test unless noted): raster pixels mapped with one scale (912.5 high on a
+912 canvas); only `p:pic` could be a background layer; a rasterized shape's
+own box stayed reserved; distant consecutive decoration merged into one
+page-sized image that reserved the body; the source canvas could not be
+requested exactly (section 3.5); a template page with an asset manifest lost
+its furniture receipt on the way to the export worker (verified live only:
+the builder has no unit harness).
+
+Open, not fixed here:
+
+* **Job payload size.** The template selection snapshot carries the whole
+  package: 15 MB for this template (font bytes 7.2 MB, preserved images twice,
+  in the frames and again in the adaptations). On SQLite one run failed with
+  `database is locked` (retryable) while heartbeats competed with these
+  writes. A structural fix is to store the selection by immutable version
+  reference and digests and load the material on replay.
+* **Fixed text with several runs.** The export writes each run of a fixed
+  text as its own text box at the measured x. LibreOffice, even with
+  Pretendard installed, draws "에스넷시스템이" wider than measured and it
+  overlaps the next run in the header slogan; the SVG itself does not
+  overlap. PowerPoint has not been checked. Writing such text as one text box
+  with several runs would not depend on the viewer's metrics.
+* **Body quality.** Four pages fell back to plain bullet lists in the upper
+  body, and the cover's body text over the dark photo has low contrast. One
+  of ten outline requests came back with nine pages and failed the whole
+  deck (`OUTLINE_SLIDE_COUNT_SHORT`).
+
