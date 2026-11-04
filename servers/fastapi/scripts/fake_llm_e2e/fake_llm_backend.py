@@ -122,6 +122,52 @@ def _outline(schema, prompt: str) -> dict:
     return payload
 
 
+_PLAN_ARCHETYPES = ("process", "icon_list", "hierarchy", "checklist")
+_PLAN_NON_FIGURE_ROLES = {"COVER", "CLOSING", "SECTION", "AGENDA"}
+_PLAN_SLIDE = re.compile(r"^--- slide (\d+) \(role: ([^)]*)\) ---$", re.MULTILINE)
+
+
+def _infographic_plan(prompt: str) -> dict:
+    """Answer the deck-scoped figure plan call.
+
+    Its schema also has a top-level ``slides`` list, so the outline branch
+    would mistake it for an outline; the caller routes it by schema name first.
+    Every figure-eligible slide gets a figure whose node labels are the first
+    three lines of that slide's own content (the plan drops any label the
+    content does not contain); cover, section, agenda and closing pages stay
+    quiet, as the plan requires.
+    """
+    marks = list(_PLAN_SLIDE.finditer(prompt))
+    slides = []
+    for position, mark in enumerate(marks):
+        index, role = int(mark.group(1)), mark.group(2).strip().upper()
+        end = marks[position + 1].start() if position + 1 < len(marks) else len(prompt)
+        labels = []
+        for line in prompt[mark.end():end].splitlines():
+            stripped = line.strip()
+            if not stripped:
+                continue
+            if not stripped.startswith(("#", "-")):
+                break
+            label = stripped.lstrip("#- ").strip()[:10]
+            if label:
+                labels.append(label)
+            if len(labels) == 3:
+                break
+        if role in _PLAN_NON_FIGURE_ROLES or len(labels) < 3:
+            slides.append({"index": index, "archetype": "none", "weight": "quiet", "nodes": []})
+            continue
+        slides.append({
+            "index": index,
+            "archetype": _PLAN_ARCHETYPES[index % len(_PLAN_ARCHETYPES)],
+            "weight": "standard",
+            "takeaway": "핵심 요약",
+            "nodes": [{"label": label} for label in labels],
+            "density": "low",
+        })
+    return {"art_direction": "검증용 단정한 인포그래픽", "slides": slides}
+
+
 def _svg(prompt: str) -> str:
     width, height = 1280, 720
     size = re.search(r'viewBox="0 0 (\d+) (\d+)"', prompt) or re.search(r"(\d{3,4})\s*[x×]\s*(\d{3,4})", prompt)
@@ -158,7 +204,10 @@ class FakeClient:
     def generate(self, **kwargs):
         prompt = _text_of(kwargs.get("messages"))
         schema = _schema_of(kwargs)
-        if schema is not None and "slides" in schema.get("properties", {}):
+        if getattr(kwargs.get("response_format"), "name", None) == "authored_infographic_plan":
+            _log("infographic_plan")
+            content = _infographic_plan(prompt)
+        elif schema is not None and "slides" in schema.get("properties", {}):
             _log("outline")
             content = _outline(schema, prompt)
         elif schema is not None:
