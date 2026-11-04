@@ -116,7 +116,9 @@ extracted from a real deck loses the sequences, which makes a connector rule loo
 `inputs/unstructured_report_ko.txt` is a fictional long running-prose report with no headings or lists (its sequences,
 comparisons and figures are implicit, so the outline step has to structure them), and `inputs/data_report_ko.txt` is a
 fictional data-heavy report (monthly, quarterly and per-plant series, two plain-text tables, KPIs). All three have a
-10-page target. `inputs/requests/<input>.json` is the matching `generate/async` body without a template pin or canvas;
+10-page target. `inputs/dense_proposal_ko.txt` is a fictional public-sector IT operations proposal with 2 to 3 sub-sections per page (tables, staged processes, an organisation hierarchy, monthly series, SLA levels, dated schedules, KPIs) at about 700 characters per page, because the other inputs carry 200 to 400 and cannot show whether a design approaches the density of the original proposal decks.
+
+`inputs/requests/<input>.json` is the matching `generate/async` body without a template pin or canvas;
 `request_builder.py` adds both (and an optional frame map) per template, with `inputs/<input>.txt` as the source of the
 `content` field (a unit test keeps the two equal).
 
