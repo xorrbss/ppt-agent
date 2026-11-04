@@ -58,6 +58,15 @@ and what to do next.
     overall 3.49 -> 3.64, fallbacks 0, first drafts accepted 9.3 -> 8.0 of 10.
     `fd5e8d05d` registration of a large deck peaked at 11 GB (raster
     preservation), now under 1 GB.
+  * Stage 3: `7301df81c`/`aecf0683a` first-draft fixes (cover weights,
+    whitespace spacers, zero-size shapes, exact prompt facts, unique body
+    ids, arrowhead direction check under the connectors policy);
+    `9e041426a`/`23476e2f0` registration generality (single-layout decks,
+    PowerPoint-saved furniture, near-full backgrounds, unwrapped boxes, bold
+    substitutes, small titles); `86977bd7b` fallback pages in the deck's
+    style; `d09c6667b`/`9148f9784` the cover belongs to no chapter;
+    `c6c1d177d` outline page-count retry; `e84b04c7b` fake-LLM infographic
+    plan; ruff gate and Linux test triage (`d9b66a06f` and following).
   * Details: `docs/content-structure-policy-20261104.md`,
     `docs/template-component-style-20261104.md`.
   * First-draft failures (stage 3, item 9): 52 of 250 stored first drafts classified; fixes for the
@@ -112,29 +121,50 @@ Details and tables: `docs/content-structure-policy-20261104.md`.
    several times.
 3. The flow review fix (`4b4852323`) is unit-tested only; the rejection is
    rare.
-4. Never checked in PowerPoint or through the UI. Header slot detection was
-   checked on one real deck only.
+4. Checked through the UI (public deck, style-only publish, generate,
+   export, download: works; `6ac0785e7` follows an analysis until it ends).
+   Left: a framed publish of a public deck stops at the cover frame with
+   `svg_template_review_regions_missing`; the real-deck template's preview
+   returns 404 in a cloned app dir (unconfirmed cause); the picker's text is
+   not in `next-intl`; four English strings in the workspace and provider
+   UI. Not yet judged in PowerPoint. Registration was checked on four
+   synthetic and three public decks (`docs/svg-template-generality-20261104.md`),
+   and the real deck's frames are unchanged by those fixes.
 5. Templates published before `98e41a0d9` must be registered again to get
    header slots.
 6. An over-wide dynamic title used to fail the page; now it shrinks and is
    cut. Chapter tab fields still fail.
 7. Without a frame map every body page used frame-2 (see Measurements). Now page 1 takes the cover frame and every other page the body frame showing most of title / chapter number / chapter name (then most dynamic fields, then largest body region, then source order), `automatic_frame_id` in `services/svg_templates/generation.py`; one frame for all body pages (the chapter frames are not varied per chapter), section frames are used only through a frame map.
-8. `test_source_publish_rejects_missing_receipt_before_database_access` and
-   `test_feature_lifecycle_refcount_expiry_and_gc_fail_closed` fail on
-   `'GuardSession' object has no attribute 'info'` in
-   `services/svg_templates/retention.py`; not caused by this session's changes.
+8. Fixed (stale tests, environment skips; `ruff check .` now passes). Still
+   failing on main as well as here, not triaged: 135 tests in
+   `test_svg_design_16x9_baseline.py`, `test_svg_canvas_brief.py`,
+   `test_svg_generation_admission.py`, `test_authored_provider_outcomes.py`
+   (pinned style snapshot digests, `svg_partial_recovery_lineage_conflict`).
+9. The converter rebuild test still fails; its fix changes
+   `converter_digest()` and is held (see `docs/handoff-svg-quality-20261103.md`).
+10. The outline page-count retry draws from the shared retry pool
+    (`c6c1d177d`); a dedicated outline retry allowance is a budget decision.
+11. The provider account ran out of credit during stage 3: the first-draft
+    fixes (`7301df81c`, `aecf0683a`, `docs/svg-template-first-draft-20261104.md`)
+    were measured on two decks only, the arrowhead check
+    (`connector_arrowheads_reversed`) and the generality font fix not live.
 
 ## Next, in order
 
-1. Have the user judge the latest deck in PowerPoint against the original.
-2. Stage 3 of the backlog: first-draft failures (cover
-   `svg_template_font_unavailable`, body outside region, arrowhead direction,
-   table plus chart on one page), generality on other decks, UI, fallback
-   page design, the cover as chapter one, outline page-count retry, earlier
-   residuals.
-3. Component style follow-ups before turning it on: two text levels instead
-   of forcing every small size up, gapped chevrons, one variant per kind,
-   then a same-session knob-off control.
+1. Have the user judge the latest deck in PowerPoint against the original
+   (comparison material was produced outside the repository).
+2. With credit restored, measure N >= 3: the first-draft fixes (target
+   first try >= 9.5 of 10, fallback 0), then `CONTENT_STRUCTURE_POLICY_SCOPE=template
+   CONTENT_STRUCTURE_POLICY_PARTS=connectors` with the arrowhead check, then
+   one generation on a re-registered public template.
+3. Decide the defaults: connectors part, component style
+   (`SVG_TEMPLATE_COMPONENT_STYLE`), tables part (pages with a table and a
+   chart still fail).
+4. Component style follow-ups: two text levels instead of forcing every
+   small size up, gapped chevrons, one variant per kind, then a
+   same-session knob-off control.
+5. Cards running past the body's bottom edge are the leading remaining
+   first-draft failure.
 
 ## How to run a live test
 
