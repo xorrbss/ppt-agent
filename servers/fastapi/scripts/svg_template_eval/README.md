@@ -57,55 +57,126 @@ with the judge below.
 
 ## Vision judge (`judge.py`)
 
-Asks a vision model whether each generated page looks like the template's own pages. Every page gets a score
-from 1 to 5 and a one-sentence reason on five axes: **structure** (body composition: diagrams, tables, cards
-against plain text), **density** (amount and balance of content), **hierarchy** (title / key message / body
-levels), **tone** (fonts, colours, manner of the template) and **visuals** (icons, figures, shapes). A deck
-gets the mean of each axis over its pages and `overall`, the mean of the five axis means.
+Asks a vision model how close each generated page comes to the template's own pages. The model first fills
+**evidence** it can count on the page body (distinct component kinds, sections, whether a key-message bar is present,
+approximate text items, empty share, template components reused, defects such as raw markup, code-like labels or
+arrows pointing against their sequence), then scores five axes from 1 to 5, each with a reason citing those counts:
+**structure** (distinct component kinds and sections against one repeated component or plain text), **density**
+(text items and empty area), **hierarchy** (title / key-message bar / numbered sub-headings / body levels), **tone**
+(the template's manner in the body: type sizes, colours, rules; the header and footer frame copied onto every page
+earns nothing) and **visuals** (icons, figures, charts, diagram shapes). Every listed defect caps structure at 2 and
+costs tone a point. The rubric with its count thresholds is `SYSTEM_PROMPT` in `judge.py`.
 
-**A judge score is a model's opinion, not a measurement.** It moves with the model, the reference pages and the
-prompt, and it varies between calls. Compare only results made with the same model, effort and reference
-pages, and judge a change on three or more decks (N >= 3), as for the other metrics. Differences of a few
-tenths are noise.
+**`overall` = the weighted mean of the axis scores in `WEIGHTS`, currently equal weights (0.2 each)**, per page and
+per deck (the deck's `overall` combines the deck's axis means). Weighting structure and density more
+(0.3/0.3/0.15/0.1/0.15) was tried in calibration and followed the human scores less closely (on the same answers of
+the final prompt Spearman 0.66 against 0.75, Pearson 0.92 against 0.94), so it was not kept.
 
-1. **Reference pages** are PNGs of the original template deck, chosen by the operator for each run and kept
-   outside the repository (never commit a customer deck or its renders). Pick about eight body pages that show
-   the deck's range (a table page, a diagram page, a card page, a chart page), plus a cover or section page if
-   the generated decks have one: a page type the references lack scores low on tone and structure. Render the
-   deck to PDF with LibreOffice with its fonts installed (a deck's embedded `ppt/fonts/*.fntdata` are EOT
-   files; without the real fonts the references show substitutes and the tone axis is judged against them),
-   then: `judge.py references --pdf deck.pdf --pages 4,9,19,25,45,58,66,73 --out refs/`.
-2. **Which references a page sees** (one rule for every page, so the cached prefix and the basis are the same):
-   the files named with `--ref-pages a.png,b.png` one by one; otherwise every PNG of the directory one by one
-   when there are at most three; otherwise all of them downscaled into one contact sheet. The choice moves the
-   scores (the same deck: 3.46 overall against a sheet of eight, 3.30 against three named pages), so keep it
-   fixed across the results you compare.
-3. **Judge.** Generated pages are read from `slides.svg_content` and rendered with Playwright's Chromium (Node,
-   `require('playwright')`, scale 1). The key comes from `PRESENTON_ANTHROPIC_API_KEY`.
+**A judge score is a model's opinion, not a measurement.** It moves with the model, the anchors, the reference pages
+and the prompt, and it varies between calls. Compare only results made with the same `judge_version`, model, effort
+and anchors, and judge a change on three or more decks (N >= 3), as for the other metrics.
+
+### `judge_version`: scores before version 2 are not comparable
+
+Every result records `judge_version` (in `judge_settings`, in each judged deck, and as a run field next to
+`judge_<axis>` / `judge_overall`). Version 1 (results without the field: a contact sheet of references, no anchors,
+plain mean) rated generated pages about 1.3 points higher than version 2 and compressed the range, so a version 1
+score cannot be set against a version 2 one. `run_eval.py decide` marks every `judge_*` metric `not comparable` when
+the judged runs of the two results do not all carry one version, and `compare` warns. Bump `JUDGE_VERSION` whenever
+the prompt, the anchors' role, the rubric or the combination change what a score means.
+
+### Anchors and references
+
+The judge sees, in this order (the same prefix for every page, cached after the first page):
+
+1. **Context** (optional): every PNG of `--references` as one downscaled contact sheet (one by one when there are at
+   most three, or the files named with `--ref-pages`), to show the range of the template's components.
+   `--no-context` drops it.
+2. **Score 5 anchors** (`--anchor-high a.png,b.png`): one or two original pages at full size, which score 5 on every
+   axis. Choose dense body pages that each combine several **different** components in numbered sections (for example
+   an org chart + chart + table page and a process + table + icon page), not a cover, a section divider or a one-table
+   page. A path, or a file name inside `--references`.
+3. **Score 1 anchor** (`--anchor-low low.png`): a fallback-style page in the template frame with plain bullet text.
+   Build it from scratch, never from a generated page under evaluation (that would leak the answer):
+   `judge.py low-anchor --frame refs/ref-058.png --font Pretendard-Regular.ttf --out anchors/low.png` keeps the
+   header band and footer of an original page (`--body-top 0.19 --body-bottom 0.94`, fractions of the height) and
+   writes eight fictional bullet lines into the cleared body (`--lines file.txt` for others; the font must cover the
+   deck's language).
+
+Each anchor and the generated page also carry a **measured blank share** in their label (`blank_share`: the share of
+the body area made of 24-pixel tiles of one flat colour, so white space and blank card interiors; `--body-top` /
+`--body-bottom` set the body, `--no-measure` drops it). The model compares the page's measure with the anchors'
+(original body pages measured 0.15 to 0.37, the generated pages below 0.45 to 0.58, fallback pages 0.71 to 0.79), because
+asked alone it estimated the empty area poorly (a full page and a page of empty cards both "35 to 40%").
+
+Reference and anchor pages are PNGs of the original template deck, rendered by the operator and kept outside the
+repository (never commit a customer deck or its renders). Render the deck to PDF with LibreOffice with its fonts
+installed (a deck's embedded `ppt/fonts/*.fntdata` are EOT files; without the real fonts the pages show substitutes),
+then `judge.py references --pdf deck.pdf --pages 4,9,19,25,45,58,66,73 --out refs/`.
+
+### Commands
+
+Generated pages are read from `slides.svg_content` and rendered with Playwright's Chromium (Node,
+`require('playwright')`, scale 1). The key comes from `PRESENTON_ANTHROPIC_API_KEY`.
 
 ```bash
+A="--references refs/ --anchor-high ref-009.png,ref-066.png --anchor-low anchors/low.png"
 # stored decks (any presentation ids); the output has the run_eval shape, so run_eval.py compare reads it
-.venv/bin/python scripts/svg_template_eval/judge.py deck --references refs/ --dsn "$DSN" \
+.venv/bin/python scripts/svg_template_eval/judge.py deck $A --dsn "$DSN" \
     --presentation-id <id> --presentation-id <id> --presentation-id <id> --label baseline --out results/
 # the same deck several times, to see how much the judge itself moves (judge_repeatability in the output)
-.venv/bin/python scripts/svg_template_eval/judge.py deck --references refs/ --presentation-id <id> --repeat 3 ...
-# page PNGs from anywhere
-.venv/bin/python scripts/svg_template_eval/judge.py pages --references refs/ --generated pngs/ --out scores.json
-# while generating: every run record gets judge_<axis> and judge_overall
-.venv/bin/python scripts/svg_template_eval/run_eval.py run ... --judge-references refs/
+.venv/bin/python scripts/svg_template_eval/judge.py deck $A --presentation-id <id> --repeat 3 ...
+# page PNGs from anywhere (prints every page's overall and axis scores)
+.venv/bin/python scripts/svg_template_eval/judge.py pages $A --generated pngs/ --out scores.json
+# while generating: every run record gets judge_<axis>, judge_overall and judge_version
+.venv/bin/python scripts/svg_template_eval/run_eval.py run ... --judge-references refs/ \
+    --judge-anchor-high ref-009.png,ref-066.png --judge-anchor-low anchors/low.png
 ```
 
-Options (prefixed `--judge-` on `run_eval.py`): `--model` (default `claude-sonnet-5-5`), `--effort` (default
-`low`), `--temperature` (only for a model that accepts one; the default model rejects a non-default value, so it
-is left unset), `--ref-pages`, `--no-fallbacks` (by default a declined request may be served by another model;
-the result lists `served_models` and warns when they differ, because those pages are not comparable),
-`--workers`, and on `deck` `--renders <dir>` to keep the page PNGs. Each result records the settings, per-page
-scores and reasons, token usage and `cost_estimate_usd`. A ten-page deck costs about $0.07 with the default model
-(the reference prefix is cached after the first page).
+Options (prefixed `--judge-` on `run_eval.py`): `--anchor-high`, `--anchor-low` (both required), `--no-context`,
+`--ref-pages`, `--no-measure`, `--body-top`, `--body-bottom`, `--model` (default `claude-sonnet-5-5`), `--effort`
+(default `low`; `medium` gave the same answers in calibration), `--temperature` (only for a model that accepts one; the
+default model rejects a non-default value, so it is left unset), `--no-fallbacks` (by default a declined request may
+be served by another model; the result lists `served_models` and warns when they differ, because those pages are
+not comparable), `--workers`, and on `deck` `--renders <dir>` to keep the page PNGs. Each result records the
+settings, per-page evidence, scores, reasons and `blank_share`, token usage and `cost_estimate_usd`. Ten pages cost
+about $0.09 to $0.11 with the default model (four anchor and context images, cached after the first page).
 
-Measured on one ten-page deck against a contact sheet of eight reference pages, three judgements: per-axis deck
-means moved by at most 0.2 (overall 3.46, 3.48, 3.54). Held-out pages of the original deck scored 4.7 overall
-and a plain black-on-white bullet page 1.2, so the scale has room on both sides of the generated decks (3.4 to 3.5).
+### Calibration (version 2, 2026-11-04)
+
+Ten generated pages of one framed template (seven pages that each repeat one component kind, three bullet-text
+fallback pages) were scored by a person against the original deck (1 = unrelated or broken, 5 = fits the original
+deck), and five held-out original pages that are neither anchors nor context were added. None of these pages is an
+anchor. Settings: default model, effort `low`, anchors `ref-009` and `ref-066` (score 5) and a `low-anchor` page
+(score 1), a contact sheet of eight reference pages as context. Two judgements of the ten pages:
+
+| page | human | version 1 | version 2, run 1 | version 2, run 2 |
+|---|---|---|---|---|
+| 1 | 2.5 | 4.0 | 2.4 | 2.4 |
+| 2 | 2.0 | 3.6 | 2.6 | 2.8 |
+| 3 | 2.5 | 3.0 | 2.4 | 2.4 |
+| 4 | 2.0 | 3.4 | 2.4 | 2.4 |
+| 5 | 2.0 | 3.6 | 2.4 | 2.2 |
+| 6 | 2.5 | 4.0 | 2.4 | 2.6 |
+| 7 | 2.5 | 3.2 | 2.6 | 2.6 |
+| 8 | 1.0 | 2.0 | 1.4 | 1.2 |
+| 9 | 1.0 | 2.0 | 1.2 | 1.2 |
+| 10 | 1.0 | 2.0 | 1.2 | 1.2 |
+
+| | target | version 1 | version 2 run 1 | version 2 run 2 |
+|---|---|---|---|---|
+| mean (human 1.9) | | 3.2 | 2.1 | 2.1 |
+| Spearman with human | >= 0.7 | 0.69 | 0.70 | 0.74 |
+| Pearson with human | >= 0.7 | 0.88 | 0.93 | 0.92 |
+| mean absolute error | <= 0.5 | 1.18 | 0.26 | 0.24 |
+| held-out originals, mean of 5 | >= 4.3 | 4.7 (v1 run) | 4.44 (4.0 to 4.8) | |
+| largest per-page spread, run 1 vs run 2 | <= 0.3 | | 0.2 | |
+
+Version 2 fixes the level (fallback pages about 1.2, generated pages 2.2 to 2.8, originals 4.0 to 4.8), but it barely
+orders the generated pages among themselves: the human split them into 2.0 and 2.5, and the judge's order within that
+group does not follow it (page 2, many components in nearly empty cards, comes out highest). Spearman is held up by
+the three levels and sits right at the target. Treat a difference of less than about half a point between generated
+pages as noise. The calibration took five iterations (rubric wording, effort, the measured blank share, the weights) and about $0.84.
 
 ## Inputs
 

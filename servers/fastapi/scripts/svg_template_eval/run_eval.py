@@ -17,7 +17,8 @@ the backend with it and running again under another ``--label``. The database is
 per-page attempts; point ``--dsn`` (or ``EVAL_DATABASE_DSN``) at the backend's database.
 
 ``--judge-references refs/`` also scores every deck against reference pages of the template with the vision
-judge in ``judge.py`` (``judge_<axis>`` and ``judge_overall`` fields, 1 to 5).
+judge in ``judge.py`` (``judge_<axis>``, ``judge_overall`` and ``judge_version`` fields, 1 to 5; it also needs
+``--judge-anchor-high`` and ``--judge-anchor-low``).
 """
 from __future__ import annotations
 
@@ -143,12 +144,10 @@ def measure_deck(conn, presentation_id: str) -> dict:
 def _make_judge(args: argparse.Namespace):
     if not args.judge_references:
         return None
-    from judge import Judge
+    from judge import judge_from_options
 
-    chosen = [name.strip() for name in args.judge_ref_pages.split(",")] if args.judge_ref_pages else None
-    return Judge(Path(args.judge_references), chosen, model=args.judge_model, effort=args.judge_effort or None,
-                 temperature=args.judge_temperature, fallbacks=not args.judge_no_fallbacks,
-                 workers=args.judge_workers)
+    options = {key[len("judge_"):]: value for key, value in vars(args).items() if key.startswith("judge_")}
+    return judge_from_options(args.judge_references, options)
 
 
 def _sample_runs(client: httpx.Client, conn, judge, args: argparse.Namespace, payload: dict, source: str | None,
@@ -245,12 +244,15 @@ def matrix(args: argparse.Namespace) -> None:
 
 
 def decide_command(args: argparse.Namespace) -> None:
-    from decide import decide, format_table, unpaired_cells
+    from decide import decide, format_table, judge_versions, unpaired_cells
 
     left, right = (json.loads(Path(path).read_text(encoding="utf-8")) for path in (args.a, args.b))
     only_a, only_b = unpaired_cells(left, right)
     if only_a or only_b:
         print(f"warning: cells left out (present in one result only): A {only_a} B {only_b}")
+    versions = [sorted(judge_versions(result)) for result in (left, right)]
+    if len(set(versions[0]) | set(versions[1])) > 1:
+        print(f"warning: judge versions differ (A {versions[0]} B {versions[1]}); judge scores are not comparable")
     report = decide(left, right)
     print(format_table(report, left["label"], right["label"]))
     if args.json_out:
@@ -275,6 +277,11 @@ def compare(args: argparse.Namespace) -> None:
         a, b = left["summary"].get(key), right["summary"].get(key)
         print(f"{key:<26}{(a['mean'] if a else '-'):>20}{(b['mean'] if b else '-'):>20}")
     print(f"{'runs completed':<26}{left['completed_runs']:>20}{right['completed_runs']:>20}")
+    from decide import judge_versions
+
+    versions = [sorted(judge_versions(result)) for result in (left, right)]
+    if len(set(versions[0]) | set(versions[1])) > 1:
+        print(f"warning: judge versions differ ({versions[0]} vs {versions[1]}); judge_* rows are not comparable")
 
 
 def main() -> None:

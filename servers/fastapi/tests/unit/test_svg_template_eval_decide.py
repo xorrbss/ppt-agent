@@ -95,3 +95,22 @@ def test_build_cells_is_the_input_by_template_cross_product():
     assert first["svgTemplateFrameMap"] == {"k": "v"} and first["svgTemplatePin"] == pin
     assert "svgCanvas" not in second and "svgTemplateFrameMap" not in second
     assert second["svgTemplateMode"] == "template-redesign"
+
+
+def test_judge_scores_of_different_judge_versions_are_not_compared():
+    old = _result("a", {"x": [{"judge_overall": 3.4, "fallback_pages": 3}], "y": [{"judge_overall": 3.5}]})
+    new = _result("b", {"x": [{"judge_overall": 2.1, "judge_version": 2, "fallback_pages": 1}],
+                        "y": [{"judge_overall": 2.2, "judge_version": 2}]})
+    assert decide_mod.judge_versions(old) == {1} and decide_mod.judge_versions(new) == {2}
+    report = decide_mod.decide(old, new)
+    assert report["judge_overall"]["verdict"] == "not comparable"
+    assert report["judge_overall"]["judge_versions"] == [[1], [2]]
+    assert report["fallback_pages"]["verdict"] == "better"  # other metrics are still decided
+    assert "judge_version" not in report  # the version is not a metric
+    same = decide_mod.decide(new, _result("c", {"x": [{"judge_overall": 2.6, "judge_version": 2}],
+                                                 "y": [{"judge_overall": 2.7, "judge_version": 2}]}))
+    assert same["judge_overall"]["verdict"] == "better"
+    mixed = _result("m", {"x": [{"judge_overall": 2.6, "judge_version": 2}], "y": [{"judge_overall": 3.5}]})
+    assert decide_mod.decide(new, mixed)["judge_overall"]["verdict"] == "not comparable"
+    assert decide_mod.judge_versions(_result("n", {"x": [{"fallback_pages": 2}]})) == set()
+    assert "not comparable" in decide_mod.format_table(report)
