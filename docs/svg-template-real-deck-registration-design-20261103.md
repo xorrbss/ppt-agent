@@ -280,3 +280,40 @@ Open, not fixed here:
   of ten outline requests came back with nine pages and failed the whole
   deck (`OUTLINE_SLIDE_COUNT_SHORT`).
 
+## 8. Follow-up fixes and re-measurement (2026-11-04)
+
+| Fix | Commit |
+|---|---|
+| A fixed line with several runs is one SVG text with tspans, so PPTX gets one text box with several runs instead of one box per run (the header slogan no longer overlaps in LibreOffice) | `8791e5a79` |
+| Template body rules name the stroke extent; a page that leaves its region gets a move-only repair hint | `37ab5b306` |
+| The template page context carries `body_background` (mean colour, tone, text colour) from the frame's background layers; the rules require 4.5:1 contrast and the template fallback page uses it (the cover body is now white on the dark photo) | `233bdf79d` |
+| A short outline is requested once more with the exact count | `591a2955c` |
+| The author gets the body region inset by 4 px (forbidden regions widened by 4 px); validation keeps the frame's own regions | `94fb4299e` |
+
+Measured on the same template (real LLM, SQLite profile):
+
+| Run | Code | Result | First drafts failing | Of which region by ~1 px | Fallback pages |
+|---|---|---|---|---|---|
+| r6-1 | up to `591a2955c` | completed, export ok, 5 passed / 5 flagged | 7 / 10 | 7 | 6 |
+| r6-4, r6-5 | `94fb4299e` | both interrupted by `database is locked` after 8 and 9 pages | 4 / 17 | 1 | 0 |
+
+Open:
+
+* **Repair attempts on template pages are weak.** With the current authoring
+  profile a repair gets the failure list but not the previous SVG (only
+  profile v8 passes it), and on this deck the second drafts were invalid or
+  unrelated (`junk after document element`, `svg_contract_invalid_id`, empty
+  bodies). The margin above avoids most repairs; passing the previous SVG to
+  template repairs is the structural fix.
+* **Job payload size (section 7) now blocks runs.** Three of the last four
+  generations on SQLite ended with `generation_service_interrupted` /
+  `database is locked`. The 15 MB template selection is stored three times
+  (`presentation_generation_jobs.request_payload` and `.svg_style_snapshot`,
+  `workspace_operations.request_payload`) and compared for equality with the
+  presentation's `theme.svg.styleSnapshot` in about ten places, so compacting
+  one storage boundary would break those invariants. Options: store the
+  selection by immutable template version reference and digests and hydrate
+  it in one loader; or move heartbeats to a narrow table so a heartbeat does
+  not rewrite the large row. PostgreSQL keeps unchanged large values out of
+  line (TOAST), so the cluster profile is much less affected.
+
