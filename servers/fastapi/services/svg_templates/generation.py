@@ -123,31 +123,80 @@ def apply_template_snapshot(snapshot: dict, request) -> None:
 _HEADER_KEYS = ("title", "chapter_number", "chapter_title")
 
 
-def automatic_frame_id(frames, index: int) -> str:
+def _text_of(svg: str) -> str:
+    return "".join(re.findall(r">([^<>]+)<", svg or "")).strip()
+
+
+def source_chapter_ordinal(frame) -> int | None:
+    """The chapter a body frame was registered from, read from the frame's own data.
+
+    The chapter tab (``chapter_number``) of a source chapter layout shows that
+    chapter's number. Only a frame that fills that tab for a generated page can
+    be chosen by chapter, which is what lets a saved page context carry the
+    chapter every caller recomputes the frame from. ``None`` when the frame has
+    no such tab or its text names no number.
+    """
+    from services.svg_templates.chapters import chapter_ordinal
+
+    if "chapter_number" not in (frame.get("dynamic_fields") or ()):
+        return None
+    for element in frame.get("elements") or ():
+        if element.get("dynamic_key") == "chapter_number":
+            ordinal = chapter_ordinal(_text_of(element.get("svg", "")))
+            if ordinal is not None:
+                return ordinal
+    return None
+
+
+def automatic_frame_id(frames, index: int, chapter: dict | None = None) -> str:
     """The frame of a page the request's frame map does not name.
 
     Page 1 takes the cover frame. Any other page takes the body frame that shows
     most of the header fields (title, chapter number, chapter name), then most
     dynamic fields, then has the largest body region; the first such frame in
-    source order wins a tie. The choice depends on the template only, so every
-    caller recomputes the same frame.
+    source order wins a tie.
+
+    ``chapter`` (``{"number", "title"}``, the page's outline chapter) refines
+    that choice among the frames that tie on the header and dynamic fields: when
+    some of them were registered from the page's chapter (the same ordinal on
+    their chapter tab), the best of those is taken, so each chapter keeps its
+    own fixed decoration. Without a chapter, or with no frame for it, the best
+    frame is taken. The cover page ignores the chapter. The choice depends on
+    the template and the page's chapter only, so every caller recomputes it.
     """
     if index == 0:
         cover = next((frame for frame in frames if frame["role"] == "cover"), None)
         if cover is not None:
             return cover["frame_id"]
+        chapter = None
     bodies = [frame for frame in frames if frame["role"] == "body"] or list(frames)
 
-    def fit(frame) -> tuple:
+    def level(frame) -> tuple:
         fields = set(frame.get("dynamic_fields") or ())
+        return sum(key in fields for key in _HEADER_KEYS), len(fields)
+
+    def fit(frame) -> tuple:
         region = frame.get("body_region") or {}
-        return (sum(key in fields for key in _HEADER_KEYS), len(fields),
-                float(region.get("width", 0)) * float(region.get("height", 0)))
+        return level(frame) + (float(region.get("width", 0)) * float(region.get("height", 0)),)
 
-    return max(bodies, key=fit)["frame_id"]
+    best = max(bodies, key=fit)
+    if isinstance(chapter, dict):
+        from services.svg_templates.chapters import chapter_ordinal
+
+        wanted = chapter_ordinal(chapter.get("number"))
+        if wanted is not None:
+            same = [frame for frame in bodies
+                    if level(frame) == level(best) and source_chapter_ordinal(frame) == wanted]
+            if same:
+                best = max(same, key=fit)
+    return best["frame_id"]
 
 
-def page_frame(snapshot: dict, index: int, count: int, role: str | None = None) -> SvgTemplateFrame:
+def page_frame(snapshot: dict, index: int, count: int, role: str | None = None,
+               chapter: dict | None = None) -> SvgTemplateFrame:
+    """The frame of page ``index``: the frame map's, else :func:`automatic_frame_id`
+    for the page's ``chapter`` (callers holding only the page context use
+    :func:`context_frame`)."""
     selection = template_selection(snapshot)
     if selection is None or selection["mode"] != "template-redesign" or not 0 <= index < count:
         raise ValueError("svg_template_page_context_invalid")
@@ -155,11 +204,20 @@ def page_frame(snapshot: dict, index: int, count: int, role: str | None = None) 
     frames = package["frames"]
     selected_id = selection["frame_map"].get(str(index + 1))
     if selected_id is None:
-        selected_id = automatic_frame_id(frames, index)
+        selected_id = automatic_frame_id(frames, index, chapter)
     if selected_id not in adaptations:
         raise ValueError("svg_template_canvas_preparation_required")
     return SvgTemplateFrameAdaptation.model_validate(unpack_adaptation_fonts(
         adaptations[selected_id], package)).frame
+
+
+def context_frame(snapshot: dict, context: dict) -> SvgTemplateFrame:
+    """The frame a saved page context was built with, recomputed from the chapter
+    the context carries in its dynamic values."""
+    from services.svg_templates.chapters import chapter_from_context
+
+    return page_frame(snapshot, context["page_index"], context["page_count"],
+                      role=context.get("role"), chapter=chapter_from_context(context))
 
 
 #: Margin between the region the author is given and the region a page is validated against.
@@ -181,7 +239,7 @@ def template_page_context(snapshot: dict, index: int, count: int, content: str,
     from utils.outline_utils import explicit_outline_title
     from services.svg_templates.frame_composition import body_background, render_frame_svg
 
-    frame = page_frame(snapshot, index, count, role)
+    frame = page_frame(snapshot, index, count, role, chapter=chapter)
     title = explicit_outline_title(content)
     if "title" in frame.dynamic_fields and not title:
         raise ValueError("svg_template_title_required")
@@ -311,7 +369,7 @@ def compose_template_page(snapshot: dict, svg: str, context: dict, *, allow_exis
                           source_manifest: dict | None = None) -> str:
     from services.svg_templates.frame_composition import compose_frame_svg
 
-    frame = page_frame(snapshot, context["page_index"], context["page_count"])
+    frame = context_frame(snapshot, context)
     body = svg
     if allow_existing:
         root = ET.fromstring(svg)
@@ -398,7 +456,7 @@ def apply_template_body_quality(quality: dict, svg: str, snapshot: dict, context
             bounds.append(FrameRect(x=box["x"] - margin, y=box["y"] - margin,
                                     width=box["width"] + 2 * margin, height=box["height"] + 2 * margin))
             owners.append(node)
-    frame = page_frame(snapshot, context["page_index"], context["page_count"])
+    frame = context_frame(snapshot, context)
     try:
         validate_body_paint(frame, tuple(bounds))
     except ValueError as error:
@@ -446,7 +504,8 @@ def validate_template_publication(snapshot: dict, pages, outline) -> None:
         validate_template_publication_page(snapshot, payload, index=index, count=len(pages),
                                            content=outline.slides[index].content,
                                            chapter=getattr(outline.slides[index], "chapter", None))
-        if page_frame(snapshot, index, len(pages)).schema_version == "svg-template-frame/v3":
+        if page_frame(snapshot, index, len(pages),
+                      chapter=getattr(outline.slides[index], "chapter", None)).schema_version == "svg-template-frame/v3":
             from services.svg_presentation_checkpoint import _read_png
             from services.svg_templates.frame_fonts import bytes_digest
             png = _png if _png is not None else _read_png(payload)
@@ -477,7 +536,7 @@ def validate_template_publication_page(snapshot: dict, payload: dict, *, index: 
             or proof.get("body_paint_measured") is not True
             or (payload.get("quality") or {}).get("measurement_complete") is not True):
         raise ValueError("svg_template_preservation_unverified")
-    frame = page_frame(snapshot, index, count)
+    frame = page_frame(snapshot, index, count, chapter=chapter)
     marker = payload.get("fixedGlyphPreview")
     quality = payload.get("quality") or {}
     glyph_quality = quality.get("fixed_glyph_preview")

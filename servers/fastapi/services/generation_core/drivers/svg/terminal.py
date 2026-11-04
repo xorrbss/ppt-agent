@@ -298,7 +298,7 @@ async def _template_fallback(*, ctx, request, index, content, payload, error, jo
     try:
         from services.svg_templates.chapters import page_chapter
         context = template_page_context(ctx.snapshot, index, ctx.count, content, chapter=page_chapter(ctx, index))
-        frame = page_frame(ctx.snapshot, index, ctx.count)
+        frame = page_frame(ctx.snapshot, index, ctx.count, chapter=page_chapter(ctx, index))
         if frame.schema_version == "svg-template-frame/v3":
             # A fixed glyph preview binds the published PNG to a capture this
             # substitute cannot reproduce.

@@ -110,7 +110,7 @@ def _body_quality(monkeypatch, tmp_path, body: str, metrics: list[dict]):
     from services.svg_templates import generation
 
     frame = _frame(tmp_path, {400, 700})
-    monkeypatch.setattr(generation, "page_frame", lambda snapshot, index, count, role=None: frame)
+    monkeypatch.setattr(generation, "page_frame", lambda snapshot, index, count, role=None, chapter=None: frame)
     svg = (f'<svg xmlns="{NS}" width="1280" height="720" viewBox="0 0 1280 720">'
            f'<g id="svg-system-template-body">{body}</g></svg>')
     quality = {"browser_metrics": {"elements": metrics}, "failures": [], "passed": True}

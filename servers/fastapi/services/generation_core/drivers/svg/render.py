@@ -618,8 +618,8 @@ async def _attempt_render(*, ctx, request, presentation_id, index, content, payl
             font_profile = ctx.source_font_profile if ctx.source_reflow else None
             fixed_glyph_preview = None
             if template_page is not None:
-                from services.svg_templates.generation import page_frame
-                template_frame = page_frame(ctx.snapshot, index, ctx.count)
+                from services.svg_templates.generation import context_frame
+                template_frame = context_frame(ctx.snapshot, template_page)
                 if template_frame.schema_version == "svg-template-frame/v3":
                     if template_frame.fixed_glyph_preview is None:
                         raise ValueError("svg_template_glyph_authority_missing")
