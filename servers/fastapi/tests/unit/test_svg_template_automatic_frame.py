@@ -88,3 +88,29 @@ def test_chapter_survives_the_page_context_round_trip():
     from services.svg_templates.chapters import chapter_from_context
     context = {"dynamic_values": {"chapter_number": "Ⅲ", "chapter_title": "t"}}
     assert automatic_frame_id(chapters(), 5, chapter_from_context(context)) == "three"
+
+
+def test_a_saved_context_keeps_the_frame_it_was_published_with(monkeypatch):
+    """A page published before chapter frames were chosen per chapter keeps its frame."""
+    from services.svg_templates import generation
+
+    frames = {"frame-2": "F2", "frame-5": "F5"}
+    selection = {"mode": "template-redesign", "frame_map": {}}
+    monkeypatch.setattr(generation, "template_selection", lambda snapshot: selection)
+    monkeypatch.setattr(generation, "template_package", lambda sel: {"frames": []})
+    monkeypatch.setattr(generation, "template_adaptations", lambda sel: frames)
+    monkeypatch.setattr(generation, "unpack_adaptation_fonts", lambda adaptation, package: adaptation)
+
+    class _Adaptation:
+        @staticmethod
+        def model_validate(value):
+            return type("A", (), {"frame": value})
+
+    monkeypatch.setattr(generation, "SvgTemplateFrameAdaptation", _Adaptation)
+    recomputed = []
+    monkeypatch.setattr(generation, "page_frame", lambda *args, **kwargs: recomputed.append(kwargs) or "AUTO")
+    context = {"page_index": 3, "page_count": 10, "frame_id": "frame-2",
+               "dynamic_values": {"chapter_number": "Ⅲ", "chapter_title": "수행"}}
+    assert generation.context_frame({}, context) == "F2" and not recomputed
+    selection["frame_map"] = {"4": "frame-5"}  # a frame map entry still wins
+    assert generation.context_frame({}, context) == "AUTO" and recomputed

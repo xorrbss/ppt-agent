@@ -16,13 +16,11 @@ def _structure(node):
 
 def template_furniture_receipt(svg, snapshot, *, width, height, index, count, page_context):
     from services.svg_contract import source_digest
-    from services.svg_templates.generation import page_frame
     from utils.hashing import canonical_json_digest
     if not page_context:
         raise ValueError("svg_template_page_context_missing")
-    from services.svg_templates.chapters import chapter_from_context
-    frame = page_frame(snapshot, index, count, role=page_context.get("role"),
-                       chapter=chapter_from_context(page_context))
+    from services.svg_templates.generation import context_frame
+    frame = context_frame(snapshot, {"page_index": index, "page_count": count, **page_context})
     if (page_context.get("frame_id") != frame.frame_id
             or page_context.get("frame_digest") != frame.digest
             or page_context.get("page_index") != index or page_context.get("page_count") != count

@@ -212,10 +212,27 @@ def page_frame(snapshot: dict, index: int, count: int, role: str | None = None,
 
 
 def context_frame(snapshot: dict, context: dict) -> SvgTemplateFrame:
-    """The frame a saved page context was built with, recomputed from the chapter
-    the context carries in its dynamic values."""
+    """The frame a saved page context was built with.
+
+    A frame map entry for the page always wins. Otherwise a context names its
+    frame (``frame_id``), so a page keeps the frame it was published with even
+    when the automatic choice has changed since (decks made before chapter
+    frames were chosen per chapter); a context without one is recomputed from
+    the chapter its dynamic values carry.
+    """
     from services.svg_templates.chapters import chapter_from_context
 
+    saved = context.get("frame_id")
+    selection = template_selection(snapshot)
+    mapped = selection is not None and str(context["page_index"] + 1) in (selection.get("frame_map") or {})
+    if saved and not mapped:
+        if selection is None or selection["mode"] != "template-redesign":
+            raise ValueError("svg_template_page_context_invalid")
+        package, adaptations = template_package(selection), template_adaptations(selection)
+        if saved not in adaptations:
+            raise ValueError("svg_template_canvas_preparation_required")
+        return SvgTemplateFrameAdaptation.model_validate(unpack_adaptation_fonts(
+            adaptations[saved], package)).frame
     return page_frame(snapshot, context["page_index"], context["page_count"],
                       role=context.get("role"), chapter=chapter_from_context(context))
 
