@@ -99,6 +99,12 @@ class SvgTemplateRasterPreservation(FrameModel):
     reasons: tuple[str, ...] = Field(min_length=1)
 
 
+#: Dynamic text that replaces a page's own header text (title, path) as a whole.
+HEADER_TEXT_KEYS = frozenset({"title", "breadcrumb", "breadcrumb_number"})
+#: Header slots a page may leave empty (the element is then not drawn).
+OPTIONAL_HEADER_KEYS = frozenset({"breadcrumb", "breadcrumb_number"})
+
+
 class SvgTemplateFrameElement(FrameModel):
     element_id: str
     source_part: str
@@ -111,7 +117,8 @@ class SvgTemplateFrameElement(FrameModel):
     anchor_x: Literal["left", "right", "center"] = "left"
     anchor_y: Literal["top", "bottom", "center"] = "top"
     size_policy: Literal["physical-fixed", "aspect-locked", "span-between-anchors"] = "physical-fixed"
-    dynamic_key: Literal["title", "page_number", "section_number", "chapter_number", "chapter_title"] | None = None
+    dynamic_key: Literal["title", "page_number", "section_number", "chapter_number", "chapter_title",
+                         "breadcrumb", "breadcrumb_number"] | None = None
     font_asset_ids: tuple[str, ...] = ()
     text_region: FrameRect | None = None
     text_align: Literal["l", "ctr", "r"] = "l"

@@ -144,6 +144,37 @@ async def plan_outline_chapters(request, outline) -> None:
     raise ValueError("svg_template_chapter_title_too_long")
 
 
+def chapter_ordinal(number: str) -> int | None:
+    """The 1-based position a chapter number names (Ⅲ, III, 03, 3 all give 3)."""
+    text = str(number or "").strip().rstrip(".)")
+    if text and text[0] in _UNICODE_ROMAN:
+        return _UNICODE_ROMAN.index(text[0]) + 1
+    if text.upper() in _ASCII_ROMAN:
+        return _ASCII_ROMAN.index(text.upper()) + 1
+    return int(text) if text.isdigit() else None
+
+
+def header_values(frame: SvgTemplateFrame, title: str, chapter: dict | None) -> dict[str, str]:
+    """The path and its number a frame's header shows (``3 | 수행 방안 › 수행 일정``).
+
+    A page with no chapter has no path to show: both are then empty and the
+    frame draws nothing for them.
+    """
+    fields = set(frame.dynamic_fields)
+    values: dict[str, str] = {}
+    chapter_title = str(chapter.get("title") or "").strip() if isinstance(chapter, dict) else ""
+    if "breadcrumb" in fields:
+        title = (title or "").strip()
+        parts = [part for part in (chapter_title, title) if part]
+        if len(parts) == 2 and parts[0] == parts[1]:
+            parts = parts[:1]
+        values["breadcrumb"] = " \u203a ".join(parts) if chapter_title else ""
+    if "breadcrumb_number" in fields:
+        ordinal = chapter_ordinal(chapter.get("number")) if isinstance(chapter, dict) else None
+        values["breadcrumb_number"] = str(ordinal) if ordinal and chapter_title else ""
+    return values
+
+
 def chapter_values(frame: SvgTemplateFrame, chapter: dict | None) -> dict[str, str]:
     """The chapter fields a frame shows, from the page's chapter; empty when it shows none."""
     fields = set(CHAPTER_KEYS) & set(frame.dynamic_fields)

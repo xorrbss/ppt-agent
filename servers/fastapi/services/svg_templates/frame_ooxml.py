@@ -12,7 +12,7 @@ from zipfile import ZipFile
 from lxml import etree
 from PIL import Image
 
-from models.svg_template_frame import FrameRect, SvgTemplateAsset, SvgTemplateFrameElement
+from models.svg_template_frame import HEADER_TEXT_KEYS, FrameRect, SvgTemplateAsset, SvgTemplateFrameElement
 from services.source_content.pptx_extraction_constants import NS, R_NS
 from services.source_content.pptx_geometry import _geometry
 from services.source_content.pptx_package_parts import _relationship_map
@@ -349,6 +349,10 @@ class OoxmlFrameContext:
                 runs.append((text, size, asset, width, ascent, descent, color, spacing))
             if not runs:
                 continue
+            if dynamic_key in HEADER_TEXT_KEYS and len(paragraphs) == 1 and len(runs) > 1:
+                # A page's own title or path replaces the source's text as a whole:
+                # it keeps the first run's face, size and colour.
+                runs = runs[:1]
             if dynamic_key and (len(paragraphs) != 1 or len(runs) != 1):
                 raise ValueError("svg_template_dynamic_rich_text_unsupported")
             layout = context.paragraph_layout(paragraph)

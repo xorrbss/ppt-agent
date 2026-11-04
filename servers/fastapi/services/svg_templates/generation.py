@@ -162,8 +162,9 @@ def template_page_context(snapshot: dict, index: int, count: int, content: str,
     section = re.match(r"^\s*(\d+(?:\.\d+)*)[.)\s]", title or "")
     values = {"title": title or "", "page_number": str(index + 1),
               "section_number": section.group(1) if section else ""}
-    from services.svg_templates.chapters import chapter_values
+    from services.svg_templates.chapters import chapter_values, header_values
     values.update(chapter_values(frame, chapter))
+    values.update(header_values(frame, title or "", chapter))
     # The compiler measures actual font bytes; oversized bound titles fail before body spend.
     render_frame_svg(frame, dynamic_values=values)
     adaptation = template_adaptations(selection)[frame.frame_id]

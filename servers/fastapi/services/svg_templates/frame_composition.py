@@ -8,7 +8,8 @@ from copy import deepcopy
 from lxml import etree
 
 from models.document_canvas import DocumentCanvasMetadata
-from models.svg_template_frame import FrameRect, SvgTemplateFrame, SvgTemplateFrameAdaptation
+from models.svg_template_frame import (HEADER_TEXT_KEYS, OPTIONAL_HEADER_KEYS, FrameRect, SvgTemplateFrame,
+                                       SvgTemplateFrameAdaptation)
 from services.source_content.security import secure_xml
 from services.svg_templates.frame_fonts import artifact_digest, bytes_digest, font_asset_for, measure_text, resolve_font_manifest, font_validation_scope
 from services.svg_templates.frame_ooxml import SVG_NS, svg_node
@@ -79,7 +80,7 @@ def adapt_frame(frame: SvgTemplateFrame, target_canvas: DocumentCanvasMetadata |
             width += dw
         if element.layer == "background":
             height += dh
-        if element.dynamic_key == "title":
+        if element.dynamic_key in {"title", "breadcrumb"}:
             width += dw
         if width < 0 or height < 0:
             raise ValueError("svg_template_adaptation_fixed_element_does_not_fit")
@@ -120,7 +121,7 @@ def adapt_frame(frame: SvgTemplateFrame, target_canvas: DocumentCanvasMetadata |
         text_region = element.text_region
         if text_region is not None:
             text_region = FrameRect(x=text_region.x * scale + dx, y=text_region.y * scale + dy,
-                width=text_region.width * scale + (dw if element.dynamic_key == "title" else 0),
+                width=text_region.width * scale + (dw if element.dynamic_key in {"title", "breadcrumb"} else 0),
                 height=text_region.height * scale)
             if element.kind == "text":
                 left = max(adapted_bounds.x, text_region.x)
@@ -260,25 +261,50 @@ def trusted_frame_images(frame: SvgTemplateFrame) -> dict[str, str]:
     return result
 
 
+def _fit_header_text(asset, value, size, spacing, region_width):
+    """A page's own header text must not fail the page for being long: shrink it to
+    60 % of the source size, then cut it with an ellipsis. Returns ``(value, size, width)``."""
+    def width_of(text, at):
+        return measure_text(asset, text, at)[0] + spacing * len(text)
+    floor = size * .6
+    while width_of(value, size) > region_width and size > floor:
+        size = max(floor, size * .95)
+    while len(value) > 1 and width_of(value, size) > region_width:
+        value = value[:-2].rstrip() + "\u2026" if len(value) > 2 else value[:-1]
+    return value, size, width_of(value, size)
+
+
 def _element_node(element, frame, values, *, require_dynamic):
     node = secure_xml(element.svg.encode(), part_name="frame-element.svg")
     if element.dynamic_key:
-        if element.dynamic_key not in values:
+        key = element.dynamic_key
+        if key not in values:
             if require_dynamic:
-                raise ValueError("svg_template_dynamic_value_missing:" + element.dynamic_key)
+                raise ValueError("svg_template_dynamic_value_missing:" + key)
             return node
         texts = list(node.iter(f"{{{SVG_NS}}}text"))
         if len(texts) != 1:
             raise ValueError("svg_template_dynamic_text_invalid")
         text = texts[0]
-        value = str(values[element.dynamic_key])
+        value = str(values[key])
+        if key in OPTIONAL_HEADER_KEYS and not value.strip():
+            # A page without this header text draws nothing there.
+            return svg_node("g", id=node.get("id"))
         if not value.strip() or len(value) > 2000 or "\n" in value:
             raise ValueError("svg_template_dynamic_value_invalid")
         asset = font_asset_for(frame.font_manifest, text.get("font-family"), int(text.get("font-weight", "400")))
-        width, ascent, descent = measure_text(asset, value, float(text.get("font-size")))
-        width += float(text.get("letter-spacing", "0")) * len(value)
-        x, y = float(text.get("x")), float(text.get("y"))
+        size = float(text.get("font-size"))
+        spacing = float(text.get("letter-spacing", "0"))
         region = element.text_region or element.bounds
+        if key in HEADER_TEXT_KEYS:
+            for child in list(text):
+                text.remove(child)
+            value, size, width = _fit_header_text(asset, value, size, spacing, region.width)
+            text.set("font-size", str(size))
+        else:
+            width = measure_text(asset, value, size)[0] + spacing * len(value)
+        _, ascent, descent = measure_text(asset, value, size)
+        x, y = float(text.get("x")), float(text.get("y"))
         if element.text_align in {"l", "ctr", "r"}:
             x = region.x + {"l": 0, "ctr": .5, "r": 1}[element.text_align] * (region.width - width)
         text.set("x", str(x))

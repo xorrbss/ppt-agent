@@ -184,6 +184,93 @@ def _layout_text_boxes(context, typography, part):
                 continue
 
 
+_PAGE_NUMBER_TEXT = re.compile(r"^\d{1,2}$")
+#: A header text at least this large (pt) and the largest of its page is its title.
+_MIN_TITLE_SIZE_PT = 18.0
+
+
+def _first_run_size(typography, part, shape):
+    """The point size of the shape's first run, or ``None`` when it cannot be resolved."""
+    try:
+        text_context = typography.shape_context(shape, part_name=part)
+        for paragraph in shape.findall("p:txBody/a:p", NS):
+            for run in paragraph:
+                if etree.QName(run).localname == "r":
+                    size = text_context.run_style(run, paragraph).get("sizePt")
+                    if size:
+                        return float(size)
+    except (ValueError, KeyError, TypeError):
+        return None
+    return None
+
+
+def _header_text_slots(context, typography, package, slide_part, canvas, variable_slots, repeats, deck_pages):
+    """The page-specific header texts of a slide that a generated page can fill.
+
+    The real proposal deck puts each page's title, a path (``3 | 프로젝트 수행전략
+    › 3.1 …``) and a requirement ID in the header band, as slide text whose
+    value differs on every page. Dropping them leaves a fifth of the page empty,
+    so the compiler keeps the two a generated page can write as dynamic text,
+    with the source's own face, size and colour:
+
+    * ``title``: the largest of the page's header texts, at least 18 pt;
+    * ``breadcrumb`` and ``breadcrumb_number``: a group holding a number and a
+      wider text (the chapter number and its path).
+
+    Anything else in the band that varies (the requirement ID) stays page
+    content, as before. Returns ``(leaf id -> dynamic key, ids of the
+    top-level shapes that hold a slot)``.
+    """
+    roles: dict[str, str] = {}
+    holders: set[str] = set()
+    if deck_pages < 2:
+        return roles, holders  # one page cannot show which of its texts vary per page
+    titles = []
+    limit = canvas.height_px * .25
+    for shape in _children(context.root(slide_part)):
+        kind = etree.QName(shape).localname
+        if kind not in {"sp", "grpSp"} or placeholder_of(shape) is not None:
+            continue
+        if shape.find(".//a:t", NS) is None:
+            continue
+        # A title is page content: its text differs between pages, or no other
+        # page repeats it. (A path group is recognised by its shape below: pages
+        # of one section share its text, and its runs may differ page to page.)
+        if kind == "sp" and (_slot_key(shape, package, slide_part) not in variable_slots
+                             and repeats[_repeat_key(shape, package, slide_part)] >= 2):
+            continue
+        if kind == "sp":
+            try:
+                bounds = shape_bounds(shape, typography, slide_part, context.scale)
+            except ValueError:
+                continue
+            if bounds is None or bounds.y + bounds.height > limit:
+                continue
+            size = _first_run_size(typography, slide_part, shape)
+            if size is not None and size >= _MIN_TITLE_SIZE_PT and _shape_text(shape):
+                titles.append((size, bounds.width, shape))
+            continue
+        try:
+            found = [(leaf, box) for leaf, box, failure in group_leaves(shape, context.scale)
+                     if failure is None and box is not None]
+        except ValueError:
+            continue
+        if not found or max(box.y + box.height for _, box in found) > limit:
+            continue
+        leaves = [leaf for leaf, _ in found if leaf.find(".//a:t", NS) is not None and _shape_text(leaf)]
+        numbers = [leaf for leaf in leaves if _PAGE_NUMBER_TEXT.match(_shape_text(leaf))]
+        paths = [leaf for leaf in leaves if leaf not in numbers]
+        if len(numbers) == 1 and len(paths) == 1:
+            roles[shape_id(numbers[0])] = "breadcrumb_number"
+            roles[shape_id(paths[0])] = "breadcrumb"
+            holders.add(shape_id(shape))
+    if titles:
+        _, _, title = max(titles, key=lambda item: (item[0], item[1]))
+        roles[shape_id(title)] = "title"
+        holders.add(shape_id(title))
+    return roles, holders
+
+
 def _chapter_slots(context, package, typography):
     """Layout text slots that name a chapter: ``(geometry, {slot key: dynamic key})``.
 
@@ -658,6 +745,9 @@ def extract_template_package(pptx_path: str | Path, *, font_assets=None,
                     if ph is not None:
                         nearest.setdefault((ph.type, ph.idx), (part, shape_id(shape)))
             latent_visible = _latent_placeholder_visibility(context, ancestry)
+            header_roles, header_holders = _header_text_slots(
+                context, typography, package, slide_part, canvas, variable_slots, repeats,
+                len(all_slides))
             for part in reversed(ancestry):
                 root = context.root(part)
                 slide_root = context.root(slide_part)
@@ -692,6 +782,16 @@ def extract_template_package(pptx_path: str | Path, *, font_assets=None,
                             fixed = False
                     elif part == slide_part and bounds is not None:
                         edge = bounds.y + bounds.height <= canvas.height_px * .25 or bounds.y >= canvas.height_px * .78
+                        if edge and bounds.y < canvas.height_px * .5 and shape.find(".//a:t", NS) is None:
+                            # A picture or shape that lies wholly below the header band is body
+                            # decoration (the key-message bar's icon), not header furniture:
+                            # kept alone it would float over the body with its bar gone.
+                            band_bottom = max((e.bounds.y + e.bounds.height for e in elements
+                                               if e.kind == "rect" and e.layer == "foreground" and e.bounds.y <= 1
+                                               and e.bounds.width >= canvas.width_px * .9
+                                               and e.bounds.height <= canvas.height_px * .3), default=None)
+                            if band_bottom is not None and bounds.y >= band_bottom - 2:
+                                edge = False
                         preset = shape.find("p:spPr/a:prstGeom", NS)
                         page_background = (preset is not None and preset.get("prst") == "rect"
                             and abs(bounds.x) <= .01 and abs(bounds.y) <= .01
@@ -706,6 +806,8 @@ def extract_template_package(pptx_path: str | Path, *, font_assets=None,
                                     and _slot_key(shape, package, part) in variable_slots)
                         fixed = page_background or (edge and not variable and (
                             repeats[_repeat_key(shape, package, part)] >= 2 or len(all_slides) == 1))
+                    if part == slide_part and shape_id(shape) in header_holders:
+                        fixed = True  # a header title or path: its text is filled per page
                     if selected is not None:
                         fixed = part + "#" + shape_id(shape) in selected
                     if not fixed:
@@ -751,12 +853,18 @@ def extract_template_package(pptx_path: str | Path, *, font_assets=None,
                                 continue
                             leaf_key = (chapter_slot(leaf_bounds)
                                         if "/slideLayouts/" in part and _simple_text(leaf) is not None else None)
+                            if part == slide_part and shape_id(shape) in header_holders:
+                                leaf_key = header_roles.get(shape_id(leaf))
+                                if leaf_key is None and leaf.find(".//a:t", NS) is not None:
+                                    continue  # other varying header text stays page content
                             _emit_fixed(context, runs, elements, issues, frame_id, part, leaf, leaf_bounds,
                                         emu=_emu(leaf_bounds, context), dynamic_key=leaf_key)
                         continue
                     dynamic_key = _DYNAMIC.get(ph.type) if ph else None
                     if dynamic_key is None and "/slideLayouts/" in part and _simple_text(shape) is not None:
                         dynamic_key = chapter_slot(bounds)
+                    if dynamic_key is None and part == slide_part:
+                        dynamic_key = header_roles.get(shape_id(shape))
                     try:
                         element = context.emit(shape, part, element_id=f"svg-system-template-{frame_id}-fixed-{len(elements)}",
                                                dynamic_key=dynamic_key)
