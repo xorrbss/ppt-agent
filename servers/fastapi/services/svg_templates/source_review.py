@@ -261,16 +261,14 @@ def _private_fontconfig(directory: Path, package) -> dict:
     return {"FONTCONFIG_FILE": str(config)}
 
 
-def _render_source_libreoffice(path: Path, package):
-    """Convert the source deck to PDF with LibreOffice and rasterize each frame's page."""
-    import pypdfium2 as pdfium
+def convert_source_pdf_libreoffice(path: Path, package) -> tuple[str, bytes]:
+    """The source deck as a PDF converted by LibreOffice with the template's own fonts: ``(version, bytes)``."""
     if bytes_digest(path.read_bytes()) != package.source_digest:
         raise ValueError("svg_template_source_digest_mismatch")
     executable = _libreoffice_executable()
     if not executable:
         raise ValueError("svg_template_libreoffice_unavailable")
     version = _libreoffice_version(executable)
-    width, height = package.source_canvas.width_px, package.source_canvas.height_px
     with tempfile.TemporaryDirectory(prefix="svg-template-libreoffice-") as raw:
         directory = Path(raw)
         source = directory / "source.pptx"
@@ -284,30 +282,38 @@ def _render_source_libreoffice(path: Path, package):
         pdf_path = directory / "source.pdf"
         if completed.returncode != 0 or not pdf_path.is_file():
             raise ValueError("svg_template_libreoffice_render_failed")
-        images = {}
-        document = pdfium.PdfDocument(pdf_path.read_bytes())
-        try:
-            for page_index in sorted({frame.source_page for frame in package.frames}):
-                if page_index >= len(document):
-                    raise ValueError("svg_template_source_page_missing")
-                page = document[page_index]
-                try:
-                    bitmap = page.render(scale=width / page.get_width())
-                    image = bitmap.to_pil().convert("RGB")
-                    bitmap.close()
-                finally:
-                    page.close()
-                if image.size != (width, height):
-                    # The PDF page is the slide at its physical size; rounding can
-                    # leave the raster a pixel off the logical canvas.
-                    if abs(image.size[0] - width) > 2 or abs(image.size[1] - height) > 2:
-                        raise ValueError("svg_template_review_image_size_mismatch")
-                    image = image.resize((width, height), Image.LANCZOS)
-                output = BytesIO()
-                image.save(output, format="PNG")
-                images[page_index] = output.getvalue()
-        finally:
-            document.close()
+        return version, pdf_path.read_bytes()
+
+
+def _render_source_libreoffice(path: Path, package):
+    """Convert the source deck to PDF with LibreOffice and rasterize each frame's page."""
+    import pypdfium2 as pdfium
+    version, pdf_bytes = convert_source_pdf_libreoffice(path, package)
+    width, height = package.source_canvas.width_px, package.source_canvas.height_px
+    images = {}
+    document = pdfium.PdfDocument(pdf_bytes)
+    try:
+        for page_index in sorted({frame.source_page for frame in package.frames}):
+            if page_index >= len(document):
+                raise ValueError("svg_template_source_page_missing")
+            page = document[page_index]
+            try:
+                bitmap = page.render(scale=width / page.get_width())
+                image = bitmap.to_pil().convert("RGB")
+                bitmap.close()
+            finally:
+                page.close()
+            if image.size != (width, height):
+                # The PDF page is the slide at its physical size; rounding can
+                # leave the raster a pixel off the logical canvas.
+                if abs(image.size[0] - width) > 2 or abs(image.size[1] - height) > 2:
+                    raise ValueError("svg_template_review_image_size_mismatch")
+                image = image.resize((width, height), Image.LANCZOS)
+            output = BytesIO()
+            image.save(output, format="PNG")
+            images[page_index] = output.getvalue()
+    finally:
+        document.close()
     return version, images
 
 
