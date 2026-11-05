@@ -269,7 +269,7 @@ async def _design_revision(context, owner, request, outline, snapshot, rows, inp
                 session_factory=session_factory)
         return await run_header_candidate_page(active, request, context.claim.presentation_id,
             page_outline, request.language, owner, page_index, identity, async_session_maker=session_factory)
-    index = document.setdefault("representative_index", _representative_index(ctx, outline, request.common_header_cover_exception))
+    index = document.setdefault("representative_index", _representative_index(ctx, outline, request.common_header_cover_exception, None, plan))
     base = header_snapshot_base(ctx.snapshot)
     base = {**base, "common_header_design_plan": plan}
     candidate_contexts, defects = {}, []

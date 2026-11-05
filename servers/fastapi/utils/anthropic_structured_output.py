@@ -57,12 +57,12 @@ import hashlib
 import json
 import logging
 import threading
-from collections.abc import Generator, Iterable, Iterator, Mapping
+from collections.abc import Callable, Generator, Iterable, Iterator, Mapping
 from contextlib import contextmanager
 from contextvars import ContextVar
 from copy import deepcopy
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, TypeVar
 
 import llmai.client as llmai_client_module
 from llmai.anthropic.client import AnthropicClient
@@ -81,6 +81,7 @@ from llmai.shared.responses import (
 )
 
 LOGGER = logging.getLogger(__name__)
+_T = TypeVar("_T")
 
 #: String formats the structured-outputs grammar accepts.
 SUPPORTED_STRING_FORMATS = frozenset(
@@ -602,6 +603,21 @@ def cache_system_prompt() -> Iterator[None]:
         yield
     finally:
         _CACHE_SYSTEM_PROMPT.reset(token)
+
+
+def with_cached_system_prompt(call: Callable[..., _T]) -> Callable[..., _T]:
+    """``call`` run under :func:`cache_system_prompt` on whichever thread runs it.
+
+    ``loop.run_in_executor`` does not carry context variables into its worker
+    thread, so a provider call dispatched there is wrapped itself instead of
+    awaited inside the context manager. Nothing else about the call changes.
+    """
+
+    def run(*args: Any, **kwargs: Any) -> _T:
+        with cache_system_prompt():
+            return call(*args, **kwargs)
+
+    return run
 
 
 class RepositoryAnthropicClient(AnthropicClient):

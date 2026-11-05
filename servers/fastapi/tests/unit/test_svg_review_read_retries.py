@@ -62,7 +62,7 @@ def _run(harness, provider, **kwargs):
         read_png=lambda _: harness.pages[0][1], run_advisory=provider, **kwargs))
 
 
-@pytest.mark.parametrize("count", [1, 2, 5, 6, 12, 80])
+@pytest.mark.parametrize("count", [1, 2, 5, 6, 8, 9, 12, 80])
 def test_admission_seals_one_read_retry_for_each_group_and_final_pass(count):
     request = SimpleNamespace(vision_qa=False)
     plan = profiles.seal_new_quality_recovery_plan(request, count)
@@ -70,8 +70,10 @@ def test_admission_seals_one_read_retry_for_each_group_and_final_pass(count):
                     quality_recovery_policy=profiles.QUALITY_RECOVERY_POLICY_V2, quality_recovery_plan=plan)
     _seal_snapshot(snapshot)
     execution = READ_EXECUTION_PLAN(snapshot)
-    groups = (count + 4) // 5 + (count > 5)
-    assert plan["schema"] == "svg-quality-recovery-plan/v4"
+    # v5: one full review per round up to the page limit, else local groups plus one global call.
+    groups = 1 if count <= profiles.FULL_REVIEW_PAGE_LIMIT else (count + 4) // 5 + 1
+    assert plan["schema"] == "svg-quality-recovery-plan/v5"
+    assert plan["full_review_page_limit"] == profiles.FULL_REVIEW_PAGE_LIMIT == 8
     assert plan["review_contract_version"] == profiles.REVIEW_CONTRACT_VERSION
     assert plan["review_retry_limit"] == 1
     assert plan["review_call_limit"] == groups * 2 * (1 if count == 1 else 2)

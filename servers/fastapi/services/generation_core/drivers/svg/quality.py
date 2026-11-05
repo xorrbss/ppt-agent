@@ -85,6 +85,27 @@ async def classify_pages(pages, *, job, checkpoint, snapshot=None) -> dict[str, 
     return {**deck_quality_summary(outcomes), "compositionObservation": composition}
 
 
+def with_vision_review_receipt(summary, pages, advisory) -> dict[str, object]:
+    """``summary`` with the deck's vision review instrumentation (calls, cost, axes, redesigns)."""
+
+    from services.generation_core.drivers.svg.review_instrumentation import vision_review_receipt
+    from services.provider_usage_instrumentation import active_provider_operation_usage
+
+    return {**(summary or {}), "visionReview": vision_review_receipt(
+        pages, advisory, operation_usage=active_provider_operation_usage())}
+
+
+def with_chart_advisories(summary, pages) -> dict[str, object]:
+    """``summary`` with the pages each advisory chart check named (never a flag)."""
+
+    from services.generation_core.drivers.svg.bar_proportion import ADVISORY_KIND
+
+    flagged = [index for index, (payload, _) in enumerate(pages)
+               if any(isinstance(item, Mapping) and item.get("kind") == ADVISORY_KIND
+                      for item in ((payload.get("quality") or {}).get("advisories") or []))]
+    return {**(summary or {}), "chartAdvisories": {ADVISORY_KIND: flagged}}
+
+
 def reclassify_pages(pages, *, summary=None) -> dict[str, object]:
     """``classify_pages`` again, in place, after publication added page flags.
 
@@ -442,7 +463,9 @@ async def _quality_first_deck_advisory(ctx, pages, *, job, read_png, run_advisor
         raise ValueError("svg_quality_recovery_review_binding_missing")
     per_phase = plan["phase_group_limit"]
     group_size = plan["review_group_size"]
-    full_review = len(pages) <= group_size
+    # A v5 plan reviews a deck of up to its page limit in one full call; an
+    # earlier plan only when the deck fits one local group.
+    full_review = len(pages) <= plan.get("full_review_page_limit", group_size)
     review_attempt_limit = 1 + plan.get("review_retry_limit", 0)
     global_retry_limit = plan["global_format_retry_limit"]
     if final_control and baseline_review_active(context):
@@ -450,8 +473,9 @@ async def _quality_first_deck_advisory(ctx, pages, *, job, read_png, run_advisor
         group_size = final_control["local_group_size"]
         global_retry_limit = final_control["global_format_retry_limit"]
         full_review = False
-    groups = [list(range(start, min(start + group_size, len(pages))))
-              for start in range(0, len(pages), group_size)]
+    groups = ([list(range(len(pages)))] if full_review else
+              [list(range(start, min(start + group_size, len(pages))))
+               for start in range(0, len(pages), group_size)])
     if (len(groups) + (not full_review) + global_retry_limit) * review_attempt_limit != per_phase:
         raise ValueError("svg_quality_recovery_review_allocation_invalid")
     local_pages, local_comparisons, records = {}, {}, []

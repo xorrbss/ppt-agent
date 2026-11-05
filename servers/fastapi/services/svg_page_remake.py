@@ -20,9 +20,9 @@ from utils.hashing import sha256_hex
 
 
 def _v7_source_profile(snapshot):
-    from services.svg_authoring_profile import read_authoring_profile
+    from services.svg_authoring_profile import behaviour_profile, read_authoring_profile
 
-    profile = read_authoring_profile(snapshot)
+    profile = behaviour_profile(read_authoring_profile(snapshot))
     return bool(profile and profile["version"] in {7, 8})
 
 

@@ -248,6 +248,12 @@ def provider_operation_usage_scope() -> Iterator[ProviderOperationUsage]:
         _ACTIVE_OPERATION_USAGE.reset(token)
 
 
+def active_provider_operation_usage() -> ProviderOperationUsage | None:
+    """The operation attempt's usage counters, or ``None`` outside a scope (read only)."""
+
+    return _ACTIVE_OPERATION_USAGE.get()
+
+
 @contextmanager
 def public_operation_scope(
     operation_id: UUID | None,

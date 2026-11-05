@@ -6,7 +6,7 @@ import re
 
 from services.generation_core.drivers.svg.native_requirements import requested_native_data, requirements_revision
 from services.generation_core.drivers.svg.visual_intent import enrich_visual_intent, source_content_evidence
-from services.svg_authoring_profile import read_authoring_profile, read_quality_recovery_policy
+from services.svg_authoring_profile import behaviour_profile, read_authoring_profile, read_quality_recovery_policy
 from services.svg_contract import source_digest
 
 SELECTION_VERSION = "svg-reference-selection/v2"
@@ -29,7 +29,7 @@ def select_reference_role(style_snapshot: dict, page_role: str, content: str,
         return _select_quality_references(style_snapshot, page_role, content, visual_intent,
                                           has_source_images=has_source_images,
                                           source_grounded=quality_policy["version"] == 2)
-    profile = read_authoring_profile(style_snapshot)
+    profile = behaviour_profile(read_authoring_profile(style_snapshot))
     if profile is None or profile["version"] not in (2, 3, 4, 5, 6, 8):
         return None
     target, basis = page_role, "page_role"

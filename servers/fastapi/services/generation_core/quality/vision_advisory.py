@@ -331,6 +331,8 @@ async def _request_advisory(sheet: bytes, *, slide_count: int, required: bool = 
     from utils.llm_config import get_client
     from llmai.shared import JSONSchemaResponse
 
+    from enums.llm_provider import LLMProvider
+    from utils.anthropic_structured_output import with_cached_system_prompt
     from services.provider_usage_instrumentation import (
         ProviderCallTimer,
         current_provider_idempotency_key,
@@ -419,8 +421,17 @@ async def _request_advisory(sheet: bytes, *, slide_count: int, required: bool = 
                 # ever spending a slide's replay reservation.
                 outcome_scope=AUTHORED_DECK_OUTCOME_SCOPE,
             )
+            # An svg design review's system prompt (rules and schema) repeats
+            # across the deck's same-shaped review groups, rounds and read
+            # retries; on Anthropic it is a prompt-cache breakpoint. The
+            # page images follow it in the user message and are never cached.
+            dispatched_call = (
+                with_cached_system_prompt(generate_call)
+                if design_context is not None and provider == LLMProvider.ANTHROPIC.value
+                else generate_call
+            )
             response = await asyncio.get_running_loop().run_in_executor(
-                None, generate_call
+                None, dispatched_call
             )
     except ProviderOutcomeError as error:
         if error.code == "public_provider_result_unknown":

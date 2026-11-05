@@ -34,6 +34,11 @@ DECK_ICON_SELECTION_PROMPT_VERSION = "deck-icon-selection-v1"
 #: Distinct from the infographic plan's slot: both calls run in the same stage.
 SEMANTIC_SLOT_PREFIX = "deck_icon_selection"
 MAX_LABELS = 120
+#: Wall bound for the one selection call. The answer is at most MAX_LABELS short
+#: picks (about 1-2k output tokens), about 30 s at a pessimistic 50 tok/s; 90 s
+#: leaves room for reasoning and time to first token. On timeout the call fails
+#: open and the caller keeps its existing icon resolution.
+DECK_ICON_SELECTION_CALL_TIMEOUT_SECONDS = 90.0
 
 _SYSTEM = (
     "You choose icons for the figure labels of ONE presentation deck from a fixed icon set. "
@@ -116,6 +121,7 @@ async def select_deck_icons(labels: Sequence[str], names: Sequence[str]
                 validate_schema=True,
                 validate_schema_max_loop_count=2,
                 semantic_slot_prefix=SEMANTIC_SLOT_PREFIX,
+                call_timeout_seconds=DECK_ICON_SELECTION_CALL_TIMEOUT_SECONDS,
             )
         return parse_deck_icon_selection(content, labels, names)
     except (ValueError, TypeError) as error:

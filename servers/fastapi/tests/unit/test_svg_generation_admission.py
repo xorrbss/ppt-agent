@@ -2112,7 +2112,7 @@ def test_resolve_master_rules_maps_pipeline_errors_to_409():
     assert excinfo.value.status_code == 409
 
 
-@pytest.mark.parametrize("profile_id", [None, 'current-v4', 'art-direction-v1', 'art-direction-v1@2', 'art-direction-v1@3', 'art-direction-v1@4', 'art-direction-v1@5', 'art-direction-v1@6', 'art-direction-v1@7', 'art-direction-v1@8'])
+@pytest.mark.parametrize("profile_id", [None, 'current-v4', 'art-direction-v1', 'art-direction-v1@2', 'art-direction-v1@3', 'art-direction-v1@4', 'art-direction-v1@5', 'art-direction-v1@6', 'art-direction-v1@7', 'art-direction-v1@8', 'art-direction-v1@9'])
 def test_authoring_profile_staging_preserves_legacy_and_frozen_new_identity(monkeypatch, profile_id):
     from models.generate_presentation_request import GeneratePresentationRequest
     from services.presentation_generation_staging import _durable_request_payload, _request_from_durable_payload
@@ -2138,7 +2138,7 @@ def test_authoring_profile_staging_preserves_legacy_and_frozen_new_identity(monk
         assert INTERNAL_SVG_AUTHORING_PROFILE_KEY not in payload
         return
     snapshot = payload["_internal_svg_style_snapshot"]
-    expected = {'art-direction-v1': ART_DIRECTION_PROFILE, 'art-direction-v1@2': ART_DIRECTION_PROFILE_V2, 'art-direction-v1@3': ART_DIRECTION_PROFILE_V3, 'art-direction-v1@4': ART_DIRECTION_PROFILE_V4, 'art-direction-v1@5': ART_DIRECTION_PROFILE_V5, 'art-direction-v1@6': ART_DIRECTION_PROFILE_V6, 'art-direction-v1@7': ART_DIRECTION_PROFILE_V7, None: {'id': 'art-direction-v1', 'version': 8}, 'art-direction-v1@8': {'id': 'art-direction-v1', 'version': 8}}[profile_id]
+    expected = {'art-direction-v1': ART_DIRECTION_PROFILE, 'art-direction-v1@2': ART_DIRECTION_PROFILE_V2, 'art-direction-v1@3': ART_DIRECTION_PROFILE_V3, 'art-direction-v1@4': ART_DIRECTION_PROFILE_V4, 'art-direction-v1@5': ART_DIRECTION_PROFILE_V5, 'art-direction-v1@6': ART_DIRECTION_PROFILE_V6, 'art-direction-v1@7': ART_DIRECTION_PROFILE_V7, None: {'id': 'art-direction-v1', 'version': 9}, 'art-direction-v1@8': {'id': 'art-direction-v1', 'version': 8}, 'art-direction-v1@9': {'id': 'art-direction-v1', 'version': 9}}[profile_id]
     assert payload[INTERNAL_SVG_AUTHORING_PROFILE_KEY] == expected
     assert snapshot["authoring_profile"] == expected
     new_contract_keys = ({"readability_policy", "common_header_design_plan", "native_requirements_revision"}
@@ -2222,7 +2222,7 @@ def test_frozen_v1_authoring_cannot_be_replayed_as_v2(monkeypatch, target_profil
         _request_from_durable_payload(payload)
 
 
-@pytest.mark.parametrize("profile", ["future-v2", "art-direction-v1@9", {"id": "art-direction-v1", "version": 9}, {"id": "art-direction-v1", "version": True}])
+@pytest.mark.parametrize("profile", ["future-v2", "art-direction-v1@10", {"id": "art-direction-v1", "version": 10}, {"id": "art-direction-v1", "version": True}])
 def test_unknown_durable_authoring_profile_fails_closed(profile):
     from services.presentation_generation_staging import _request_from_durable_payload
     from services.svg_authoring_profile import INTERNAL_SVG_AUTHORING_PROFILE_KEY
@@ -5289,7 +5289,7 @@ def test_prepare_uses_fenced_current_job_snapshot_before_live_adaptation(conflic
         import json
         from xml.etree import ElementTree as ET
         from services import svg_partial_recovery as recovery
-        from services.svg_authoring_profile import ART_DIRECTION_PROFILE_V8, read_quality_recovery_policy
+        from services.svg_authoring_profile import read_quality_recovery_policy
         from services.svg_generation_admission import pin_svg_style as official_pin_svg_style
         from services import artifact_store, svg_asset_persistence
         from models.generate_presentation_request import GeneratePresentationRequest
@@ -5324,7 +5324,7 @@ def test_prepare_uses_fenced_current_job_snapshot_before_live_adaptation(conflic
         normalized, first_svg, author_digest, _, _, advisories = recovery._replay_sealed_author_transform(
             original, raw, request=source_request, job=source_job, asset=asset, index=0)
         author_receipt = dict(contract_version="svg-static/v2", provider="fixture", requested_model="fixture-model",
-            style_digest=snapshot["digest"], authoring_profile=dict(ART_DIRECTION_PROFILE_V8),
+            style_digest=snapshot["digest"], authoring_profile=dict(snapshot["authoring_profile"]),
             raw_digest="sha256:" + sha256_hex(raw.encode()), source_digest="sha256:" + author_digest,
             validation_error=None, native_declarations=None, vector_icons_used=[], attempt_ordinal=1)
         metrics = {"owned_text": [{"text": "Fixture message"}]}
@@ -5476,12 +5476,12 @@ def test_prepare_uses_fenced_current_job_snapshot_before_live_adaptation(conflic
         with pytest.raises(ValueError, match="svg_final_selected_evidence_unproven"):
             recovery.verify_cached_page(legacy_cached_child, legacy_cache_plan.manifest, 0, input_digest)
         from utils.hashing import canonical_json_digest
-        from services.svg_authoring_profile import read_authoring_profile
+        from services.svg_authoring_profile import CURRENT_ART_DIRECTION_PROFILE, read_authoring_profile
         no_policy_snapshot = deepcopy(snapshot)
         no_policy_snapshot.pop("quality_recovery_policy", None)
         no_policy_snapshot.pop("quality_recovery_plan", None)
         no_policy_snapshot["digest"] = canonical_json_digest({k: v for k, v in no_policy_snapshot.items() if k != "digest"}, allow_nan=True)
-        assert read_authoring_profile(no_policy_snapshot) == ART_DIRECTION_PROFILE_V8
+        assert read_authoring_profile(no_policy_snapshot) == CURRENT_ART_DIRECTION_PROFILE
         assert read_quality_recovery_policy(no_policy_snapshot) is None
         no_policy_cache_plan = deepcopy(plan)
         no_policy_cache_plan.archive = {"job": {"svg_style_snapshot": no_policy_snapshot}}

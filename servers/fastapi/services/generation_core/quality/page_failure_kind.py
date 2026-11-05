@@ -47,10 +47,16 @@ CONTENT_FAILURE_KINDS = frozenset({
     "source_classification_unproven",
     # Text that exists in the markup but that a reader cannot see.
     "text_off_canvas",
+    # Glyphs cut off by the canvas. A page reaches classification with it only
+    # after its one local repair (``drivers/svg/local_page_repair.py``) was
+    # refused or still clipped, so the visible page has lost those glyphs.
+    "text_clipped",
     "text_hidden",
     "source_text_paint_occluded",
     "source_text_paint_unproven",
-    # Unmeasured: visibility is unknown, so completeness is unproven.
+    # Unmeasured: visibility is unknown, so completeness is unproven. The
+    # renderer reads an incomplete page once more before it is classed
+    # (``drivers/svg/local_page_repair.remeasure_incomplete``).
     "measurement_incomplete",
     "physical_readability_unmeasured",
     "physical_font_unmeasured",
@@ -61,7 +67,6 @@ CONTENT_FAILURE_KINDS = frozenset({
 #: Every word is on the page; only its arrangement, size or style is defective.
 LAYOUT_FAILURE_KINDS = frozenset({
     "text_overlap",
-    "text_clipped",
     "small_body_text",
     "font_unresolved",
     "physical_font_too_small",

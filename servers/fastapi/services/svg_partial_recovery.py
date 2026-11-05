@@ -30,6 +30,7 @@ from models.sql.workspace import WorkspaceOperation
 from services.svg_cached_author_render_recovery import _unknown_provider, author_witness, digest
 from services.svg_timeout_repurchase import _live
 from utils.datetime_utils import get_current_utc_datetime
+from utils.code_file_digest import code_file_sha256
 from utils.hashing import sha256_hex
 
 REVISION = "svg-partial-recovery/v1"
@@ -1843,8 +1844,9 @@ async def _verify_append_only_edge(session, child, parent, *, verification=None,
 
 
 def _base_code_digest(files=None):
+    # Source bytes are fixed for the life of the process; each file is hashed once.
     root = Path(__file__).resolve().parents[1]
-    return digest([{ "path": name, "sha256": sha256_hex((root / name).read_bytes())}
+    return digest([{ "path": name, "sha256": code_file_sha256(root / name)}
                    for name in (CODE_FILES if files is None else files)])
 
 
@@ -5261,4 +5263,4 @@ def _code_digest():
              root / "generation_core/drivers/svg/quality_recovery.py",
              root / "generation_core/drivers/svg/collect.py"]
     return digest({"base": _base_code_digest(),
-                   "final_selected_sources": {str(p.relative_to(root)): sha256_hex(p.read_bytes()) for p in paths}})
+                   "final_selected_sources": {str(p.relative_to(root)): code_file_sha256(p) for p in paths}})

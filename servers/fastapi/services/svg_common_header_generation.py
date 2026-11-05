@@ -17,6 +17,7 @@ from services.svg_common_header_design_checkpoint import (
 from services.svg_common_header_v2 import prepare_common_header_v2
 from utils.hashing import canonical_json_digest, sha256_hex
 from services.svg_common_header_design_calls import PROMPT_VERSION, build_header_call, preflight_header_selector
+from services.svg_common_header_design_plan import design_input_without_asset_manifest
 
 VERSION = "svg-common-header-design-checkpoint/v2"
 
@@ -189,12 +190,26 @@ def admit_header_scoped_candidates(pages):
             page["eligibility"] = HEADER_SCOPED
 
 
-def _representative_index(ctx, outline, cover_exception, stage_plan=None):
+async def _settle_assets(ctx):
+    """Wait for the deck's asset offer when it was started beside the header design."""
+    settle = getattr(ctx, "settle_assets", None)
+    if settle is not None:
+        await settle()
+
+
+def _representative_index(ctx, outline, cover_exception, stage_plan=None, plan=None):
     eligible = list(range(1 if cover_exception else 0, ctx.count))
     if stage_plan is not None:
         eligible = [index for index in eligible if index in stage_plan["partitions"][0]]
     if not eligible:
         raise ValueError("svg_common_header_representative_missing")
+    def offered(index):
+        # A decoupled design runs before the asset offer settles, so only the
+        # source images planned before it can rank a page.
+        if plan is not None and design_input_without_asset_manifest(plan):
+            counts = getattr(ctx, "source_asset_counts", None)
+            return counts[index] if counts is not None else len(ctx.planned[index])
+        return len(ctx.manifests[index])
     def risk(index):
         if ctx.source_reflow:
             page = ctx.source_units[index]
@@ -204,7 +219,7 @@ def _representative_index(ctx, outline, cover_exception, stage_plan=None):
         from services.generation_core.drivers.svg.native_requirements import (
             requested_native_data, requirements_revision)
         native = requested_native_data(source, requirements_revision(ctx.snapshot))
-        return (len(native or []), len(ctx.manifests[index]), len(source), -index)
+        return (len(native or []), offered(index), len(source), -index)
     return max(eligible, key=risk)
 
 
@@ -213,6 +228,12 @@ def _design_input(ctx, request, outline, plan, index, previous=None):
     pages = [{"page_id": slide.page_id, "page_index": i, "title": slide.title,
               "source_digest": _digest(slide.content)} for i, slide in enumerate(outline.slides)]
     page_values = _header_values(ctx, request, outline)
+    representative = {"page_id": outline.slides[index].page_id, "source_ref": pages[index]["source_digest"]}
+    if not design_input_without_asset_manifest(plan):
+        representative["required_assets"] = {
+            key: {name: item for name, item in value.items() if name not in {"data_url", "dataUrl", "vector"}}
+            for key, value in ctx.manifests[index].items()}
+    representative["source"] = outline.slides[index].content
     value = {"version": VERSION, "plan_digest": plan["plan_digest"], "seed": plan["seed"],
         "purpose": request.content, "instructions": request.instructions,
         "language": getattr(request, "language", None), "writing_policy": getattr(request, "writing_policy", None),
@@ -224,11 +245,7 @@ def _design_input(ctx, request, outline, plan, index, previous=None):
         "style": svg_prompt_design(header_snapshot_base(ctx.snapshot)), "pages": pages,
         "available_value_refs": sorted({key for page in page_values for key in page["values"]}),
         "available_values": deepcopy(page_values), "page_values_digest": _digest(page_values),
-        "representative": {"page_id": outline.slides[index].page_id,
-            "source_ref": pages[index]["source_digest"], "required_assets": {
-                key: {name: item for name, item in value.items() if name not in {"data_url", "dataUrl", "vector"}}
-                for key, value in ctx.manifests[index].items()},
-            "source": outline.slides[index].content},
+        "representative": representative,
         "capability": {"version": plan["capability_version"], "svg_rules": SVG_AUTHOR_RULES},
         "limits": {key: plan[key] for key in ("max_svg_bytes", "max_svg_nodes", "max_render_seconds")}}
     if previous is not None:
@@ -612,7 +629,7 @@ async def _prepare_designed_document_header(ctx, request, presentation_id, outli
     document["header_page_values_digest"] = _digest(page_values)
     cover_exception = bool(getattr(request, "common_header_cover_exception", False))
     index = document.setdefault("representative_index", _representative_index(ctx, outline, cover_exception,
-        getattr(request, "_svg_stage_plan", None)))
+        getattr(request, "_svg_stage_plan", None), plan))
     if document.get("representative_page_id", outline.slides[index].page_id) != outline.slides[index].page_id:
         raise ValueError("svg_common_header_representative_identity_conflict")
     document["representative_page_id"] = outline.slides[index].page_id
@@ -628,6 +645,9 @@ async def _prepare_designed_document_header(ctx, request, presentation_id, outli
         with observe_setup(request, "header_design"):
             response = await _stage_paid_step(document, key=f"design-{revision}", stage="design", ordinal=revision,
                 payload=design_input, images=reference_images, plan=plan, job=job, save=save)
+        # The representative pages author with the asset offer; every candidate
+        # context below is a copy of the settled one.
+        await _settle_assets(ctx)
         try:
             candidates = _checked_candidates(response, plan, revision)
             failures = []

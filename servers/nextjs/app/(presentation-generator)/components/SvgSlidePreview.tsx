@@ -6,6 +6,7 @@ import {
   LEGACY_AUTHORED_CANVAS,
   type AuthoredCanvasContract,
 } from "@/lib/authored-canvas";
+import { buildSvgPreviewSrcDoc } from "@/lib/svg-preview-fonts";
 import { AUTH_SESSION_EXPIRED_EVENT } from "../services/api/api-error-handler";
 
 interface SvgSlidePreviewProps {
@@ -21,9 +22,32 @@ interface SvgSlidePreviewProps {
 
 const previewCache = new Map<string, Promise<string>>();
 const MAX_CACHED_PREVIEWS = 128;
+// Materialized SVG text kept after a slide is deselected so it keeps rendering
+// as SVG (not the server PNG). Bounded: each entry is a whole slide document.
+const resolvedPreviewText = new Map<string, string>();
+const MAX_RESOLVED_PREVIEW_TEXTS = 32;
+
+function previewCacheKey(slideId: string, revision: string | number): string {
+  return JSON.stringify([slideId, String(revision)]);
+}
+
+function rememberResolvedPreview(key: string, source: string) {
+  resolvedPreviewText.delete(key);
+  resolvedPreviewText.set(key, source);
+  while (resolvedPreviewText.size > MAX_RESOLVED_PREVIEW_TEXTS) {
+    const oldest = resolvedPreviewText.keys().next().value;
+    if (oldest === undefined) break;
+    resolvedPreviewText.delete(oldest);
+  }
+}
+
+function peekResolvedPreview(slideId: string | undefined, revision: string): string {
+  if (!slideId) return "";
+  return resolvedPreviewText.get(previewCacheKey(slideId, revision)) ?? "";
+}
 
 export function prefetchSvgSlidePreview(slideId: string, revision: string | number): Promise<string> {
-  const key = JSON.stringify([slideId, String(revision)]);
+  const key = previewCacheKey(slideId, revision);
   const existing = previewCache.get(key);
   if (existing) return existing;
   const previewUrl = new URL(`/api/v1/ppt/slide/${encodeURIComponent(slideId)}/svg-preview`, window.location.origin);
@@ -31,7 +55,9 @@ export function prefetchSvgSlidePreview(slideId: string, revision: string | numb
   const request = fetch(previewUrl, { credentials: "same-origin", cache: "no-store" })
     .then(async (response) => {
       if (!response.ok) throw new Error("svg_preview_unavailable");
-      return response.text();
+      const text = await response.text();
+      rememberResolvedPreview(key, text);
+      return text;
     })
     .catch((error) => {
       if (previewCache.get(key) === request) previewCache.delete(key);
@@ -44,18 +70,6 @@ export function prefetchSvgSlidePreview(slideId: string, revision: string | numb
   }
   return request;
 }
-
-const SVG_PREVIEW_CSP = [
-  "default-src 'none'",
-  "base-uri 'none'",
-  "object-src 'none'",
-  "connect-src 'none'",
-  "img-src data:",
-  "font-src 'none'",
-  "style-src 'unsafe-inline'",
-  "script-src 'none'",
-].join("; ");
-const FIXED_GLYPH_SVG_PREVIEW_CSP = SVG_PREVIEW_CSP.replace("font-src 'none'", "font-src data:");
 
 /** SVG stays in the same unprivileged iframe/PNG boundary as authored previews. */
 export function SvgSlidePreview({
@@ -141,16 +155,16 @@ export function SvgSlidePreview({
     // Only legacy requests use the shared cache; v3 requests are scoped to this view.
     return () => { active = false; controller?.abort(); if (pending.current === controller) pending.current = null; };
   }, [runtime, shouldResolve, slideId, revisionKey, requestKey, wantsFixedGlyph, fixedDigest, authInvalidated]);
+  // After deselection (`resolveAssets` false) keep rendering the materialized
+  // SVG from state or the bounded cache instead of flipping back to the PNG.
   const svgSource = authInvalidated ? "" : canonicalSvg ||
-    ((resolveAssets || wantsFixedGlyph) && resolved?.key === requestKey ? resolved.svg : "");
+    (resolved?.key === requestKey ? resolved.svg
+      : !wantsFixedGlyph ? peekResolvedPreview(slideId, revisionKey) : "");
   const loading = runtime === "unknown" || (runtime === "web" && !authInvalidated
     && shouldResolve && failedKey !== requestKey && !svgSource);
   const srcDoc = useMemo(() => {
     if (!svgSource || runtime !== "web") return "";
-    const withoutForeignDocument = svgSource
-      .replace(/<script\b[\s\S]*?<\/script\s*>/gi, "")
-      .replace(/<foreignObject\b[\s\S]*?<\/foreignObject\s*>/gi, "");
-    return `<!doctype html><meta http-equiv="Content-Security-Policy" content="${wantsFixedGlyph ? FIXED_GLYPH_SVG_PREVIEW_CSP : SVG_PREVIEW_CSP}"><style>html,body{margin:0;width:100%;height:100%;overflow:hidden}body>svg{display:block;width:100%;height:100%}</style><body>${withoutForeignDocument}</body>`;
+    return buildSvgPreviewSrcDoc(svgSource, window.location.origin, wantsFixedGlyph);
   }, [runtime, svgSource, wantsFixedGlyph]);
 
   return (

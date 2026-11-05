@@ -544,10 +544,18 @@ async def _generate_prepared_deck(
 
     if uses_header_design(ctx.snapshot.get("common_header_design_plan")):
         from services.svg_common_header_generation import prepare_document_header
-        ctx = await prepare_document_header(ctx, request, presentation_id, outline, language, job,
-            checkpoint=checkpoint, async_session_maker=async_session_maker,
-            read_png=read_png, write_png=write_png, page_runner=_page,
-            page_hooks_factory=_PageHooks, state_factory=_RunState)
+        try:
+            ctx = await prepare_document_header(ctx, request, presentation_id, outline, language, job,
+                checkpoint=checkpoint, async_session_maker=async_session_maker,
+                read_png=read_png, write_png=write_png, page_runner=_page,
+                page_hooks_factory=_PageHooks, state_factory=_RunState)
+        except BaseException:
+            # A header failure never discards the paid asset offer running beside it.
+            if ctx.pending_assets is not None:
+                await asyncio.gather(ctx.pending_assets, return_exceptions=True)
+            raise
+    # Whatever the header did, authoring starts only with the settled offer.
+    await ctx.settle_assets()
     from services.svg_authoring_profile import read_quality_recovery_policy
     recovery_policy = read_quality_recovery_policy(ctx.snapshot)
     if recovery_policy:
@@ -758,6 +766,8 @@ async def _generate_prepared_deck(
         if not recovery_policy:
             advisory = stage_advisory if stage_plan is not None else await deck_quality.deck_advisory(
                 ctx, pages, job=job, read_png=read_png, run_advisory=observed_advisory)
+        summary = deck_quality.with_chart_advisories(
+            deck_quality.with_vision_review_receipt(summary, pages, advisory), pages)
     return ctx, pages, summary, advisory
 
 
