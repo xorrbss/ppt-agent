@@ -323,6 +323,7 @@ tests/unit/test_source_id_alias.py
 tests/unit/test_source_image_registry.py
 tests/unit/test_svg_attempt_cause.py
 tests/unit/test_svg_attempt_observability.py
+tests/unit/test_svg_author_layered_rules.py
 tests/unit/test_svg_author_prompt_cache.py
 tests/unit/test_svg_author_timeout_recovery.py
 tests/unit/test_svg_axis_review.py

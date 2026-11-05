@@ -359,6 +359,10 @@ PARTIAL_RECOVERY_CODE_LEDGER = VerifierRevisionLedger(
         # were reduced to the rejection each one already always reached. No partial
         # recovery behaviour changed.
         "651b68aa3866cf5987ce233b5e8ebc5098c9b29b00fdda4cf8700b8ece5f8cdf": "svg-partial-recovery-code/1",
+        # S3 authoring profile v10: new rules apply only to decks pinned to v10
+        # (admissions still pin v9 by default); v9 and earlier prompts are
+        # byte-identical (pinned digests), so recovery of stored decks is unchanged.
+        "64ad5a76691fb115fbe7932497489ed2a53cb5fd48e4a11f3c96d55fcb09584a": "svg-partial-recovery-code/1",
     }),
 )
 
@@ -379,6 +383,9 @@ PAGE_RENDER_CODE_LEDGER = VerifierRevisionLedger(
         # Cached-author-render deletion (same edit as the code ledger entry): no page
         # rendering or measurement behaviour changed.
         "8e9cd3ad649183f3635bf02e53d7f2efa86646b5823729d3511b82491ea4e921": "svg-page-render-code/1",
+        # S3 authoring profile v10 (same edit as the code ledger entry): pages of
+        # v9-and-earlier decks render from byte-identical prompts.
+        "b12bbf894bf36535708a8ffea10ce5f14f46a0a45f46482afb3d468745e4be48": "svg-page-render-code/1",
     }),
 )
 

@@ -66,6 +66,34 @@ NATIVE_CHART_RULE = (
 )
 
 
+#: Revision ten's stacked bar/column rule (plan item S7), appended to ``NATIVE_CHART_RULE``.
+#: Earlier revisions never send it; their native rule bytes are unchanged.
+NATIVE_STACKED_CHART_RULE = (
+    "Stacked bar/column: set \"grouping\":\"stacked\" (values add up) or \"percentStacked\" (every "
+    "stack fills the full length) and declare at least two series. Draw each category's segments from "
+    "one shared baseline in series order with no gaps, equal thickness, centred on the category label; "
+    "lengths proportional to values (percentStacked: equal totals, segments proportional to shares). "
+    "Value labels only center/insideEnd/insideBase; values > 0; one colour per series.\n"
+)
+
+
+def native_author_rules_v10() -> str:
+    """Revision ten's native rules: the table and chart rules plus the stacked chart rule.
+
+    A new-copy free deck has no source tables or source-native bindings, so the source
+    paragraph sentence of the table rule and the merged-cell addendum of
+    ``native_author_rules(source_grounded=True)`` are left out.
+    """
+    table_rule = NATIVE_TABLE_RULE.replace(_SOURCE_PARAGRAPH_SENTENCE, "")
+    return table_rule + (NATIVE_CHART_RULE + NATIVE_STACKED_CHART_RULE if NATIVE_CHARTS_OFFERED else "")
+
+
+_SOURCE_PARAGRAPH_SENTENCE = (
+    "Preserve explicit source cell paragraph breaks in the drawing and JSON; "
+    "additional visual wrapping is allowed within a paragraph, but cannot join original paragraphs. "
+)
+
+
 def native_author_rules(*, source_grounded: bool = False) -> str:
     """The native-object rule text appended to the SVG author rules."""
     table_rule = NATIVE_TABLE_RULE
