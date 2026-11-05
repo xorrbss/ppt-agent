@@ -29,9 +29,9 @@ from threading import Lock
 
 LOGGER = logging.getLogger(__name__)
 
-#: Renders held per process (about 100 KB each).
+#: Renders held per process (about 100 KB each), keyed by (owner, tenant, sha256).
 _CACHE_LIMIT = 64
-_cache: OrderedDict[str, bytes] = OrderedDict()
+_cache: OrderedDict[tuple[str, str, str], bytes] = OrderedDict()
 _lock = Lock()
 #: A body page gets at most this many renders (the exemplars it gets as outlines).
 MAX_PAGE_RENDERS = 2
@@ -47,6 +47,21 @@ def _slide_count(source_path: Path) -> int | None:
         with zipfile.ZipFile(source_path) as archive:
             return len(_SLIDE_ID.findall(archive.read("ppt/presentation.xml")))
     except (OSError, KeyError, zipfile.BadZipFile):
+        return None
+
+
+def shared_libreoffice_pdf(source_path, package) -> tuple[str, bytes] | None:
+    """The deck converted once by LibreOffice for the renders and the source review, or ``None`` when
+    this server has no LibreOffice or the conversion fails (the source review then reports its own cause)."""
+    from services.svg_templates.source_review import (
+        LIBREOFFICE_RENDERER, convert_source_pdf_libreoffice, source_preview_renderer,
+    )
+    if source_preview_renderer() != LIBREOFFICE_RENDERER:
+        return None
+    try:
+        return convert_source_pdf_libreoffice(Path(source_path), package)
+    except Exception as error:  # noqa: BLE001 - the renders are skipped, the review retries on its own
+        LOGGER.warning("[svg-template] deck PDF conversion failed: %s", type(error).__name__)
         return None
 
 
@@ -104,10 +119,13 @@ def render_exemplar_pages(package, source_path: Path, *, captured_pdf: bytes | N
 
 
 async def attach_body_renders(session, package, source_path, *, captured_pdf: bytes | None, operation_id):
-    """The package with its exemplars' masked renders stored and referenced: ``(package, artifact ids)``.
+    """The package with its exemplars' masked renders stored and referenced:
+    ``(package, artifact ids, receipt)``.
 
     Called by every framed registration. Returns the package unchanged (and no artifact) when nothing
-    could be rendered; a page that fails is left without a render. The package digest is recomputed.
+    could be rendered; a page that fails, or whose render cannot be stored, is left without a render
+    (each store in its own savepoint). The package digest is recomputed. The receipt (counts and the
+    OCR path, never text) goes into the registration operation's result.
     """
     from models.svg_template_frame import SvgTemplateBodyRender
     from services.artifact_store import configured_public_artifact_service
@@ -117,49 +135,74 @@ async def attach_body_renders(session, package, source_path, *, captured_pdf: by
 
     composition = package.body_composition
     if composition is None or not composition.exemplars:
-        return package, []
+        return package, [], {"status": "no_exemplars"}
     try:
         renders, receipt = await asyncio.to_thread(
             render_exemplar_pages, package, Path(source_path), captured_pdf=captured_pdf,
             excluded_pages=get_svg_template_body_render_excluded_pages_env())
     except Exception as error:  # noqa: BLE001 - renders are guidance; registration goes on without them
         LOGGER.warning("[svg-template] body renders failed: %s", type(error).__name__)
-        return package, []
+        return package, [], {"status": "error", "reason": type(error).__name__}
     LOGGER.info("[svg-template] body renders: %s", receipt)
     if not renders:
-        return package, []
-    owner, tenant = principal()
-    service = configured_public_artifact_service()
-    exemplars, artifact_ids = list(composition.exemplars), []
+        return package, [], receipt
+    exemplars, artifact_ids, unstored = list(composition.exemplars), [], 0
+    try:
+        owner, tenant = principal()
+        service = configured_public_artifact_service()
+    except Exception as error:  # noqa: BLE001 - no store: the template is registered without renders
+        LOGGER.warning("[svg-template] body render store unavailable: %s", type(error).__name__)
+        return package, [], {**receipt, "rendered": 0, "unstored": len(renders)}
     for index, masked in sorted(renders.items()):
-        ref = await service.persist_bytes(session, owner_id=owner, tenant_id=tenant, kind="image-derivative",
-                                          payload=masked.png, media_type="image/png",
-                                          created_by_operation_id=operation_id, retention_class="published")
+        try:
+            async with session.begin_nested():
+                ref = await service.persist_bytes(session, owner_id=owner, tenant_id=tenant, kind="image-derivative",
+                                                  payload=masked.png, media_type="image/png",
+                                                  created_by_operation_id=operation_id, retention_class="published")
+        except Exception as error:  # noqa: BLE001 - one render that cannot be stored is left out
+            LOGGER.warning("[svg-template] body render not stored: %s", type(error).__name__)
+            unstored += 1
+            continue
         artifact_ids.append(str(ref.artifact_id))
         exemplars[index] = exemplars[index].model_copy(update={"render": SvgTemplateBodyRender(
             artifact_id=str(ref.artifact_id), owner_id=str(ref.owner_id), tenant_id=ref.tenant_id,
             sha256=ref.sha256, width=masked.width, height=masked.height, mask=masked.mask_receipt())})
+    receipt = {**receipt, "rendered": len(artifact_ids), **({"unstored": unstored} if unstored else {})}
+    if not artifact_ids:
+        return package, [], receipt
     updated = package.model_copy(update={
         "body_composition": composition.model_copy(update={"exemplars": tuple(exemplars)})})
-    return updated.model_copy(update={"digest": artifact_digest(updated)}), artifact_ids
+    return updated.model_copy(update={"digest": artifact_digest(updated)}), artifact_ids, receipt
 
 
 # --- generation ---------------------------------------------------------------------------------
 
 
-def _remember(sha256: str, payload: bytes) -> None:
+def _remember(key: tuple[str, str, str], payload: bytes) -> None:
     with _lock:
-        _cache[sha256] = payload
-        _cache.move_to_end(sha256)
+        _cache[key] = payload
+        _cache.move_to_end(key)
         while len(_cache) > _CACHE_LIMIT:
             _cache.popitem(last=False)
 
 
-def cached_render(sha256: str | None) -> bytes | None:
+def cached_render(owner: str, tenant: str, sha256: str | None) -> bytes | None:
+    """A loaded render, only under the owner and tenant it was loaded for."""
     if not sha256:
         return None
     with _lock:
-        return _cache.get(sha256)
+        return _cache.get((str(owner), tenant, sha256))
+
+
+def _current_principal() -> tuple[str, str] | None:
+    from fastapi import HTTPException
+
+    from services.svg_templates.catalog import principal
+    try:
+        owner, tenant = principal()
+    except HTTPException:
+        return None
+    return str(owner), tenant
 
 
 def clear_render_cache() -> None:
@@ -178,12 +221,9 @@ async def ensure_body_renders(session, selection: dict | None) -> dict:
 
     Owner-scoped: a render is read only when its recorded owner and tenant are the requesting
     principal (the owner the template pin was resolved for) and the artifact store finds it under that
-    owner with the recorded digest. Never raises: a render that cannot be read is counted and left out.
+    owner with the recorded digest; it is cached under that owner and tenant. Never raises: a render
+    that cannot be read is counted and left out.
     """
-    from fastapi import HTTPException
-
-    from services.artifact_store import ArtifactStoreError, configured_public_artifact_service
-    from services.svg_templates.catalog import principal
     from services.svg_templates.selection_material import template_package
 
     counts = {"loaded": 0, "cached": 0, "missing": 0, "scope_mismatch": 0}
@@ -193,37 +233,40 @@ async def ensure_body_renders(session, selection: dict | None) -> dict:
         composition = template_package(selection).get("body_composition") or {}
     except ValueError:
         return counts
-    try:
-        owner, tenant = principal()
-    except HTTPException:
+    rendered = [exemplar["render"] for exemplar in composition.get("exemplars") or ()
+                if isinstance(exemplar.get("render"), dict)]
+    who = _current_principal()
+    if who is None:
         # No owner in this context: no render can be proved to be the requester's.
-        return {**counts, "scope_mismatch": sum(isinstance(item.get("render"), dict)
-                                                for item in composition.get("exemplars") or ())}
-    service = configured_public_artifact_service()
-    for exemplar in composition.get("exemplars") or ():
-        render = exemplar.get("render")
-        if not isinstance(render, dict):
-            continue
-        if cached_render(render.get("sha256")) is not None:
-            counts["cached"] += 1
-            continue
-        if render.get("owner_id") != str(owner) or render.get("tenant_id") != tenant:
+        return {**counts, "scope_mismatch": len(rendered)}
+    owner, tenant = who
+    service = None
+    for render in rendered:
+        # Ownership first; only then the cache or the store.
+        if render.get("owner_id") != owner or render.get("tenant_id") != tenant:
             counts["scope_mismatch"] += 1
             continue
+        key = (owner, tenant, render.get("sha256"))
+        if cached_render(*key) is not None:
+            counts["cached"] += 1
+            continue
         try:
+            if service is None:
+                from services.artifact_store import configured_public_artifact_service
+                service = configured_public_artifact_service()
             current = await service.resolve_ref(session, artifact_id=uuid.UUID(render["artifact_id"]),
-                owner_id=owner, tenant_id=tenant, expected_digest=render["sha256"], check_object=False)
+                owner_id=uuid.UUID(owner), tenant_id=tenant, expected_digest=render["sha256"], check_object=False)
             if current.kind != "image-derivative" or current.media_type != "image/png":
                 raise ValueError("svg_template_body_render_kind_invalid")
             payload, _ = await service.read_verified_ref_bytes(current, max_bytes=8 * 1024 * 1024)
-        except (ArtifactStoreError, ValueError, KeyError) as error:
+        except Exception as error:  # noqa: BLE001 - a render is guidance: a failed read is a missing render
             LOGGER.warning("[svg-template] body render unavailable: %s", type(error).__name__)
             counts["missing"] += 1
             continue
         if hashlib.sha256(payload).hexdigest() != render["sha256"]:
             counts["missing"] += 1
             continue
-        _remember(render["sha256"], payload)
+        _remember(key, payload)
         counts["loaded"] += 1
     return counts
 
@@ -248,12 +291,14 @@ def page_body_renders(snapshot: dict, context: dict | None, content: str, *,
         return []
     from services.svg_templates.body_composition import choose_exemplars
     chosen = choose_exemplars(template_package(template_selection(snapshot)).get("body_composition"), content)
+    who = _current_principal()
     pages = []
     for index, exemplar in enumerate(chosen[:MAX_PAGE_RENDERS]):
         render = exemplar.get("render")
         if isinstance(render, dict):
+            owned = who is not None and (render.get("owner_id"), render.get("tenant_id")) == who
             pages.append({"exemplar": index, "sha256": render.get("sha256"),
-                          "png": cached_render(render.get("sha256"))})
+                          "png": cached_render(*who, render.get("sha256")) if owned else None})
     return pages
 
 
