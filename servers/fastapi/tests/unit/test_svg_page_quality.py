@@ -294,7 +294,7 @@ def test_visual_review_passes_with_a_matching_clean_advisory(policy_version, mon
             from services.svg_quality_recovery_review import seal_saved_review
             saved_context = {**context, "reviewScope": "edited"}
             prepared = dict(context=saved_context, changed=[0], reusable={}, snapshot=snapshot,
-                runtime={"fixture": "current-runtime"}, ownerScope=owner, sourceGenerationRevision=1,
+                runtime={"fixture": "current-runtime", "promptVersion": DESIGN_REVIEW_PROMPT_VERSION}, ownerScope=owner, sourceGenerationRevision=1,
                 publication=dict(parentOperationId=operation, parentJobId=job),
                 pages=[({**slide.content["svgReceipt"], "svg_content": slide.svg_content}, png) for slide in slides],
                 pngs=[png, png])
@@ -566,12 +566,12 @@ def test_visual_review_passes_with_a_matching_clean_advisory(policy_version, mon
             assert parent_identity["sourceRevision"] == parent_identity["sourceGenerationRevision"] == 1
             assert not any(key in parent_identity for key in ("gateDigest", "snapshotDigest", "vision"))
 
-            # A passed saved-source review may retain minor, nonblocking
-            # design targets; it does not run generation's rewrite loop.
+            # A passed saved-source review may retain a design target on a passing
+            # axis (designImprovementStatus "needed"); it does not run generation's
+            # rewrite loop. Targets on advisory/minor axes are already "satisfied"
+            # (see quality._blocking_design_targets).
             needed_vision = deepcopy(vision)
             for page in needed_vision["designReview"]["pages"]:
-                page["axes"]["brand_expression"] = dict(verdict="advisory", severity="minor", repairScope="none",
-                    visibleEvidence="A minor brand-expression opportunity remains.")
                 page["designTargets"] = [dict(axis="brand_expression", evidenceRegion="header",
                     visibleEvidence="Minor brand expression", sourceEvidence="Current source and admitted style",
                     improvementGoal="Optional brand-expression refinement")]
