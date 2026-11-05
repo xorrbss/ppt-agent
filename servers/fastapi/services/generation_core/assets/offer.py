@@ -101,9 +101,9 @@ _FALLBACK_ICON_INK = "#1E5EFF"
 
 def icon_ink(brand, style) -> str:
     """The deck accent icons are painted with: the author's own (an explicit brand colour wins)."""
-    from services.generation_core.authoring.author_slide_design_system import apply_style_defaults
+    from services.generation_core.authoring.author_slide_design_system import resolve_style_primary
 
-    return getattr(apply_style_defaults(brand, style), "primary", None) or _FALLBACK_ICON_INK
+    return resolve_style_primary(brand, style) or _FALLBACK_ICON_INK
 
 
 def _file_slot(path: str | Path, **fields: Any) -> AssetSlot:

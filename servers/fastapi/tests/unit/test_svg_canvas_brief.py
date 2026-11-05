@@ -18,7 +18,7 @@ from services.generation_core.drivers.svg.canvas_brief import (
     svg_brief_replacements,
 )
 from utils.authored_styles import resolve_authored_style
-from utils.llm_calls.author_canvas_shape import aspect_ratio_label, composition_clause
+from utils.llm_calls.author_canvas_shape import aspect_ratio_label
 from services.generation_core.authoring.author_slide_svg import free_composition_canvas_clause, svg_author_rules
 from services.generation_core.drivers.svg.svg_style_adapter import adapt_svg_style
 

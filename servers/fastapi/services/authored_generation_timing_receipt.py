@@ -97,7 +97,7 @@ PUBLIC_GENERATION_TIMING_STAGES = (
 OPTIONAL_PUBLIC_GENERATION_TIMING_STAGES = (
     "headerDesign", "headerRepresentative", "headerSelection",
 )
-_HEADER_PUBLIC_SOURCES = dict(zip(OPTIONAL_PUBLIC_GENERATION_TIMING_STAGES, HEADER_TIMING_STAGES))
+_HEADER_PUBLIC_SOURCES = dict(zip(OPTIONAL_PUBLIC_GENERATION_TIMING_STAGES, HEADER_TIMING_STAGES, strict=True))
 OPTIONAL_GENERATION_OBSERVATIONS = frozenset({
     "setup.title", "setup.plan_llm", "setup.scenes", "setup.icon_sheets",
     "setup.header_design", "setup.header_representative", "setup.header_selection",
