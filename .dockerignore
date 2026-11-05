@@ -44,6 +44,8 @@ servers/nextjs/tsconfig.tsbuildinfo
 
 servers/fastapi/tmp
 servers/fastapi/debug
+# Built inside the image (Dockerfile, fastapi-builder), never copied from a checkout.
+servers/fastapi/assets/font_instances
 servers/fastapi/.venv
 
 servers/nextjs/node_modules

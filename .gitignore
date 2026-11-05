@@ -65,6 +65,8 @@ servers/fastapi/*.egg-info/
 # --- Regenerable caches/build artifacts (slimmed from history 2026-06) ---
 servers/fastapi/fastembed_cache/
 servers/fastapi/chroma/
+# Built by servers/fastapi/scripts/build_svg_pptx_font_instances.py (digest-pinned).
+servers/fastapi/assets/font_instances/
 servers/fastapi/build/
 servers/fastapi/dist/
 servers/nextjs/cypress/screenshots/
