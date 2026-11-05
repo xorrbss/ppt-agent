@@ -180,6 +180,8 @@ async def ensure_body_renders(session, selection: dict | None) -> dict:
     principal (the owner the template pin was resolved for) and the artifact store finds it under that
     owner with the recorded digest. Never raises: a render that cannot be read is counted and left out.
     """
+    from fastapi import HTTPException
+
     from services.artifact_store import ArtifactStoreError, configured_public_artifact_service
     from services.svg_templates.catalog import principal
     from services.svg_templates.selection_material import template_package
@@ -191,7 +193,12 @@ async def ensure_body_renders(session, selection: dict | None) -> dict:
         composition = template_package(selection).get("body_composition") or {}
     except ValueError:
         return counts
-    owner, tenant = principal()
+    try:
+        owner, tenant = principal()
+    except HTTPException:
+        # No owner in this context: no render can be proved to be the requester's.
+        return {**counts, "scope_mismatch": sum(isinstance(item.get("render"), dict)
+                                                for item in composition.get("exemplars") or ())}
     service = configured_public_artifact_service()
     for exemplar in composition.get("exemplars") or ():
         render = exemplar.get("render")

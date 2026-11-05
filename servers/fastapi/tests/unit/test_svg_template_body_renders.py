@@ -379,6 +379,17 @@ def test_renders_load_only_for_the_owner_of_the_template_pin(monkeypatch):
     # A second load is served from the process cache; a free-design selection loads nothing.
     assert asyncio.run(renders.ensure_body_renders(None, {"mode": "template-redesign"}))["cached"] == 1
     assert asyncio.run(renders.ensure_body_renders(None, {"mode": "free-design"}))["loaded"] == 0
+    # Without an owner in context nothing is read.
+    from fastapi import HTTPException
+
+    def no_principal():
+        raise HTTPException(401, "svg_template_principal_required")
+
+    monkeypatch.setattr("services.svg_templates.catalog.principal", no_principal)
+    renders.clear_render_cache()
+    store.resolved.clear()
+    assert asyncio.run(renders.ensure_body_renders(None, {"mode": "template-redesign"}))["scope_mismatch"] == 3
+    assert store.resolved == [] and renders.cached_render(hashlib.sha256(mine).hexdigest()) is None
 
 
 def test_a_render_whose_bytes_do_not_match_is_missing(monkeypatch):
