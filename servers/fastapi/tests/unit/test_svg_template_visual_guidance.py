@@ -52,7 +52,8 @@ def test_the_knob_swaps_only_the_anti_decoration_line(monkeypatch):
     assert lines[3] == generation.TEMPLATE_VOCABULARY_LINE
     assert "icons or visual difference are not evidence" not in lines[3]
     # The vocabulary is conditional on the content having that shape; nothing is invented.
-    for phrase in ("wherever this page's content has that shape", "source-stated sequence", "source order",
+    for phrase in ("wherever this page's content has that shape", "a table for attributes the source compares",
+                   "source-stated sequence", "source order",
                    "each offered icon beside the label of its own item", "not a page-dominating number",
                    "Decoration without such content is not an improvement"):
         assert phrase in lines[3]
@@ -95,18 +96,56 @@ def test_the_density_line_swaps_enlarging_for_explaining():
     assert "larger type or taller empty cards" in on
 
 
-@pytest.mark.parametrize("knob", [None, "on"])
-def test_body_author_rules_follow_the_knob(monkeypatch, knob):
+def test_the_off_path_density_paragraph_is_pinned_literally():
+    rules = composition.composition_rules(_grammar(), body_floor=14.0)
+    assert rules == (
+        "\nTEMPLATE PAGE COMPOSITION (measured over 20 of this template's body pages; how it fills a page, not a"
+        " layout to copy):\n"
+        "- Sections: a body page holds 3 sections (quartiles 2-4); 90% of pages start each section with a numbered"
+        " sub-heading; 80% open the body with a key-message bar across the content width right under the header,"
+        " stating the page's conclusion.\n"
+        "- Mix: a page combines 3 different content kinds (quartiles 2-4); across pages: table 50%, flow 40%. Give"
+        " each section the component its own content calls for (a table for compared attributes, steps for a"
+        " sequence, a hierarchy for an organisation or layers, a chart or figures for numbers, cards for parallel"
+        " points) instead of repeating one component down the page.\n"
+        "- Density: 50 text items per page (quartiles 30-70), body text about 14.5px (from 14 to 18px); elements"
+        " cover 60% of the body area and reach 95% of its height. Fill body_region from top to bottom at a"
+        " comparable density using every fact, label and figure of this page (state each point fully; give labels a"
+        " short explanation from the source); when the facts are few, enlarge the components rather than leaving"
+        " the lower half empty. Never invent facts to fill space.\n"
+        "- template_exemplars, when given, outline one or two of this template's own body pages whose content"
+        " resembles this page's: one element per line in reading order, kind, x,y relative to the body's top-left,"
+        " width x height in px, paint, then text size/weight colour and amount (p paragraphs, ch characters that"
+        " fit; the words are left out; number = an item number, number+ = a heading that starts with one); picture"
+        " and icon mark the source's images, where this page uses its own offered images or icons, or content."
+        " They show how this template divides and fills a page; never copy their positions, counts or arrangement,"
+        " and never take content from them: compose this page from its own content.\n"
+    )
+
+
+@pytest.mark.parametrize("frozen", [None, "on"])
+@pytest.mark.parametrize("env", [None, "on"])
+def test_body_author_rules_follow_the_frozen_snapshot_not_the_environment(monkeypatch, frozen, env):
+    """A deck admitted under one setting and authored, retried or remade under the other keeps one text."""
     monkeypatch.setattr(generation, "template_selection", lambda snapshot: {"mode": "template-redesign"})
     monkeypatch.setattr(generation, "template_package", lambda value: {"body_composition": _grammar()})
     monkeypatch.delenv("SVG_TEMPLATE_COMPONENT_STYLE", raising=False)
     monkeypatch.delenv("SVG_TEMPLATE_BODY_EXEMPLARS", raising=False)
-    if knob is None:
+    if frozen is None:
         monkeypatch.delenv("SVG_TEMPLATE_VISUAL_GUIDANCE", raising=False)
     else:
-        monkeypatch.setenv("SVG_TEMPLATE_VISUAL_GUIDANCE", knob)
-    guidance = generation.template_composition_guidance()
-    rules = generation.body_author_rules("BASE", {"composition_guidance": guidance}, body_floor=14.0)
-    assert (composition.FILL_BY_EXPLAINING in rules) is (knob == "on")
-    assert (generation.TEMPLATE_VOCABULARY_LINE in rules) is (knob == "on")
-    assert (generation.PLAIN_COMPOSITION_LINE in rules) is (knob is None)
+        monkeypatch.setenv("SVG_TEMPLATE_VISUAL_GUIDANCE", frozen)
+    guidance = generation.template_composition_guidance()  # frozen at admission
+    if env is None:
+        monkeypatch.delenv("SVG_TEMPLATE_VISUAL_GUIDANCE", raising=False)
+    else:
+        monkeypatch.setenv("SVG_TEMPLATE_VISUAL_GUIDANCE", env)
+    snapshot = {"composition_guidance": guidance}
+    assert generation.snapshot_has_visual_guidance(snapshot) is (frozen == "on")
+    rules = generation.body_author_rules("BASE", snapshot, body_floor=14.0)
+    assert (composition.FILL_BY_EXPLAINING in rules) is (frozen == "on")
+    assert (composition.FILL_BY_ENLARGING in rules) is (frozen is None)
+    assert (generation.TEMPLATE_VOCABULARY_LINE in rules) is (frozen == "on")
+    assert (generation.PLAIN_COMPOSITION_LINE in rules) is (frozen is None)
+    # A snapshot made before the knob existed reads as off.
+    assert generation.snapshot_has_visual_guidance({}) is False

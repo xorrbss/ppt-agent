@@ -118,6 +118,23 @@ visuals 2.3 / 2.5); first drafts 8 and 10 of 10, fallback 1 and 0. Per-page judg
   shapes where the source states a sequence), density (empty share down); risk: low, no new check. Tests:
   `tests/unit/test_svg_template_visual_guidance.py`.
 
+### Review fixes and known limitations
+
+* The sections clause names Markdown table rows as a sub-section's material only when the content structure
+  policy's `tables` part is on (the writing policy's pipe rule forbids table pipes otherwise); with the policy off
+  a sub-section holds bullets or a series of figures. The vocabulary line keeps "a table for attributes the source
+  compares": the author draws tables under its own native-table rules, and baseline decks with the policy off
+  already carry 5-8 native tables each at 9-10 first drafts of 10; the 5-of-5 fallback predates the 2026-11-04
+  server fixes and came from outline pipe rows without the cell-text clause, which this line does not ask for.
+* The density sentence follows the frozen snapshot (`snapshot_has_visual_guidance`), so a deck admitted with one
+  setting and resumed or remade under the other keeps one text.
+* `demote_extra_titles` turns a slide's second and later `##` headings into `###` when the knob is on, so a framed
+  title field never fails on several titles; a slide the model returns without any `##` keeps failing
+  `svg_template_title_required` (no title is invented).
+* Not handled: the outline density floor and ceiling steps (`outline_density`) measure the whole content including
+  headings, so a sectioned outline counts its headings as text; the UI `/outline` endpoint and the Mem0 outline
+  prompt do not know the template mode and never get the clause.
+
 ## Next
 
 Baseline matrix on template A (4 inputs x 3 runs), the change behind an internal knob (default off), independent

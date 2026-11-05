@@ -204,7 +204,7 @@ def get_system_prompt(
         # The writing policy's pipe rule must not forbid the pipes of a table.
         system += outline_table_clause(structure_policy)
     # SVG_TEMPLATE_OUTLINE_SECTIONS (template-redesign decks only): the template's page structure.
-    system += outline_sections_clause(template_sections)
+    system += outline_sections_clause(template_sections, structure_policy)
     return system
 
 

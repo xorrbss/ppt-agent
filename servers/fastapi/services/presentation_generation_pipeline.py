@@ -1231,6 +1231,12 @@ async def generate_presentation_handler(
                         continue
                     raise HTTPException(status_code=400, detail=error.detail) from None
 
+            if template_outline_sections(request):
+                # Sub-sections written as ## would leave the page without a single title.
+                from utils.svg_template_outline import demote_extra_titles
+
+                presentation_outlines = demote_extra_titles(presentation_outlines)
+
             if not request.web_search:
                 # A chart line may carry only values the source writes (web search brings its own
                 # sources, which this text does not hold). The reason is logged by the guard.

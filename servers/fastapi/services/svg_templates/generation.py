@@ -123,12 +123,19 @@ PLAIN_COMPOSITION_LINE = ("Prefer clear simple compositions. Decorative cards, i
                           " not evidence of improvement.")
 TEMPLATE_VOCABULARY_LINE = (
     "Use the template's body vocabulary wherever this page's content has that shape: a numbered"
-    " sub-heading per section; small body type with many short items; a table for compared attributes;"
+    " sub-heading per section; small body type with many short items; a table for attributes the source compares;"
     " a source-stated sequence as separate gapped step shapes (chevrons, or boxes joined by lines with"
     " arrowheads) in source order; a hierarchy as stacked or tree boxes with connecting lines; each"
     " offered icon beside the label of its own item; a key figure as a compact tile next to its"
     " explanation, not a page-dominating number. Decoration without such content is not an improvement."
 )
+
+
+def snapshot_has_visual_guidance(snapshot: dict) -> bool:
+    """Whether a frozen snapshot was admitted with ``SVG_TEMPLATE_VISUAL_GUIDANCE`` on. Every later
+    reading (the composition grammar's density line on each page authoring, retry or remake) follows
+    the frozen guidance, never the environment of the process that authors the page."""
+    return TEMPLATE_VOCABULARY_LINE in (snapshot.get("composition_guidance") or ())
 
 
 def template_composition_guidance() -> list[str]:
@@ -321,10 +328,7 @@ def body_author_rules(rules: str, snapshot: dict, *, body_floor: float | None = 
     selection = template_selection(snapshot)
     if not selection or selection["mode"] != "template-redesign":
         return rules
-    from utils.get_env_concurrency import (
-        get_svg_template_body_exemplars_env, get_svg_template_component_style_env,
-        get_svg_template_visual_guidance_env,
-    )
+    from utils.get_env_concurrency import get_svg_template_body_exemplars_env, get_svg_template_component_style_env
     component_rules = ""
     if get_svg_template_component_style_env():
         from services.svg_templates.component_style import component_style_rules
@@ -335,7 +339,7 @@ def body_author_rules(rules: str, snapshot: dict, *, body_floor: float | None = 
         from services.svg_templates.body_composition import composition_rules
         component_rules += composition_rules(template_package(selection).get("body_composition"),
                                              body_floor=body_floor, exemplars=composition == "on",
-                                             visual_guidance=get_svg_template_visual_guidance_env())
+                                             visual_guidance=snapshot_has_visual_guidance(snapshot))
     rules = rules.replace(
         "Never create a page number or use id svg-system-page-number. Reserve the bottom-right 64x36 area for the system footer.",
         "Do not author any system page number, header, footer or logo. The template owns their exact regions.",
