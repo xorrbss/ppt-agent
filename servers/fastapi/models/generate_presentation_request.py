@@ -465,7 +465,10 @@ class GeneratePresentationRequest(BaseModel):
                 resolve_generation_strategy,
             )
 
-            if resolve_generation_strategy(self) != "svg":
+            # D4 (2026-11-05): raster reconstruction quality is measured on A4
+            # only, so the canvas must be an explicit A4 document canvas even
+            # though svg now admits other canvases.
+            if self.page_size != "A4" or resolve_generation_strategy(self) != "svg":
                 raise ValueError("raster_a4_svg_required")
             if self.template.strip().lower() != "authored":
                 raise ValueError("source_content_template_required")
