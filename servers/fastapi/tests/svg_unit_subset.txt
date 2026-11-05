@@ -454,6 +454,7 @@ tests/unit/test_svg_trusted_fonts.py
 tests/unit/test_svg_utility_layering.py
 tests/unit/test_svg_vector_paint.py
 tests/unit/test_svg_vector_pdf_export.py
+tests/unit/test_svg_verifier_revisions.py
 tests/unit/test_svg_writing_substitution.py
 tests/unit/test_vector_illustrations.py
 tests/unit/test_workspace_authored_template_confirmation.py
