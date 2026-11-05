@@ -68,8 +68,9 @@ def deck_palette(brand, style) -> tuple[dict[str, str], str]:
     from utils.llm_calls.draw_vector_illustrations import palette_roles
 
     background = (getattr(style, "background_color", None) or getattr(style, "preview_bg", None) or "#FFFFFF")
-    accent = (getattr(brand, "primary", None) if getattr(brand, "primary_is_explicit", False)
-              else getattr(style, "preview_accent", None)) or getattr(brand, "primary", None)
+    from services.generation_core.assets.offer import icon_ink
+
+    accent = icon_ink(brand, style)
     colors = [color for color in (accent, *(getattr(style, "preview_palette", None) or ()),
                                   getattr(style, "primary_color", None), background, "#FFFFFF")
               if isinstance(color, str)]

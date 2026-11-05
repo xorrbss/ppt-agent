@@ -104,10 +104,19 @@ def _symbol(family: IconFamily, name: str, color: str) -> str:
     return "".join(parts)
 
 
-def _group(family: IconFamily, name: str, color: str, placement: tuple[float, float]) -> str:
+def _group(family: IconFamily, name: str, color: str, placement: tuple[float, float],
+           stroke_width: Optional[float] = None) -> str:
     offset, scale = placement
+    width = f' stroke-width="{_number(stroke_width)}"' if stroke_width is not None else ""
     return (f'<g transform="translate({_number(offset)} {_number(offset)}) '
-            f'scale({_number(scale * 24 / family.grid)})">{_symbol(family, name, color)}</g>')
+            f'scale({_number(scale * 24 / family.grid)})"{width}>{_symbol(family, name, color)}</g>')
+
+
+def _badge_stroke_width(family: IconFamily) -> Optional[float]:
+    """Badge stroke in its own scaled units so it draws as wide as the main icon beside it."""
+    if family.stroke_width is None:
+        return None
+    return family.stroke_width * family.grid / 24 * _MAIN_WITH_BADGE[1] / _BADGE[1]
 
 
 def compose_icon_svg(main: str, badge: Optional[str] = None, *, color: str = "#000000",
@@ -126,7 +135,7 @@ def compose_icon_svg(main: str, badge: Optional[str] = None, *, color: str = "#0
     if badge is None or badge == main:
         return f"{head}{_group(family, main, color, _SINGLE)}</svg>"
     return (f"{head}{_group(family, main, color, _MAIN_WITH_BADGE)}"
-            f"{_group(family, badge, color, _BADGE)}</svg>")
+            f"{_group(family, badge, color, _BADGE, _badge_stroke_width(family))}</svg>")
 
 
 #: Person icons a pictograph repeats, first present in the family wins.
