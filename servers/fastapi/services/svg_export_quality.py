@@ -30,7 +30,7 @@ def _native_ooxml_domain(*, required, worker_metrics, artifact_digest, operation
     if not required:
         return dict(required=False, status="not_required")
     from services.svg_export_whole_page_verifier import whole_page_verifier_digest
-    from workers.public_svg_pptx_convert import converter_digest
+    from workers.public_svg_converter_aliases import converter_digest_accepted
     from utils.hashing import canonical_json_sha256
     worker = worker_metrics.get("public_export_worker_evidence", {})
     structural = worker.get("structuralReadback", {})
@@ -53,7 +53,7 @@ def _native_ooxml_domain(*, required, worker_metrics, artifact_digest, operation
             or proof.get("artifactDigest") != artifact_digest or proof.get("operationId") != str(operation_id)
             or proof.get("presentationId") != str(presentation_id) or proof.get("sourceRevision") != source_revision
             or proof.get("verifierCodeDigest") != whole_page_verifier_digest()
-            or proof.get("converterDigest") != converter_digest()
+            or not converter_digest_accepted(proof.get("converterDigest"))
             or proof.get("coverageDigest") != "sha256:" + canonical_json_sha256(unsigned)
             or proof.get("sourceReadbackDigest") != "sha256:" + canonical_json_sha256(source_readback)
             or proof.get("sourceStyleReadbackDigest") != "sha256:" + canonical_json_sha256(style_readback)
@@ -150,7 +150,7 @@ def _generic_native_ooxml_domain(*, required, slides, worker_metrics, artifact_d
     from services.isolated_worker_contracts import ArtifactRef
     from services.svg_contract import source_digest
     from services.svg_export_whole_page_verifier import whole_page_verifier_digest
-    from workers.public_svg_pptx_convert import converter_digest
+    from workers.public_svg_converter_aliases import converter_digest_accepted
     from utils.hashing import canonical_json_sha256
     failed = dict(required=True, status="failed", reasonCode="svg_generic_native_ooxml_coverage_evidence_invalid")
     worker = worker_metrics.get("public_export_worker_evidence", {})
@@ -221,7 +221,7 @@ def _generic_native_ooxml_domain(*, required, slides, worker_metrics, artifact_d
             or worker.get("sourceDigests") != [digest[7:] for digest in sources]
             or structural.get("slideCount") != len(sources)
             or proof.get("verifierCodeDigest") != whole_page_verifier_digest()
-            or proof.get("converterDigest") != converter_digest()
+            or not converter_digest_accepted(proof.get("converterDigest"))
             or proof.get("coverageDigest") != "sha256:" + canonical_json_sha256(unsigned)
             or proof.get("nativeObjectsDigest") != "sha256:" + canonical_json_sha256(native)
             or type(native.get("fellBack")) is not int or native["fellBack"] != 0
