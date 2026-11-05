@@ -58,6 +58,48 @@ def test_parts_with_a_scene_keep_the_vector_plan(vector_fakes):  # noqa: F811
     assert sorted({request.kind for request in vector_fakes["draw"]}) == ["scene", "spots"]
 
 
+def test_hybrid_mode_keeps_its_vector_plan_and_provider_photographs_whatever_the_parts(  # noqa: F811
+        vector_fakes, monkeypatch, tmp_path):  # noqa: F811
+    """The parts pick what the model draws; they never switch off a photograph scene."""
+    from PIL import Image
+
+    from models.authored_infographic_plan import AuthoredInfographicPlan, AuthoredSlideInfographic
+    from services.generation_core.assets import icon_pack, infographic_assets, infographic_plan
+    from tests.unit.test_vector_illustrations import _nodes
+
+    async def plan(*_args, vector_illustrations=False, **_kwargs):
+        vector_fakes["plan"].append(vector_illustrations)
+        return AuthoredInfographicPlan(slides=(
+            AuthoredSlideInfographic(index=0),
+            AuthoredSlideInfographic(index=1, archetype="scene", weight="hero", takeaway="현장 점검",
+                                     nodes=_nodes("센서", "경보", "현장"), depiction="photo"),
+            AuthoredSlideInfographic(index=2, archetype="process", weight="standard",
+                                     nodes=_nodes("수집", "분석", "대응")),
+            AuthoredSlideInfographic(index=3, archetype="icon_list", weight="standard",
+                                     nodes=_nodes("보안", "비용", "속도")),
+        ))
+
+    photo = tmp_path / "photo.png"
+    Image.new("RGB", (8, 8), (200, 10, 10)).save(photo)
+
+    async def cutout(**_kwargs):
+        return SimpleNamespace(path=str(photo))
+
+    monkeypatch.setattr(infographic_plan, "resolve_infographic_plan", plan)
+    monkeypatch.setattr(icon_pack, "generate_scene_cutout", cutout)
+    context = infographic_assets.InfographicAssetContext(pack_key="p", output_directory=str(tmp_path))
+    monkeypatch.setattr(infographic_assets, "build_infographic_asset_context", lambda **_: context)
+    offer = _build(icons_only=False, illustration_mode="hybrid", illustration_parts=("cover", "spots"),
+                   image_service=SimpleNamespace(is_image_generation_disabled=False))
+    # The plan stays the vector one (depiction is asked for) and the photograph scene reaches the provider.
+    assert vector_fakes["plan"] == [True]
+    photos = [slot for slot in offer.slots if slot.kind == "illustration" and slot.role == "scene"]
+    assert [slot.page_index for slot in photos] == [1] and photos[0].origin == "cutout"
+    assert sorted({request.kind for request in vector_fakes["draw"]}) == ["cover", "spots"]
+    assert {slot.page_index for slot in offer.slots if slot.kind == "spot"} == {2}
+    assert offer.receipt["scenesPlanned"] == 1
+
+
 @pytest.mark.parametrize("mode", [None, "vector"])
 def test_resolve_offer_turns_on_vector_spots_for_a_template_deck_while_the_mode_is_off(monkeypatch, mode):
     seen = {}
@@ -84,14 +126,41 @@ def test_resolve_offer_turns_on_vector_spots_for_a_template_deck_while_the_mode_
     async def checkpoint(_job, _index, *, payload=None):
         return {}
 
-    asyncio.run(asset_slots.resolve_offer(template, SimpleNamespace(slides=[]), [], None, profile=profile,
-                                          checkpoint=checkpoint, durable=True))
+    offer = asyncio.run(asset_slots.resolve_offer(template, SimpleNamespace(slides=[]), [], None, profile=profile,
+                                                  checkpoint=checkpoint, durable=True))
     assert seen["icons_only"] is True and seen["illustration_mode"] == "vector"
     # An explicit illustration mode keeps its own parts; the knob fills in only while the mode is off.
     assert seen["illustration_parts"] == (("spots",) if mode is None else ("cover", "scene"))
+    # The receipt names the route only when the knob chose it.
+    assert offer.receipt == ({"status": "stub", "templateStepPictures": True} if mode is None
+                             else {"status": "stub"})
     seen.clear()
     monkeypatch.delenv("SVG_ILLUSTRATION_MODE", raising=False)
     plain = SimpleNamespace(svg_template_pin=None, svg_template_mode=None, authored_style=None, instructions=None)
     asyncio.run(asset_slots.resolve_offer(plain, SimpleNamespace(slides=[]), [], None, profile=profile,
                                           checkpoint=checkpoint, durable=True))
     assert seen["icons_only"] is True and "illustration_mode" not in seen
+
+
+def test_a_stored_offer_is_replayed_unchanged_after_the_knob_changed(monkeypatch, tmp_path):
+    """A resumed attempt keeps the offer it was sealed with, whatever the knob says now."""
+    stored_offer = offer_mod.AssetOffer(receipt={"status": "library_icons_only", "icons": 3})
+    seed = {asset_slots.SEED_KEY: stored_offer.to_json(root=tmp_path)}
+
+    async def checkpoint(_job, _index, *, payload=None):
+        return dict(seed)
+
+    async def never(*_a, **_k):
+        raise AssertionError("a resumed attempt must not rebuild its offer")
+
+    monkeypatch.setattr(asset_slots, "_build", never)
+    monkeypatch.setattr(asset_slots, "get_app_data_directory_env", lambda: str(tmp_path))
+    monkeypatch.setenv("SVG_TEMPLATE_STEP_PICTURES", "on")
+    monkeypatch.delenv("SVG_ILLUSTRATION_MODE", raising=False)
+    template = SimpleNamespace(svg_template_pin={"templateId": "t"}, svg_template_mode="template-redesign",
+                               authored_style=None, instructions=None)
+    job = SimpleNamespace(id="job", attempt_number=1)
+    profile = SimpleNamespace(illustration_budget=4, illustration_timeout_seconds=5)
+    replayed = asyncio.run(asset_slots.resolve_offer(template, SimpleNamespace(slides=[]), [], job, profile=profile,
+                                                     checkpoint=checkpoint, durable=True))
+    assert replayed == stored_offer and "templateStepPictures" not in replayed.receipt

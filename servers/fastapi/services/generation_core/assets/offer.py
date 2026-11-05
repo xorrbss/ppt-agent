@@ -305,17 +305,20 @@ async def build_asset_offer(*, outline, brand, style, roles: Sequence[str], inst
     vector = illustration_mode in {"vector", "hybrid"}
     if vector:
         receipt["illustrationMode"] = illustration_mode
-    # Scenes are drawn only when the parts name them; otherwise the plan is made as in off
-    # mode (the provider scene guide, the scene ceiling) and its scenes are demoted to their
-    # icon figures, so a parts list such as ``spots`` adds pictures without losing icons.
+    # In vector mode a scene is drawn only when the parts name it; otherwise the plan is made
+    # as in off mode (the provider scene guide, the scene ceiling) and its scenes are demoted
+    # to their icon figures, so a parts list such as ``spots`` adds pictures without losing
+    # icons. Hybrid mode keeps its vector plan whatever the parts: its photograph scenes go to
+    # the image provider, and the parts only pick what the model draws.
     scene_part = illustration_parts is None or "scene" in illustration_parts
+    demote_scenes = illustration_mode == "vector" and not scene_part
     with svg_outline_spans.span("plan_llm"):
         plan = await resolve_infographic_plan(outline, brand, style, roles=list(roles),
                                               instructions=instructions,
-                                              vector_illustrations=vector and scene_part)
+                                              vector_illustrations=vector and not demote_scenes)
     if plan is None:
         return AssetOffer(receipt={**receipt, "status": "plan_unavailable"})
-    if vector and not scene_part:
+    if demote_scenes:
         plan = without_scenes(plan)
     if icons_only and vector:
         # No image provider: every picture is drawn as vector SVG instead.

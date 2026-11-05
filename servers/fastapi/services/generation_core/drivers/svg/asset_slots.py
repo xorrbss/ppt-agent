@@ -291,7 +291,8 @@ async def resolve_offer(request, outline, roles, job, *, profile, checkpoint, du
                                           has_source_assets=has_source_assets)
     image_service = ImageGenerationService(get_images_directory()) if literal_pages is None else None
     mode, parts = get_svg_illustration_mode_env(), get_svg_illustration_parts_env()
-    if mode == "off" and template_step_pictures(request):
+    step_pictures = mode == "off" and template_step_pictures(request)
+    if step_pictures:
         # SVG_TEMPLATE_STEP_PICTURES: step pictures only, no cover or scene drawing.
         mode, parts = "vector", ("spots",)
     if literal_pages is not None:
@@ -300,6 +301,9 @@ async def resolve_offer(request, outline, roles, job, *, profile, checkpoint, du
         provider = not (image_service.is_image_generation_disabled or image_service.image_gen_func is None)
         offer = await _build(request, outline, roles, job, profile, image_service if provider else None,
                              icons_only=not provider, illustration_mode=mode, illustration_parts=parts)
+        if step_pictures:
+            # Names the route in the receipt; every other receipt keeps its bytes.
+            offer = replace(offer, receipt={**offer.receipt, "templateStepPictures": True})
     elif image_service.is_image_generation_disabled or image_service.image_gen_func is None:
         # No picture can be made, but the bundled vector library needs no
         # provider: the plan still places icons, with no illustration or sprite

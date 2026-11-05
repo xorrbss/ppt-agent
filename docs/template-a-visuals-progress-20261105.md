@@ -175,6 +175,9 @@ icons. Expected: visuals up on the step pages (3-5 of 10 on the proposal inputs,
 to first drafts (the slots are optional; a drawing is validated before it is offered); cost about $0.02-0.04 and
 10-18 s per step page, in parallel with icon selection.
 
+The "source itself tabulates" wording may not bring the unstructured input's tables back: its baseline tables were
+model-made from prose, not the source's own. Batch 2 is read per input for that.
+
 Batch 2 environment: `SVG_TEMPLATE_OUTLINE_SECTIONS=on SVG_TEMPLATE_VISUAL_GUIDANCE=on SVG_TEMPLATE_STEP_PICTURES=on`
 (compare with batch 1 for the pictures, with the baseline for the whole).
 
