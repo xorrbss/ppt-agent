@@ -2,8 +2,9 @@
 
 Design: docs/template-body-renders-design-20261105.md.
 
-* **Registration** (:func:`attach_body_renders`, every framed registration, whatever the
-  generation knob says): each body exemplar page of the deck PDF is masked and cropped to its body
+* **Registration** (:func:`attach_body_renders`, a framed registration with
+  ``SVG_TEMPLATE_BODY_RENDERS`` on; off, the registration neither masks nor stores anything): each
+  body exemplar page of the deck PDF is masked and cropped to its body
   region (``services/svg_templates/body_render_mask.py``), stored as an owner-bound ``published``
   artifact and referenced from the exemplar (``SvgTemplateBodyRender``: ids, a digest, sizes and the
   mask receipt; no text). A page whose masking cannot be verified gets no render; registration goes
@@ -175,6 +176,27 @@ async def attach_body_renders(session, package, source_path, *, captured_pdf: by
     return updated.model_copy(update={"digest": artifact_digest(updated)}), artifact_ids, receipt
 
 
+async def registration_body_renders(session, package, source_path, *, captured_pdf: bytes | None, operation_id):
+    """The registration step: ``(package, artifact ids, receipt or None, shared LibreOffice PDF or None)``.
+
+    Only with ``SVG_TEMPLATE_BODY_RENDERS`` on at registration (measured no effect on 2026-11-05, and
+    the masking OCR costs minutes): off, nothing is converted, masked, read or stored, and the package
+    comes back unchanged. On, one LibreOffice conversion (when no captured PDF exists) serves both the
+    renders and the source review, and the renders are attached (:func:`attach_body_renders`).
+    """
+    from utils.get_env_concurrency import get_svg_template_body_renders_env
+
+    if not get_svg_template_body_renders_env():
+        return package, [], None, None
+    libreoffice_pdf = None
+    if captured_pdf is None:
+        libreoffice_pdf = await asyncio.to_thread(shared_libreoffice_pdf, source_path, package)
+    render_pdf = captured_pdf if captured_pdf is not None else (libreoffice_pdf[1] if libreoffice_pdf else None)
+    package, artifact_ids, receipt = await attach_body_renders(session, package, source_path, captured_pdf=render_pdf,
+                                                               operation_id=operation_id)
+    return package, artifact_ids, receipt, libreoffice_pdf
+
+
 # --- generation ---------------------------------------------------------------------------------
 
 
@@ -330,6 +352,6 @@ def render_receipt(entries: list[dict]) -> dict:
             "digests": [entry["sha256"] for entry in sent]}
 
 
-__all__ = ["BODY_RENDER_RULE", "MAX_PAGE_RENDERS", "attach_body_renders", "cached_render", "clear_render_cache",
+__all__ = ["BODY_RENDER_RULE", "MAX_PAGE_RENDERS", "attach_body_renders", "registration_body_renders", "cached_render", "clear_render_cache",
            "ensure_body_renders", "page_body_renders", "render_exemplar_pages", "render_prompt_block",
            "render_receipt", "snapshot_body_renders"]

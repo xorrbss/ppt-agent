@@ -100,7 +100,7 @@ INTERNAL_ENV_NAMES: MappingProxyType[str, str] = MappingProxyType(
         "SVG_TEMPLATE_OUTLINE_SECTIONS": "Template page structure (key message, ### sub-sections) in template-redesign outlines: on/off.",
         "SVG_TEMPLATE_VISUAL_GUIDANCE": "Template body vocabulary instead of anti-decoration guidance for template-redesign authors: on/off.",
         "SVG_TEMPLATE_STEP_PICTURES": "Model-drawn step pictures (vector spots) for template-redesign decks while SVG_ILLUSTRATION_MODE is off: on/off.",
-        "SVG_TEMPLATE_BODY_RENDERS": "Masked renders of the template's body pages for template-redesign authors, frozen at admission: on/off.",
+        "SVG_TEMPLATE_BODY_RENDERS": "Masked template body page renders, made at registration and sent to authors only when on (frozen at admission): on/off.",
         "SVG_TEMPLATE_BODY_RENDER_EXCLUDED_PAGES": "Measurement only: 1-based template slide numbers registration renders no body page for (e.g. 9,66).",
         "SVG_ILLUSTRATION_PARTS": "Model-drawn picture kinds in vector mode: cover,scene,spots,pairs,pictograph.",
         "SVG_ILLUSTRATION_TIMEOUT_SECONDS": "Per-illustration timeout for the SVG asset stage.",

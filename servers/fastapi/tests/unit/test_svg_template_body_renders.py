@@ -493,6 +493,51 @@ def test_a_render_that_cannot_be_stored_is_left_out_and_the_registration_goes_on
     assert same is package and ids == [] and receipt["unstored"] == 2
 
 
+def test_registration_renders_nothing_while_the_knob_is_off(monkeypatch, tmp_path):
+    """Off (the default): no conversion, masking, OCR or store; the package comes back unchanged."""
+    def forbidden(*a, **k):
+        raise AssertionError("the renderer must not run with SVG_TEMPLATE_BODY_RENDERS off")
+
+    monkeypatch.setattr(renders, "shared_libreoffice_pdf", forbidden)
+    monkeypatch.setattr(renders, "render_exemplar_pages", forbidden)
+    monkeypatch.setattr("services.artifact_store.configured_public_artifact_service", forbidden)
+    package = SimpleNamespace(body_composition=_composition(_exemplar(0, region_x=BODY[0], region_y=BODY[1])))
+    for value in (None, "off", "bogus"):
+        if value is None:
+            monkeypatch.delenv("SVG_TEMPLATE_BODY_RENDERS", raising=False)
+        else:
+            monkeypatch.setenv("SVG_TEMPLATE_BODY_RENDERS", value)
+        result = asyncio.run(renders.registration_body_renders(None, package, tmp_path / "deck.pptx",
+                                                               captured_pdf=None, operation_id=None))
+        assert result == (package, [], None, None)
+
+
+def test_registration_renders_with_the_knob_on_and_shares_one_pdf(monkeypatch, tmp_path):
+    composition = _composition(_exemplar(0, region_x=BODY[0], region_y=BODY[1]))
+    package = _Package(body_composition=composition, source_canvas=SimpleNamespace(width_px=CANVAS_W), digest="old")
+    masked = mask.mask_pdf_page(_deck(), 0, canvas_width_px=CANVAS_W, crop=BODY, ocr=None, ocr_name="unavailable")
+    _stub_attach(monkeypatch, {0: masked})
+    seen = {}
+    real_attach = renders.attach_body_renders
+
+    async def attach(session, package, source_path, *, captured_pdf, operation_id):
+        seen["pdf"] = captured_pdf
+        return await real_attach(session, package, source_path, captured_pdf=captured_pdf, operation_id=operation_id)
+
+    monkeypatch.setattr(renders, "attach_body_renders", attach)
+    monkeypatch.setattr(renders, "shared_libreoffice_pdf", lambda source, pkg: ("LibreOffice 24.2", b"%PDF-shared"))
+    monkeypatch.setenv("SVG_TEMPLATE_BODY_RENDERS", "on")
+    updated, ids, receipt, shared = asyncio.run(renders.registration_body_renders(
+        _Session(), package, tmp_path / "deck.pptx", captured_pdf=None, operation_id=uuid.uuid4()))
+    assert updated.body_composition.exemplars[0].render is not None and len(ids) == 1
+    assert receipt["rendered"] == 1 and shared == ("LibreOffice 24.2", b"%PDF-shared") and seen["pdf"] == b"%PDF-shared"
+    # A captured PDF (the PowerPoint capture) is used as it is, with no LibreOffice conversion.
+    monkeypatch.setattr(renders, "shared_libreoffice_pdf", lambda *a: pytest.fail("no conversion with a capture"))
+    *_, shared = asyncio.run(renders.registration_body_renders(_Session(), package, tmp_path / "deck.pptx",
+                                                               captured_pdf=b"%PDF-captured", operation_id=None))
+    assert shared is None and seen["pdf"] == b"%PDF-captured"
+
+
 def test_attach_body_renders_leaves_the_package_alone_when_nothing_renders(monkeypatch, tmp_path):
     package = SimpleNamespace(body_composition=_composition(_exemplar(0)), digest="old")
     monkeypatch.setattr(renders, "render_exemplar_pages", lambda *a, **k: ({}, {"status": "pdf_unavailable"}))

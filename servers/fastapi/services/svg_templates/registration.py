@@ -406,16 +406,14 @@ class SvgTemplateOperationHandler:
                         owner_id=owner_id, tenant_id=tenant_id)
                     package_model = await asyncio.to_thread(build_preview_package,
                         package_model, source_path, captured_pdf, capture_receipt)
-                # Masked renders of the body exemplar pages, stored whatever SVG_TEMPLATE_BODY_RENDERS
-                # says (docs/template-body-renders-design-20261105.md); a page that cannot be verified
-                # gets none and the registration goes on.
-                from services.svg_templates.body_renders import attach_body_renders, shared_libreoffice_pdf
-                if captured_pdf is None:
-                    # One LibreOffice conversion serves the renders and the source review.
-                    libreoffice_pdf = await asyncio.to_thread(shared_libreoffice_pdf, source_path, package_model)
-                render_pdf = captured_pdf if captured_pdf is not None else (libreoffice_pdf[1] if libreoffice_pdf else None)
-                package_model, render_artifact_ids, render_receipt = await attach_body_renders(
-                    session, package_model, source_path, captured_pdf=render_pdf, operation_id=claim.operation_id)
+                # Masked renders of the body exemplar pages, only with SVG_TEMPLATE_BODY_RENDERS on at
+                # registration (docs/template-body-renders-design-20261105.md: measured no effect, and the
+                # masking OCR costs minutes); a page that cannot be verified gets none and the
+                # registration goes on. Off, the package and the registration stay as before.
+                from services.svg_templates.body_renders import registration_body_renders
+                (package_model, render_artifact_ids, render_receipt,
+                 libreoffice_pdf) = await registration_body_renders(
+                    session, package_model, source_path, captured_pdf=captured_pdf, operation_id=claim.operation_id)
                 package = package_model.model_dump(mode="json", by_alias=True)
                 if len(canonical_json_bytes(package)) > MAX_DRAFT_PACKAGE_BYTES:
                     raise ValueError("svg_template_package_size_limit")
