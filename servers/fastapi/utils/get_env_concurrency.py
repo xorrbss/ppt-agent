@@ -218,6 +218,41 @@ def get_svg_template_body_exemplars_env(settings: RuntimeSettings | None = None)
     return "grammar" if value == "grammar" else "off"
 
 
+def get_svg_template_outline_sections_env(settings: RuntimeSettings | None = None) -> bool:
+    """Whether a template-redesign deck's outline is asked for the template's page structure
+    (``SVG_TEMPLATE_OUTLINE_SECTIONS``: ``on`` / ``off``; unset or unknown: off).
+
+    On, the outline prompt adds :data:`utils.svg_template_outline.TEMPLATE_SECTIONS_CLAUSE`:
+    a key-message line and two to four ``###`` sub-sections per content slide, each holding
+    its own facts, so the body author gets sections to compose (measured 2026-11-05: the
+    judge counted 0 sections on 13 of 20 generated pages while every outline page held one
+    ``##`` title and bullets only). Internal knob read when the outline is requested, listed
+    in ``tests/support/internal_env_names.py``.
+    """
+    from utils.get_env import get_setting_env
+
+    value = (get_setting_env("SVG_TEMPLATE_OUTLINE_SECTIONS", settings) or "").strip().lower()
+    return value in {"on", "true", "1"}
+
+
+def get_svg_template_visual_guidance_env(settings: RuntimeSettings | None = None) -> bool:
+    """Whether a template-redesign author is told to use the template's body vocabulary
+    (``SVG_TEMPLATE_VISUAL_GUIDANCE``: ``on`` / ``off``; unset or unknown: off).
+
+    On, the frozen composition guidance of a template-redesign snapshot names the
+    template's components where the content has their shape instead of saying that icons
+    and visual difference are not evidence of improvement, and the composition grammar's
+    density line asks for secondary components and full explanations instead of enlarged
+    components (``services/svg_templates/generation.py``, ``body_composition.py``). Prompt
+    only. Internal knob read at admission and when a page is authored, listed in
+    ``tests/support/internal_env_names.py``.
+    """
+    from utils.get_env import get_setting_env
+
+    value = (get_setting_env("SVG_TEMPLATE_VISUAL_GUIDANCE", settings) or "").strip().lower()
+    return value in {"on", "true", "1"}
+
+
 def get_svg_template_component_style_env(settings: RuntimeSettings | None = None) -> bool:
     """Whether a template-redesign deck's author rules carry the template's body component styles
     (``SVG_TEMPLATE_COMPONENT_STYLE``: ``on`` / ``off``; unset or unknown: off).

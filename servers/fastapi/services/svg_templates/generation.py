@@ -110,14 +110,38 @@ def apply_template_snapshot(snapshot: dict, request) -> None:
             observed = (profile.get("fonts", {}).get(role) or {}).get("family")
             snapshot["tokens"][role + "_font"] = observed if observed in families else families[0]
         snapshot["tokens"]["mono_font"] = snapshot["tokens"]["body_font"]
-        snapshot["composition_guidance"] = [
-            "The server preserves original fonts, background, header, footer and logos.",
-            "Author only the permitted body region. Reuse successful source hierarchy, comparison and image treatment when they fit this content.",
-            "Adjust only what needs improvement; freely redesign the body when content or canvas makes the source composition unsuitable.",
-            "Prefer clear simple compositions. Decorative cards, icons or visual difference are not evidence of improvement.",
-            "Examples contain no factual authority: use only this request's facts, labels, figures and relationships.",
-        ]
+        snapshot["composition_guidance"] = template_composition_guidance()
     snapshot["digest"] = canonical_json_digest({key: value for key, value in snapshot.items() if key != "digest"}, allow_nan=True)
+
+
+#: The frozen composition guidance of a template-redesign snapshot (a digest input: it changes
+#: only for decks admitted after the change). ``SVG_TEMPLATE_VISUAL_GUIDANCE`` swaps the fourth
+#: line: measured 2026-11-05 on template A, generated pages scored 2.3-2.5 of 5 on the judge's
+#: visuals axis with no step shape (0 polygons per deck) and icons left out on 3-4 pages of 10,
+#: while the author was told that icons and visual difference are not evidence of improvement.
+PLAIN_COMPOSITION_LINE = ("Prefer clear simple compositions. Decorative cards, icons or visual difference are"
+                          " not evidence of improvement.")
+TEMPLATE_VOCABULARY_LINE = (
+    "Use the template's body vocabulary wherever this page's content has that shape: a numbered"
+    " sub-heading per section; small body type with many short items; a table for compared attributes;"
+    " a source-stated sequence as separate gapped step shapes (chevrons, or boxes joined by lines with"
+    " arrowheads) in source order; a hierarchy as stacked or tree boxes with connecting lines; each"
+    " offered icon beside the label of its own item; a key figure as a compact tile next to its"
+    " explanation, not a page-dominating number. Decoration without such content is not an improvement."
+)
+
+
+def template_composition_guidance() -> list[str]:
+    """The composition guidance lines frozen into a template-redesign snapshot."""
+    from utils.get_env_concurrency import get_svg_template_visual_guidance_env
+
+    return [
+        "The server preserves original fonts, background, header, footer and logos.",
+        "Author only the permitted body region. Reuse successful source hierarchy, comparison and image treatment when they fit this content.",
+        "Adjust only what needs improvement; freely redesign the body when content or canvas makes the source composition unsuitable.",
+        TEMPLATE_VOCABULARY_LINE if get_svg_template_visual_guidance_env() else PLAIN_COMPOSITION_LINE,
+        "Examples contain no factual authority: use only this request's facts, labels, figures and relationships.",
+    ]
 
 
 _HEADER_KEYS = ("title", "chapter_number", "chapter_title")
@@ -297,7 +321,10 @@ def body_author_rules(rules: str, snapshot: dict, *, body_floor: float | None = 
     selection = template_selection(snapshot)
     if not selection or selection["mode"] != "template-redesign":
         return rules
-    from utils.get_env_concurrency import get_svg_template_body_exemplars_env, get_svg_template_component_style_env
+    from utils.get_env_concurrency import (
+        get_svg_template_body_exemplars_env, get_svg_template_component_style_env,
+        get_svg_template_visual_guidance_env,
+    )
     component_rules = ""
     if get_svg_template_component_style_env():
         from services.svg_templates.component_style import component_style_rules
@@ -307,7 +334,8 @@ def body_author_rules(rules: str, snapshot: dict, *, body_floor: float | None = 
     if composition != "off":
         from services.svg_templates.body_composition import composition_rules
         component_rules += composition_rules(template_package(selection).get("body_composition"),
-                                             body_floor=body_floor, exemplars=composition == "on")
+                                             body_floor=body_floor, exemplars=composition == "on",
+                                             visual_guidance=get_svg_template_visual_guidance_env())
     rules = rules.replace(
         "Never create a page number or use id svg-system-page-number. Reserve the bottom-right 64x36 area for the system footer.",
         "Do not author any system page number, header, footer or logo. The template owns their exact regions.",

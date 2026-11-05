@@ -753,9 +753,21 @@ def _percent(value: float) -> str:
     return f"{round(value * 100):d}%"
 
 
+#: The density line's closing advice. ``SVG_TEMPLATE_VISUAL_GUIDANCE`` replaces "enlarge the
+#: components": measured 2026-11-05 on template A, drafts read it as larger type (figures of 40-50px
+#: in half-empty cards; the judge's empty share 30-62 % against 10-37 % on the original pages).
+FILL_BY_ENLARGING = (" when the facts are few, enlarge the components rather than leaving the lower half"
+                     " empty.")
+FILL_BY_EXPLAINING = (" When the facts are few, give each item its full explanation from the source and the"
+                      " template's secondary components (a caption row, a note line, an icon beside the"
+                      " label, a compact key figure next to its explanation) rather than larger type or"
+                      " taller empty cards; a figure is at most about three times the body size.")
+
+
 def composition_rules(composition: dict | None, *, body_floor: float | None = None,
-                      exemplars: bool = True) -> str:
-    """The author-rule paragraph for a stored composition grammar; empty when there is none."""
+                      exemplars: bool = True, visual_guidance: bool = False) -> str:
+    """The author-rule paragraph for a stored composition grammar; empty when there is none.
+    ``visual_guidance`` (``SVG_TEMPLATE_VISUAL_GUIDANCE``) swaps the density line's closing advice."""
     if not composition:
         return ""
     grammar = SvgTemplateBodyComposition.model_validate(composition).grammar
@@ -784,8 +796,8 @@ def composition_rules(composition: dict | None, *, body_floor: float | None = No
         f" {shown(usual):g}px (from {shown(small):g} to {shown(big):g}px); elements cover {_percent(grammar.ink_coverage)}"
         f" of the body area and reach {_percent(min(1.0, grammar.bottom_reach))} of its height. Fill body_region from"
         " top to bottom at a comparable density using every fact, label and figure of this page (state each"
-        " point fully; give labels a short explanation from the source); when the facts are few, enlarge the"
-        " components rather than leaving the lower half empty. Never invent facts to fill space.",
+        " point fully; give labels a short explanation from the source);"
+        + (FILL_BY_EXPLAINING if visual_guidance else FILL_BY_ENLARGING) + " Never invent facts to fill space.",
     ]
     if exemplars:
         lines.append(

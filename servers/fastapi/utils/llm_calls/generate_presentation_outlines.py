@@ -14,6 +14,7 @@ from llmai.shared import (
 
 from models.presentation_outline_model import PresentationOutlineModel
 from utils.content_structure_policy import StructurePolicy, outline_table_clause, outline_table_line
+from utils.svg_template_outline import outline_sections_clause
 from utils.ppt_writing_prompt import WRITING_POLICY_ID, writing_policy_prompt
 from utils.get_dynamic_models import outline_model
 from utils.get_env_programme import (
@@ -54,6 +55,7 @@ def get_system_prompt(
     language: str | None = None,
     common_header_mode: str = "free",
     structure_policy: StructurePolicy | None = None,
+    template_sections: bool = False,
 ):
     # Slide text has a FLOOR again (2026-09-05). The 08-19 rewrite turned the
     # "at least ~N words" floor into a per-bullet ceiling because dense outlines
@@ -201,6 +203,8 @@ def get_system_prompt(
         system += writing_policy_prompt(language=language)
         # The writing policy's pipe rule must not forbid the pipes of a table.
         system += outline_table_clause(structure_policy)
+    # SVG_TEMPLATE_OUTLINE_SECTIONS (template-redesign decks only): the template's page structure.
+    system += outline_sections_clause(template_sections)
     return system
 
 
@@ -279,6 +283,7 @@ def get_messages(
     writing_policy: str | None = None,
     common_header_mode: str = "free",
     structure_policy: StructurePolicy | None = None,
+    template_sections: bool = False,
 ) -> list[Message]:
     return [
         SystemMessage(
@@ -291,6 +296,7 @@ def get_messages(
                 language=language,
                 common_header_mode=common_header_mode,
                 structure_policy=structure_policy,
+                template_sections=template_sections,
             ),
         ),
         UserMessage(
@@ -326,6 +332,7 @@ async def generate_ppt_outline(
     common_header_mode: str = "free",
     structure_policy: StructurePolicy | None = None,
     is_retry: bool = False,
+    template_sections: bool = False,
 ):
     model = get_model()
     canvas_scales = canvas_budget is not None and canvas_budget.factor < 1
@@ -436,6 +443,7 @@ async def generate_ppt_outline(
                 writing_policy=writing_policy,
                 common_header_mode=common_header_mode,
                 structure_policy=structure_policy,
+                template_sections=template_sections,
             ),
             response_format=response_format,
             tools=([WebSearchTool()] if use_search_tool else None),

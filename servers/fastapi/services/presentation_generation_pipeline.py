@@ -50,6 +50,7 @@ from utils.content_structure_policy import active_policy
 from utils.get_env_concurrency import (
     get_content_structure_policy_parts_env,
     get_content_structure_policy_scope_env,
+    get_svg_template_outline_sections_env,
 )
 from services.presentation_generation_completion import record_generation_completion
 from constants.presentation import (
@@ -326,6 +327,14 @@ async def _validate_authored_master_pin_admission(request: GeneratePresentationR
     request._authored_style_snapshot = style
     composition, _ = resolve_authored_composition(resolved.contract, style=style if request.authored_style is not None else None, visual_direction=getattr(resolved, "visual_direction", None), metadata=request._authored_deck_metadata)
     request._authored_composition_pin = composition
+
+
+def template_outline_sections(request: object) -> bool:
+    """Whether this deck's outline gets the template's page structure: a template-redesign
+    deck with ``SVG_TEMPLATE_OUTLINE_SECTIONS`` on (``utils/svg_template_outline.py``)."""
+    return (getattr(request, "svg_template_pin", None) is not None
+            and getattr(request, "svg_template_mode", None) == "template-redesign"
+            and get_svg_template_outline_sections_env())
 
 
 def _source_content_http_exception(error: SourceContentError) -> HTTPException:
@@ -1189,6 +1198,7 @@ async def generate_presentation_handler(
                             parts=get_content_structure_policy_parts_env()),
                         # The count retry is its own logical provider call.
                         is_retry=outline_attempt > 0,
+                        template_sections=template_outline_sections(request),
                     ):
 
                         if isinstance(chunk, HTTPException):
