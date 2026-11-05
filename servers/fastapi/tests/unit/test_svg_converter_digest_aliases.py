@@ -29,9 +29,9 @@ def _digest_over_manifest(tmp_path, monkeypatch, manifest_bytes):
         return convert.converter_digest()
 
 
-def test_identity_mirror_matches_converter_digest():
+def test_identity_mirror_matches_converter_source_digest():
     current = hashlib.sha256((convert.VENDOR_ROOT / "MANIFEST.json").read_bytes()).hexdigest()
-    assert aliases.converter_identity_digest(current) == convert.converter_digest()
+    assert aliases.converter_identity_digest(current) == convert.converter_source_digest()
 
 
 @pytest.mark.parametrize("sha256", sorted(aliases.SUPERSEDED_VENDOR_MANIFESTS))
