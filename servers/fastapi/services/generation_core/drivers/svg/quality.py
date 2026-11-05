@@ -85,6 +85,16 @@ async def classify_pages(pages, *, job, checkpoint, snapshot=None) -> dict[str, 
     return {**deck_quality_summary(outcomes), "compositionObservation": composition}
 
 
+def with_vision_review_receipt(summary, pages, advisory) -> dict[str, object]:
+    """``summary`` with the deck's vision review instrumentation (calls, cost, axes, redesigns)."""
+
+    from services.generation_core.drivers.svg.review_instrumentation import vision_review_receipt
+    from services.provider_usage_instrumentation import active_provider_operation_usage
+
+    return {**(summary or {}), "visionReview": vision_review_receipt(
+        pages, advisory, operation_usage=active_provider_operation_usage())}
+
+
 def reclassify_pages(pages, *, summary=None) -> dict[str, object]:
     """``classify_pages`` again, in place, after publication added page flags.
 

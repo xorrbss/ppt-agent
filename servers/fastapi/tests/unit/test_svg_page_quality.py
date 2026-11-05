@@ -716,3 +716,86 @@ def test_source_preservation_receipt_is_release_ready_with_a_clean_advisory():
     assert validated.visual_review.status == "passed"
     assert result["releaseReadiness"] == "ready"
     require_release_v1_receipt(result)  # must not raise
+
+
+# --------------------------------------------------------------------------
+# M3: the deck quality receipt's vision review instrumentation
+# --------------------------------------------------------------------------
+
+
+def _review_group(status, scope, *, superseded=()):
+    return {"status": status, "review_scope": scope, "group_id": "g", "indices": [0],
+            "superseded_attempts": [{"status": item} for item in superseded]}
+
+
+def _gate_advisory(status, failed_axes_by_page):
+    pages = [{"index": index, "failedAxes": axes} for index, axes in enumerate(failed_axes_by_page)]
+    blocking = [index for index, axes in enumerate(failed_axes_by_page) if axes]
+    return {"vision": {"designGate": {"status": status, "pages": pages, "blockingPages": blocking,
+                                      "unreviewedPages": []}}}
+
+
+def test_vision_review_receipt_counts_calls_axes_and_redesigns():
+    from services.generation_core.drivers.svg.review_instrumentation import SCHEMA, vision_review_receipt
+    from services.provider_operation_usage import ProviderOperationUsage
+
+    initial = _gate_advisory("failed", [["hierarchy_emphasis"], [], ["hierarchy_emphasis", "brand_expression"]])
+    candidate = _gate_advisory("passed", [[], [], []])
+    execution = {"rounds": [
+        {"status": "completed", "advisory": initial, "groups": {
+            # one read retry after a failed call, a reserved-but-unsent slot, and the global call
+            "0": _review_group("completed", "local", superseded=("review_failed",)),
+            "1": _review_group("review_not_dispatched", "local"),
+            "2": _review_group("completed", "global")}},
+        {"status": "completed", "advisory": candidate, "groups": {"0": _review_group("completed", "full")}},
+    ]}
+    pages = [({"quality_recovery_execution": execution,
+               "quality_recovery": {"status": "selected", "decision": {"target_axes": ["hierarchy_emphasis"]}}},
+              b""),
+             ({}, b""),
+             ({"quality_recovery": {"status": "retained", "reason": "svg_provider_timeout",
+                                    "decision": {"target_axes": ["hierarchy_emphasis", "brand_expression"]}}},
+              b""),
+             ({"quality_recovery": {"status": "unresolved", "reason": "page_attempt_budget_exhausted"}}, b"")]
+    usage = ProviderOperationUsage()
+    usage.record_usage("vqa", usage_state="reported", input_tokens=9000, output_tokens=1200,
+                       actual_cost_microunits=81000, cached_tokens=0)
+    usage.record_usage("author", usage_state="reported", input_tokens=1, output_tokens=1,
+                       actual_cost_microunits=5)
+
+    receipt = vision_review_receipt(pages, candidate, operation_usage=usage)
+
+    assert receipt["schema"] == SCHEMA and receipt["path"] == "quality_first"
+    assert receipt["calls"] == {"logical": 3, "physical": 4, "completed": 3, "failed": 0, "unknown": 0}
+    first = receipt["rounds"][0]
+    assert first["round"] == "initial" and first["callsByScope"] == {"global": 1, "local": 1}
+    assert first["failedAxes"] == {"brand_expression": 1, "hierarchy_emphasis": 2}
+    assert first["blockingPages"] == [0, 2]
+    assert receipt["rounds"][1]["round"] == "candidate" and receipt["rounds"][1]["failedAxes"] == {}
+    assert receipt["finalGateStatus"] == "passed" and receipt["finalFailedAxes"] == {}
+    assert receipt["redesigns"] == {
+        "attempted": 2, "adopted": 1, "retained": 1, "notAttempted": 1, "attemptedPages": [0, 2],
+        "adoptedPages": [0], "retainedPages": [2], "notAttemptedPages": [3],
+        "targetAxes": {"brand_expression": 1, "hierarchy_emphasis": 2}}
+    # Only the review stage's cost, labelled as this worker attempt's.
+    assert receipt["usage"]["scope"] == "attempt" and receipt["usage"]["actualCostMicrounits"] == 81000
+    assert receipt["usage"]["inputTokens"] == 9000
+
+
+def test_vision_review_receipt_without_quality_first_execution_or_usage():
+    from services.generation_core.drivers.svg.review_instrumentation import vision_review_receipt
+
+    skipped = advisory_record({"skipped": "render_missing"}, ["sha256:a"])
+    receipt = vision_review_receipt([({}, b"")], skipped)
+
+    assert receipt["path"] == "advisory" and receipt["rounds"] == []
+    assert receipt["calls"]["logical"] == 0 and receipt["usage"] == {"scope": "unmeasured"}
+    assert receipt["advisory"] == {"ran": False, "skipped": "render_missing"}
+    assert receipt["redesigns"]["attempted"] == 0
+
+
+def test_deck_quality_summary_carries_the_vision_review_receipt():
+    from services.generation_core.drivers.svg.quality import with_vision_review_receipt
+
+    summary = with_vision_review_receipt({"status": "passed", "pageCount": 1}, [({}, b"")], None)
+    assert summary["status"] == "passed" and summary["visionReview"]["usage"] == {"scope": "unmeasured"}

@@ -758,6 +758,7 @@ async def _generate_prepared_deck(
         if not recovery_policy:
             advisory = stage_advisory if stage_plan is not None else await deck_quality.deck_advisory(
                 ctx, pages, job=job, read_png=read_png, run_advisory=observed_advisory)
+        summary = deck_quality.with_vision_review_receipt(summary, pages, advisory)
     return ctx, pages, summary, advisory
 
 
