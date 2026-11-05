@@ -15,7 +15,7 @@ from services.svg_final_selected_continuation import (
 SOURCE_LOCAL_SCHEMA = "svg-source-local-review-continuation/v1"
 
 def _source_local_vector(payloads):
-    from services.svg_cached_author_render_recovery import author_witness
+    from services.svg_recovery_witness import author_witness
     result = []
     for index, payload in enumerate(payloads):
         quality = payload.get("quality")
@@ -168,7 +168,7 @@ async def prepare_source_local_leaf(session, *, source_operation=None, verificat
     from services.svg_partial_recovery import (
         ARCHIVE_KEY, _hydrate_checkpoint_archive, _frozen_payload, frozen_episode_payload,
     )
-    from services.svg_cached_author_render_recovery import digest
+    from services.svg_recovery_witness import digest
     request = kwargs["source_job"].get("request_payload") or {}
     manifest, archive = operation_request.get("svg_partial_recovery_manifest"), operation_request.get(ARCHIVE_KEY)
     _require(isinstance(manifest, Mapping) and isinstance(archive, Mapping)
@@ -450,7 +450,7 @@ def _build_flattened_local_proof(*, operation_id, job_id, owner_id, tenant_id, a
                 _sha(witness.get(key))
             _sha(projection.get("projected_payload_digest"))
             if raw != payload:
-                from services.svg_cached_author_render_recovery import author_witness
+                from services.svg_recovery_witness import author_witness
                 _require(_digest(payload) == projection["projected_payload_digest"]
                          and _svg_sha(payload) == witness["current_author_svg_digest"]
                          and author_witness(payload) == witness.get("current_author_receipt_digest",
@@ -658,7 +658,7 @@ def build_source_local_proof(*, operation_id, job_id, owner_id, tenant_id, archi
 
 
 def archived_source_local_payloads(archive, working, proof, *, manifest_pages=None):
-    from services.svg_cached_author_render_recovery import digest
+    from services.svg_recovery_witness import digest
     _require(proof.get("schema") == SOURCE_LOCAL_SCHEMA and digest(archive) == proof.get("archive_digest"))
     job = archive.get("job")
     rows = working.get("checkpoints")

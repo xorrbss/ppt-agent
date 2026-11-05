@@ -12,7 +12,7 @@ from services import svg_source_local_review_continuation as continuation
 from services.generation_core.quality.advisory_record import content_digest
 from services.generation_core.quality.vision_advisory_prompt import DESIGN_PRINCIPLES_VERSION
 from services.provider_pricing import ProviderModelPricing
-from services.svg_cached_author_render_recovery import digest
+from services.svg_recovery_witness import digest
 from tests.unit.test_svg_page_error_class import _RecoveryHarness
 from tests.unit.test_svg_review_read_retries import _harness, _provider, _run
 from utils.hashing import sha256_hex

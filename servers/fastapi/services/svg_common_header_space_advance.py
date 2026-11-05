@@ -50,6 +50,7 @@ import platform
 import re
 import sys
 
+from models.canvas_defaults import DEFAULT_CANVAS_WIDTH_PX
 from utils.hashing import canonical_json_digest
 
 logger = logging.getLogger(__name__)
@@ -69,7 +70,7 @@ _SCALE_CHECK_SIZE_PX = 24
 #: by a pixel: 0.001 em is 0.04 px per glyph or space at a 40 px title.
 _GLYPH_CONFORMANCE_EM = 0.001
 _AGREEMENT_EM = 0.001
-_PROBE_WIDTH_PX = 1280
+_PROBE_WIDTH_PX = DEFAULT_CANVAS_WIDTH_PX
 _SOLID_COLUMN_X = 660
 _ENTRY_KEYS = frozenset({"family", "weight", "digest", "contexts"})
 _SAMPLE_KEYS = frozenset({"pair", "space_delta_em", "scale_check_delta_em", "glyph_offset_em"})

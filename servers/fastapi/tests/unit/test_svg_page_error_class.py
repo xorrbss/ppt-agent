@@ -828,7 +828,7 @@ def test_a_rescued_append_only_page_resumes_as_flagged(monkeypatch):
 
 
 def _known_page(stores):
-    from services.svg_cached_author_render_recovery import author_witness, digest
+    from services.svg_recovery_witness import author_witness, digest
     job = SimpleNamespace(workspace_operation_id=uuid.uuid4())
     saved = _rendered_payload(stores, _AUTHORED, _quality(_AUTHORED))
     page = {"row_digest": "row-1", "category": "known", "svg_sha256": sha256_hex(_AUTHORED.encode()),

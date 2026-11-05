@@ -2262,11 +2262,8 @@ async def _apply_workspace_action(
     from services.svg_classification_remeasurement import (
         ClassificationRemeasurementRejected, SVG_CLASSIFICATION_REMEASUREMENT, SVG_SOURCE_REMEASUREMENT_DISPATCH,
     )
-    from services.svg_cached_author_render_recovery import (
-        CachedAuthorRenderRejected, REVISION as SVG_CACHED_AUTHOR_RENDER,
-        REVISION_V2 as SVG_CACHED_AUTHOR_RENDER_V2,
-        REVISION_V3 as SVG_CACHED_AUTHOR_RENDER_V3,
-    )
+    # A cached-author-render request (retired) is always rejected here.
+    from services.svg_cached_author_render_lineage import CachedAuthorRenderRejected
     from services.svg_partial_recovery import PartialRecoveryRejected, REVISION as SVG_PARTIAL_RECOVERY
     try:
         svg_recovery = await verified_svg_recovery_checkpoints(
@@ -2354,10 +2351,6 @@ async def _apply_workspace_action(
                 retry_payload["svg_timeout_repurchase_manifest"] = deepcopy(svg_recovery.manifest)
         if request.recovery_revision in {SVG_CLASSIFICATION_REMEASUREMENT, SVG_SOURCE_REMEASUREMENT_DISPATCH}:
             retry_payload["svg_classification_remeasurement_manifest_hash"] = svg_recovery.manifest_hash
-        if request.recovery_revision in {SVG_CACHED_AUTHOR_RENDER, SVG_CACHED_AUTHOR_RENDER_V2,
-                                         SVG_CACHED_AUTHOR_RENDER_V3}:
-            retry_payload["svg_cached_author_render_manifest_hash"] = svg_recovery.manifest_hash
-            retry_payload["svg_cached_author_render_manifest"] = deepcopy(svg_recovery.manifest)
         retry_request_hash = canonical_payload_hash(
             {
                 "retry_of_operation_id": str(source_operation.id),
@@ -2509,15 +2502,9 @@ async def _apply_workspace_action(
                     operation.request_hash = canonical_payload_hash(operation.request_payload)
                     session.add(operation)
                 elif append_only_recovery:
-                    if request.recovery_revision in {SVG_CACHED_AUTHOR_RENDER, SVG_CACHED_AUTHOR_RENDER_V2,
-                                                     SVG_CACHED_AUTHOR_RENDER_V3}:
-                        retry_job = await _fork_cached_author_render_job(
-                            session, source_operation, operation, svg_recovery,
-                            key_hash=retry_operation_key_hash)
-                    else:
-                        retry_job = await _fork_append_only_svg_recovery_job(
-                            session, source_operation, operation, svg_recovery,
-                            key_hash=retry_operation_key_hash)
+                    retry_job = await _fork_append_only_svg_recovery_job(
+                        session, source_operation, operation, svg_recovery,
+                        key_hash=retry_operation_key_hash)
                 else:
                     rebound = await rebind_workspace_linked_generation_job_for_retry(
                         session,
@@ -2553,9 +2540,6 @@ async def _apply_workspace_action(
                             **({"retry_source_operation": source_operation}
                                if svg_recovery is None and checkpoint_recovery is None
                                and not explicit_capacity_recovery else {}),
-                            zero_provider_cached_author_recovery=request.recovery_revision in {
-                                SVG_CACHED_AUTHOR_RENDER, SVG_CACHED_AUTHOR_RENDER_V2,
-                                SVG_CACHED_AUTHOR_RENDER_V3},
                             partial_svg_recovery=partial_recovery,
                             partial_svg_verification=(svg_recovery.verification if partial_recovery else None),
                         )
@@ -2570,11 +2554,7 @@ async def _apply_workspace_action(
 
                     await bind_admission(session, operation, svg_recovery)
                 elif append_only_recovery:
-                    if request.recovery_revision in {SVG_CACHED_AUTHOR_RENDER, SVG_CACHED_AUTHOR_RENDER_V2,
-                                                     SVG_CACHED_AUTHOR_RENDER_V3}:
-                        await _verify_zero_provider_cached_admission(session, operation)
-                    else:
-                        await _bind_append_only_svg_recovery_admission(session, operation, svg_recovery)
+                    await _bind_append_only_svg_recovery_admission(session, operation, svg_recovery)
                 if checkpoint_recovery is not None:
                     checkpoint_recovery.render_status = "completed"
                     checkpoint_recovery.failed_stage = None
@@ -2587,8 +2567,6 @@ async def _apply_workspace_action(
                     reset_svg_recovery_checkpoints(session, svg_recovery,
                         operation_id=operation.id if request.recovery_revision in {
                             SVG_CLASSIFICATION_REMEASUREMENT, SVG_SOURCE_REMEASUREMENT_DISPATCH,
-                            SVG_CACHED_AUTHOR_RENDER, SVG_CACHED_AUTHOR_RENDER_V2,
-                            SVG_CACHED_AUTHOR_RENDER_V3,
                             SVG_TIMEOUT_REPURCHASE_V2, SVG_TIMEOUT_REPURCHASE_V3} else source_operation.id,
                         now=now, recovery_revision=request.recovery_revision)
         except PartialRecoveryRejected as error:
@@ -2805,92 +2783,6 @@ async def _fork_append_only_svg_recovery_workspace(session, source, presentation
     session.add(conversation)
     await session.flush()
     return child, conversation
-
-
-async def _fork_cached_author_render_job(session, source, child, recovery, *, key_hash):
-    """Fork a provider-free child; leave the failed job and all rows untouched."""
-    from models.sql.async_presentation_generation_status import AsyncPresentationGenerationTaskModel
-    from services.svg_cached_author_render_recovery import child_checkpoint_payload, digest
-    from services.presentation_generation_job_service import request_sha256
-
-    parent = await session.scalar(select(PresentationGenerationJob).where(
-        PresentationGenerationJob.id == uuid.UUID(recovery.manifest["job_id"]),
-    ).with_for_update())
-    if parent is None or digest(parent.model_dump(mode="json")) != recovery.manifest["job_digest"]:
-        raise WorkspaceServiceError("operation_state_conflict", status_code=409)
-    status = AsyncPresentationGenerationTaskModel(status="pending", owner_id=source.owner_id)
-    session.add(status)
-    await session.flush()
-    revision = recovery.manifest["recovery_revision"]
-    lineage = {
-        "schema": ("svg-cached-author-render-lineage/v3"
-                   if revision == "svg-cached-author-render/v3"
-                   else "svg-cached-author-render-lineage/v2"
-                   if revision == "svg-cached-author-render/v2"
-                   else "svg-cached-author-render-lineage/v1"),
-        "parent_operation_id": recovery.manifest["operation_id"],
-        "parent_job_id": str(parent.id),
-        "parent_presentation_id": str(parent.presentation_id),
-        "child_operation_id": str(child.id),
-        "child_presentation_id": str(child.presentation_id),
-        "approval_manifest_hash": recovery.manifest_hash,
-    }
-    if revision in {"svg-cached-author-render/v2", "svg-cached-author-render/v3"}:
-        if recovery.manifest.get("action_operation_id") != str(source.id):
-            raise WorkspaceServiceError("svg_cached_author_render_prior_child_unproven",
-                                        status_code=409)
-        lineage["action_operation_id"] = str(source.id)
-    payload = deepcopy(parent.request_payload)
-    payload["presentation_id"] = str(child.presentation_id)
-    payload["_svg_recovery_lineage"] = lineage
-    job = PresentationGenerationJob(
-        task_id=status.id, presentation_id=child.presentation_id,
-        workspace_operation_id=child.id, idempotency_key_hash=key_hash,
-        request_sha256=request_sha256(payload), request_payload=payload,
-        svg_style_snapshot=deepcopy(parent.svg_style_snapshot),
-        authored_outline=deepcopy(parent.authored_outline),
-        total_slides=parent.total_slides, state="queued", export_cookie_required=False,
-    )
-    lineage["child_job_id"] = str(job.id)
-    payload["_svg_recovery_lineage"] = lineage
-    job.request_payload = payload
-    job.request_sha256 = request_sha256(payload)
-    session.add(job)
-    await session.flush()
-    if [row.slide_index for row in recovery.rows] != list(range(parent.total_slides)):
-        raise WorkspaceServiceError("operation_state_conflict", status_code=409)
-    for original in recovery.rows:
-        child_payload = child_checkpoint_payload(
-            original, recovery, child_operation_id=child.id)
-        session.add(AuthoredSlideCheckpoint(
-            job_id=job.id, slide_index=original.slide_index, role=original.role,
-            svg_checkpoint=child_payload, author_status="completed",
-            render_status="pending", persist_status="pending",
-        ))
-    child.request_payload = {
-        **child.request_payload, "job_id": str(job.id), "task_id": status.id,
-        "generation_request": deepcopy(payload),
-        "svg_recovery_lineage": deepcopy(lineage),
-    }
-    child.request_hash = canonical_payload_hash(child.request_payload)
-    session.add(child)
-    return job
-
-
-async def _verify_zero_provider_cached_admission(session, operation):
-    from models.sql.public_admission import PublicOperationAdmission
-
-    admission = await session.scalar(select(PublicOperationAdmission).where(
-        PublicOperationAdmission.operation_id == operation.id,
-    ).with_for_update())
-    if (admission is None or admission.planned_request_limit != 0
-            or admission.retry_request_limit != 0
-            or admission.estimated_cost_limit_microunits != 0
-            or admission.actual_cost_limit_microunits != 0
-            or admission.initial_request_count != 0
-            or admission.retry_request_count != 0):
-        raise WorkspaceServiceError("svg_cached_author_render_provider_budget_nonzero",
-                                    status_code=409)
 
 
 async def _fork_append_only_svg_recovery_job(session, source, child, recovery, *, key_hash):
