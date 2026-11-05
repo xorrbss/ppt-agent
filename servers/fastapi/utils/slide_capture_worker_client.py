@@ -13,6 +13,7 @@ import signal
 import subprocess
 from typing import Any, Mapping
 
+from models.canvas_defaults import DEFAULT_CANVAS_SIZE_PX
 from utils.get_env_programme import (
     get_authored_renderer_lease_max_renders,
     get_authored_renderer_lease_pool_size,
@@ -51,7 +52,7 @@ async def _render_html_in_isolated_worker(  # noqa: ASYNC109
     if private_diagnostic_profile is not None:
         if (private_diagnostic_profile != "fixed-glyph-dpr2/v1"
                 or fixed_glyph_preview is None or canonical_svg is None
-                or (width_px, height_px) != (1280, 720)):
+                or (width_px, height_px) != DEFAULT_CANVAS_SIZE_PX):
             raise ValueError("svg_template_glyph_diagnostic_profile_invalid")
     if font_manifest is None:
         if fixed_glyph_preview is not None:
@@ -252,7 +253,7 @@ async def _render_html_in_isolated_worker_impl(  # noqa: ASYNC109
         if (private_diagnostic_profile != "fixed-glyph-dpr2/v1"
                 or not isinstance(diagnostic, dict)
                 or diagnostic.get("profile") != private_diagnostic_profile
-                or diagnostic.get("logicalCanvasPx") != [1280, 720]
+                or diagnostic.get("logicalCanvasPx") != list(DEFAULT_CANVAS_SIZE_PX)
                 or diagnostic.get("rasterCanvasPx") != [2560, 1440]
                 or diagnostic.get("devicePixelRatio") != 2
                 or diagnostic.get("pipeCodeDigest") != private_diagnostic_pipe_code_digest()

@@ -106,10 +106,10 @@ def source_numbers(source: str) -> set[str]:
     return _numbers(source or "")
 
 
-def _chart_points(line: str) -> list[tuple[str, str]]:
+def _chart_points(line: str, revision: str | None = None) -> list[tuple[str, str]]:
     """(label, value) of every point of every chart the line declares, as the requirement parser reads it."""
     points: list[tuple[str, str]] = []
-    for chart in _charts(line):
+    for chart in _charts(line, revision):
         categories = chart.get("categories", [])
         for series in chart.get("series", [chart]):
             points.extend(zip(categories, (str(v) for v in series.get("values", [])), strict=False))
@@ -124,10 +124,11 @@ class DroppedChartLine:
     reason: str = "chart_values_not_in_source"
 
 
-def ground_chart_lines(content: str, index: SourceIndex, slide_index: int = 0) -> tuple[str, list[DroppedChartLine]]:
+def ground_chart_lines(content: str, index: SourceIndex, slide_index: int = 0, *,
+                       revision: str | None = None) -> tuple[str, list[DroppedChartLine]]:
     kept, dropped = [], []
     for line in content.split("\n"):
-        points = _chart_points(line) if _CHART_LINE.search(line) else []
+        points = _chart_points(line, revision) if _CHART_LINE.search(line) else []
         missing = tuple(f"{label} {value}" for label, value in points if not index.grounds(label, value))
         if missing:
             dropped.append(DroppedChartLine(slide_index, line.strip(), missing))
@@ -136,14 +137,39 @@ def ground_chart_lines(content: str, index: SourceIndex, slide_index: int = 0) -
     return ("\n".join(kept) if dropped else content), dropped
 
 
-def ground_outline_charts(outline: PresentationOutlineModel, source: str) -> tuple[PresentationOutlineModel, list[DroppedChartLine]]:
+def ground_outline_charts(outline: PresentationOutlineModel, source: str, *,
+                          revision: str | None = None) -> tuple[PresentationOutlineModel, list[DroppedChartLine]]:
+    """``revision``: the deck's pinned native requirement revision (v2 when omitted), so the
+    guard reads chart lines exactly as the deck's requirement parser will."""
     index = source_index(source)
     slides, dropped = [], []
     for position, slide in enumerate(outline.slides):
-        content, lines = ground_chart_lines(slide.content, index, position)
+        content, lines = ground_chart_lines(slide.content, index, position, revision=revision)
         dropped.extend(lines)
         slides.append(slide.model_copy(update={"content": content}) if lines else slide)
     for item in dropped:
         LOGGER.warning("outline chart line dropped (%s): slide=%d values=%s line=%r",
                        item.reason, item.slide_index, list(item.ungrounded_values), item.line[:200])
     return (PresentationOutlineModel(slides=slides, title=outline.title) if dropped else outline), dropped
+
+
+def derive_outline_chart_literals(outline: PresentationOutlineModel, *, revision: str | None
+                                  ) -> tuple[PresentationOutlineModel, int]:
+    """Add the ``chart:`` line each slide's prose series states (``prose_chart_literal.py``).
+
+    Only for a deck whose pinned revision derives them (v3); the lines then pass the same
+    source guard as model-written chart lines. Returns the outline and the line count added."""
+    from services.generation_core.drivers.svg.prose_chart_literal import DERIVATION_ID, with_chart_literals
+    from services.generation_core.drivers.svg.native_requirements import REQUIREMENTS_VERSION_V3
+
+    if revision != REQUIREMENTS_VERSION_V3:
+        return outline, 0
+    slides, added = [], 0
+    for position, slide in enumerate(outline.slides):
+        content, derived = with_chart_literals(slide.content, revision=revision)
+        for item in derived:
+            LOGGER.info("outline chart line derived (%s): slide=%d line=%r",
+                        DERIVATION_ID, position, item.literal[:200])
+        added += len(derived)
+        slides.append(slide.model_copy(update={"content": content}) if derived else slide)
+    return (PresentationOutlineModel(slides=slides, title=outline.title) if added else outline), added

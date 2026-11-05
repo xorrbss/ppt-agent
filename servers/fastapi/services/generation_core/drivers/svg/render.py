@@ -11,12 +11,14 @@ sentinel by continuing its own loop.
 from __future__ import annotations
 
 import asyncio
+import functools
 import json
 import math
 
 from services.svg_templates.selection_material import template_package
 from services.authored_checkpoint_errors import AuthoredStageError
 from services.generation_core.drivers.svg.attempt_cause import static_cause
+from services.generation_core.drivers.svg.local_page_repair import remeasure_incomplete
 from services.svg_presentation_checkpoint import _required_numeric_claims
 from utils.hashing import sha256_hex
 
@@ -456,6 +458,65 @@ def native_table_line_pitch_hint(quality, svg, preservation):
     return result if result["witnesses"] else None
 
 
+async def _local_text_clip_repair(*, ctx, request, presentation_id, index, content, payload, svg, ordinal,
+                                  job, checkpoint, async_session_maker, write_png, observations, quality,
+                                  recovery_readability_policy, template_page, template_source_manifest,
+                                  cache_remeasurement):
+    """One provider-free repair of clipped text per author attempt, measured again.
+
+    Returns the re-measured attempt's result, or ``None`` when the page has no
+    clipped text, already had its repair, or no candidate exists (the reason is
+    recorded on the attempt). Text that still clips afterwards is a content
+    failure (``quality/page_failure_kind.py``), so it is never kept flag-only.
+    """
+    from services.generation_core.drivers.svg.local_page_repair import still_clipped, text_clip_repair
+    from services.generation_core.drivers.svg.native_declarations import PAYLOAD_KEY
+    from services.svg_presentation_checkpoint import quality_browser_metrics
+
+    attempt = payload["attempts"][-1]
+    if not still_clipped(quality) or "local_clip_repair" in attempt:
+        return None
+    refused = {"status": "not_repairable", "provider_calls": 0}
+    if (ctx.source_reflow or ctx.raster_reconstruction or cache_remeasurement
+            or payload.get("cached_author_render")):
+        # Verbatim or witnessed bytes: their receipts forbid a moved glyph.
+        attempt["local_clip_repair"] = {**refused, "reason": "verbatim_page_protected"}
+        return None
+    if (payload.get(PAYLOAD_KEY) or {}).get("objects"):
+        attempt["local_clip_repair"] = {**refused, "reason": "native_data_requires_recomposition"}
+        return None
+    local = text_clip_repair(svg, quality, width=ctx.canvas.width_px, height=ctx.canvas.height_px,
+                             metrics=quality_browser_metrics(quality))
+    candidate = local.pop("svg", None)
+    if candidate is not None and template_page is not None:
+        import xml.etree.ElementTree as ET
+        from services.svg_templates.generation import compose_template_page
+        try:
+            compose_template_page(ctx.snapshot, candidate, template_page, allow_existing=True,
+                                  source_manifest=template_source_manifest)
+        except (ValueError, ET.ParseError):
+            candidate = None
+            local = {**refused, "reason": "template_fixed_frame_protected"}
+    attempt["local_clip_repair"] = local
+    if candidate is None:
+        return None
+    initial_quality = payload.get("initial_quality")
+    payload["svg_content"] = candidate
+    await checkpoint(job, index, payload=payload)
+    try:
+        result = await _attempt_render(ctx=ctx, request=request, presentation_id=presentation_id,
+            index=index, content=content, payload=payload, svg=candidate, ordinal=ordinal,
+            job=job, checkpoint=checkpoint, async_session_maker=async_session_maker, write_png=write_png,
+            recovery_readability_policy=recovery_readability_policy, allow_existing_common_header=True,
+            observations=observations, allow_existing_template=template_page is not None)
+    finally:
+        local.update(remeasured=True, still_clipped=still_clipped(attempt.get("quality")))
+    if initial_quality is not None:
+        payload["initial_quality"] = initial_quality  # the author's first response, not the repair
+    await checkpoint(job, index, payload=payload)
+    return result
+
+
 async def attempt_render(*, ctx, request, presentation_id, index, content, payload, svg, ordinal,
                          job, checkpoint, async_session_maker, write_png,
                          recovery_readability_policy=None, allow_existing_common_header=False,
@@ -486,12 +547,12 @@ async def _attempt_render(*, ctx, request, presentation_id, index, content, payl
     from services.svg_contract import finalize_svg
     from services.svg_renderer import render_svg_with_metrics
     from services.svg_source_layout import verify_source_receipt
-    from services.svg_authoring_profile import read_authoring_profile, read_quality_recovery_policy
+    from services.svg_authoring_profile import behaviour_profile, read_authoring_profile, read_quality_recovery_policy
     from services.generation_core.drivers.svg.timeline_ink_guard import (
         apply_timeline_ink_quality, source_timeline_rows,
     )
 
-    profile = read_authoring_profile(ctx.snapshot)
+    profile = behaviour_profile(read_authoring_profile(ctx.snapshot))
     header_pages = getattr(ctx, "header_pages", None)
     header_page = header_pages[index] if header_pages else None
     readability_policy = recovery_readability_policy or ctx.snapshot.get("readability_policy")
@@ -728,7 +789,7 @@ async def _attempt_render(*, ctx, request, presentation_id, index, content, payl
 
                         source_font_kwargs["minimum_font_px"] = max(source_font_kwargs["minimum_font_px"],
                             svg_quality_font_floor(readability_policy))
-                render_request = render_svg_with_metrics(final, width=ctx.canvas.width_px,
+                render_request = functools.partial(render_svg_with_metrics, final, width=ctx.canvas.width_px,
                                                      height=ctx.canvas.height_px,
                                                      # Source instructions are resolved into the hard
                                                      # minimum above, including the 7px lower bound.
@@ -748,8 +809,13 @@ async def _attempt_render(*, ctx, request, presentation_id, index, content, payl
                                                       **({"timeline_ink_probe": True} if timeline_source or profile and profile["version"] in (7, 8) else {}),
                                                      materialized_svg=materialized, **ctx.physical_kwargs)
                 render_timeout = getattr(ctx, "header_render_timeout_seconds", None)
-                rendered = (await asyncio.wait_for(render_request, timeout=render_timeout)
-                            if render_timeout is not None else await render_request)
+
+                async def render_once():
+                    return (await asyncio.wait_for(render_request(), timeout=render_timeout)
+                            if render_timeout is not None else await render_request())
+                # An incomplete probe is read once more before it can cost a
+                # provider repair or send the page to the text fallback.
+                rendered = await remeasure_incomplete(render_once)
                 observations.move("post")
         except ValueError as error:
             if ctx.canonical_assets:
@@ -807,11 +873,13 @@ async def _attempt_render(*, ctx, request, presentation_id, index, content, payl
     if not (ctx.source_reflow or ctx.raster_reconstruction):
         from services.authored_canvas import request_canvas_metadata
         from services.generation_core.drivers.svg.native_publish import canvas_point_per_px
-        from services.generation_core.drivers.svg.native_requirements import apply_requested_native_quality
+        from services.generation_core.drivers.svg.native_requirements import (
+            apply_requested_native_quality, requirements_revision)
         source_pages = getattr(request, "slides_markdown", None)
         native_source = source_pages[index] if source_pages and len(source_pages) == ctx.count else content
         apply_requested_native_quality(rendered.quality, payload, final, native_source,
-            pt_per_px=canvas_point_per_px(request_canvas_metadata(request)))
+            pt_per_px=canvas_point_per_px(request_canvas_metadata(request)),
+            revision=requirements_revision(ctx.snapshot))
     elif ctx.source_reflow and payload.get("source_preservation", {}).get("whole_page_native_groups"):
         from services.authored_canvas import request_canvas_metadata
         from services.generation_core.drivers.svg.native_publish import canvas_point_per_px, page_native_objects
@@ -861,6 +929,9 @@ async def _attempt_render(*, ctx, request, presentation_id, index, content, payl
             }, ensure_ascii=False, separators=(",", ":"))
     from services.generation_core.drivers.svg.embed_assets import apply_vector_icon_quality
     apply_vector_icon_quality(rendered.quality, payload)
+    from services.generation_core.drivers.svg.bar_proportion import apply_bar_proportion_advisory
+    # Advisory only until its precision is labelled: it never fails the page.
+    apply_bar_proportion_advisory(rendered.quality, final, width=ctx.canvas.width_px, height=ctx.canvas.height_px)
     from services.svg_presentation_checkpoint import compact_browser_metrics, with_browser_metrics
     # Persist the measured metrics once; checkpoint and publication carry the
     # bound reference, and the readers below see the exact inline view.
@@ -878,6 +949,15 @@ async def _attempt_render(*, ctx, request, presentation_id, index, content, payl
             **rendered.quality, "stage": "first_response",
         }
     payload["last_valid_svg"] = final
+    clip_repair = await _local_text_clip_repair(ctx=ctx, request=request, presentation_id=presentation_id,
+        index=index, content=content, payload=payload, svg=final, ordinal=ordinal, job=job,
+        checkpoint=checkpoint, async_session_maker=async_session_maker, write_png=write_png,
+        observations=observations, quality=measured(), template_page=template_page,
+        recovery_readability_policy=recovery_readability_policy,
+        template_source_manifest=template_source_manifest if template_page is not None else None,
+        cache_remeasurement=cache_remeasurement)
+    if clip_repair is not None:
+        return clip_repair
     if (readability_policy is not None and rendered.quality.get("passed") is False
             and not payload.get("local_readability_repair") and not (header_page and header_page.get("applied"))):
         from services.document_canvas_generation import minimal_svg_readability_repair

@@ -42,7 +42,14 @@ _POLICY_V1 = {
 # provider step keeps its unknown state, so it is never bought again.
 _POLICY = {**_POLICY_V1, "version": "svg-header-capacity-fallback/v2",
            "optional_stage_failures": ["provider_step", "representative_page"]}
-_POLICIES = (_POLICY_V1, _POLICY)
+# v3 keeps the v2 fallback rules and drops the asset-offer manifest from the
+# design call input (see ``design_input_without_asset_manifest``), so the design
+# call no longer waits for the infographic plan and icon selection. A plan
+# sealed with v1 or v2 replays with its original design input bytes.
+_POLICY_V3 = {**_POLICY, "version": "svg-header-capacity-fallback/v3",
+              "design_input": "without-asset-manifest/v1"}
+_POLICIES = (_POLICY_V1, _POLICY, _POLICY_V3)
+_OPTIONAL_FAILURE_POLICY_VERSIONS = frozenset({_POLICY["version"], _POLICY_V3["version"]})
 _BOUNDED_FAILURES = frozenset({
     "svg_common_header_input_capacity_exceeded",
     "svg_common_header_candidates_ineligible",
@@ -124,7 +131,19 @@ def evaluate_header_capacity(plan, *, text, schema, images=(), envelope):
 def reduces_optional_stage_failures(plan):
     """Whether a provider or representative failure of the header stage reduces the header."""
     return (isinstance(plan, Mapping) and plan.get("schema") == HEADER_DESIGN_PLAN_VERSION
-            and isinstance(plan.get("policy"), Mapping) and plan["policy"].get("version") == _POLICY["version"])
+            and isinstance(plan.get("policy"), Mapping)
+            and plan["policy"].get("version") in _OPTIONAL_FAILURE_POLICY_VERSIONS)
+
+
+def design_input_without_asset_manifest(plan):
+    """Whether this plan's design call input omits the page asset manifests.
+
+    Only a plan sealed with the v3 policy does; earlier plans replay the design
+    input they were sealed with, which carries the representative's manifest.
+    """
+    return (isinstance(plan, Mapping) and plan.get("schema") == HEADER_DESIGN_PLAN_VERSION
+            and isinstance(plan.get("policy"), Mapping)
+            and plan["policy"].get("design_input") == _POLICY_V3["design_input"])
 
 
 def permits_header_fallback(plan, reason, document):
@@ -364,7 +383,7 @@ def seal_new_header_design_plan(request, *, explicit_revision=False):
     from services.svg_authoring_profile import new_svg_admission_profile
     new_svg_admission_profile(request)
     plan = {"schema": HEADER_DESIGN_PLAN_VERSION, "stage": "header", **_LIMITS,
-            "policy": deepcopy(_POLICY),
+            "policy": deepcopy(_POLICY_V3),
             "free_compatible": getattr(request, "common_header_design", None) is None,
             "capability_version": "svg-static/v2", "required_capabilities": ["structuredOutput", "vision"],
             "seed": secrets.token_hex(16), "input_digest": canonical_json_digest(_identity(request))}

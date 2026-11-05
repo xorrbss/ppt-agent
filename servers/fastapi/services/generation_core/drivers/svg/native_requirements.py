@@ -6,17 +6,59 @@ import json
 import re
 import unicodedata
 
+from collections.abc import Mapping
+
 from services.generation_core.drivers.svg.native_publish import page_native_objects
 
+#: Requirement revisions. A deck reads its revision from its frozen style snapshot
+#: (:data:`SNAPSHOT_REVISION_KEY`); a snapshot without the key, and every caller that passes
+#: no revision, keeps v2 exactly, so a deck admitted before v3 resumes with the derivation it
+#: was authored and checked with.
+#:
+#: v3 (2026-11-05, docs/svg-mode-improvement-plan-20261105.md item S2) differs from v2 in the
+#: literal grammar only: ``30%p`` / ``30%포인트`` is a unit, a trailing ``(note)`` after a value
+#: joins its label, a comma inside brackets (or in a ``;``-separated list) stays in its label,
+#: a label ending in a Korean magnitude amount (``1조 2,000억원``) refuses the line instead of
+#: misreading ``1조`` as label text, and a non-data diagram marker (``간트 차트:``) is not a
+#: chart. A v3 deck also has prose series written as ``chart:`` lines at outline time
+#: (``prose_chart_literal.py``); that derivation lives in the pinned outline, not here.
 REQUIREMENTS_VERSION = "svg-native-requirements/v2"
+REQUIREMENTS_VERSION_V3 = "svg-native-requirements/v3"
+REQUIREMENTS_REVISIONS = (REQUIREMENTS_VERSION, REQUIREMENTS_VERSION_V3)
+#: The revision a fresh svg admission pins.
+ADMITTED_REQUIREMENTS_REVISION = REQUIREMENTS_VERSION_V3
+SNAPSHOT_REVISION_KEY = "native_requirements_revision"
 _NUMBER = r"[-+]?(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?"
 _UNIT = r"(?:%|％|[A-Za-z가-힣][A-Za-z가-힣/²³]*)"
+_UNIT_V3 = r"(?:[%％](?:p|포인트)?|[A-Za-z가-힣][A-Za-z가-힣/²³]*)"
 _PAIR = re.compile(rf"\s*(.+?)\s+([$€£₩¥]?)({_NUMBER})\s*({_UNIT})?\s*")
+_PAIR_V3 = re.compile(rf"\s*(.+?)\s+([$€£₩¥]?)({_NUMBER})\s*({_UNIT_V3})?\s*(\([^()]*\))?\s*")
+#: A label that ends in a Korean magnitude amount: the value is a compound such as ``1조 2,000억원``.
+_COMPOUND_AMOUNT_LABEL = re.compile(rf"(?:^|\s){_NUMBER}\s*(?:조|억|만|천)$")
 _CHART = re.compile(r"(?:\bchart\b|차트)\s*[:：]\s*([^\n]+)", re.I)
+#: Diagram names that precede a ``chart:``/``차트:`` marker without introducing numeric data.
+#: (A "cash flow chart" is a data chart, so plain "flow"/"흐름" is not listed.)
+_NON_DATA_CHART = re.compile(
+    r"(?:간트|조직|플로우|순서|프로세스|마인드\s*맵|\b(?:gantt|org(?:ani[sz]ation(?:al)?)?|process|pert|mind\s*map))"
+    r"\s*$", re.I)
+
 _SERIES_NAME = r"(?:[^,;:：()]|\([^()]*\))+"
 _NAMED_SERIES = re.compile(rf"\s*({_SERIES_NAME}?)\s*[:：]\s*(.+)")
 _TABLE_PREFIX = re.compile(r"^[^|]*?(?:\btable\b|(?<![가-힣])표)\s*[:：]\s*", re.I)
 _CELL_BREAK = re.compile(r"<br[ \t]*/?>", re.I)
+
+
+def requirements_revision(snapshot: object) -> str:
+    """The requirement revision a deck's frozen style snapshot pins (v2 when it pins none)."""
+    return _revision(snapshot.get(SNAPSHOT_REVISION_KEY) if isinstance(snapshot, Mapping) else None)
+
+
+def _revision(value: str | None) -> str:
+    if value is None:
+        return REQUIREMENTS_VERSION
+    if value not in REQUIREMENTS_REVISIONS:
+        raise ValueError("svg_native_requirements_revision_invalid")
+    return value
 
 
 def _compact(value: str) -> str:
@@ -70,13 +112,62 @@ def _tables(content: str) -> list[dict]:
     return tables
 
 
-def _chart_pairs(source: str) -> dict | None:
+_PAIR_SEPARATOR = r"[,;]\s*(?!\d{3}(?:\D|$))"
+
+
+def _split_outside_brackets(source: str, separator: str) -> list[str]:
+    """Split on ``separator`` except inside (), [] or full-width brackets."""
+    parts, depth, start = [], 0, 0
+    pattern = re.compile(separator)
+    position = 0
+    while position < len(source):
+        char = source[position]
+        if char in "([（［":
+            depth += 1
+        elif char in ")]）］" and depth:
+            depth -= 1
+        elif depth == 0:
+            match = pattern.match(source, position)
+            if match and match.end() > position:
+                parts.append(source[start:position])
+                start = position = match.end()
+                continue
+        position += 1
+    parts.append(source[start:])
+    return parts
+
+
+def _pair_parts(source: str, revision: str) -> list[str]:
+    if revision == REQUIREMENTS_VERSION:
+        return re.split(_PAIR_SEPARATOR, source)
+    # v3: a ';'-separated list keeps a comma in its labels when every part reads as one pair
+    # and no part also reads as several comma-separated pairs (that would be ambiguous).
+    if ";" in source:
+        parts = _split_outside_brackets(source, r";\s*")
+        if len(parts) >= 2 and all(_PAIR_V3.fullmatch(part) for part in parts) and not any(
+                len(pieces) > 1 and all(_PAIR_V3.fullmatch(piece) for piece in pieces)
+                for pieces in (_split_outside_brackets(part, _PAIR_SEPARATOR) for part in parts)):
+            return parts
+    return _split_outside_brackets(source, _PAIR_SEPARATOR)
+
+
+def _chart_pairs(source: str, revision: str = REQUIREMENTS_VERSION) -> dict | None:
     pairs = []
-    for part in re.split(r"[,;]\s*(?!\d{3}(?:\D|$))", source):
-        match = _PAIR.fullmatch(part)
-        if not match:
-            return None
-        label, prefix, value, suffix = match.groups()
+    for part in _pair_parts(source, revision):
+        if revision == REQUIREMENTS_VERSION:
+            match = _PAIR.fullmatch(part)
+            if not match:
+                return None
+            label, prefix, value, suffix = match.groups()
+        else:
+            match = _PAIR_V3.fullmatch(part)
+            if not match:
+                return None
+            label, prefix, value, suffix, note = match.groups()
+            label = label.strip()
+            if _COMPOUND_AMOUNT_LABEL.search(label):
+                return None
+            label += note or ""
         pairs.append((label.strip(), value.replace(",", ""), prefix + (suffix or "")))
     if len(pairs) < 2:
         return None
@@ -133,19 +224,25 @@ def _chart_unit_contract(chart: dict) -> None:
             for name, unit in series_units]
 
 
-def _charts(content: str) -> list[dict]:
+def _charts(content: str, revision: str | None = None) -> list[dict]:
+    revision = _revision(revision)
+    unit_pattern = _UNIT if revision == REQUIREMENTS_VERSION else _UNIT_V3
     charts = []
     for marker in _CHART.finditer(content):
+        if revision != REQUIREMENTS_VERSION:
+            line_start = content.rfind("\n", 0, marker.start()) + 1
+            if _NON_DATA_CHART.search(content[line_start:marker.start()]):
+                continue
         segments = re.split(r"\.(?!\d)", marker.group(1), maxsplit=1)
         source = segments[0].strip()
-        unit = re.fullmatch(rf"\s*(?:단위|unit)\s*[:：]?\s*({_UNIT})\s*\.?\s*", segments[1], re.I) if len(segments) > 1 else None
+        unit = re.fullmatch(rf"\s*(?:단위|unit)\s*[:：]?\s*({unit_pattern})\s*\.?\s*", segments[1], re.I) if len(segments) > 1 else None
         series_parts = re.split(rf";\s*(?={_SERIES_NAME}[:：])", source)
         named_parts = [_NAMED_SERIES.fullmatch(part) for part in series_parts]
         named = []
         if all(named_parts):
             for part in named_parts:
                 name, values = part.groups()
-                parsed = _chart_pairs(values)
+                parsed = _chart_pairs(values, revision)
                 if parsed is None:
                     break
                 named.append({"name": name.strip(), **parsed})
@@ -154,7 +251,7 @@ def _charts(content: str) -> list[dict]:
             chart = {"categories": named[0]["categories"], "series": [
                 {key: value for key, value in item.items() if key != "categories"} for item in named]}
         else:
-            chart = _chart_pairs(source)
+            chart = _chart_pairs(source, revision)
         if chart is None:
             continue
         if unit:
@@ -164,21 +261,36 @@ def _charts(content: str) -> list[dict]:
     return charts
 
 
-def requested_native_data(content: str) -> dict:
-    """Recognize independent literal blocks; never derive values from prose."""
+def requested_native_data(content: str, revision: str | None = None) -> dict:
+    """Recognize independent literal blocks; never derive values from prose.
+
+    ``revision`` is the deck's pinned requirement revision (:func:`requirements_revision`);
+    omitted, it is v2."""
+    revision = _revision(revision)
     if not isinstance(content, str):
         return {}
-    tables, charts = _tables(content), _charts(content)
+    tables, charts = _tables(content), _charts(content, revision)
     if not tables and not charts:
         return {}
-    result = {"version": REQUIREMENTS_VERSION, "tables": tables, "charts": charts}
+    result = {"version": revision, "tables": tables, "charts": charts}
     if len(tables) == 1:
         result["tableRows"] = tables[0]["rows"]
     return result
 
 
-def format_requested_native_data(content: str) -> str:
-    requirements = requested_native_data(content)
+def same_requirements_as_v2(content: str, snapshot: object) -> bool:
+    """Whether the snapshot's revision reads ``content`` exactly as v2 does (version aside)."""
+    revision = requirements_revision(snapshot)
+    if revision == REQUIREMENTS_VERSION:
+        return True
+
+    def data(value: dict) -> dict:
+        return {key: item for key, item in value.items() if key != "version"}
+    return data(requested_native_data(content, revision)) == data(requested_native_data(content))
+
+
+def format_requested_native_data(content: str, revision: str | None = None) -> str:
+    requirements = requested_native_data(content, revision)
     if not requirements:
         return ""
     requirements = {key: value for key, value in requirements.items() if key != "tableRows"}
@@ -264,8 +376,9 @@ def _chart_matches(chart: dict, expected: dict) -> bool:
     return True
 
 
-def apply_requested_native_quality(quality: dict, payload: dict, svg: str, content: str, *, pt_per_px: float) -> None:
-    requirements = requested_native_data(content)
+def apply_requested_native_quality(quality: dict, payload: dict, svg: str, content: str, *, pt_per_px: float,
+                                   revision: str | None = None) -> None:
+    requirements = requested_native_data(content, revision)
     if not requirements:
         return
     wire, summary = page_native_objects({**payload, "svg_content": svg}, pt_per_px=pt_per_px)
@@ -287,7 +400,7 @@ def apply_requested_native_quality(quality: dict, payload: dict, svg: str, conte
             failures.append({"kind": "native_requested_chart_missing", **expected})
         else:
             remaining.remove(match)
-    quality["requestedNativeObjects"] = {"version": REQUIREMENTS_VERSION,
+    quality["requestedNativeObjects"] = {"version": requirements["version"],
         "requiredTables": len(requirements["tables"]), "requiredCharts": len(requirements["charts"]),
         "passed": not failures, "projection": summary,
         "repairInstruction": "Preserve each independent table/chart with its exact data and all series in its own data-native-table/data-native-chart group. Retain explicit source cell paragraph breaks; additional visual wrapping may occur within a paragraph, but cannot replace its original boundary with a space. Retain every required unit label with its series association in the declared chart title. Unsupported unit mappings cannot be repaired by changing values or inventing units. Fix rejected declaration geometry without changing its meaning."}

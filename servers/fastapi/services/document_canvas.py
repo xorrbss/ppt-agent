@@ -8,6 +8,7 @@ from __future__ import annotations
 import json
 from decimal import Decimal
 
+from models.canvas_defaults import DEFAULT_CANVAS_WIDTH_PX
 from models.document_canvas import (  # noqa: F401 - re-exported for callers
     DOCUMENT_CANVAS_A4_CANDIDATE_ENABLED,
     DOCUMENT_CANVAS_A4_RELEASE_VERIFIED,
@@ -52,7 +53,7 @@ def document_canvas_from_source_slide_size(
         if not (50 <= width_mm <= 1000 and 50 <= height_mm <= 1000
                 and Decimal("0.25") <= width_mm / height_mm <= 4):
             raise ValueError("svg_source_canvas_not_supported")
-        logical_width = int((Decimal(1280) * width_mm / max(width_mm, height_mm))
+        logical_width = int((Decimal(DEFAULT_CANVAS_WIDTH_PX) * width_mm / max(width_mm, height_mm))
                             .to_integral_value(rounding="ROUND_HALF_UP"))
         margin = 64.0
     logical_height = int((Decimal(logical_width) * Decimal(height_emu) / Decimal(width_emu))

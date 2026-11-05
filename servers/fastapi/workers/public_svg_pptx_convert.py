@@ -179,8 +179,8 @@ def convert_pptx(paths, target, notes, canvas, *, source_preservation=None,
     if capture is not None:
         from services.svg_contract import source_digest
         from utils.hashing import canonical_json_sha256
-        if readback["nativeObjects"]["fellBack"] != 0:
-            raise ValueError("svg_generic_native_coverage_fallback")
+        # An object that could not be projected stays a drawn shape; its reason is in
+        # the receipt, which nativeObjectsDigest binds into the proof below.
         receipts = [{"source_page_id": f"slide-{index + 1}", "svg_digest": source_digest(source)}
                     for index, source in enumerate(native_coverage_sources)]
         coverage = capture.verify(target, trace_path, native_coverage_sources, receipts)

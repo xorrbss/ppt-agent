@@ -8,6 +8,7 @@ import uuid
 from fastapi import HTTPException
 from sqlalchemy import select, update
 
+from models.canvas_defaults import canvas_or_default
 from models.sql.presentation import PresentationModel
 from models.sql.reference_snapshot import ReferenceSnapshot
 from models.sql.svg_template import SvgTemplate, SvgTemplateVersion, SvgTemplateAssetBinding
@@ -412,7 +413,7 @@ class SvgTemplateOperationHandler:
             profile = await asyncio.to_thread(project_uploaded_design_reference, source_path,
                 expected_sha256=binding.sha256, media_type=binding.media_type,
                 snapshot_id=snapshot_id, snapshot_content_sha256=admitted.content_sha256,
-                width=canvas.width_px if canvas else 1280, height=canvas.height_px if canvas else 720)
+                width=canvas_or_default(canvas)[0], height=canvas_or_default(canvas)[1])
             evidence, previews = {}, {}
             if package:
                 from services.svg_templates.source_review import prepare_source_review

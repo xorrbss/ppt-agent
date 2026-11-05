@@ -104,7 +104,8 @@ def project_art_direction(design: dict) -> dict:
             "Geometry remains model-authored; examples are inspiration, never prescribed templates."
         )
         return result
-    if design.get("authoring_profile") == {"id": "art-direction-v1", "version": 8}:
+    if design.get("authoring_profile") in ({"id": "art-direction-v1", "version": 8},
+                                           {"id": "art-direction-v1", "version": 9}):
         return _project_generic_art_direction(design)
     return _project_frozen_art_direction(design)
 

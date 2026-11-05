@@ -23,6 +23,7 @@ from services.svg_pptx_font_embedding import (
     embed_trusted_fonts,
 )
 from services.svg_trusted_fonts import FONT_FAMILY, read_trusted_pretendard_faces
+from tests.support.windows_symbol_font import requires_windows_symbol_font
 
 
 def _blank_pptx(tmp_path: Path) -> Path:
@@ -107,6 +108,7 @@ def test_embed_trusted_fonts_does_not_collide_with_existing_relationship_ids(tmp
     assert existing_ids <= set(all_ids)
 
 
+@requires_windows_symbol_font
 def test_whole_page_measured_symbol_runs_and_used_font_bytes(tmp_path):
     from copy import deepcopy
     import hashlib

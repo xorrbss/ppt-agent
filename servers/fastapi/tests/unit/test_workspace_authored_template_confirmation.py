@@ -46,6 +46,7 @@ from services.authored_vnext.master.digests import canonical_digest, seal_master
 from tests.support.authored_vnext_master_fixture import master_contract_payload
 from utils.authored_styles import resolve_authored_style
 from utils.owner_context import reset_current_owner_id, set_current_owner_id
+from tests.support.environment_requirements import requires_osb_retained_reference
 
 
 TABLES = [
@@ -254,6 +255,7 @@ def test_design_intents_distinguish_keep_set_and_clear():
     assert explicit.master.intent == "clear"
 
 
+@requires_osb_retained_reference
 def test_design_admission_resolves_keep_and_clear_before_enqueue(
     tmp_path: Path, monkeypatch
 ):

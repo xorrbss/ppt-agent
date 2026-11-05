@@ -90,7 +90,8 @@ def _validate_request(value: Any) -> Mapping[str, Any]:
     if "private_diagnostic_profile" in fields and (
         value["private_diagnostic_profile"] != "fixed-glyph-dpr2/v1"
         or not has_glyph or "font_manifest_ref" not in fields
-        or value.get("width_px") != 1280 or value.get("height_px") != 720
+        or value.get("width_px") != DEFAULT_CANVAS_WIDTH_PX
+        or value.get("height_px") != DEFAULT_CANVAS_HEIGHT_PX
         or "preserved_raster_svg" in fields or "max_requests" in fields
     ):
         raise RendererPolicyError("renderer private diagnostic profile invalid")

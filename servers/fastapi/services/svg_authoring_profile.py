@@ -10,7 +10,7 @@ INTERNAL_SVG_AUTHORING_PROFILE_KEY = "_internal_svg_authoring_profile"
 
 class SvgAuthoringProfile(TypedDict):
     id: Literal["art-direction-v1"]
-    version: Literal[1, 2, 3, 4, 5, 6, 7, 8]
+    version: Literal[1, 2, 3, 4, 5, 6, 7, 8, 9]
 
 
 ART_DIRECTION_PROFILE: SvgAuthoringProfile = {"id": "art-direction-v1", "version": 1}
@@ -21,22 +21,41 @@ ART_DIRECTION_PROFILE_V5: SvgAuthoringProfile = {"id": "art-direction-v1", "vers
 ART_DIRECTION_PROFILE_V6: SvgAuthoringProfile = {"id": "art-direction-v1", "version": 6}
 ART_DIRECTION_PROFILE_V7: SvgAuthoringProfile = {"id": "art-direction-v1", "version": 7}
 ART_DIRECTION_PROFILE_V8: SvgAuthoringProfile = {"id": "art-direction-v1", "version": 8}
+# Revision nine keeps revision eight's rules, gates and receipts. It changes only the
+# author request layout -- a deck-stable system block (rules and design JSON; a
+# prompt-cache breakpoint on Anthropic) with the per-call correction and visual-intent
+# rules in the user message -- and drops operational plans from the design JSON.
+ART_DIRECTION_PROFILE_V9: SvgAuthoringProfile = {"id": "art-direction-v1", "version": 9}
+#: The revision a fresh svg admission freezes.
+CURRENT_ART_DIRECTION_PROFILE = ART_DIRECTION_PROFILE_V9
+#: Revisions that behave as revision eight everywhere outside the author request layout.
+_REVISION_EIGHT_BEHAVIOUR = frozenset({8, 9})
 
 QUALITY_RECOVERY_POLICY = {"id": "svg-quality-first", "version": 1}
 QUALITY_RECOVERY_POLICY_V2 = {"id": "svg-quality-first", "version": 2}
 REVIEW_CONTRACT_VERSION = "svg-axis-review/v2"
+#: Local review groups hold at most this many pages; a larger deck adds one
+#: global flow call after its local groups.
+REVIEW_GROUP_SIZE = 5
+#: ``svg-quality-recovery-plan/v5``: a deck of at most this many pages gets one
+#: full review per round instead of local groups plus a serial global call. The
+#: full scope reviews every page and the deck flow in one call; its schema and
+#: prompt are page-count agnostic, and the saved quality review already sends
+#: whole decks through it (``services/svg_quality_recovery_review.py``).
+FULL_REVIEW_PAGE_LIMIT = 8
 
 
-def _read_only_review_plan(slide_count: int) -> dict:
+def _read_only_review_plan(slide_count: int, *, full_review_page_limit: int = REVIEW_GROUP_SIZE) -> dict:
     rounds = 1 if slide_count == 1 else 2
-    groups = (slide_count + 4) // 5 + (slide_count > 5)
+    groups = (1 if slide_count <= full_review_page_limit
+              else (slide_count + REVIEW_GROUP_SIZE - 1) // REVIEW_GROUP_SIZE + 1)
     calls = rounds * groups * 2
     plan = dict(schema="svg-quality-recovery-plan/v3", review_round_limit=rounds,
-                page_attempt_limit=3, slide_count=slide_count, review_group_size=5,
+                page_attempt_limit=3, slide_count=slide_count, review_group_size=REVIEW_GROUP_SIZE,
                 review_call_limit=calls, review_retry_limit=1)
     if slide_count > 1:
         from services.svg_final_selected_continuation import NAMESPACE
-        local_groups = (slide_count + 4) // 5
+        local_groups = (slide_count + REVIEW_GROUP_SIZE - 1) // REVIEW_GROUP_SIZE
         control = dict(schema="svg-final-selected-review-control/v2", namespace=NAMESPACE,
                        page_count=slide_count, local_group_size=5, local_group_limit=local_groups,
                        global_format_retry_limit=0, review_call_limit=(local_groups + 1) * 2,
@@ -61,6 +80,21 @@ def _axis_review_plan(slide_count: int) -> dict:
             "review_contract_version": REVIEW_CONTRACT_VERSION}
 
 
+def _full_review_plan(slide_count: int) -> dict:
+    """v4 with one full review per round for decks of at most ``FULL_REVIEW_PAGE_LIMIT`` pages."""
+    return {**_read_only_review_plan(slide_count, full_review_page_limit=FULL_REVIEW_PAGE_LIMIT),
+            "schema": "svg-quality-recovery-plan/v5", "review_contract_version": REVIEW_CONTRACT_VERSION,
+            "full_review_page_limit": FULL_REVIEW_PAGE_LIMIT}
+
+
+#: Each sealed retry-plan schema and the builder its stored bytes must equal.
+_RETRY_PLAN_BUILDERS = {
+    "svg-quality-recovery-plan/v3": _read_only_review_plan,
+    "svg-quality-recovery-plan/v4": _axis_review_plan,
+    "svg-quality-recovery-plan/v5": _full_review_plan,
+}
+
+
 def validate_quality_recovery_policy(value: object) -> dict | None:
     if value is None:
         return None
@@ -79,7 +113,7 @@ def read_quality_recovery_policy(snapshot: Mapping | None) -> dict | None:
     if snapshot is None:
         return None
     policy = validate_quality_recovery_policy(snapshot.get("quality_recovery_policy"))
-    if policy is not None and read_authoring_profile(snapshot) != ART_DIRECTION_PROFILE_V8:
+    if policy is not None and (read_authoring_profile(snapshot) or {}).get("version") not in _REVISION_EIGHT_BEHAVIOUR:
         raise ValueError("svg_quality_recovery_profile_invalid")
     return policy
 
@@ -115,7 +149,7 @@ def seal_new_quality_recovery_plan(request: object, slide_count: int) -> dict | 
     single_page = slide_count == 1
     policy = request_quality_recovery_policy(request) or dict(QUALITY_RECOVERY_POLICY_V2)
     if policy["version"] == 2:
-        plan = _axis_review_plan(slide_count)
+        plan = _full_review_plan(slide_count)
         request._svg_quality_recovery_plan = plan
         request._svg_quality_recovery_policy = policy
         return plan
@@ -138,18 +172,12 @@ def read_quality_recovery_plan(snapshot: Mapping) -> dict | None:
     if policy is None:
         return None
     plan = snapshot.get("quality_recovery_plan")
-    if isinstance(plan, Mapping) and plan.get("schema") == "svg-quality-recovery-plan/v4":
+    builder = _RETRY_PLAN_BUILDERS.get(plan.get("schema")) if isinstance(plan, Mapping) else None
+    if builder is not None:
         count = plan.get("slide_count")
         if (policy["version"] != 2 or type(count) is not int or count < 1
                 or canonical_json_digest(plan, allow_nan=True)
-                != canonical_json_digest(_axis_review_plan(count), allow_nan=True)):
-            raise ValueError("svg_quality_recovery_plan_invalid")
-        return dict(plan)
-    if isinstance(plan, Mapping) and plan.get("schema") == "svg-quality-recovery-plan/v3":
-        count = plan.get("slide_count")
-        if (policy["version"] != 2 or type(count) is not int or count < 1
-                or canonical_json_digest(plan, allow_nan=True)
-                != canonical_json_digest(_read_only_review_plan(count), allow_nan=True)):
+                != canonical_json_digest(builder(count), allow_nan=True)):
             raise ValueError("svg_quality_recovery_plan_invalid")
         return dict(plan)
     single_page = (isinstance(plan, Mapping)
@@ -191,7 +219,7 @@ def read_quality_recovery_plan(snapshot: Mapping) -> dict | None:
 
 def has_versioned_review_retries(snapshot: Mapping) -> bool:
     plan = snapshot.get("quality_recovery_plan") or {}
-    if plan.get("schema") not in {"svg-quality-recovery-plan/v3", "svg-quality-recovery-plan/v4"}:
+    if plan.get("schema") not in _RETRY_PLAN_BUILDERS:
         return False
     return read_quality_recovery_plan(snapshot).get("review_retry_limit") is not None
 
@@ -299,7 +327,8 @@ def svg_quality_review_admission_budget(request: object, slide_count: int) -> in
             if request_quality_recovery_policy(request) is None:
                 raise ValueError("svg_quality_recovery_plan_invalid")
             # Validate the same immutable representation admission will freeze.
-            snapshot = {"authoring_profile": dict(ART_DIRECTION_PROFILE_V8),
+            snapshot = {"authoring_profile": dict(request_authoring_profile(request)
+                                                  or CURRENT_ART_DIRECTION_PROFILE),
                         "quality_recovery_policy": request_quality_recovery_policy(request),
                         "quality_recovery_plan": dict(plan)}
             snapshot["digest"] = canonical_json_digest(snapshot, allow_nan=True)
@@ -334,16 +363,19 @@ def validate_authoring_profile(value: object) -> SvgAuthoringProfile | None:
         return dict(ART_DIRECTION_PROFILE_V7)
     if value == "art-direction-v1@8":
         return dict(ART_DIRECTION_PROFILE_V8)
+    if value == "art-direction-v1@9":
+        return dict(ART_DIRECTION_PROFILE_V9)
     if (
         isinstance(value, Mapping)
         and set(value) == {"id", "version"}
         and value.get("id") == ART_DIRECTION_PROFILE["id"]
         and type(value.get("version")) is int
-        and value["version"] in {1, 2, 3, 4, 5, 6, 7, 8}
+        and value["version"] in {1, 2, 3, 4, 5, 6, 7, 8, 9}
     ):
         return dict({1: ART_DIRECTION_PROFILE, 2: ART_DIRECTION_PROFILE_V2, 3: ART_DIRECTION_PROFILE_V3,
                      4: ART_DIRECTION_PROFILE_V4, 5: ART_DIRECTION_PROFILE_V5, 6: ART_DIRECTION_PROFILE_V6,
-                     7: ART_DIRECTION_PROFILE_V7, 8: ART_DIRECTION_PROFILE_V8}[value["version"]])
+                     7: ART_DIRECTION_PROFILE_V7, 8: ART_DIRECTION_PROFILE_V8,
+                     9: ART_DIRECTION_PROFILE_V9}[value["version"]])
     raise ValueError("svg_authoring_profile_invalid")
 
 
@@ -366,9 +398,25 @@ def new_svg_admission_profile(request: object) -> dict[str, object] | None:
     profile = request_authoring_profile(request)
     if profile is not None or getattr(request, "_svg_authoring_profile_selected", False):
         return profile
-    profile = validate_authoring_profile("art-direction-v1@8")
+    profile = dict(CURRENT_ART_DIRECTION_PROFILE)
     request._svg_authoring_profile = profile
     return profile
+
+
+def behaviour_profile(profile: SvgAuthoringProfile | None) -> SvgAuthoringProfile | None:
+    """The revision whose rules, quality gates and receipts ``profile`` follows.
+
+    Revision nine is revision eight with a cacheable author request layout, so every
+    check outside that layout reads it as revision eight.
+    """
+    if profile is not None and profile["version"] in _REVISION_EIGHT_BEHAVIOUR:
+        return dict(ART_DIRECTION_PROFILE_V8)
+    return profile
+
+
+def uses_cacheable_author_layout(profile: SvgAuthoringProfile | None) -> bool:
+    """Whether the author request splits into a deck-stable system block and a per-call part."""
+    return profile is not None and profile["version"] == 9
 
 
 def read_authoring_profile(snapshot: Mapping) -> SvgAuthoringProfile | None:

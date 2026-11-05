@@ -92,6 +92,55 @@ test("workspace E2E is an always-captured PR gate on Bitbucket", () => {
   assert.match(pipeline, /capture-on: always/u);
 });
 
+test("the svg unit subset is a deterministic, parallel PR and main gate on Bitbucket", () => {
+  const pipeline = read("bitbucket-pipelines.yml");
+  const pyproject = read("servers/fastapi/pyproject.toml");
+  const lockfile = read("servers/fastapi/uv.lock");
+  const subsetList = read("servers/fastapi/tests/svg_unit_subset.txt")
+    .split("\n")
+    .filter((line) => line.trim() !== "");
+
+  assert.match(pipeline, /name: FastAPI svg unit subset/u);
+  assert.match(
+    pipeline,
+    /pull-requests:\s*\n\s*"\*\*":\s*[\s\S]*\*fastapi-svg-unit-subset[\s\S]*branches:/u,
+  );
+  assert.match(
+    pipeline,
+    /branches:\s*\n\s*main:\s*[\s\S]*\*fastapi-svg-unit-subset[\s\S]*custom:/u,
+  );
+  // The same environment the CLAUDE.md CI section prescribes for pytest.
+  assert.match(pipeline, /export DISABLE_IMAGE_GENERATION=true/u);
+  assert.match(pipeline, /export DATABASE_URL=sqlite\+aiosqlite:\/\/\/\.\/test\.db/u);
+  assert.match(pipeline, /export APP_DATA_DIRECTORY=\/tmp\/app_data/u);
+  // The list must match its derivation rule before it is trusted, then it is the
+  // only thing pytest is handed, so the step is deterministic.
+  assert.match(
+    pipeline,
+    /uv run python scripts\/svg_unit_subset\.py --check\s*\n\s*-\s*\.\.\/\.\.\/\.bitbucket-uv\/bin\/uv run pytest \$\(cat tests\/svg_unit_subset\.txt\) -n 4 --dist loadfile/u,
+  );
+  assert.match(pipeline, /name: FastAPI svg unit subset\s*\n\s*size: 2x\s*\n\s*max-time: 30/u);
+  // pytest-xdist is a locked dev dependency, not an ad-hoc install.
+  assert.match(pyproject, /"pytest-xdist>=3\.8\.0"/u);
+  assert.match(lockfile, /name = "pytest-xdist"\nversion = "3\.8\.0"/u);
+  assert.doesNotMatch(pipeline, /pip install[^\n]*pytest-xdist/u);
+  // The checked-in list is non-trivial, sorted, unique and made of existing unit files.
+  assert.ok(subsetList.length > 400, `svg unit subset has ${subsetList.length} files`);
+  assert.deepEqual(subsetList, [...subsetList].sort());
+  assert.equal(new Set(subsetList).size, subsetList.length);
+  for (const entry of subsetList) {
+    assert.match(entry, /^tests\/unit\/test_[A-Za-z0-9_]+\.py$/u);
+    assert.doesNotThrow(() => read(`servers/fastapi/${entry}`), entry);
+  }
+  for (const anchor of [
+    "tests/unit/test_svg_generation_admission.py",
+    "tests/unit/test_svg_export_deadline_precheck.py",
+    "tests/unit/test_authored_canvas_defaults.py",
+  ]) {
+    assert.ok(subsetList.includes(anchor), `${anchor} must stay in the svg unit subset`);
+  }
+});
+
 test("chat-first deployment configuration is required by the Bitbucket CI suite", () => {
   const rootPackage = readJson("package.json");
   const pipeline = read("bitbucket-pipelines.yml");

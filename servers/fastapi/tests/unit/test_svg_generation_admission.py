@@ -3,6 +3,7 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 import pytest
+import sqlalchemy
 from fastapi import HTTPException
 
 from models.authored_vnext.deck import MasterDigestPin
@@ -18,6 +19,42 @@ from services.svg_generation_admission import (
     source_svg_capability,
 )
 from tests.support.authored_vnext_master_fixture import master_contract_payload
+
+
+def _json_plain(value):
+    if isinstance(value, SimpleNamespace):
+        return {key: _json_plain(item) for key, item in vars(value).items()}
+    if isinstance(value, (list, tuple)):
+        return [_json_plain(item) for item in value]
+    if isinstance(value, uuid.UUID):
+        return str(value)
+    return value
+
+
+class _SourceManifestAsset(SimpleNamespace):
+    """Stub of a loaded source manifest: partial recovery seals it by ``model_dump``."""
+
+    def model_dump(self, **_kwargs):
+        return {key: _json_plain(value) for key, value in vars(self).items()}
+
+
+def _source_manifest_asset(**fields):
+    return _SourceManifestAsset(**fields)
+
+
+
+def _source_manifest_reference(created_by_operation_id):
+    """Stub of the artifact reference ``resolve_ref`` returns for a source manifest.
+
+    Partial recovery binds the reference's kind and media type before it loads
+    the manifest, so a stub must carry them.
+    """
+
+    return SimpleNamespace(
+        kind="source-manifest",
+        media_type="application/json",
+        created_by_operation_id=created_by_operation_id,
+    )
 
 
 def _v2_header_request():
@@ -2112,7 +2149,7 @@ def test_resolve_master_rules_maps_pipeline_errors_to_409():
     assert excinfo.value.status_code == 409
 
 
-@pytest.mark.parametrize("profile_id", [None, 'current-v4', 'art-direction-v1', 'art-direction-v1@2', 'art-direction-v1@3', 'art-direction-v1@4', 'art-direction-v1@5', 'art-direction-v1@6', 'art-direction-v1@7', 'art-direction-v1@8'])
+@pytest.mark.parametrize("profile_id", [None, 'current-v4', 'art-direction-v1', 'art-direction-v1@2', 'art-direction-v1@3', 'art-direction-v1@4', 'art-direction-v1@5', 'art-direction-v1@6', 'art-direction-v1@7', 'art-direction-v1@8', 'art-direction-v1@9'])
 def test_authoring_profile_staging_preserves_legacy_and_frozen_new_identity(monkeypatch, profile_id):
     from models.generate_presentation_request import GeneratePresentationRequest
     from services.presentation_generation_staging import _durable_request_payload, _request_from_durable_payload
@@ -2138,18 +2175,22 @@ def test_authoring_profile_staging_preserves_legacy_and_frozen_new_identity(monk
         assert INTERNAL_SVG_AUTHORING_PROFILE_KEY not in payload
         return
     snapshot = payload["_internal_svg_style_snapshot"]
-    expected = {'art-direction-v1': ART_DIRECTION_PROFILE, 'art-direction-v1@2': ART_DIRECTION_PROFILE_V2, 'art-direction-v1@3': ART_DIRECTION_PROFILE_V3, 'art-direction-v1@4': ART_DIRECTION_PROFILE_V4, 'art-direction-v1@5': ART_DIRECTION_PROFILE_V5, 'art-direction-v1@6': ART_DIRECTION_PROFILE_V6, 'art-direction-v1@7': ART_DIRECTION_PROFILE_V7, None: {'id': 'art-direction-v1', 'version': 8}, 'art-direction-v1@8': {'id': 'art-direction-v1', 'version': 8}}[profile_id]
+    expected = {'art-direction-v1': ART_DIRECTION_PROFILE, 'art-direction-v1@2': ART_DIRECTION_PROFILE_V2, 'art-direction-v1@3': ART_DIRECTION_PROFILE_V3, 'art-direction-v1@4': ART_DIRECTION_PROFILE_V4, 'art-direction-v1@5': ART_DIRECTION_PROFILE_V5, 'art-direction-v1@6': ART_DIRECTION_PROFILE_V6, 'art-direction-v1@7': ART_DIRECTION_PROFILE_V7, None: {'id': 'art-direction-v1', 'version': 9}, 'art-direction-v1@8': {'id': 'art-direction-v1', 'version': 8}, 'art-direction-v1@9': {'id': 'art-direction-v1', 'version': 9}}[profile_id]
     assert payload[INTERNAL_SVG_AUTHORING_PROFILE_KEY] == expected
     assert snapshot["authoring_profile"] == expected
-    new_contract_keys = {"readability_policy", "common_header_design_plan"} if profile_id is None else set()
+    new_contract_keys = ({"readability_policy", "common_header_design_plan", "native_requirements_revision"}
+                         if profile_id is None else set())
     if profile_id is None:
         from services.document_canvas_generation import validate_svg_readability_policy
         from services.svg_common_header_design_plan import validate_header_design_plan
+
+        assert snapshot["native_requirements_revision"] == "svg-native-requirements/v3"
 
         assert validate_svg_readability_policy(snapshot["readability_policy"])["minimum_font_pt"] == 9
         assert validate_header_design_plan(snapshot["common_header_design_plan"])["schema"] == "svg-common-header-design-plan/v3"
     else:
         assert "readability_policy" not in snapshot
+        assert "native_requirements_revision" not in snapshot
     assert {key: value for key, value in snapshot.items() if key not in {"authoring_profile", "digest"} | new_contract_keys} == {
         key: value for key, value in baseline["_internal_svg_style_snapshot"].items() if key != "digest"
     }
@@ -2218,7 +2259,7 @@ def test_frozen_v1_authoring_cannot_be_replayed_as_v2(monkeypatch, target_profil
         _request_from_durable_payload(payload)
 
 
-@pytest.mark.parametrize("profile", ["future-v2", "art-direction-v1@9", {"id": "art-direction-v1", "version": 9}, {"id": "art-direction-v1", "version": True}])
+@pytest.mark.parametrize("profile", ["future-v2", "art-direction-v1@10", {"id": "art-direction-v1", "version": 10}, {"id": "art-direction-v1", "version": True}])
 def test_unknown_durable_authoring_profile_fails_closed(profile):
     from services.presentation_generation_staging import _request_from_durable_payload
     from services.svg_authoring_profile import INTERNAL_SVG_AUTHORING_PROFILE_KEY
@@ -3108,6 +3149,10 @@ def test_partial_recovery_live_heartbeat_preserves_authority_and_history(monkeyp
                     job_selects[str(result.id)] += 1
                     if result.id == jobs[1].id and mutate_payload[0] is not None:
                         mutate_payload[0](operations[1].request_payload)
+                if result is not None and statement.column_descriptions[0]["name"] == "id":
+                    # ``select(Model.id)`` transfers only the identity; the
+                    # session's ``get`` then supplies the row (edge verification).
+                    return result.id
                 return result
 
             async def get(self, model, identifier, **kwargs):
@@ -3149,9 +3194,11 @@ def test_partial_recovery_live_heartbeat_preserves_authority_and_history(monkeyp
             return seals
 
         def counted_digest(value):
-            if (isinstance(value, list) and len(value) == 2 and isinstance(value[0], dict)
-                    and value[0].get("id") in {str(row.id) for row in operations[1:]}):
-                canonical_calls[value[0]["id"]] += 1
+            # The operation fingerprint is the digest of ``_operation_projection``:
+            # the control fields plus ``request_payload`` in one mapping.
+            if (isinstance(value, dict) and "request_payload" in value
+                    and value.get("id") in {str(row.id) for row in operations[1:]}):
+                canonical_calls[value["id"]] += 1
             return real_digest(value)
 
         original_operation_fingerprint = recovery._EpisodeVerification.operation_fingerprint
@@ -3171,7 +3218,7 @@ def test_partial_recovery_live_heartbeat_preserves_authority_and_history(monkeyp
         def capture_owned_snapshot(verifier, operation, *args, **kwargs):
             result = original_operation_fingerprint(verifier, operation, *args, **kwargs)
             if result[1] is not None:
-                fingerprint_key, snapshot = result[1]
+                fingerprint_key, snapshot, *_marshalled = result[1]
                 assert not mutable_ids(snapshot).intersection(mutable_ids(operation.request_payload))
                 owned_snapshots[id(snapshot)] = (verifier, fingerprint_key, snapshot, deepcopy(snapshot))
             return result
@@ -3191,6 +3238,18 @@ def test_partial_recovery_live_heartbeat_preserves_authority_and_history(monkeyp
             scoped.setattr(recovery, "_fresh_payload_storage_seals", fresh_seals)
             scoped.setattr("models.sql.workspace.get_workspace_owner_scope", lambda: str(owner))
             scoped.setattr(recovery, "digest", counted_digest)
+
+            real_inspect = sqlalchemy.inspect
+
+            def inspect_fixture_rows(subject, *args, **kwargs):
+                # Node proofs inspect the live ORM state of each proven row.
+                # Fixture rows are plain namespaces that are never expired or
+                # detached, so they report an empty, attached state.
+                if isinstance(subject, HistoryRow):
+                    return SimpleNamespace(expired_attributes=frozenset(), detached=False)
+                return real_inspect(subject, *args, **kwargs)
+
+            scoped.setattr(sqlalchemy, "inspect", inspect_fixture_rows)
             scoped.setattr(recovery._EpisodeVerification, "operation_fingerprint", capture_owned_snapshot)
             scoped.setattr(recovery, "_json_fingerprint_snapshot", count_owned_clone)
             proof = recovery._EpisodeVerification(history_session)
@@ -3232,7 +3291,7 @@ def test_partial_recovery_live_heartbeat_preserves_authority_and_history(monkeyp
             historical = operations[1]
             direct_payload = deepcopy(historical.request_payload)
             memo_keys = tuple(proof.operation_fingerprints)
-            direct_expected = real_digest([recovery._operation_control(historical), direct_payload])
+            direct_expected = real_digest(recovery._operation_projection(historical))
             before_direct = canonical_calls[str(historical.id)]
             direct_value, direct_key = proof.operation_fingerprint(historical, None, require_current_code=False)
             assert direct_value == direct_expected and direct_key is None
@@ -3242,7 +3301,7 @@ def test_partial_recovery_live_heartbeat_preserves_authority_and_history(monkeyp
                 historical.request_payload["probe"][field] = changed
                 before_direct = canonical_calls[str(historical.id)]
                 direct_value, direct_key = proof.operation_fingerprint(historical, None, require_current_code=False)
-                assert direct_value == real_digest([recovery._operation_control(historical), historical.request_payload])
+                assert direct_value == real_digest(recovery._operation_projection(historical))
                 assert direct_key is None and canonical_calls[str(historical.id)] == before_direct + 1
             historical.request_payload = deepcopy(direct_payload)
             direct_state = historical.state
@@ -3250,7 +3309,7 @@ def test_partial_recovery_live_heartbeat_preserves_authority_and_history(monkeyp
                 historical.state = "cancelled"
                 before_direct = canonical_calls[str(historical.id)]
                 direct_value, direct_key = proof.operation_fingerprint(historical, None, require_current_code=False)
-                assert direct_value == real_digest([recovery._operation_control(historical), historical.request_payload])
+                assert direct_value == real_digest(recovery._operation_projection(historical))
                 assert direct_key is None and canonical_calls[str(historical.id)] == before_direct + 1
             finally:
                 historical.state = direct_state
@@ -3325,10 +3384,22 @@ def test_partial_recovery_live_heartbeat_preserves_authority_and_history(monkeyp
             immediate_snapshot = recovery._json_fingerprint_snapshot
             immediate_checkpoint_snapshots = []
 
-            def count_immediate_snapshot(value, fingerprint):
+            immediate_exact_snapshot = recovery._exact_json_snapshot
+
+            def note_checkpoint_snapshot(value):
                 if type(value) is dict and "svg_checkpoint" in value and "slide_index" in value:
                     immediate_checkpoint_snapshots.append(value["id"])
+
+            def count_immediate_snapshot(value, fingerprint):
+                note_checkpoint_snapshot(value)
                 return immediate_snapshot(value, fingerprint)
+
+            def count_immediate_exact_snapshot(value):
+                # The exact-JSON fast path now takes the private snapshot first
+                # and falls back to ``_json_fingerprint_snapshot`` only for
+                # values it cannot prove; either one is "a snapshot taken".
+                note_checkpoint_snapshot(value)
+                return immediate_exact_snapshot(value)
 
             def count_immediate_copy(value):
                 if value is raw_v3:
@@ -3345,6 +3416,7 @@ def test_partial_recovery_live_heartbeat_preserves_authority_and_history(monkeyp
                 immediate_hooks.setattr(recovery, "deepcopy", count_immediate_copy)
                 immediate_hooks.setattr(recovery, "_marshal_json_bytes", count_immediate_marshal)
                 immediate_hooks.setattr(recovery, "_json_fingerprint_snapshot", count_immediate_snapshot)
+                immediate_hooks.setattr(recovery, "_exact_json_snapshot", count_immediate_exact_snapshot)
                 before_immediate = len(checkpoint_reads)
                 immediate_producer = await recovery._verify_producer_rows(history_session, manifest_v3, raw_v3,
                     verification=immediate)
@@ -3958,6 +4030,7 @@ def test_partial_recovery_descendant_manifest_uses_current_episode_author_calls(
     from models.sql.public_admission import PublicOperationAdmission, PublicProviderLogicalCall
     from models.sql.authored_slide_checkpoint import AuthoredSlideCheckpoint
     from models.sql.source_content import SourceContentManifestRecord
+    from models.sql.public_artifact import PublicArtifact
     from models.sql.provider_usage_receipt import ProviderUsageReceipt
     from services.source_content import manifest_store
     from services import svg_source_layout
@@ -4173,6 +4246,10 @@ def test_partial_recovery_descendant_manifest_uses_current_episode_author_calls(
                 return next(item for item in admissions if item.operation_id in values)
             if model is SourceContentManifestRecord:
                 return Row(manifest_id="fixture-manifest")
+            if model is PublicArtifact:
+                # The final metadata readback of a loaded source manifest: the
+                # committed artifact row is still present.
+                return Row(lifecycle_state="committed")
             raise AssertionError(model)
 
         async def scalars(self, statement):
@@ -4252,10 +4329,10 @@ def test_partial_recovery_descendant_manifest_uses_current_episode_author_calls(
     policy = Row(enabled=True, version=1, estimated_cost_limit_microunits=100, actual_cost_limit_microunits=100)
     monkeypatch.setattr(public_admission, "load_public_policy", AsyncMock(return_value=policy))
     monkeypatch.setattr(public_admission, "_policy_digest", lambda _: "fixture-policy")
-    service = SimpleNamespace(resolve_ref=AsyncMock(return_value=SimpleNamespace(created_by_operation_id=parent_id)))
+    service = SimpleNamespace(resolve_ref=AsyncMock(return_value=_source_manifest_reference(parent_id)))
     monkeypatch.setattr(artifact_store, "configured_public_artifact_service", lambda: service)
     monkeypatch.setattr(svg_asset_persistence, "load_source_manifest_pointer", AsyncMock(return_value=
-        SimpleNamespace(digest="fixture-asset", presentation_id=parent_pid, source_revision=1,
+        _source_manifest_asset(digest="fixture-asset", presentation_id=parent_pid, source_revision=1,
             offered_pages=[SimpleNamespace(page_index=index, slot_ids=()) for index in range(request.n_slides)], slots=[])))
     if mode.startswith("inherited_local_"):
         # The parent manifest carries a source-local proof the recovery source job cannot continue.
@@ -4391,9 +4468,9 @@ def test_partial_recovery_proves_completed_invalid_source_for_new_child(with_svg
     raw = f'<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720" viewBox="0 0 1280 720">{body}</svg>'
     svg = ET.tostring(ET.fromstring(raw), encoding="unicode")
     pointer = {"ref": str(uuid.uuid4()), "sha256": "a" * 64}
-    asset = SimpleNamespace(digest="fixture-asset", presentation_id=presentation_id,
+    asset = _source_manifest_asset(digest="fixture-asset", presentation_id=presentation_id,
         source_revision=1, offered_pages=[SimpleNamespace(page_index=0, slot_ids=())], slots=[])
-    service = SimpleNamespace(resolve_ref=AsyncMock(return_value=SimpleNamespace(created_by_operation_id=operation_id)))
+    service = SimpleNamespace(resolve_ref=AsyncMock(return_value=_source_manifest_reference(operation_id)))
     monkeypatch.setattr(artifact_store, "configured_public_artifact_service", lambda: service)
     monkeypatch.setattr(svg_asset_persistence, "load_source_manifest_pointer", AsyncMock(return_value=asset))
     monkeypatch.setattr("utils.svg_template_fonts.source_font_profile", lambda _: "fixture-font")
@@ -4715,7 +4792,7 @@ def test_partial_recovery_replays_compact_output_view_raws_through_the_pinned_vi
             svg_style_snapshot=snapshot, total_slides=1,
             authored_outline={"slides": [{"content": "Fixture message"}]})
 
-    asset = SimpleNamespace(digest="fixture-asset", presentation_id=presentation_id,
+    asset = _source_manifest_asset(digest="fixture-asset", presentation_id=presentation_id,
         source_revision=1, offered_pages=[SimpleNamespace(page_index=0, slot_ids=())], slots=[])
     text_style = 'font-weight="400" fill="#111111" text-anchor="start"'
 
@@ -4783,7 +4860,7 @@ def test_partial_recovery_replays_compact_output_view_raws_through_the_pinned_vi
     expanded_svg = ET.tostring(expanded_root, encoding="unicode")
     pages = source_pages(source)
     monkeypatch.setattr(artifact_store, "configured_public_artifact_service", lambda: SimpleNamespace(
-        resolve_ref=AsyncMock(return_value=SimpleNamespace(created_by_operation_id=operation_id))))
+        resolve_ref=AsyncMock(return_value=_source_manifest_reference(operation_id))))
     monkeypatch.setattr(svg_asset_persistence, "load_source_manifest_pointer", AsyncMock(return_value=asset))
     monkeypatch.setattr("utils.svg_template_fonts.source_font_profile", lambda _: "fixture-font")
 
@@ -4949,7 +5026,7 @@ def test_partial_recovery_failed_source_overlap_requires_bound_evidence(tmp_path
     raw = f'<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720" viewBox="0 0 1280 720">{body}</svg>'
     raw, preservation = bind_whole_page_source_svg(raw, source, 0, facts=facts, width=1280,
         height=720, style_snapshot=snapshot, minimum_font_px=12)
-    asset = SimpleNamespace(digest="fixture-asset", presentation_id=presentation_id,
+    asset = _source_manifest_asset(digest="fixture-asset", presentation_id=presentation_id,
         source_revision=1, offered_pages=[SimpleNamespace(page_index=0, slot_ids=())], slots=[])
     monkeypatch.setattr("utils.svg_template_fonts.source_font_profile", lambda _: "fixture-font")
     input_digest = recovery.digest({"page": recovery._expected_page_input_digest(request, job, 0, {}),
@@ -5285,7 +5362,7 @@ def test_prepare_uses_fenced_current_job_snapshot_before_live_adaptation(conflic
         import json
         from xml.etree import ElementTree as ET
         from services import svg_partial_recovery as recovery
-        from services.svg_authoring_profile import ART_DIRECTION_PROFILE_V8, read_quality_recovery_policy
+        from services.svg_authoring_profile import read_quality_recovery_policy
         from services.svg_generation_admission import pin_svg_style as official_pin_svg_style
         from services import artifact_store, svg_asset_persistence
         from models.generate_presentation_request import GeneratePresentationRequest
@@ -5304,10 +5381,10 @@ def test_prepare_uses_fenced_current_job_snapshot_before_live_adaptation(conflic
         source_job = SimpleNamespace(id=job_id, workspace_operation_id=operation_id,
             request_payload=immutable_request, svg_style_snapshot=snapshot, total_slides=1,
             authored_outline={"slides": [{"content": "Fixture message"}]})
-        asset = SimpleNamespace(digest="sha256:" + "a" * 64, offered_pages=[], slots=[],
+        asset = _source_manifest_asset(digest="sha256:" + "a" * 64, offered_pages=[], slots=[],
                                 presentation_id=presentation_id, source_revision=1)
         source_pointer = {"ref": str(uuid.uuid4()), "sha256": "a" * 64}
-        service = SimpleNamespace(resolve_ref=AsyncMock(return_value=SimpleNamespace(created_by_operation_id=operation_id)))
+        service = SimpleNamespace(resolve_ref=AsyncMock(return_value=_source_manifest_reference(operation_id)))
         monkeypatch.setattr(artifact_store, "configured_public_artifact_service", lambda: service)
         monkeypatch.setattr(svg_asset_persistence, "load_source_manifest_pointer", AsyncMock(return_value=asset))
         input_digest = recovery.digest(dict(content="Fixture message", style=snapshot, index=0, count=1,
@@ -5320,7 +5397,7 @@ def test_prepare_uses_fenced_current_job_snapshot_before_live_adaptation(conflic
         normalized, first_svg, author_digest, _, _, advisories = recovery._replay_sealed_author_transform(
             original, raw, request=source_request, job=source_job, asset=asset, index=0)
         author_receipt = dict(contract_version="svg-static/v2", provider="fixture", requested_model="fixture-model",
-            style_digest=snapshot["digest"], authoring_profile=dict(ART_DIRECTION_PROFILE_V8),
+            style_digest=snapshot["digest"], authoring_profile=dict(snapshot["authoring_profile"]),
             raw_digest="sha256:" + sha256_hex(raw.encode()), source_digest="sha256:" + author_digest,
             validation_error=None, native_declarations=None, vector_icons_used=[], attempt_ordinal=1)
         metrics = {"owned_text": [{"text": "Fixture message"}]}
@@ -5472,12 +5549,12 @@ def test_prepare_uses_fenced_current_job_snapshot_before_live_adaptation(conflic
         with pytest.raises(ValueError, match="svg_final_selected_evidence_unproven"):
             recovery.verify_cached_page(legacy_cached_child, legacy_cache_plan.manifest, 0, input_digest)
         from utils.hashing import canonical_json_digest
-        from services.svg_authoring_profile import read_authoring_profile
+        from services.svg_authoring_profile import CURRENT_ART_DIRECTION_PROFILE, read_authoring_profile
         no_policy_snapshot = deepcopy(snapshot)
         no_policy_snapshot.pop("quality_recovery_policy", None)
         no_policy_snapshot.pop("quality_recovery_plan", None)
         no_policy_snapshot["digest"] = canonical_json_digest({k: v for k, v in no_policy_snapshot.items() if k != "digest"}, allow_nan=True)
-        assert read_authoring_profile(no_policy_snapshot) == ART_DIRECTION_PROFILE_V8
+        assert read_authoring_profile(no_policy_snapshot) == CURRENT_ART_DIRECTION_PROFILE
         assert read_quality_recovery_policy(no_policy_snapshot) is None
         no_policy_cache_plan = deepcopy(plan)
         no_policy_cache_plan.archive = {"job": {"svg_style_snapshot": no_policy_snapshot}}

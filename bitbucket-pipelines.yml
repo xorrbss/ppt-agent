@@ -25,6 +25,25 @@ definitions:
           - npm ci --prefix servers/nextjs
           - cd servers/nextjs
           - xvfb-run -a npx --no-install cypress run --component --spec "**/DashboardPage.cy.tsx"
+    - step: &fastapi-svg-unit-subset
+        name: FastAPI svg unit subset
+        size: 2x
+        max-time: 30
+        caches:
+          - uv
+        script:
+          - apt-get update
+          - DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends python3 python3-venv
+          - python3 -m venv .bitbucket-uv
+          - .bitbucket-uv/bin/python -m pip install --disable-pip-version-check uv==0.11.17
+          - .bitbucket-uv/bin/uv sync --frozen --directory servers/fastapi
+          - export DISABLE_IMAGE_GENERATION=true
+          - export DATABASE_URL=sqlite+aiosqlite:///./test.db
+          - export APP_DATA_DIRECTORY=/tmp/app_data
+          - mkdir -p "$APP_DATA_DIRECTORY"
+          - cd servers/fastapi
+          - ../../.bitbucket-uv/bin/uv run python scripts/svg_unit_subset.py --check
+          - ../../.bitbucket-uv/bin/uv run pytest $(cat tests/svg_unit_subset.txt) -n 4 --dist loadfile -q -p no:cacheprovider
     - step: &workspace-chat-first-e2e
         name: Workspace chat-first browser E2E
         size: 2x
@@ -60,12 +79,14 @@ pipelines:
       - step: *authored-release-readiness-config
       - step: *nextjs-ci-node-contracts
       - step: *dashboard-component-gate
+      - step: *fastapi-svg-unit-subset
       - step: *workspace-chat-first-e2e
   branches:
     main:
       - step: *authored-release-readiness-config
       - step: *nextjs-ci-node-contracts
       - step: *dashboard-component-gate
+      - step: *fastapi-svg-unit-subset
       - step: *workspace-chat-first-e2e
   custom:
     FastAPI pytest baseline:
