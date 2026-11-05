@@ -84,6 +84,13 @@ async def prepare_template_request(request, session) -> None:
     if frozen is not None and frozen != selection:
         raise HTTPException(409, "svg_template_execution_snapshot_conflict")
     request._svg_template_selection = deepcopy(frozen or selection)
+    if mode == "template-redesign":
+        from services.svg_templates.body_renders import ensure_body_renders, snapshot_body_renders
+        from utils.get_env_concurrency import get_svg_template_body_renders_env
+        frozen_snapshot = getattr(request, "_svg_style_snapshot", None)
+        if (snapshot_body_renders(frozen_snapshot) if frozen is not None
+                else get_svg_template_body_renders_env()):
+            await ensure_body_renders(session, request._svg_template_selection)
 
 
 def apply_template_snapshot(snapshot: dict, request) -> None:
@@ -111,6 +118,10 @@ def apply_template_snapshot(snapshot: dict, request) -> None:
             snapshot["tokens"][role + "_font"] = observed if observed in families else families[0]
         snapshot["tokens"]["mono_font"] = snapshot["tokens"]["body_font"]
         snapshot["composition_guidance"] = template_composition_guidance()
+        from utils.get_env_concurrency import get_svg_template_body_renders_env
+        if get_svg_template_body_renders_env():
+            # Frozen: every page, retry and remake of this deck follows its admission.
+            snapshot["template_body_renders"] = True
     snapshot["digest"] = canonical_json_digest({key: value for key, value in snapshot.items() if key != "digest"}, allow_nan=True)
 
 
@@ -340,6 +351,9 @@ def body_author_rules(rules: str, snapshot: dict, *, body_floor: float | None = 
         component_rules += composition_rules(template_package(selection).get("body_composition"),
                                              body_floor=body_floor, exemplars=composition == "on",
                                              visual_guidance=snapshot_has_visual_guidance(snapshot))
+        from services.svg_templates.body_renders import BODY_RENDER_RULE, snapshot_body_renders
+        if composition == "on" and snapshot_body_renders(snapshot):
+            component_rules += BODY_RENDER_RULE
     rules = rules.replace(
         "Never create a page number or use id svg-system-page-number. Reserve the bottom-right 64x36 area for the system footer.",
         "Do not author any system page number, header, footer or logo. The template owns their exact regions.",

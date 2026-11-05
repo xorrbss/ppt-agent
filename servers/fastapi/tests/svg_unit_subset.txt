@@ -425,6 +425,7 @@ tests/unit/test_svg_subset_publication.py
 tests/unit/test_svg_substage_observations.py
 tests/unit/test_svg_template_automatic_frame.py
 tests/unit/test_svg_template_body_composition.py
+tests/unit/test_svg_template_body_renders.py
 tests/unit/test_svg_template_chapters.py
 tests/unit/test_svg_template_component_style.py
 tests/unit/test_svg_template_eval_decide.py

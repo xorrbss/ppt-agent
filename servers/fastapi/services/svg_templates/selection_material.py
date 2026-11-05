@@ -123,6 +123,9 @@ async def ensure_selection_material(session, selection: dict | None) -> None:
 
 async def ensure_snapshot_material(session, snapshot: dict | None) -> None:
     await ensure_selection_material(session, (snapshot or {}).get("svg_template"))
+    from services.svg_templates.body_renders import ensure_body_renders, snapshot_body_renders
+    if snapshot_body_renders(snapshot):
+        await ensure_body_renders(session, (snapshot or {}).get("svg_template"))
 
 
 def clear_material_cache() -> None:
