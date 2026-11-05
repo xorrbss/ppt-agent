@@ -31,6 +31,7 @@ from collections import Counter
 from collections.abc import Mapping, Sequence
 import xml.etree.ElementTree as ET
 
+from utils.color_contrast import readable_ink
 from services.svg_contract import SVG_NS, SVG_CONTRACT_VERSION, finalize_svg
 
 FALLBACK_GROUP_ID = "svg-fallback-page"
@@ -328,9 +329,7 @@ def _mix(base: str, over: str, share: float) -> str:
 
 def _ink_on(fill: str, preferred: str) -> str:
     """Text colour for ``fill``: ``preferred`` while it reads (4.5:1), else the stronger of white and near-black."""
-    if _contrast(preferred, fill) >= _TEXT_CONTRAST:
-        return preferred
-    return max(("#FFFFFF", _BODY_COLOR), key=lambda color: (_contrast(color, fill), color))
+    return readable_ink(fill, preferred, dark=_BODY_COLOR)
 
 
 def _table_rows(lines: Sequence[str]) -> list[list[str]] | None:

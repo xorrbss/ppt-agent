@@ -90,6 +90,14 @@ def contrast_ratio(first: str, second: str) -> float:
     return (lighter + 0.05) / (darker + 0.05)
 
 
+def readable_ink(fill: str, preferred: str, *, dark: str = "#0F172A") -> str:
+    """Text colour for ``fill``: ``preferred`` while it reads (4.5:1), else the stronger of white and ``dark``."""
+
+    if contrast_ratio(preferred, fill) >= AA_BODY_TEXT:
+        return preferred
+    return max(("#FFFFFF", dark), key=lambda color: (contrast_ratio(color, fill), color))
+
+
 def blend(foreground: str, background: str, amount: float) -> str:
     """Mix ``amount`` of ``foreground`` over ``background``; deterministic hex."""
 
