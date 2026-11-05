@@ -166,6 +166,28 @@ def _chromium_space_advance(font, measurement_version):
         raise ValueError("svg_common_header_font_material_invalid") from None
 
 
+def _reduced_header_family(heading_font):
+    """The style's heading family when its header faces have a measured space advance.
+
+    Only the faces in ``_CHROMIUM_SPACE_ADVANCE_EM_BY_FONT_DIGEST`` can be
+    measured under MEASUREMENT_VERSION. The constant there is Chromium's
+    rendered space advance, which does not follow the font's own hmtx advance
+    on every platform, so it cannot be derived from the font file. A heading
+    face without one (Pretendard) takes the measured Noto Sans KR faces, as
+    the v2 design fields do (svg_common_header_design_calls.candidate_schema).
+    """
+    family = bundled_svg_font_family(heading_font)
+    if family == FONT_FAMILY:
+        return family
+    try:
+        # Title and eyebrow are drawn at 700, the subline at 400.
+        for weight in (400, 700):
+            _chromium_space_advance(_font(family, weight, 1), MEASUREMENT_VERSION)
+    except ValueError:
+        return FONT_FAMILY
+    return family
+
+
 def _advance(text, font, measurement_version="svg-common-header-glyph/v1"):
     space_advance = _chromium_space_advance(font, measurement_version)
     measured_text = text.replace(" ", "") if space_advance is not None else text
@@ -285,7 +307,7 @@ def prepare_common_header(snapshot: dict, outline, canvas, *, mode="uniform", co
     tokens = snapshot.get("tokens", {})
     width, height = geometry["width"], geometry["height"]
     spec = HeaderTitleSpec()
-    family = options.get("font_family", bundled_svg_font_family(tokens.get("heading_font")))
+    family = options.get("font_family", _reduced_header_family(tokens.get("heading_font")))
     size = _number(options, "font_size_px", spec.font_size_px, minimum=20)
     font = _font(family, options.get("font_weight", spec.weight if family == FONT_FAMILY else 700), size)
     line_height = _number(options, "line_height_px", round_px(size * spec.line_height), minimum=size)
