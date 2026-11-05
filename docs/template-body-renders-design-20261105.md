@@ -145,10 +145,10 @@ kinds, chart and diagram shapes, icons, pictures, scale).
   share of visuals reasons naming missing charts, diagrams or figures, counts of polygons, paths, pictures, icons,
   tables and charts per deck, first drafts accepted, fallback pages and repair causes, words and numbers kept, input
   tokens and seconds per page, and a template-text leak count (generated slide text against the template's own text,
-  computed locally outside the repository; must be 0 in both arms).
+  computed locally outside the repository; no higher in the variant than in the control).
 * Decision: propose default on if density or visuals improve beyond the 0.2 threshold in at least 3 of 4 cells, first
   drafts do not fall by 0.5 or more, fallbacks do not rise by 0.5 or more, numbers kept do not fall and the leak count
-  is 0. Otherwise keep it off and record why. Template B: count metrics only (first drafts, fallbacks, tables, flow
+  is no higher than the control's. Otherwise keep it off and record why. Template B: count metrics only (first drafts, fallbacks, tables, flow
   shapes), 2 inputs x 3 runs, since its judge is not calibrated.
 
 ## 7. Effort and open questions
@@ -157,18 +157,26 @@ Effort: masking, rendering, verification and storage at registration with tests 
 retention and generation-time fetch, prompt block, receipts and knob about 1 day; the leak metric in the eval tool
 half a day; re-registration and the two arms about 4 hours wall time and $50-60 of provider calls.
 
-Open questions for the user:
+Decided by the user (2026-11-05), and how the implementation follows:
 
-1. Pictures that may carry words: keep them only when OCR reads no text (needs tesseract `kor+eng` on the registering
-   server; this VM has none), or always replace large pictures by flat blocks (safe everywhere, but loses the
-   illustrations that the visuals axis rewards)?
-2. Should registration always store renders (data only, used only with the knob on, so templates registered from now
-   on need no second registration), or only when the knob is on?
-3. Exemplar pages only (at most 10, about 1.5 MB), or every content page (about 100 for template A, about 13 MB and
-   2-3 more minutes of registration) for a closer match per page?
-4. Are masked layouts and the template's own pictures acceptable in prompts for decks of the same owner? (No text
-   leaves the registration; pictures and logo marks inside the body do.)
-5. Swap the judge anchors when a render page is an anchor (proposed), or exclude anchor pages from rendering during the
-   measurement?
-6. Later: should the design review also see the renders, so that it judges density against the template rather than
-   in the abstract?
+1. Text masking is on (it protects source fidelity: template wording and figures must not flow into new decks).
+   Pictures that may carry words are read by the product's existing OCR, tesseract (`utils/authored_ocr_quality.py`)
+   when installed, else LiteParse's tesseract.js with the bundled `tessdata/` kor+eng
+   (`services/liteparse_service.py`); a picture with recognised text is covered; where no OCR runtime is available every
+   picture larger than an icon is covered. The render's mask receipt records the path (`tesseract`, `liteparse`,
+   `unavailable`). A picture with almost no sharp edge (soft shadows, gradients) cannot carry text and is neither read
+   nor covered; an icon (at most 120 canvas px on both edges) is kept.
+2. Every framed registration stores renders, whatever the generation knob says.
+3. Exemplar pages only (at most 10).
+4. Allowed for decks of the same owner only: a render is read only when its recorded owner and tenant are the
+   requesting principal, the owner the template pin resolved for, and the artifact store finds it under that owner.
+5. Measurement: `SVG_TEMPLATE_BODY_RENDER_EXCLUDED_PAGES` (internal, read at registration, 1-based slide numbers such
+   as `9,66`) withholds the renders of given pages, so the judge's score-5 anchors are never shown to the author. The
+   exemplar outlines are unchanged.
+6. The design review does not see the renders.
+
+Also built: the template-text leak count in the evaluation tool (`template_text_leaks` in
+`scripts/svg_template_eval/metrics.py`; a template manifest's `template_text` or `run --template-text` names the
+template's own deck, read locally). It counts word bigrams and figures that the template and a generated deck share and
+the deck's source does not; common phrases count too, so arms are compared with each other rather than against zero
+(section 6's "must be 0" becomes "no higher than the control").
