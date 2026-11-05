@@ -884,7 +884,7 @@ async def _attempt_render(*, ctx, request, presentation_id, index, content, payl
         from services.authored_canvas import request_canvas_metadata
         from services.generation_core.drivers.svg.native_publish import canvas_point_per_px, page_native_objects
 
-        from services.svg_cached_author_render_recovery import approved_sidecars
+        from services.svg_cached_author_render_lineage import approved_sidecars
         objects, summary = page_native_objects(
             payload, pt_per_px=canvas_point_per_px(request_canvas_metadata(request)),
             verified_fixed_axis_migrations=approved_sidecars(payload))

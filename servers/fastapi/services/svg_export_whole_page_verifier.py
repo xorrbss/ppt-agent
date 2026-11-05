@@ -48,7 +48,30 @@ _FILES = (
 
 
 def whole_page_verifier_digest() -> str:
-    inventory = {name: hashlib.sha256((_ROOT / name).read_bytes()).hexdigest()
-                 for name in _FILES}
-    payload = json.dumps(inventory, sort_keys=True, separators=(",", ":")).encode()
+    """The whole-page verifier identity that bundles, coverage proofs and export identities carry.
+
+    It is the reviewed revision's identity (``services/verifier_revisions``) while
+    the running source is a reviewed state of that revision, and the raw
+    ``whole_page_verifier_source_digest()`` otherwise.
+    """
+    from services.verifier_revisions import WHOLE_PAGE_VERIFIER_LEDGER
+
+    return WHOLE_PAGE_VERIFIER_LEDGER.resolve(whole_page_verifier_source_state())
+
+
+def whole_page_verifier_source_digest() -> str:
+    """The pre-migration identity: the verifier files' bytes as they are on disk."""
+    return whole_page_verifier_source_state().raw
+
+
+def whole_page_verifier_source_state():
+    from services.verifier_revisions import WHOLE_PAGE_VERIFIER_LEDGER
+
+    return WHOLE_PAGE_VERIFIER_LEDGER.source_state(
+        {name: _ROOT / name for name in _FILES}, whole_page_verifier_identity)
+
+
+def whole_page_verifier_identity(hashes) -> str:
+    """Identity formula over ``{file: SHA-256}``: the SHA-256 of the sorted compact JSON."""
+    payload = json.dumps(dict(hashes), sort_keys=True, separators=(",", ":")).encode()
     return hashlib.sha256(payload).hexdigest()

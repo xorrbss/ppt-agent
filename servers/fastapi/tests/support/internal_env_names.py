@@ -86,6 +86,7 @@ INTERNAL_ENV_NAMES: MappingProxyType[str, str] = MappingProxyType(
         "DECK_IR_GENERATION_ENABLED": "Enable the deck-IR generation path.",
         # --- svg driver ---------------------------------------------------------------
         "CANVAS_BENCH_ENABLED": "Allow admission-only per-request canvas experiment fields when exactly true.",
+        "SVG_AUTHORING_PROFILE_REVISION": "svg authoring profile revision fresh admissions freeze (unset = current); paired measurement.",
         "SVG_AUTHOR_CONCURRENCY": "Explicit SVG author-call concurrency.",
         "SVG_AUTHOR_CONCURRENCY_SOURCE_REFLOW": "SVG author-call concurrency for source-reflow decks.",
         "SVG_RENDER_CONCURRENCY": "Explicit SVG page-render concurrency.",

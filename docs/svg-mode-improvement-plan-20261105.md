@@ -518,6 +518,34 @@ Acceptance, Check.
   New profile revision.
 - **Acceptance:** §5 paired runs with no rise in first-attempt failures and a
   higher judge score.
+- **Status (2026-11-05): implemented as profile revision 10, not the default,
+  not yet measured.**
+  - `authoring/author_rules_v10.py` builds one rule text for a new-copy free
+    page: priority line, output contract (with paragraphs as one `<text>`
+    whose lines are `<tspan>` with absolute `x`/`y`, since the contract admits
+    no `dy` there; the PPTX converter still splits such lines until S4's
+    converter fix), design principles (type scale and spacing derived from the
+    snapshot's canvas, floor and stated style typography; the information-type
+    menu; five Korean width lines on the `fallback.py` model), content fidelity
+    and the unchanged writing policy. Pie and donut slices are polygons; the
+    readability-failure sentence, the new-copy reversal paragraph and the
+    "retain archetype advice" design priority are gone. S7's stacked chart rule
+    joins the native chart rule for revision 10 only.
+  - Relationship/classification, schedule and clustered-grid blocks go in the
+    per-call user message only when the page's source carries their signal,
+    so the cached system block stays deck-stable. Template and source pages
+    keep revision 9's rules.
+  - System rules: about 5.5k tokens (v9, 21.8k characters) to about 2.5k
+    (v10, 10.0k characters) for the default style, estimated at 4 characters
+    per token.
+  - Revision 9 and earlier keep their prompt bytes (pinned digests in
+    `tests/unit/test_svg_author_layered_rules.py`). New admissions still freeze
+    revision 9; the internal knob `SVG_AUTHORING_PROFILE_REVISION=10` selects
+    revision 10 on a backend for the paired runs.
+  - The §5 paired run (two reference prompts, N=2 per arm) could not run: the
+    provider account had no credit. Make revision 10 the default only after it
+    shows a higher mean slide rating with no more first-attempt failures or
+    fallback pages.
 
 **S4 — Paragraph text boxes in PPTX** · P1 · no gate
 - **Change:** enable `merge_paragraphs` for ordinary decks
@@ -555,6 +583,8 @@ Acceptance, Check.
 - **Change:** allow stacked and percent-stacked charts (the converter already
   supports them, `vendor/slide_master/svg_to_pptx/native_objects/chart_data.py`)
   in `native_chart.py:57-62`, then waterfall.
+- **Prompt (2026-11-05):** the author rule that offers stacked and
+  percent-stacked charts ships with profile revision 10 only (see S3).
 
 **S8 — Font parity in the browser preview** · P1 · no gate · review §4.11 item 1
 - **Change:**

@@ -273,6 +273,12 @@ def main() -> None:
     # (worker dispatcher and settings) runs a real-provider smoke test.
     if os.environ.get("FAKE_LLM_CLIENTS", "1") != "0":
         llmai.get_client = lambda config=None, logger=None, **_kw: FakeClient(config, logger)
+        # Call sites import utils.llm_config.get_client, which builds the repository-owned
+        # Anthropic/Codex clients itself and never reaches llmai.get_client for them.
+        # Replace it before any call site imports the name.
+        import utils.llm_config as llm_config
+
+        llm_config.get_client = lambda config=None, logger=None, **_kw: FakeClient(config, logger)
     elif os.environ.get("FAKE_LLM_LOG_PROVIDER_ERRORS") == "1":
         # The app records only bounded diagnostics for provider failures; for a
         # smoke run, print the provider's own error message (never headers).

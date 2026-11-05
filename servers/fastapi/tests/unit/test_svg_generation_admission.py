@@ -2149,7 +2149,7 @@ def test_resolve_master_rules_maps_pipeline_errors_to_409():
     assert excinfo.value.status_code == 409
 
 
-@pytest.mark.parametrize("profile_id", [None, 'current-v4', 'art-direction-v1', 'art-direction-v1@2', 'art-direction-v1@3', 'art-direction-v1@4', 'art-direction-v1@5', 'art-direction-v1@6', 'art-direction-v1@7', 'art-direction-v1@8', 'art-direction-v1@9'])
+@pytest.mark.parametrize("profile_id", [None, 'current-v4', 'art-direction-v1', 'art-direction-v1@2', 'art-direction-v1@3', 'art-direction-v1@4', 'art-direction-v1@5', 'art-direction-v1@6', 'art-direction-v1@7', 'art-direction-v1@8', 'art-direction-v1@9', 'art-direction-v1@10'])
 def test_authoring_profile_staging_preserves_legacy_and_frozen_new_identity(monkeypatch, profile_id):
     from models.generate_presentation_request import GeneratePresentationRequest
     from services.presentation_generation_staging import _durable_request_payload, _request_from_durable_payload
@@ -2175,7 +2175,7 @@ def test_authoring_profile_staging_preserves_legacy_and_frozen_new_identity(monk
         assert INTERNAL_SVG_AUTHORING_PROFILE_KEY not in payload
         return
     snapshot = payload["_internal_svg_style_snapshot"]
-    expected = {'art-direction-v1': ART_DIRECTION_PROFILE, 'art-direction-v1@2': ART_DIRECTION_PROFILE_V2, 'art-direction-v1@3': ART_DIRECTION_PROFILE_V3, 'art-direction-v1@4': ART_DIRECTION_PROFILE_V4, 'art-direction-v1@5': ART_DIRECTION_PROFILE_V5, 'art-direction-v1@6': ART_DIRECTION_PROFILE_V6, 'art-direction-v1@7': ART_DIRECTION_PROFILE_V7, None: {'id': 'art-direction-v1', 'version': 9}, 'art-direction-v1@8': {'id': 'art-direction-v1', 'version': 8}, 'art-direction-v1@9': {'id': 'art-direction-v1', 'version': 9}}[profile_id]
+    expected = {'art-direction-v1': ART_DIRECTION_PROFILE, 'art-direction-v1@2': ART_DIRECTION_PROFILE_V2, 'art-direction-v1@3': ART_DIRECTION_PROFILE_V3, 'art-direction-v1@4': ART_DIRECTION_PROFILE_V4, 'art-direction-v1@5': ART_DIRECTION_PROFILE_V5, 'art-direction-v1@6': ART_DIRECTION_PROFILE_V6, 'art-direction-v1@7': ART_DIRECTION_PROFILE_V7, None: {'id': 'art-direction-v1', 'version': 9}, 'art-direction-v1@8': {'id': 'art-direction-v1', 'version': 8}, 'art-direction-v1@9': {'id': 'art-direction-v1', 'version': 9}, 'art-direction-v1@10': {'id': 'art-direction-v1', 'version': 10}}[profile_id]
     assert payload[INTERNAL_SVG_AUTHORING_PROFILE_KEY] == expected
     assert snapshot["authoring_profile"] == expected
     new_contract_keys = ({"readability_policy", "common_header_design_plan", "native_requirements_revision"}
@@ -2259,7 +2259,7 @@ def test_frozen_v1_authoring_cannot_be_replayed_as_v2(monkeypatch, target_profil
         _request_from_durable_payload(payload)
 
 
-@pytest.mark.parametrize("profile", ["future-v2", "art-direction-v1@10", {"id": "art-direction-v1", "version": 10}, {"id": "art-direction-v1", "version": True}])
+@pytest.mark.parametrize("profile", ["future-v2", "art-direction-v1@11", {"id": "art-direction-v1", "version": 11}, {"id": "art-direction-v1", "version": True}])
 def test_unknown_durable_authoring_profile_fails_closed(profile):
     from services.presentation_generation_staging import _request_from_durable_payload
     from services.svg_authoring_profile import INTERNAL_SVG_AUTHORING_PROFILE_KEY

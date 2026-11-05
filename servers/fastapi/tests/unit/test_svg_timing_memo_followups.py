@@ -20,7 +20,7 @@ from services.workspace_generation_timing_payload import (
 )
 from tests.unit.test_author_slide_svg_asset_offer import _art_direction_style
 from services.presentation_generation_attempt_timing import _persist_terminal_attempt_timing
-from services.svg_cached_author_render_recovery import author_witness
+from services.svg_recovery_witness import author_witness
 from services.svg_partial_recovery import _page_render_result_digest
 from tests.unit.test_svg_generation_timing_receipt import _context, _request, _seal_success, _usage
 from tests.unit.test_svg_source_layout import manifest_for

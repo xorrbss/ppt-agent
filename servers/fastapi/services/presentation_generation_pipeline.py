@@ -2136,7 +2136,6 @@ async def _admit_generation_operation_v2_compatible(
     presentation: PresentationModel,
     operation: WorkspaceOperation,
     retry_source_operation: WorkspaceOperation | None = None,
-    zero_provider_cached_author_recovery: bool = False,
     partial_svg_recovery: bool = False,
     partial_svg_verification: object | None = None,
 ) -> uuid.UUID:
@@ -2156,17 +2155,6 @@ async def _admit_generation_operation_v2_compatible(
         partial_manifest = await verify_episode(sql_session, operation, partial_job,
             verification=partial_svg_verification,
             finish_verification=partial_svg_verification is not None)
-    if zero_provider_cached_author_recovery:
-        from services.svg_cached_author_render_recovery import REVISIONS
-
-        if (
-            operation.retry_of_operation_id is None
-            or operation.request_payload.get("recovery_revision") not in REVISIONS
-            or request.strategy != "svg"
-            or request.vision_qa
-            or request.web_search
-        ):
-            raise HTTPException(status_code=409, detail="svg_cached_author_render_admission_invalid")
     if retry_source_operation is not None:
         from models.sql.public_admission import PublicOperationAdmission
 
@@ -2249,22 +2237,6 @@ async def _admit_generation_operation_v2_compatible(
                 "Retry-After": str(error.retry_after_seconds or 15),
             },
         ) from error
-    if zero_provider_cached_author_recovery:
-        if (
-            admission.operation_id != operation.id
-            or admission.state != "queued"
-            or admission.initial_request_count != 0
-            or admission.retry_request_count != 0
-            or admission.estimated_reserved_microunits != 0
-            or admission.actual_reserved_microunits != 0
-        ):
-            raise HTTPException(status_code=409, detail="svg_cached_author_render_admission_conflict")
-        admission.planned_request_limit = 0
-        admission.retry_request_limit = 0
-        admission.estimated_cost_limit_microunits = 0
-        admission.actual_cost_limit_microunits = 0
-        sql_session.add(admission)
-        await sql_session.flush()
     if retry_bounds is not None:
         if (
             admission.operation_id != operation.id

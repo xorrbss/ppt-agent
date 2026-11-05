@@ -1,9 +1,7 @@
 import asyncio
 from datetime import timedelta
-import json
 from types import SimpleNamespace
 import uuid
-from unittest.mock import AsyncMock
 
 from fastapi import HTTPException
 import pytest
@@ -14,7 +12,6 @@ from models.sql.presentation_generation_job import PresentationGenerationJob
 from models.sql.public_admission import PublicOperationAdmission, PublicProviderLogicalCall
 from models.sql.workspace import WorkspaceOperation
 from services import presentation_generation_pipeline as pipeline
-from services import svg_cached_author_render_recovery as cached_recovery
 from services import svg_partial_recovery as partial_recovery
 from services import svg_presentation_checkpoint as svg_checkpoints
 from utils import owner_context
@@ -108,16 +105,8 @@ def test_preparation_can_retry_but_an_author_attempt_cannot(tmp_path, monkeypatc
     asyncio.run(scenario())
 
 
-class _Snapshot(SimpleNamespace):
-    def model_dump(self, **_kwargs):
-        return json.loads(json.dumps(vars(self), default=str))
-
-
 def test_authored_page_waiting_for_render_satisfies_real_recovery_predicates(tmp_path, monkeypatch):
-    from services import artifact_store, authored_canvas, document_canvas_generation, presentation_generation_staging
-    from services import svg_asset_persistence, svg_source_layout
-    from services.generation_core.drivers.svg import native_publish
-    from services.source_content import manifest_store
+    from services import authored_canvas, document_canvas_generation
 
     async def scenario():
         engine, maker = await _checkpoint_database(tmp_path, monkeypatch)
@@ -166,64 +155,11 @@ def test_authored_page_waiting_for_render_satisfies_real_recovery_predicates(tmp
             )
             assert witness["phase"] == "author-only"
 
-            job.state, job.resume_allowed = "failed", False
-            job.svg_style_snapshot = {"readability_policy": policy}
-            operation = _Snapshot(
-                id=operation_id, owner_id=owner, owner_scope=str(owner), kind="presentation.generate",
-                state="failed", error_code="public_provider_retry_limit_exceeded",
-                error_detail={"retryable": False}, result_revision=None, lease_expires_at=None,
-                presentation_id=job.presentation_id, version=1, request_hash=job.request_sha256,
-                request_payload={"generation_request": job.request_payload,
-                                 "job_id": str(job.id), "task_id": str(job.task_id)},
-            )
-            admission = _Snapshot(
-                id=uuid.uuid4(), state="failed", terminal_at=get_current_utc_datetime(),
-                owner_id=owner, tenant_id="test-tenant", initial_request_count=2, retry_request_count=0,
-                estimated_reserved_microunits=0, actual_reserved_microunits=0,
-            )
-            calls = [_Snapshot(stage="author", slide_index=index, logical_call_ordinal=1,
-                               state="reported", outcome="succeeded", reconciled_at=get_current_utc_datetime())
-                     for index in range(2)]
-            usage = [_Snapshot(stage="author", outcome="succeeded", request_count=1) for _ in rows]
-            # A different page has a measured render failure; this page remains queued.
-            rows[1].render_status, rows[1].failed_stage = "failed", "render"
-            pin = _Snapshot(manifest_id=uuid.uuid4(), digest=preservation["manifest_digest"])
-            request = SimpleNamespace(source_content_manifest_pin=pin, vision_qa=False,
-                                      web_search=False, n_slides=2, instructions=None)
-            session = SimpleNamespace(
-                scalar=AsyncMock(side_effect=[_Snapshot(revision=1), None, job, status, admission, None, object()]),
-                scalars=AsyncMock(side_effect=[[], calls, usage, [], [], rows]),
-            )
-            monkeypatch.setattr(cached_recovery, "converter_code_digest",
-                                lambda: cached_recovery.APPROVED_CONVERTER_CODE_DIGEST)
-            monkeypatch.setattr(presentation_generation_staging, "_request_from_durable_payload", lambda _: request)
-            monkeypatch.setattr(authored_canvas, "request_canvas_metadata",
-                                lambda _: authored_canvas.canvas_metadata_for_aspect_ratio("16:9"))
-            monkeypatch.setattr(manifest_store, "admit_source_content_manifest_pin", AsyncMock(return_value=
-                                SimpleNamespace(units=[None, None], manifest_digest=preservation["manifest_digest"])))
-            monkeypatch.setattr(svg_asset_persistence, "load_source_manifest_pointer", AsyncMock(return_value=
-                                SimpleNamespace(digest=payload["source_manifest_digest"],
-                                                presentation_id=job.presentation_id, source_revision=1)))
-            monkeypatch.setattr(artifact_store, "configured_public_artifact_service", lambda: object())
-            monkeypatch.setattr(svg_source_layout, "verify_source_receipt", lambda *_args: None)
-            monkeypatch.setattr(cached_recovery, "fixed_axis_failed_drops", lambda _: {"chart-1"})
-            monkeypatch.setattr(cached_recovery, "verified_fixed_axis_migrations", lambda *_args, **_kwargs: {})
-            monkeypatch.setattr(native_publish, "page_native_objects",
-                                lambda *_args, **_kwargs: ({"objects": [{"id": "chart-1"}]}, {"dropped": []}))
-            result = await cached_recovery.build_manifest(session, operation, presentation_revision=1)
-            assert [page["slide_index"] for page in result.manifest["pages"]] == [0, 1]
-            assert result.rows[0].render_status == "pending"
-            assert result.manifest["pages"][0]["failed_fixed_axis_ids"] == []
             # Negative controls show the production predicates reject the old running state.
             waiting.render_status = "running"
             assert "phase" not in partial_recovery._source_author_render_witness(
                 svg, waiting.svg_checkpoint, raw, job=job, row=waiting, completed=terminal
             )
-            session.scalar.side_effect = [_Snapshot(revision=1), None, job, status, admission, None, object()]
-            session.scalars.side_effect = [[], calls, usage, [], [], rows]
-            with pytest.raises(cached_recovery.CachedAuthorRenderRejected,
-                               match="svg_cached_author_render_checkpoint_changed"):
-                await cached_recovery.build_manifest(session, operation, presentation_revision=1)
         finally:
             await engine.dispose()
 

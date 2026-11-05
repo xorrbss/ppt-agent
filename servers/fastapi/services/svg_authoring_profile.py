@@ -10,7 +10,7 @@ INTERNAL_SVG_AUTHORING_PROFILE_KEY = "_internal_svg_authoring_profile"
 
 class SvgAuthoringProfile(TypedDict):
     id: Literal["art-direction-v1"]
-    version: Literal[1, 2, 3, 4, 5, 6, 7, 8, 9]
+    version: Literal[1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
 
 
 ART_DIRECTION_PROFILE: SvgAuthoringProfile = {"id": "art-direction-v1", "version": 1}
@@ -26,10 +26,19 @@ ART_DIRECTION_PROFILE_V8: SvgAuthoringProfile = {"id": "art-direction-v1", "vers
 # prompt-cache breakpoint on Anthropic) with the per-call correction and visual-intent
 # rules in the user message -- and drops operational plans from the design JSON.
 ART_DIRECTION_PROFILE_V9: SvgAuthoringProfile = {"id": "art-direction-v1", "version": 9}
-#: The revision a fresh svg admission freezes.
+# Revision ten keeps revision nine's gates, receipts and cacheable request layout. It
+# replaces the author rules of a new-copy free svg page with one layered rule text
+# (``authoring/author_rules_v10.py``, plan item S3, with the S7 stacked chart rule) and
+# sends benchmark-specific blocks only with a page whose source carries their signal.
+# Source-preserving and template pages keep revision nine's rule text.
+ART_DIRECTION_PROFILE_V10: SvgAuthoringProfile = {"id": "art-direction-v1", "version": 10}
+#: The revision a fresh svg admission freezes unless the internal measurement knob
+#: ``SVG_AUTHORING_PROFILE_REVISION`` selects another (``admission_default_profile``).
 CURRENT_ART_DIRECTION_PROFILE = ART_DIRECTION_PROFILE_V9
+#: Revisions a fresh admission may freeze through that knob.
+_ADMISSION_REVISIONS = {9: ART_DIRECTION_PROFILE_V9, 10: ART_DIRECTION_PROFILE_V10}
 #: Revisions that behave as revision eight everywhere outside the author request layout.
-_REVISION_EIGHT_BEHAVIOUR = frozenset({8, 9})
+_REVISION_EIGHT_BEHAVIOUR = frozenset({8, 9, 10})
 
 QUALITY_RECOVERY_POLICY = {"id": "svg-quality-first", "version": 1}
 QUALITY_RECOVERY_POLICY_V2 = {"id": "svg-quality-first", "version": 2}
@@ -328,7 +337,7 @@ def svg_quality_review_admission_budget(request: object, slide_count: int) -> in
                 raise ValueError("svg_quality_recovery_plan_invalid")
             # Validate the same immutable representation admission will freeze.
             snapshot = {"authoring_profile": dict(request_authoring_profile(request)
-                                                  or CURRENT_ART_DIRECTION_PROFILE),
+                                                  or admission_default_profile()),
                         "quality_recovery_policy": request_quality_recovery_policy(request),
                         "quality_recovery_plan": dict(plan)}
             snapshot["digest"] = canonical_json_digest(snapshot, allow_nan=True)
@@ -365,17 +374,19 @@ def validate_authoring_profile(value: object) -> SvgAuthoringProfile | None:
         return dict(ART_DIRECTION_PROFILE_V8)
     if value == "art-direction-v1@9":
         return dict(ART_DIRECTION_PROFILE_V9)
+    if value == "art-direction-v1@10":
+        return dict(ART_DIRECTION_PROFILE_V10)
     if (
         isinstance(value, Mapping)
         and set(value) == {"id", "version"}
         and value.get("id") == ART_DIRECTION_PROFILE["id"]
         and type(value.get("version")) is int
-        and value["version"] in {1, 2, 3, 4, 5, 6, 7, 8, 9}
+        and value["version"] in {1, 2, 3, 4, 5, 6, 7, 8, 9, 10}
     ):
         return dict({1: ART_DIRECTION_PROFILE, 2: ART_DIRECTION_PROFILE_V2, 3: ART_DIRECTION_PROFILE_V3,
                      4: ART_DIRECTION_PROFILE_V4, 5: ART_DIRECTION_PROFILE_V5, 6: ART_DIRECTION_PROFILE_V6,
                      7: ART_DIRECTION_PROFILE_V7, 8: ART_DIRECTION_PROFILE_V8,
-                     9: ART_DIRECTION_PROFILE_V9}[value["version"]])
+                     9: ART_DIRECTION_PROFILE_V9, 10: ART_DIRECTION_PROFILE_V10}[value["version"]])
     raise ValueError("svg_authoring_profile_invalid")
 
 
@@ -398,16 +409,36 @@ def new_svg_admission_profile(request: object) -> dict[str, object] | None:
     profile = request_authoring_profile(request)
     if profile is not None or getattr(request, "_svg_authoring_profile_selected", False):
         return profile
-    profile = dict(CURRENT_ART_DIRECTION_PROFILE)
+    profile = admission_default_profile()
     request._svg_authoring_profile = profile
     return profile
+
+
+def admission_default_profile() -> SvgAuthoringProfile:
+    """The revision a fresh default admission freezes.
+
+    ``CURRENT_ART_DIRECTION_PROFILE`` unless the internal measurement knob
+    ``SVG_AUTHORING_PROFILE_REVISION`` names another admissible revision (paired runs of
+    two backends, docs/svg-mode-improvement-plan-20261105.md section 5). Unlike an explicit
+    bench selection, the knob keeps every other part of a fresh admission (readability,
+    header and review plans); a malformed value refuses the admission.
+    """
+    from utils.get_env_canvas_bench import get_svg_authoring_profile_revision_env
+
+    revision = get_svg_authoring_profile_revision_env()
+    if revision is None:
+        return dict(CURRENT_ART_DIRECTION_PROFILE)
+    if revision not in _ADMISSION_REVISIONS:
+        raise ValueError("svg_authoring_profile_revision_invalid")
+    return dict(_ADMISSION_REVISIONS[revision])
 
 
 def behaviour_profile(profile: SvgAuthoringProfile | None) -> SvgAuthoringProfile | None:
     """The revision whose rules, quality gates and receipts ``profile`` follows.
 
-    Revision nine is revision eight with a cacheable author request layout, so every
-    check outside that layout reads it as revision eight.
+    Revision nine is revision eight with a cacheable author request layout, and revision
+    ten adds layered author rules to that layout, so every check outside the author
+    request reads both as revision eight.
     """
     if profile is not None and profile["version"] in _REVISION_EIGHT_BEHAVIOUR:
         return dict(ART_DIRECTION_PROFILE_V8)
@@ -416,7 +447,12 @@ def behaviour_profile(profile: SvgAuthoringProfile | None) -> SvgAuthoringProfil
 
 def uses_cacheable_author_layout(profile: SvgAuthoringProfile | None) -> bool:
     """Whether the author request splits into a deck-stable system block and a per-call part."""
-    return profile is not None and profile["version"] == 9
+    return profile is not None and profile["version"] in (9, 10)
+
+
+def uses_layered_author_rules(profile: SvgAuthoringProfile | None) -> bool:
+    """Whether a new-copy free svg page gets revision ten's layered author rules."""
+    return profile is not None and profile["version"] == 10
 
 
 def read_authoring_profile(snapshot: Mapping) -> SvgAuthoringProfile | None:
