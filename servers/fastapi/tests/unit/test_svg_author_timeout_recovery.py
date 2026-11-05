@@ -89,11 +89,11 @@ def test_one_timeout_retries_and_records_failure_second_timeout_raises(harness):
 
     async def run():
         first = await _attempt(state, payload, provider_ordinal=1)
-        assert first == author.AuthorAttempt(svg=None, retry=True)
+        assert first == author.AuthorAttempt(svg=None, retry=True, cooldown_seconds=30.0)
         assert payload["provider_failures"] == [
             {"ordinal": 1, "code": "public_provider_call_timeout", "run_timeout_retry": 1}]
         assert payload["inflight"] is None
-        assert harness.sleeps == [30.0]
+        assert harness.sleeps == []  # the caller sleeps outside its permit
         with pytest.raises(ProviderOutcomeError) as second:
             await _attempt(state, payload, provider_ordinal=2)
         assert second.value.code == "public_provider_call_timeout"
@@ -104,7 +104,7 @@ def test_one_timeout_retries_and_records_failure_second_timeout_raises(harness):
     # second cooldown, and it does not spend a run-wide slot.
     assert [entry["ordinal"] for entry in payload["provider_failures"]] == [1, 2]
     assert "run_timeout_retry" not in payload["provider_failures"][1]
-    assert harness.sleeps == [30.0]
+    assert harness.sleeps == []
     assert state.timeout_retries == 1
 
 
@@ -197,7 +197,7 @@ def test_run_cap_allows_three_timeout_retries_then_the_fourth_raises(harness):
     asyncio.run(run())
     assert [p["provider_failures"][0]["run_timeout_retry"] for p in payloads[:3]] == [1, 2, 3]
     assert "provider_failures" not in payloads[3]
-    assert state.timeout_retries == 3 and harness.sleeps == [30.0] * 3
+    assert state.timeout_retries == 3 and harness.sleeps == []
 
 
 def test_concurrent_pages_cannot_exceed_the_run_cap(harness):

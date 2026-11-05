@@ -23,6 +23,7 @@ from utils.provider_overload import (
     ProviderQuotaPause,
     ProviderRetryReservation,
     is_provider_overload,
+    provider_retry_after_seconds,
     provider_status_code,
     safe_provider_diagnostics,
     usage_limit_reset_epoch,
@@ -543,11 +544,13 @@ def provider_generate_call(
                     diagnostics=safe_provider_diagnostics(nested if synthetic_stream_status else error, diagnostics={"statusOrigin": "local_stream", "failureKind": "result_unknown"}),
                 ) from error
             if is_provider_overload(error):
+                retry_after = provider_retry_after_seconds(error)
                 raise ProviderOutcomeError(
                     "public_provider_overload",
                     recovery_allowed=True,
                     overload=True,
-                    cooldown_seconds=OVERLOAD_COOLDOWN_BASE_SECONDS,
+                    cooldown_seconds=OVERLOAD_COOLDOWN_BASE_SECONDS if retry_after is None else retry_after,
+                    cooldown_from_retry_after=retry_after is not None,
                     diagnostics=safe_provider_diagnostics(error, diagnostics={"failureKind": "overload"}),
                 ) from error
             raise ProviderOutcomeError(
