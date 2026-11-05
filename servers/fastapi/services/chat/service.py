@@ -376,6 +376,14 @@ class PresentationChatService:
             completion: Any | None = None
             content_chunks: list[str] = []
             try:
+                # Provider call identity: this runs outside any provider usage
+                # scope (the chat operation handler never enters
+                # provider_usage_scope; only generation/quality/header handlers
+                # do), so provider_call_admission sees no active scope and the
+                # durable ledger keys nothing. Repeated "stream.primary" calls
+                # across tool rounds are therefore safe. If a scope is ever
+                # added around chat, pass semantic_slot_suffix=f".round-{n}"
+                # (without double-suffixing public_logical_call_key) per round.
                 async for event in stream_generate_events(
                     client,
                     **get_generate_kwargs(
