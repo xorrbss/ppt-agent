@@ -33,7 +33,7 @@ def _text(x: float, y: float, value: str, *, centered: bool = False,
 
 
 def _group(kind: str, *, wrong_color: bool = False, wrong_slice: bool = False,
-           wrong_label: bool = False, contrasting_labels: bool = False) -> str:
+           wrong_label: bool = False, contrasting_labels: bool = False, unit: str = "") -> str:
     values = VALUES[kind]
     labels = {"bar": (True, "insideEnd"), "column": (True, "outsideEnd"),
               "line": (False, None), "pie": (True, "center")}
@@ -63,7 +63,7 @@ def _group(kind: str, *, wrong_color: bool = False, wrong_slice: bool = False,
             x, height = 230 + 190 * i, value * 3
             parts += [f'<rect x="{x}" y="{600 - height}" width="70" height="{height}" fill="{COLORS[i]}"/>',
                       _text(x + 35, 635, category, centered=True),
-                      _text(x + 35, 590 - height, str(value), centered=True)]
+                      _text(x + 35, 590 - height, f"{value}{unit}", centered=True)]
     elif kind == "line":
         points = [(260 + 180 * i, 600 - value * 4) for i, value in enumerate(values)]
         parts.append('<polyline points="' + " ".join(f"{x},{y}" for x, y in points) +
@@ -201,7 +201,8 @@ def test_chart_appearance_survives_worker_and_pptx_readback(tmp_path):
         if kind != "line":
             fills = xml.xpath(".//c:ser/c:dPt/c:spPr/a:solidFill/a:srgbClr")
             assert ["#" + point.get("val") for point in fills] == COLORS
-            assert len(xml.xpath(".//c:dLbls/c:showVal[@val='1']")) >= 1
+            # Point-scoped labels carry showVal on each c:dLbl (chart_xml point path), not on c:dLbls.
+            assert len(xml.xpath(".//c:dLbls/c:dLbl/c:showVal[@val='1']")) == len(VALUES[kind])
         if kind in {"bar", "column"}:
             assert xml.xpath(".//c:barChart/c:varyColors[@val='0']")
             assert xml.xpath(".//c:ser/c:tx/c:strRef/c:strCache/c:pt/c:v")[0].text == "Revenue"
@@ -212,11 +213,11 @@ def test_chart_appearance_survives_worker_and_pptx_readback(tmp_path):
             assert float(xml.xpath(".//c:valAx/c:scaling/c:max")[0].get("val")) == max(VALUES[kind])
             assert float(xml.xpath(".//c:valAx/c:scaling/c:min")[0].get("val")) == 0
         if kind == "bar":
-            assert {node.get("val") for node in xml.xpath(".//c:dLbls/c:txPr//a:srgbClr")} == {"FFFFFF"}
+            assert {node.get("val") for node in xml.xpath(".//c:dLbls//c:txPr//a:srgbClr")} == {"FFFFFF"}
             assert len(xml.xpath(".//c:catAx/c:scaling/c:orientation[@val='maxMin']")) == 1
             assert len(xml.xpath(".//c:valAx/c:crosses[@val='max']")) == 1
         if kind == "pie":
-            assert len(xml.xpath(".//c:dLbls/c:showCatName[@val='1']")) == 1
+            assert len(xml.xpath(".//c:dLbls/c:dLbl/c:showCatName[@val='1']")) == len(VALUES[kind])
         if kind == "line":
             assert len(xml.xpath(".//c:ser/c:marker/c:symbol[@val='circle']")) == 1
             assert int(xml.xpath(".//c:ser/c:marker/c:size")[0].get("val")) >= 10
@@ -777,3 +778,14 @@ def test_wide_source_category_labels_at_frozen_edge_remain_editable(tmp_path):
     (legend,) = [item for item in _frames(deck.slides[0])
                 if item.has_text_frame and item.text_frame.text == "주문 수(건)"]
     assert legend.text_frame.paragraphs[0].runs[0].font.name == "Noto Sans KR"
+
+
+@pytest.mark.parametrize("unit, expected", [("%", '0"%"'), ("억원", '0"억원"')])
+def test_unit_on_drawn_value_labels_survives_as_number_format(unit, expected, tmp_path):
+    svg, content = _publish(_group("column", unit=unit), 0)
+    assert content["svgReceipt"]["nativeObjects"]["accepted"] == 1
+    deck, _evidence = _export(tmp_path, [svg], [content])
+    (shape,) = [item for item in _frames(deck.slides[0]) if item.has_chart]
+    xml = shape.chart._element
+    formats = {node.get("formatCode") for node in xml.xpath(".//c:dLbls/c:dLbl/c:numFmt")}
+    assert formats == {expected}

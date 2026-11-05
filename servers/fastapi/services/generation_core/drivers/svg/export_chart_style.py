@@ -4,6 +4,7 @@ from __future__ import annotations
 from collections import Counter
 from copy import deepcopy
 import math
+import re
 from statistics import median
 from xml.etree import ElementTree as ET
 
@@ -605,30 +606,77 @@ def _apply_drawn_chart_style_core(projected: dict, item, root, *, source_underla
 
 
 
-def _source_data_label_format(texts):
-    """Infer a shared Office number format only from consistent visible labels."""
-    import re
+_LABEL_NUMBER = re.compile(r"[+-]?(?:[0-9]+|[0-9]{1,3}(?:,[0-9]{3})+)(?:\.([0-9]+))?")
+_LABEL_AFFIXED = re.compile(r"([^0-9+\-.,]*)([+-]?[0-9][0-9,]*(?:\.[0-9]+)?)([^0-9]*)")
+_MAX_UNIT_LENGTH = 8
 
+
+def _office_literal(unit):
+    """An Office number-format literal for a shared unit, or None if it cannot be quoted safely."""
+    if not unit:
+        return ""
+    if len(unit) > _MAX_UNIT_LENGTH or any(char in unit for char in '"\\;\n\r\t[]*_@'):
+        return None
+    return f'"{unit}"'
+
+
+def _source_data_label_format(texts):
+    """Infer a shared Office number format only from consistent visible labels.
+
+    Every label must be one number with the same decimals and grouping, and the
+    same non-numeric prefix and suffix (``%``, ``억원``, ``$``...), which becomes
+    a quoted literal so the native label renders the drawn text.
+    """
     if not texts:
         return None
     parsed = []
     for text in texts:
         literal = text.text.strip()
-        match = re.fullmatch(r"[+-]?(?:[0-9]+|[0-9]{1,3}(?:,[0-9]{3})+)(?:\.([0-9]+))?", literal)
+        affixed = _LABEL_AFFIXED.fullmatch(literal)
+        if affixed is None:
+            return None
+        prefix, number, suffix = affixed.groups()
+        match = _LABEL_NUMBER.fullmatch(number)
         if match is None:
             return None
-        integer = literal.lstrip('+-').split('.', 1)[0]
+        integer = number.lstrip('+-').split('.', 1)[0]
         if len(integer) > 1 and integer.startswith('0'):
             return None
-        parsed.append((len(match.group(1) or ''), ',' in integer, abs(float(literal.replace(',', '')))))
-    precisions = {row[0] for row in parsed}
-    if len(precisions) != 1:
+        parsed.append((len(match.group(1) or ''), ',' in integer, abs(float(number.replace(',', ''))),
+                       prefix, suffix))
+    if len({row[0] for row in parsed}) != 1 or len({row[3] for row in parsed}) != 1 \
+            or len({row[4] for row in parsed}) != 1:
         return None
     grouped = any(row[1] for row in parsed)
-    if grouped and any(value >= 1000 and not has_grouping for _, has_grouping, value in parsed):
+    if grouped and any(value >= 1000 and not has_grouping for _, has_grouping, value, *_ in parsed):
         return None
-    decimals = next(iter(precisions))
-    return ('#,##0' if grouped else '0') + ('.' + '0' * decimals if decimals else '')
+    prefix, suffix = parsed[0][3], parsed[0][4]
+    quoted_prefix, quoted_suffix = _office_literal(prefix), _office_literal(suffix)
+    if quoted_prefix is None or quoted_suffix is None:
+        return None
+    decimals = parsed[0][0]
+    body = ('#,##0' if grouped else '0') + ('.' + '0' * decimals if decimals else '')
+    return quoted_prefix + body + quoted_suffix
+
+
+def _fixed_axis_tick_format(item, prims, value_labels, semantic_names):
+    """A unit-carrying number format for the fixed value axis, from its drawn tick labels."""
+    axis = item.payload.get("valueAxis") or {}
+    try:
+        low, high, step = float(axis["minimum"]), float(axis["maximum"]), float(axis["majorUnit"])
+    except (KeyError, TypeError, ValueError):
+        return None
+    if step <= 0 or (high - low) / step > 200:
+        return None
+    ticks = {round(low + index * step, 9) for index in range(int(round((high - low) / step)) + 1)}
+    data_ids = {id(text) for text in value_labels}
+    labels = [text for text in prims.texts if id(text) not in data_ids
+              and normalize_text(text.text) not in semantic_names
+              and (number := parse_label_number(text.text)) is not None
+              and round(number, 9) in ticks]
+    number_format = _source_data_label_format(labels)
+    # A bare number keeps the axis "General"; only a drawn unit needs a format.
+    return number_format if number_format and '"' in number_format else None
 
 
 def _source_text_visible(root, group, value, *, unique):
@@ -762,6 +810,14 @@ def apply_drawn_chart_style(projected, item, root: ET.Element, *, source_underla
         raise NativeRejection("native_chart_data_label_style_unproven")
     if isinstance(labels, dict) and number_format is not None:
         labels['number_format'] = number_format
+    if item.payload.get("axisContract") == "native-chart-fixed-value-axis/v1":
+        value_axis = (projected.get("axes") or {}).get("value")
+        if isinstance(value_axis, dict):
+            semantic = {normalize_text(series["name"]) for series in item.payload["series"]
+                        if isinstance(series.get("name"), str)}
+            axis_format = _fixed_axis_tick_format(item, prims, value_labels, semantic)
+            if axis_format is not None:
+                value_axis["number_format"] = axis_format
     _fixed_axis_series_label_styles(projected, item, prims, categories, value_labels)
 
     # Point overrides belong to each native label, rather than a majority paint.
