@@ -38,7 +38,7 @@ def test_static_registry_composes_declared_modules_in_order() -> None:
 
 def test_ppt_router_is_composed_from_an_explicit_static_feature_tuple() -> None:
     assert PPT_FEATURE_MODULES[0].name == "svg-templates"
-    assert PPT_FEATURE_MODULES[-1].name == "design-packs"
+    assert PPT_FEATURE_MODULES[-1].name == "presentation-slide-order"
     assert API_V1_PPT_ROUTER.routes
 
 
