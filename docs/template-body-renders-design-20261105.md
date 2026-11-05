@@ -4,6 +4,16 @@ Status: design for review, no product code. Base `7ec3fe48` (the template A visu
 Measurements behind it: `docs/template-a-visuals-progress-20261105.md`. The customer deck (template A), its renders
 and anything derived from its text stay out of the repository; this note gives counts only.
 
+## Not source-skeleton reuse
+
+The user's decision `generation.no-source-skeleton-reuse` (`.spec-memory/decisions/`) forbids building generation on
+original template pages as skeletons: cloning a page's body shapes and layout and swapping only its text or data, fixed
+slots, Deck IR slot schemas or Design Pack source frames. The renders are not that. They are reference pictures with
+every word replaced by a bar, sent next to the page's own content; nothing in the generated page is copied from them, no
+slot or shape is filled, and the author composes the body itself under the rule "never copy their positions, counts or
+arrangement". They play the role the decision's invariants allow a template ("frames, furniture, fonts, colours,
+composition guidance and references"), like the exemplar outlines already sent today.
+
 ## 1. Problem and evidence
 
 * The author of a template-redesign page never sees the template. Its frozen style snapshot carries no image:
@@ -179,7 +189,11 @@ Decided by the user (2026-11-05), and how the implementation follows:
    render receipt (rendered, excluded, rejected and unstored counts, OCR path).
    Cost: with LiteParse every picture is one OCR call (about 1 to 2 s; repeated pictures are read once); the real
    template's ten pages took about 220 s at registration. Accepted.
-2. Every framed registration stores renders, whatever the generation knob says.
+2. Every framed registration stores renders, whatever the generation knob says. Changed after the measurement (user
+   decision 2026-11-06): registration renders only with `SVG_TEMPLATE_BODY_RENDERS` on (the masking OCR added 3 to 4
+   minutes per registration); off, nothing is converted, masked, read or stored and the package is unchanged. A
+   template registered with the knob off has no renders, so a deck generated with the knob on later sends none (fail
+   open): turning the knob on needs the template registered again.
 3. Exemplar pages only (at most 10).
 4. Allowed for decks of the same owner only: a render is read only when its recorded owner and tenant are the
    requesting principal, the owner the template pin resolved for, and the artifact store finds it under that owner.
@@ -195,3 +209,27 @@ the deck's source does not; common phrases count too, so arms are compared with 
 (section 6's "must be 0" becomes "no higher than the control"). The metric reads deck text only, so it cannot see a
 leak through a render (a render carries no text by construction); the safeguards there are the stored renders' OCR
 checks above and a look at the stored renders before a measurement.
+
+## Result (2026-11-06)
+
+Template A, 4 inputs x 3 runs per arm, paired, the same registrations for both arms (rendered with
+`SVG_TEMPLATE_BODY_RENDER_EXCLUDED_PAGES=9,66`); control = current defaults, variant = `SVG_TEMPLATE_BODY_RENDERS=on`.
+The renders were sent: every page receipt shows offered 1, sent 1, missing 0.
+
+| Metric | Control | Renders | Verdict |
+|---|---|---|---|
+| judge overall | 2.81 | 2.81 (-0.01) | no difference |
+| judge density | 2.50 | 2.48 (-0.03) | no difference |
+| judge visuals | 2.01 | 2.02 (+0.01) | no difference |
+| judge hierarchy / structure / tone | | -0.05 / -0.01 / +0.05 | no difference |
+| first drafts accepted (of 10) | 8.42 | 8.50 | |
+| fallback pages | 0.75 | 0.50 | |
+| template-text leak: n-grams / figures | 8.6 / 4.0 | 8.5 / 3.2 | no increase |
+
+Report only: charts 0 -> 0, pictures 0 -> 0, flow shapes 63.8 -> 54.4, icons 28.3 -> 24.3, polygons 0 -> 0.8, native
+tables 6.8 -> 7.0 per deck. The judge's visuals reasons name missing charts or diagrams on 119-120 of 120 pages in both
+arms.
+
+Conclusion: no effect. Seeing the template's pages did not change what the author draws; the gap to the original pages is
+that the pipeline produces no charts and no pictures, not what the author sees. The knob stays off and registration no
+longer renders unless it is on (decision 2 above). The next lever is the pipeline's missing charts and pictures.
