@@ -58,3 +58,17 @@ def test_package_objects_count_native_tables_and_charts_from_slide_parts():
 def test_summarize_reports_mean_min_max_of_numeric_fields_only():
     runs = [{"a": 2, "b": True, "c": "x"}, {"a": 4, "b": False}, {"a": 3}]
     assert metrics.summarize(runs) == {"a": {"mean": 3.0, "min": 2, "max": 4, "n": 3}}
+
+
+def test_template_text_leaks_count_template_wording_the_source_does_not_explain():
+    template_text_leaks = metrics.template_text_leaks
+    template = "퀵카필드 운영 센터는 연간 194명의 전문 인력과 33% 성장률을 기록했다. Zephyrine Platform launch"
+    source = "운영 센터는 24시간 운영되며 12명이 근무한다."
+    # A deck that copies a template phrase and two template figures, and writes the source's own facts.
+    generated = "퀵카필드 운영 센터의 전문 인력은 194명이며 33% 성장했다. 운영 센터는 12명이 근무한다."
+    leaks = template_text_leaks(template, generated, source)
+    # "퀵카필드 운영" and "전문 인력" are template bigrams outside the source; "운영 센터" is in the source.
+    assert leaks == {"ngrams": 2, "figures": 2}
+    assert template_text_leaks(template, "운영 센터는 12명이 근무한다.", source) == {"ngrams": 0, "figures": 0}
+    # Counts only: the result never carries the words.
+    assert set(leaks) == {"ngrams", "figures"} and all(isinstance(value, int) for value in leaks.values())
