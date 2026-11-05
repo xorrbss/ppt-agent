@@ -846,8 +846,9 @@ def _baseline_review_messages(sheet, *, slide_count, pngs, context):
                                    "exampleDigests", "authorExampleDigests", "inputDigest", "priorCandidates",
                                    "priorSheet", "examples", "blindVariantLabel", "version", "style_id",
                                    "id", "revision", "profile_version", "_globalPagePanelImages",
-                                   # A header's renderer measurement provenance is not reviewable.
-                                   "space_advance"}}
+                                   # A header's renderer measurement provenance (or why it
+                                   # has none) is not reviewable.
+                                   "space_advance", "space_advance_fallback"}}
         if isinstance(value, (list, tuple)):
             return [public(item) for item in value]
         return value

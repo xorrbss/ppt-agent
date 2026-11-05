@@ -8,10 +8,9 @@ import re
 import xml.etree.ElementTree as ET
 
 from services.svg_common_header import (
-    GROUP_ID, SVG_NS, _MISSING, _canvas, _digest, _font, _line_evidence,
-    _slides, _value, _wrap, common_header_source_digest,
+    GROUP_ID, SVG_NS, _MISSING, _canvas, _digest, _font, _line_evidence, _space_measurement,
+    _slides, _value, _wrap, common_header_source_digest, validated_space_advance,
 )
-from services.svg_common_header_space_advance import space_advance_evidence, validate_space_advance_evidence
 from services.svg_common_header_v2_geometry import contains, intersects, paint_boxes
 from services.svg_contract import _numbers, validate_svg
 from services.svg_master_furniture import master_furniture
@@ -21,7 +20,9 @@ VERSION = "svg-common-header/v2"
 PAGE_VERSION = "svg-common-header-page/v2"
 MEASUREMENT_VERSION = "svg-common-header-glyph-paint/v4"
 # Frozen contracts keep their own measurement: v2 face advances, v3 the sealed
-# space constant. v4 seals the rendering browser's measured space advance.
+# space constant. v4 seals the rendering browser's measured space advance; a
+# renderer without that measurement makes v3 contracts that seal why
+# (svg_common_header.SPACE_FALLBACK_KEY).
 _RECOGNIZED_MEASUREMENT_VERSIONS = (MEASUREMENT_VERSION, "svg-common-header-glyph-paint/v3",
                                     "svg-common-header-glyph-paint/v2")
 MARKER_ID = GROUP_ID + "-v2-contract"
@@ -298,11 +299,12 @@ def prepare_common_header_v2(candidate, outline, canvas, *, snapshot, cover_exce
                     if item.get("visibility") != "hidden" and item.get("kind") != "pageNumber"]
     if any(intersects(body, reservation) for reservation in reservations):
         raise ValueError("svg_common_header_body_brand_overlap")
-    space_advance = space_advance_evidence([field["font"] for field in fields])
+    measurement_version, space_provenance, space_advance = _space_measurement(
+        MEASUREMENT_VERSION, [field["font"] for field in fields])
     contract = {"version": VERSION, "origin": "generated-common-header", "candidate_id": candidate["candidate_id"],
         "revision": candidate["revision"], "canvas": geometry, "svg_template": template, "fields": fields,
         "body_box": body, "content_top_px": body["y"], "cover_exception": cover_exception,
-        "measurement_version": MEASUREMENT_VERSION, "space_advance": space_advance, "fonts": [dict(font) for font in {f["font"]["digest"] + str(f["font"]["weight"]): f["font"] for f in fields}.values()],
+        "measurement_version": measurement_version, **space_provenance, "fonts": [dict(font) for font in {f["font"]["digest"] + str(f["font"]["weight"]): f["font"] for f in fields}.values()],
         "assets": assets, "asset_sources": sources, "brand_reservations": reservations,
         "design_intent": copy.deepcopy(candidate.get("design_intent", "")),
         "shared_style": copy.deepcopy(candidate.get("shared_style", {}))}
@@ -326,10 +328,10 @@ def prepare_common_header_v2(candidate, outline, canvas, *, snapshot, cover_exce
                     raise ValueError("svg_common_header_value_missing")
                 actual = {"value": "", "source_ref": "absent:" + field["value_ref"], "user_fixed": False}
             lines = (_wrap(actual["value"], field["font"], field["box"]["width"], field["max_lines"],
-                           MEASUREMENT_VERSION, space_advance)
+                           measurement_version, space_advance)
                      if actual["value"] and applied else [])
             widths, boxes = _line_evidence(lines, field["font"], field["box"], field["baseline_offset_px"],
-                                         field["line_height_px"], field["alignment"], MEASUREMENT_VERSION,
+                                         field["line_height_px"], field["alignment"], measurement_version,
                                          space_advance)
             bound_fields.append({"node_id": field["node_id"], "role": field["role"], "value_ref": field["value_ref"],
                                  **actual, "lines": lines, "line_widths": widths, "glyph_boxes": boxes, "font": field["font"]})
@@ -370,11 +372,7 @@ def validate_common_header_binding_v2(contract, binding, *, index=None, count=No
         raise ValueError("svg_common_header_page_id_mismatch")
     if len(binding["fields"]) != len(contract["fields"]):
         raise ValueError("svg_common_header_binding_invalid")
-    space_advance = contract.get("space_advance")
-    if contract["measurement_version"] == MEASUREMENT_VERSION:
-        validate_space_advance_evidence(space_advance, [field["font"] for field in contract["fields"]])
-    elif "space_advance" in contract:
-        raise ValueError("svg_common_header_digest_mismatch")
+    space_advance = validated_space_advance(contract, [field["font"] for field in contract["fields"]])
     for field, bound in zip(contract["fields"], binding["fields"], strict=False):
         font = field["font"]
         if _font(font["family"], font["weight"], font["size_px"]) != font:

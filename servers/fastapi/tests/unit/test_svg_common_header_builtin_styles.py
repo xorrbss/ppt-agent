@@ -78,7 +78,7 @@ def test_pretendard_heading_keeps_its_face_once_the_renderer_measured_it():
 @pytest.fixture
 def pretendard_unmeasured(monkeypatch):
     """This renderer's measurement with the Pretendard faces rejected by the probe."""
-    measurement = space_advance._current_measurement()
+    _identity, measurement, _reason = space_advance._renderer_measurement()
     faces = {key: entry for key, entry in measurement["faces"].items() if key[0] != "Pretendard"}
     monkeypatch.setitem(space_advance._measurements, measurement["renderer"]["digest"],
                         {**measurement, "faces": faces})

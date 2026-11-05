@@ -31,6 +31,14 @@ granted: the renderer follows the font for the probe glyphs, the deviation
 scales linearly with font size (a reference and a small size), and the
 ``other`` class behaves as one class (a Latin letter and a digit agree). A face
 that fails a check has no measurement.
+
+A renderer that cannot be measured (a failed probe, a face that fails a check,
+or a header prepared on an event loop that never awaited
+``ensure_space_advance_measurement``) does not fail the deck and does not get an
+unverified number: ``header_space_measurement`` returns a fallback record
+instead, and the header takes the previous sealed-constant measurement
+(``glyph/v2`` / ``glyph-paint/v3``) with that record sealed in the contract as
+``space_advance_fallback``.
 """
 
 from __future__ import annotations
@@ -39,6 +47,7 @@ import asyncio
 import logging
 import math
 import platform
+import re
 import sys
 
 from utils.hashing import canonical_json_digest
@@ -64,8 +73,16 @@ _PROBE_WIDTH_PX = 1280
 _SOLID_COLUMN_X = 660
 _ENTRY_KEYS = frozenset({"family", "weight", "digest", "contexts"})
 _SAMPLE_KEYS = frozenset({"pair", "space_delta_em", "scale_check_delta_em", "glyph_offset_em"})
+#: The header was prepared on an event loop before this renderer was probed.
+UNMEASURED = "svg_common_header_space_advance_unmeasured"
+#: The probe ran (or could not run) and left a needed face without a measurement.
+UNMEASURABLE = "svg_common_header_space_advance_unmeasurable"
+_FALLBACK_KEYS = frozenset({"probe_version", "reason", "renderer"})
+_MAX_CAUSE_CHARS = 240
+_FALLBACK_REASON = re.compile(UNMEASURED + "|" + UNMEASURABLE + r":[^\x00-\x1f\x7f]{1,%d}" % _MAX_CAUSE_CHARS)
 
-#: renderer identity digest -> {"renderer": identity, "faces": {(family, weight, digest): entry}}
+#: renderer identity digest -> {"renderer": identity, "faces": {(family, weight, digest): entry},
+#: "rejected": {(family, weight, digest): why the probe rejected that face}}
 _measurements: dict[str, dict] = {}
 #: renderer identity digest -> why the last probe produced no measurement
 _failures: dict[str, str] = {}
@@ -186,7 +203,8 @@ async def ensure_space_advance_measurement() -> None:
     """Measure this process's renderer once; later calls reuse the result.
 
     A failed probe records its cause and is retried on the next call. It never
-    raises: only a header that needs the measurement fails, with that cause.
+    raises: a header prepared without the measurement takes the sealed-constant
+    fallback and seals that cause (``header_space_measurement``).
     """
     try:
         identity = renderer_identity()
@@ -198,7 +216,7 @@ async def ensure_space_advance_measurement() -> None:
         return
     from services.svg_renderer import render_svg_with_metrics
 
-    faces = {}
+    faces, rejected_faces = {}, {}
     try:
         for family, weight in PROBE_FACES:
             svg, rows, height = _probe_svg(family, weight)
@@ -206,35 +224,77 @@ async def ensure_space_advance_measurement() -> None:
             entry, rejected = _face_from_metrics(family, weight, rendered.quality, rows)
             if entry is None:
                 logger.warning("svg common header space probe rejected %s %s: %s", family, weight, rejected)
+                rejected_faces[(family, weight, _face_digest(family, weight))] = rejected
                 continue
             faces[(family, weight, entry["digest"])] = entry
     except Exception as error:
         _failures[key] = str(error) if isinstance(error, ValueError) else type(error).__name__
         logger.warning("svg common header space probe failed: %s", _failures[key])
         return
-    _measurements[key] = {"renderer": identity, "faces": faces}
+    _measurements[key] = {"renderer": identity, "faces": faces, "rejected": rejected_faces}
     _failures.pop(key, None)
 
 
-def _current_measurement() -> dict:
-    identity = renderer_identity()
-    measurement = _measurements.get(identity["digest"])
-    if measurement is not None:
-        return measurement
+def _cause(text: str) -> str:
+    """A bounded, single-line cause for a sealed fallback reason."""
+    return (re.sub(r"[\x00-\x1f\x7f]", "_", text) or "unknown")[:_MAX_CAUSE_CHARS]
+
+
+def _renderer_measurement() -> tuple[dict | None, dict | None, str | None]:
+    """``(identity, measurement, reason)`` of this process's renderer; ``reason`` is set iff no measurement."""
     try:
-        asyncio.get_running_loop()
-    except RuntimeError:
-        # A synchronous caller (a script or a test) can run the probe itself.
-        # An async caller must await ensure_space_advance_measurement() first:
-        # blocking its loop on a render could deadlock the render semaphore.
-        asyncio.run(ensure_space_advance_measurement())
-        measurement = _measurements.get(identity["digest"])
-        if measurement is not None:
-            return measurement
-        raise ValueError("svg_common_header_space_advance_unmeasurable") from None
-    if identity["digest"] in _failures:
-        raise ValueError("svg_common_header_space_advance_unmeasurable")
-    raise ValueError("svg_common_header_space_advance_unmeasured")
+        identity = renderer_identity()
+    except Exception as error:  # renderer policy or binary resolution
+        return None, None, f"{UNMEASURABLE}:{_cause('renderer_identity_unavailable:' + type(error).__name__)}"
+    key = identity["digest"]
+    if key not in _measurements and key not in _failures:
+        try:
+            asyncio.get_running_loop()
+        except RuntimeError:
+            # A synchronous caller (a script or a test) can run the probe itself,
+            # once: a failed probe is retried only by an explicit
+            # ensure_space_advance_measurement(), not by every header it prepares.
+            # An async caller must await ensure_space_advance_measurement() first:
+            # blocking its loop on a render could deadlock the render semaphore.
+            asyncio.run(ensure_space_advance_measurement())
+        else:
+            return identity, None, UNMEASURED
+    measurement = _measurements.get(key)
+    if measurement is not None:
+        return identity, measurement, None
+    return identity, None, f"{UNMEASURABLE}:{_cause(_failures.get(key, 'svg_common_header_space_probe_unavailable'))}"
+
+
+def _font_key(font) -> tuple:
+    return (font.get("family"), font.get("weight"), font.get("digest"))
+
+
+def header_space_measurement(fonts) -> tuple[dict | None, dict | None]:
+    """``(evidence, None)`` when this renderer measured every face of ``fonts``, else ``(None, fallback)``.
+
+    ``evidence`` is the measurement a ``glyph/v3`` / ``glyph-paint/v4`` contract
+    seals. ``fallback`` names why there is none, for a contract that takes the
+    previous sealed-constant measurement instead; it carries no number to use.
+    """
+    identity, measurement, reason = _renderer_measurement()
+    if measurement is not None:
+        missing = [font for font in fonts if _font_key(font) not in measurement["faces"]]
+        if not missing:
+            entries = {}
+            for font in fonts:
+                entry = measurement["faces"][_font_key(font)]
+                entries[_font_key(font)] = {**entry, "contexts": {
+                    name: [dict(sample) for sample in samples] for name, samples in entry["contexts"].items()}}
+            return {"version": PROBE_VERSION, "renderer": dict(measurement["renderer"]),
+                    "faces": [entries[key] for key in sorted(entries)]}, None
+        key = _font_key(missing[0])
+        cause = (measurement.get("rejected", {}).get(key)
+                 or f"svg_common_header_space_probe_face_unprobed:{key[0]}:{key[1]}")
+        reason = f"{UNMEASURABLE}:{_cause(cause)}"
+    logger.warning("svg common header space advance is not measured on this renderer; "
+                   "the header takes the sealed-constant measurement: %s", reason)
+    return None, {"probe_version": PROBE_VERSION, "reason": reason,
+                  "renderer": dict(identity) if identity is not None else None}
 
 
 def face_measured(family: str, weight: int) -> bool:
@@ -243,22 +303,30 @@ def face_measured(family: str, weight: int) -> bool:
         digest = _face_digest(family, weight)
     except ValueError:
         return False
-    return (family, weight, digest) in _current_measurement()["faces"]
+    _identity, measurement, _reason = _renderer_measurement()
+    return measurement is not None and (family, weight, digest) in measurement["faces"]
 
 
 def space_advance_evidence(fonts) -> dict:
-    """The sealed measurement for ``fonts`` on this process's renderer."""
-    measurement = _current_measurement()
-    entries = {}
-    for font in fonts:
-        key = (font.get("family"), font.get("weight"), font.get("digest"))
-        entry = measurement["faces"].get(key)
-        if entry is None:
-            raise ValueError("svg_common_header_font_material_invalid")
-        entries[key] = {**entry, "contexts": {name: [dict(sample) for sample in samples]
-                                              for name, samples in entry["contexts"].items()}}
-    return {"version": PROBE_VERSION, "renderer": dict(measurement["renderer"]),
-            "faces": [entries[key] for key in sorted(entries)]}
+    """The sealed measurement of ``fonts`` on this process's renderer; raises when there is none."""
+    evidence, fallback = header_space_measurement(fonts)
+    if evidence is None:
+        raise ValueError(fallback["reason"].split(":", 1)[0])
+    return evidence
+
+
+def _valid_identity(identity) -> bool:
+    return (isinstance(identity, dict) and isinstance(identity.get("digest"), str)
+            and identity["digest"] == canonical_json_digest({k: v for k, v in identity.items() if k != "digest"}))
+
+
+def validate_space_advance_fallback(record) -> None:
+    """Fail closed for a malformed sealed fallback record."""
+    if (not isinstance(record, dict) or set(record) != _FALLBACK_KEYS
+            or record["probe_version"] != PROBE_VERSION
+            or not isinstance(record["reason"], str) or not _FALLBACK_REASON.fullmatch(record["reason"])
+            or (record["renderer"] is not None and not _valid_identity(record["renderer"]))):
+        raise ValueError("svg_common_header_digest_mismatch")
 
 
 def _finite(value) -> bool:
@@ -283,9 +351,7 @@ def validate_space_advance_evidence(evidence, fonts) -> None:
     """Fail closed for a malformed sealed measurement or one missing a used face."""
     if (not isinstance(evidence, dict) or set(evidence) != {"version", "renderer", "faces"}
             or evidence["version"] != PROBE_VERSION
-            or not isinstance(evidence["renderer"], dict)
-            or evidence["renderer"].get("digest") != canonical_json_digest(
-                {k: v for k, v in evidence["renderer"].items() if k != "digest"})
+            or not _valid_identity(evidence["renderer"])
             or not isinstance(evidence["faces"], list)):
         raise ValueError("svg_common_header_digest_mismatch")
     keys = set()
@@ -326,7 +392,8 @@ def space_deviation_em(text: str, deltas: tuple[float, ...]) -> float:
 
 
 __all__ = [
-    "PROBE_FACES", "PROBE_VERSION", "SPACE_CONTEXTS", "ensure_space_advance_measurement", "face_measured",
+    "PROBE_FACES", "PROBE_VERSION", "SPACE_CONTEXTS", "UNMEASURABLE", "UNMEASURED",
+    "ensure_space_advance_measurement", "face_measured", "header_space_measurement",
     "renderer_identity", "space_advance_evidence", "space_contexts", "space_deltas_em",
-    "space_deviation_em", "validate_space_advance_evidence",
+    "space_deviation_em", "validate_space_advance_evidence", "validate_space_advance_fallback",
 ]
