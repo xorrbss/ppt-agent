@@ -45,6 +45,7 @@ from utils.outline_utils import (
     explicit_outline_title,
     get_no_of_outlines_to_generate_for_n_slides,
     get_presentation_title_from_presentation_outline,
+    clean_deck_title,
     parse_outline_response,
 )
 from utils.llm_calls.generate_content_brief import generate_content_brief
@@ -351,9 +352,9 @@ async def stream_outlines(
             presentation.n_slides = len(presentation_outlines.slides)
 
         presentation.outlines = presentation_outlines.model_dump()
-        presentation.title = get_presentation_title_from_presentation_outline(
-            presentation_outlines
-        )
+        presentation.title = clean_deck_title(
+            presentation_outlines.title
+        ) or get_presentation_title_from_presentation_outline(presentation_outlines)
 
         sql_session.add(presentation)
         await sql_session.commit()

@@ -146,7 +146,10 @@ def merge_condense(
         changed += 1
     if not changed:
         return None
-    return PresentationOutlineModel(slides=[{"content": text} for text in contents])
+    return PresentationOutlineModel(
+        slides=[{"content": text} for text in contents],
+        title=getattr(outline, "title", None),
+    )
 
 
 def enforce_floor_after_condense(original: Any, candidate: Any, *, floor: int) -> Any:

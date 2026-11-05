@@ -82,6 +82,7 @@ def strip_outline_citations(
 ) -> PresentationOutlineModel:
     """The same removal across a whole outline, as a new model."""
     return PresentationOutlineModel(
+        title=outline.title,
         slides=[
             slide.model_copy(update={"content": strip_outline_citation_links(slide.content)})
             for slide in outline.slides

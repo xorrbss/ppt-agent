@@ -146,4 +146,4 @@ def ground_outline_charts(outline: PresentationOutlineModel, source: str) -> tup
     for item in dropped:
         LOGGER.warning("outline chart line dropped (%s): slide=%d values=%s line=%r",
                        item.reason, item.slide_index, list(item.ungrounded_values), item.line[:200])
-    return (PresentationOutlineModel(slides=slides) if dropped else outline), dropped
+    return (PresentationOutlineModel(slides=slides, title=outline.title) if dropped else outline), dropped

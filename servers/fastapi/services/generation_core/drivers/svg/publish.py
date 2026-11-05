@@ -174,7 +174,8 @@ async def _publish(request, presentation_id, outline, language, session, job, sn
         image_refs = await asyncio.to_thread(_save_slide_pngs, presentation_id,
                                              [png for _, png in pages], attempt_token)
     stamp_new_svg_presentation(presentation)
-    presentation.title = authored_title(request, outline)
+    stored_outline = presentation.outlines if isinstance(presentation.outlines, dict) else {}
+    presentation.title = authored_title(request, outline, stored_outline.get("title"))
     presentation.n_slides = len(pages)
     presentation.outlines = outline.model_dump(mode="json")
     presentation.content = request.content

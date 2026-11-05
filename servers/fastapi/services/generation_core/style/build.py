@@ -13,7 +13,10 @@ from typing import Mapping, Optional, Sequence
 from models.generate_presentation_request import GeneratePresentationRequest
 from models.presentation_outline_model import PresentationOutlineModel
 from services.generation_core.authoring.author_slide import Brand
-from utils.outline_utils import get_presentation_title_from_presentation_outline
+from utils.outline_utils import (
+    clean_deck_title,
+    get_presentation_title_from_presentation_outline,
+)
 
 from .context import BriefLine, FontChoice, Palette, StyleContext
 
@@ -44,11 +47,21 @@ def _is_korean(*candidates: Optional[str]) -> bool:
 
 
 def authored_title(
-    request: GeneratePresentationRequest, outline: PresentationOutlineModel
+    request: GeneratePresentationRequest,
+    outline: PresentationOutlineModel,
+    stored_title: str | None = None,
 ) -> str:
-    """A clean deck title for authored mode. Prefer the user's topic (request.content
-    first line) over the verbose generated first-slide outline (which often carries
-    presenter/date/agenda scaffolding that bloats the title and filename)."""
+    """A clean deck title. In order: the title the outline gave the whole deck
+    (or the one stored with the outline the user reviewed), an explicit request
+    title, the user's topic (request.content first line), then the first slide's
+    heading (which often carries presenter/date/agenda scaffolding)."""
+    explicit = (
+        clean_deck_title(getattr(outline, "title", None))
+        or clean_deck_title(stored_title)
+        or clean_deck_title(getattr(request, "title", None))
+    )
+    if explicit:
+        return explicit
     content = (request.content or "").strip()
     if content:
         first_line = content.splitlines()[0].lstrip("#").strip()

@@ -401,6 +401,15 @@ async def generate_ppt_outline(
                 properties["title"] = {"type": "string", "minLength": 1,
                     "description": "Grounded plain-text display title matching the Markdown headline"}
                 item.setdefault("required", []).append("title")
+        if "slides" in schema.get("properties", {}):
+            # The deck's own title: slide headings are page headings, not a
+            # title for the whole deck.
+            schema["properties"]["title"] = {
+                "type": "string",
+                "minLength": 1,
+                "description": "Plain-text title of the whole presentation, not the first slide's heading",
+            }
+            schema.setdefault("required", []).append("title")
         outline_schema = prepare_schema_for_validation(
             schema,
             strict=True,

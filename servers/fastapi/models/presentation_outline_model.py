@@ -43,6 +43,16 @@ class SlideOutlineModel(BaseModel):
 
 class PresentationOutlineModel(BaseModel):
     slides: List[SlideOutlineModel]
+    #: Plain-text title of the whole deck, as the outline writer gave it.
+    title: str | None = None
+
+    @model_serializer(mode="wrap")
+    def _serialize_optional_title(self, handler):
+        # Outlines without a deck title keep their original JSON/digest.
+        result = handler(self)
+        if result.get("title") is None:
+            result.pop("title", None)
+        return result
 
     def to_string(self):
         message = ""

@@ -38,6 +38,14 @@ def explicit_outline_title(content: str) -> str | None:
     return title
 
 
+def clean_deck_title(value: object) -> str | None:
+    """A deck title as one plain line of at most 80 characters, or None."""
+    if not isinstance(value, str):
+        return None
+    text = " ".join(value.replace("#", " ").split())
+    return text[:80].strip() or None
+
+
 def get_presentation_title_from_presentation_outline(
     presentation_outline: PresentationOutlineModel,
 ) -> str:
