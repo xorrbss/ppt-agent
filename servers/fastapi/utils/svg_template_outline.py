@@ -31,7 +31,12 @@ from models.presentation_outline_model import PresentationOutlineModel
 from utils.content_structure_policy import StructurePolicy
 
 _WITH_TABLES = "its bullets, its Markdown table rows or its series of figures"
-_WITHOUT_TABLES = "its bullets or its series of figures"
+#: Measured 2026-11-05 (template A, policy off, 12 decks per arm): outlines held 23-50 Markdown
+#: table rows per deck and the decks 5.9 native tables each at 8.9 first drafts of 10; a clause
+#: that named bullets and figures only dropped the unstructured input's rows from 42 to 0 and its
+#: tables from 8.3 to 1.0 per deck. A table the source itself tabulates stays a table.
+_WITHOUT_TABLES = ("its bullets, a Markdown table where the source itself tabulates those facts (keep its"
+                   " pipes and separator row), or its series of figures")
 
 _CLAUSE = (
     "\nThis deck is written into a registered template whose body pages are structured, so each"

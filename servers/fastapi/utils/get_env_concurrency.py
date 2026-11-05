@@ -253,6 +253,26 @@ def get_svg_template_visual_guidance_env(settings: RuntimeSettings | None = None
     return value in {"on", "true", "1"}
 
 
+def get_svg_template_step_pictures_env(settings: RuntimeSettings | None = None) -> bool:
+    """Whether a template-redesign deck gets model-drawn step pictures
+    (``SVG_TEMPLATE_STEP_PICTURES``: ``on`` / ``off``; unset or unknown: off).
+
+    On, and only while ``SVG_ILLUSTRATION_MODE`` is off, the asset offer of a template-redesign
+    deck runs in vector mode with the ``spots`` part alone (``drivers/svg/asset_slots.py``): a
+    process, cycle, timeline or roadmap page with three to six planned steps gets one small
+    vector picture per step, drawn in the deck palette (``assets/vector_offer.py``), offered as
+    optional slots; scenes are demoted to icons as in off mode and no cover picture is drawn.
+    Measured 2026-11-05 on template A: the judge's visuals axis stayed at 2.2 with icons only
+    ("no charts, diagrams or figures like the anchors") while the template's own pages carry
+    small pictures above their step boxes. Internal knob read when the offer is built, listed in
+    ``tests/support/internal_env_names.py``.
+    """
+    from utils.get_env import get_setting_env
+
+    value = (get_setting_env("SVG_TEMPLATE_STEP_PICTURES", settings) or "").strip().lower()
+    return value in {"on", "true", "1"}
+
+
 def get_svg_template_component_style_env(settings: RuntimeSettings | None = None) -> bool:
     """Whether a template-redesign deck's author rules carry the template's body component styles
     (``SVG_TEMPLATE_COMPONENT_STYLE``: ``on`` / ``off``; unset or unknown: off).

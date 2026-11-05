@@ -42,7 +42,10 @@ def test_table_rows_are_material_only_with_the_tables_part_of_the_structure_poli
     # Every queued deck carries the writing policy, whose pipe rule forbids table pipes unless the
     # content structure policy's tables part adds its exception; the clause follows that part.
     assert "Markdown table rows" not in TEMPLATE_SECTIONS_CLAUSE
-    assert "its bullets or its series of figures" in TEMPLATE_SECTIONS_CLAUSE
+    # A table the source itself tabulates stays a table (the outline already wrote 23-50 pipe rows per
+    # deck with the policy off; naming bullets and figures only dropped them to 0 on one input).
+    assert ("its bullets, a Markdown table where the source itself tabulates those facts (keep its pipes"
+            " and separator row), or its series of figures") in TEMPLATE_SECTIONS_CLAUSE
     assert "its bullets, its Markdown table rows or its series of figures" in TEMPLATE_SECTIONS_CLAUSE_WITH_TABLES
     assert outline_sections_clause(True) == TEMPLATE_SECTIONS_CLAUSE
     assert outline_sections_clause(True, StructurePolicy(tables=False)) == TEMPLATE_SECTIONS_CLAUSE
@@ -52,6 +55,7 @@ def test_table_rows_are_material_only_with_the_tables_part_of_the_structure_poli
     assert with_policy.replace(TEMPLATE_SECTIONS_CLAUSE_WITH_TABLES, "") == _prompt(structure_policy=StructurePolicy())
     connectors_only = _prompt(structure_policy=StructurePolicy(tables=False), template_sections=True)
     assert connectors_only.endswith(TEMPLATE_SECTIONS_CLAUSE) and "Markdown table rows" not in connectors_only
+    assert "where the source itself tabulates" in connectors_only
 
 
 def test_the_clause_asks_for_the_template_structure_without_inventing_content():

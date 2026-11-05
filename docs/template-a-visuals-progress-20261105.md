@@ -135,6 +135,49 @@ visuals 2.3 / 2.5); first drafts 8 and 10 of 10, fallback 1 and 0. Per-page judg
   headings, so a sectioned outline counts its headings as text; the UI `/outline` endpoint and the Mem0 outline
   prompt do not know the template mode and never get the clause.
 
+## Batch 1: both knobs on against the baseline (template A, 4 inputs x 3 runs, paired)
+
+`decide`: hierarchy 3.10 -> 3.48 (better, 4/4 cells), overall 2.74 -> 2.88 (+0.14, under the 0.2 threshold),
+structure +0.19, tone +0.10, density 2.46 -> 2.50 and visuals 2.18 -> 2.15 (no difference); first drafts 8.92 ->
+8.92, fallback 0.33 -> 0.25, gate 8.75 -> 9.33; native tables 5.9 -> 4.0 per deck. Per-page evidence (108 body
+pages per arm):
+
+* Sections: the judge's count went from a mean of 1.39 (45 pages with 0) to 2.47 (7 pages with 0); key-message bar
+  present 55 % -> 77 %; "numbered sub-headings" entered the template components it recognised (0 -> 50 mentions).
+  Outlines carry 18-31 `###` sub-headings per deck (0 before). The sections lever did what it was meant to.
+* Visuals did not move because nothing new was drawn: polygons 1.1 -> 0.9 per deck, polylines 1.1 -> 0, native charts
+  0.2 -> 0.2, icons 32.1 -> 32.8, icon pages offered/used unchanged (8.4/7.9 -> 8.4/7.9). The visuals reasons are the
+  same words in both arms ("no charts, diagrams or figures like the anchors", "only small line icons": 74 and 80 of
+  108 pages). The vocabulary line changed no drawing, so `SVG_TEMPLATE_VISUAL_GUIDANCE` is kept on for batch 2 only
+  so that batch 2 differs from batch 1 by one knob; the data gives it no effect of its own.
+* Density did not move because the empty area did not: judge empty share 37.2 % -> 37.2 % (measured blank 0.43 ->
+  0.42; the originals 0.15-0.37), text items 35.2 -> 34.3 per page, "large type" named on 28 -> 26 pages. The reworded
+  density sentence changed nothing either.
+* Tables dropped through the sections clause, not the author: with the policy off the baseline outlines still held
+  23-50 Markdown table rows per deck on three inputs (the model keeps a source's tables and tabulates even the
+  unstructured report), and those became 5.9 native tables per deck at 8.9 first drafts of 10. The clause named
+  "bullets or figures" as a sub-section's material and the unstructured input's rows fell from 42 to 0 per deck
+  (tables 8.3 -> 1.0); the structured and data inputs kept theirs (7-9 and 6-9). The clause now keeps "a Markdown
+  table where the source itself tabulates those facts" with the policy off (`utils/svg_template_outline.py`).
+
+## Batch 2 lever: `SVG_TEMPLATE_STEP_PICTURES` (commit after `bce62345`, internal, default off)
+
+The judge's visuals axis asks for "icons, figures, charts and diagram shapes of the kind and amount of the score 5
+anchors"; slide 66 (an anchor) carries 14 small pictures, four of them above its four step boxes, and 47 of the
+template's 100 body slides have page-specific pictures. The generated pages have none (image generation is off and
+`SVG_ILLUSTRATION_MODE` is off). `SVG_TEMPLATE_STEP_PICTURES=on` runs the asset offer of a template-redesign deck in
+vector mode with the `spots` part alone (`drivers/svg/asset_slots.resolve_offer`, `template_step_pictures`): a
+process, cycle, timeline or roadmap page with three to six planned steps gets one 220x180 vector picture per step,
+drawn by the model in the deck palette in one call per page (`assets/vector_offer.plan_jobs`, at most 12 calls per
+deck), offered as optional slots ("place it above or beside that item's text"); no cover or scene picture is drawn,
+and `build_asset_offer` now makes the plan as in off mode when the parts leave scenes out, so scene pages keep their
+icons. Expected: visuals up on the step pages (3-5 of 10 on the proposal inputs, 0 on the data report), no change
+to first drafts (the slots are optional; a drawing is validated before it is offered); cost about $0.02-0.04 and
+10-18 s per step page, in parallel with icon selection.
+
+Batch 2 environment: `SVG_TEMPLATE_OUTLINE_SECTIONS=on SVG_TEMPLATE_VISUAL_GUIDANCE=on SVG_TEMPLATE_STEP_PICTURES=on`
+(compare with batch 1 for the pictures, with the baseline for the whole).
+
 ## Next
 
 Baseline matrix on template A (4 inputs x 3 runs), the change behind an internal knob (default off), independent
