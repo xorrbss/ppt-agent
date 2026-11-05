@@ -14,6 +14,7 @@ servers/nextjs/utils/provider-registry.generated.ts text eol=lf
 # Converter manifests and replay patches pin exact bytes, including on Windows.
 servers/fastapi/vendor/slide_master/** -text
 compatibility/slide-master/patches/*.patch -text
+servers/fastapi/workers/svg_converter_superseded_manifests/** -text
 
 # Byte-compared 16:9 canvas baselines must keep their exact Git blob bytes on every OS.
 servers/fastapi/tests/fixtures/infographic_16x9_baseline/** -text

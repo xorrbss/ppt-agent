@@ -1,0 +1,410 @@
+--- a/servers/fastapi/vendor/slide_master/svg_to_pptx/native_objects/chart_data.py
++++ b/servers/fastapi/vendor/slide_master/svg_to_pptx/native_objects/chart_data.py
+@@ -589,7 +589,9 @@
+     return style
+ 
+ 
+-def _category_series(payload: dict[str, Any], categories: list[Any]) -> list[dict[str, Any]]:
++def _category_series(payload: dict[str, Any], categories: list[Any], *,
++                     chart_type: str | None = None,
++                     grouping: str | None = None) -> list[dict[str, Any]]:
+     raw_series = payload.get("series", [])
+     if not categories or not isinstance(raw_series, list) or not raw_series:
+         raise RuntimeError("Native PPTX chart requires non-empty categories and series")
+@@ -622,6 +624,13 @@
+         if point_colors and len(point_colors) != len(values):
+             raise RuntimeError("Native PPTX chart series point_colors must match values length")
+         series_item = {"name": str(item.get("name") or f"Series {idx}"), "values": values}
++        if item.get("data_labels") is not None:
++            if (chart_type not in {"bar", "column"} or grouping != "clustered"
++                    or not isinstance(item["data_labels"], dict)):
++                raise RuntimeError("Native PPTX per-series data labels require clustered bar/column")
++            series_item["data_labels"] = _chart_data_labels(
++                item, chart_type, grouping, len(categories),
++            )
+         if point_colors:
+             series_item["point_colors"] = point_colors
+         fill_opacity = _first_present(item.get("fill_opacity"), item.get("fillOpacity"))
+@@ -653,6 +662,31 @@
+     alias_grouping: str | None,
+     alias_style: str | None,
+ ) -> dict[str, Any]:
++    source_options = {}
++    if "vary_colors" in payload:
++        source_options["vary_colors"] = _chart_bool(payload["vary_colors"])
++    if "gap_width" in payload:
++        gap = _chart_number(payload["gap_width"])
++        if type(gap) is not int or not 0 <= gap <= 500:
++            raise RuntimeError("Native PPTX gap_width must be an integer from 0 to 500")
++        source_options["gap_width"] = gap
++    if "plot_layout" in payload:
++        raw_layout = payload["plot_layout"]
++        if not isinstance(raw_layout, dict) or set(raw_layout) != {"x", "y", "w", "h"}:
++            raise RuntimeError("Native PPTX plot_layout must contain x/y/w/h")
++        layout = {key: _number(raw_layout[key], f"plot_layout {key}") for key in ("x", "y", "w", "h")}
++        if (any(not 0 <= number <= 1 for number in layout.values())
++                or layout["w"] <= 0 or layout["h"] <= 0
++                or layout["x"] + layout["w"] > 1 + 1e-6
++                or layout["y"] + layout["h"] > 1 + 1e-6):
++            raise RuntimeError("Native PPTX plot_layout must be normalized within chart bounds")
++        source_options["plot_layout"] = layout
++    if "overlap" in payload:
++        overlap = payload["overlap"]
++        if (chart_type not in {"bar", "column"} or payload.get("grouping") != "clustered"
++                or type(overlap) is not int or not -100 <= overlap <= 100):
++            raise RuntimeError("Native PPTX clustered overlap must be an integer from -100 to 100")
++        source_options["overlap"] = overlap
+     axes = _chart_axes(payload, {"category", "value"})
+     if axes and chart_type in {"doughnut", "of_pie", "pie"}:
+         raise RuntimeError(
+@@ -670,7 +704,12 @@
+     )
+     style = payload.get("style") if isinstance(payload.get("style"), dict) else {}
+ 
+-    series = _category_series(payload, categories)
++    grouping = (
++        _chart_grouping(chart_type, payload, alias_grouping)
++        if chart_type in {"bar", "column", "line", "area"}
++        else None
++    )
++    series = _category_series(payload, categories, chart_type=chart_type, grouping=grouping)
+     if chart_type in {"doughnut", "of_pie", "pie"}:
+         if len(series) != 1:
+             raise RuntimeError("Native PPTX pie-family charts support exactly one series")
+@@ -703,13 +742,9 @@
+     if alias_style == "exploded" or payload.get("exploded"):
+         raise RuntimeError("Native PPTX exploded pie/doughnut is outside current basic chart support")
+ 
+-    grouping = (
+-        _chart_grouping(chart_type, payload, alias_grouping)
+-        if chart_type in {"bar", "column", "line", "area"}
+-        else None
+-    )
+     return {
+         "kind": "category",
++        **source_options,
+         "type": chart_type,
+         "categories": categories,
+         "grouping": grouping,
+--- a/servers/fastapi/vendor/slide_master/svg_to_pptx/native_objects/chart_xml.py
++++ b/servers/fastapi/vendor/slide_master/svg_to_pptx/native_objects/chart_xml.py
+@@ -40,6 +40,7 @@
+     _first_present,
+     _font_size_hpt,
+     _hex_or_none,
++    _number,
+     _powerpoint_line_width_emu,
+ )
+ 
+@@ -378,9 +379,10 @@
+                 )
+             marker_xml = _marker_xml(radar_marker_style)
+         invert_xml = '<c:invertIfNegative val="0"/>' if chart_type in {"bar", "column"} else ""
++        series_labels = item.get("data_labels") if item.get("data_labels") is not None else data_labels
+         data_labels_xml = (
+             _data_labels_xml(
+-                data_labels,
++                series_labels,
+                 chart_type=chart_type,
+                 grouping=grouping,
+                 point_count=len(item["values"]),
+@@ -388,7 +390,8 @@
+                 default_color=data_label_color,
+                 default_font_face=data_label_font_face,
+             )
+-            if (_series_scoped_data_labels(data_labels) or data_labels is not None and chart_type in {"pie","doughnut"})
++            if (item.get("data_labels") is not None or _series_scoped_data_labels(data_labels)
++                or data_labels is not None and chart_type in {"pie","doughnut"})
+             and chart_type in {"area", "bar", "column", "line", "pie", "doughnut"}
+             else ""
+         )
+@@ -409,20 +412,41 @@
+     return "".join(parts)
+ 
+ 
++def _chart_manual_layout_xml(value: Any, *, inner: bool = False) -> str:
++    if value is None:
++        return "<c:layout/>"
++    if not isinstance(value, dict) or set(value) != {"x", "y", "w", "h"}:
++        raise RuntimeError("Native PPTX chart manual layout requires x/y/w/h")
++    bounds = {key: _number(raw, f"manual layout {key}") for key, raw in value.items()}
++    if (any(not 0 <= number <= 1 for number in bounds.values()) or bounds["w"] <= 0 or bounds["h"] <= 0
++            or bounds["x"] + bounds["w"] > 1 + 1e-6 or bounds["y"] + bounds["h"] > 1 + 1e-6):
++        raise RuntimeError("Native PPTX chart manual layout must be within chart bounds")
++    target = '<c:layoutTarget val="inner"/>' if inner else ""
++    modes = ''.join(f'<c:{key}Mode val="{"edge" if key in {"x", "y"} else "factor"}"/>' for key in ("x", "y", "w", "h"))
++    coords = ''.join(f'<c:{key} val="{bounds[key]:.12g}"/>' for key in ("x", "y", "w", "h"))
++    return f"<c:layout><c:manualLayout>{target}{modes}{coords}</c:manualLayout></c:layout>"
++
++
+ def _chart_title_paragraph_xml(
+     text: str,
+     *,
+     font_size: int,
+     color: str | None = None,
+     font_face: str | None = None,
++    bold: Any = None,
++    align: str | None = None,
+ ) -> str:
+     fill_xml = (
+         f'<a:solidFill><a:srgbClr val="{color}"/></a:solidFill>'
+         if color else ""
+     )
+     lang = detect_text_lang(text)
++    bold_xml = f' b="{_bool_attr(_chart_bool(bold))}"' if bold is not None else ""
++    if align is not None and align not in {"l", "ctr", "r"}:
++        raise RuntimeError("Native PPTX chart title alignment is unsupported")
++    align_xml = f'<a:pPr algn="{align}"/>' if align is not None else ""
+     return (
+-        f'<a:p><a:r><a:rPr lang="{lang}" sz="{font_size}">{fill_xml}{_font_face_xml(font_face)}</a:rPr>'
++        f'<a:p>{align_xml}<a:r><a:rPr lang="{lang}" sz="{font_size}"{bold_xml}>{fill_xml}{_font_face_xml(font_face)}</a:rPr>'
+         f"<a:t>{_xml_escape(text)}</a:t></a:r></a:p>"
+     )
+ 
+@@ -441,13 +465,16 @@
+     if title_entry is None and subtitle_entry is None:
+         return '<c:autoTitleDeleted val="1"/>'
+     paragraphs = []
++    layout = None
+     if title_entry is not None:
+         text, item = title_entry
++        layout = item.get("layout")
+         paragraphs.append(_chart_title_paragraph_xml(
+             text,
+             font_size=_chart_text_entry_font_size(item, font_size),
+             color=_chart_text_entry_color(item, color),
+             font_face=_chart_text_entry_font_face(item, font_face),
++            bold=item.get("bold"), align=item.get("align"),
+         ))
+     if subtitle_entry is not None:
+         text, item = subtitle_entry
+@@ -457,10 +484,10 @@
+             color=_chart_text_entry_color(item, color),
+             font_face=_chart_text_entry_font_face(item, font_face),
+         ))
+-    overlay_xml = '<c:overlay val="0"/>' if reserve_space else ""
++    overlay_xml = '<c:overlay val="1"/>' if layout is not None else '<c:overlay val="0"/>' if reserve_space else ""
+     return (
+         f"<c:title><c:tx><c:rich><a:bodyPr/><a:lstStyle/>{''.join(paragraphs)}"
+-        f"</c:rich></c:tx><c:layout/>{overlay_xml}</c:title>"
++        f"</c:rich></c:tx>{_chart_manual_layout_xml(layout)}{overlay_xml}</c:title>"
+         '<c:autoTitleDeleted val="0"/>'
+     )
+ 
+@@ -488,9 +515,11 @@
+         "t": "t",
+     }
+     position = positions.get(position_key, "b")
++    layout_xml = _chart_manual_layout_xml(style.get("legend_layout"))
++    overlay = _chart_bool(style.get("legend_overlay"), False)
+     return (
+-        f'<c:legend><c:legendPos val="{position}"/><c:layout/>'
+-        '<c:overlay val="0"/>'
++        f'<c:legend><c:legendPos val="{position}"/>{layout_xml}'
++        f'<c:overlay val="{_bool_attr(overlay)}"/>'
+         f'{_chart_tx_pr_xml(font_size, color, font_face=font_face)}'
+         '</c:legend>'
+     )
+@@ -875,6 +904,7 @@
+                 default_font_face=chart_style.get("font_face"),
+             )
+             if not _series_scoped_data_labels(data_labels)
++            and not any(item.get("data_labels") is not None for item in plot["series"])
+             else ""
+         )
+         if chart_type == "column":
+@@ -1068,6 +1098,7 @@
+         )
+         if chart_type in {"area", "bar", "column", "line"}
+         and not _series_scoped_data_labels(chart_data.get("data_labels"))
++        and not any(item.get("data_labels") is not None for item in series)
+         else ""
+     )
+ 
+@@ -1086,14 +1117,15 @@
+             show_value_axis_labels=chart_data.get("show_value_axis_labels", True),
+             axes=chart_data.get("axes") or {},
+         )
++        overlap = chart_data.get("overlap")
+         overlap_xml = (
+-            '<c:overlap val="100"/>'
+-            if grouping in {"stacked", "percentStacked"}
++            '<c:overlap val="100"/>' if grouping in {"stacked", "percentStacked"}
++            else f'<c:overlap val="{overlap}"/>' if grouping == "clustered" and overlap is not None
+             else ""
+         )
+         vary_colors_xml = (
+             '<c:varyColors val="1"/>'
+-            if any(item.get("point_colors") for item in series)
++            if chart_data.get("vary_colors", any(item.get("point_colors") for item in series))
+             else '<c:varyColors val="0"/>'
+         )
+         return (
+@@ -1102,7 +1134,7 @@
+             f"{vary_colors_xml}"
+             f"{ser_xml}"
+             f"{data_labels_xml}"
+-            '<c:gapWidth val="150"/>'
++            f'<c:gapWidth val="{chart_data.get("gap_width", 150)}"/>'
+             f"{overlap_xml}"
+             f'<c:axId val="{cat_ax_id}"/><c:axId val="{val_ax_id}"/>'
+             "</c:barChart>"
+@@ -1392,7 +1424,7 @@
+ <c:lang val="en-US"/>
+ <c:chart>
+ {title_xml}
+-<c:plotArea><c:layout/>{plot_xml}{_chart_area_sp_pr_xml(chart_style.get("plot_fill"))}</c:plotArea>
++<c:plotArea>{_chart_manual_layout_xml(chart_data.get("plot_layout"), inner=True)}{plot_xml}{_chart_area_sp_pr_xml(chart_style.get("plot_fill"))}</c:plotArea>
+ {legend_xml}
+ <c:plotVisOnly val="1"/>
+ <c:dispBlanksAs val="gap"/>
+--- a/servers/fastapi/vendor/slide_master/svg_to_pptx/native_objects/table.py
++++ b/servers/fastapi/vendor/slide_master/svg_to_pptx/native_objects/table.py
+@@ -7,6 +7,7 @@
+ from xml.etree import ElementTree as ET
+ 
+ from ..drawingml.context import ConvertContext, ShapeResult
++from ..conversion_context import current_conversion_context
+ from ..drawingml.theme_colors import ThemeColorSpec, color_node_xml
+ from ..drawingml.utils import _xml_escape, detect_text_lang, font_px_to_hpt
+ from .chart_style import _font_face_xml
+@@ -138,6 +139,8 @@
+     font_family: str | None = None
+     lang: str | None = None
+     alt_lang: str | None = None
++    # A soft line break (DrawingML a:br) inside the paragraph before this run.
++    break_before: bool = False
+ 
+ 
+ @dataclass(frozen=True)
+@@ -145,6 +148,21 @@
+     text: str
+     align: str | None = None
+     runs: tuple[_TableRun, ...] | None = None
++    line_spacing: int | None = None
++    space_before: int | None = None
++
++
++def _table_paragraph_spacing(value, field: str, paragraph_idx: int) -> int | None:
++    """Optional canvas units become DrawingML hundredths of a point once."""
++    if field not in value:
++        return None
++    pixels = _number(value[field], f"paragraph {paragraph_idx} {field}")
++    if pixels < 0 or (field == "line_spacing" and pixels == 0):
++        raise RuntimeError(f"Native PPTX table paragraph {paragraph_idx} {field} is out of range")
++    points = round(pixels * current_conversion_context().hundredths_pt_per_unit)
++    if not 0 <= points <= 158400 or (field == "line_spacing" and points == 0):
++        raise RuntimeError(f"Native PPTX table paragraph {paragraph_idx} {field} is out of range")
++    return points
+ 
+ 
+ def _table_rows(payload: dict[str, Any]) -> list[list[Any]]:
+@@ -185,10 +203,12 @@
+             raise RuntimeError(
+                 f"Native PPTX table paragraph {idx} must be a string or object"
+             )
+-        if set(value) - {"text", "runs", "align"}:
++        if set(value) - {"text", "runs", "align", "line_spacing", "space_before"}:
+             raise RuntimeError(
+-                f"Native PPTX table paragraph {idx} accepts text/runs/align only"
++                f"Native PPTX table paragraph {idx} contains unsupported fields"
+             )
++        line_spacing = _table_paragraph_spacing(value, "line_spacing", idx)
++        space_before = _table_paragraph_spacing(value, "space_before", idx)
+         has_text = "text" in value
+         has_runs = "runs" in value
+         if has_text == has_runs:
+@@ -206,7 +226,7 @@
+                 raise RuntimeError(
+                     f"Native PPTX table paragraph {idx} text must be a string"
+                 )
+-            paragraphs.append(_TableParagraph(text, align))
++            paragraphs.append(_TableParagraph(text, align, line_spacing=line_spacing, space_before=space_before))
+             continue
+ 
+         raw_runs = value.get("runs")
+@@ -219,7 +239,7 @@
+             for run_idx, run in enumerate(raw_runs, start=1)
+         )
+         paragraphs.append(
+-            _TableParagraph("".join(run.text for run in runs), align, runs)
++            _TableParagraph("".join(run.text for run in runs), align, runs, line_spacing, space_before)
+         )
+     return tuple(paragraphs)
+ 
+@@ -235,7 +255,7 @@
+         raise RuntimeError(f"Native PPTX table {label} must be a text object")
+     allowed = {
+         "text", "bold", "italic", "underline", "strike", "color",
+-        "font_size", "font_family", "lang", "alt_lang",
++        "font_size", "font_family", "lang", "alt_lang", "break_before",
+     }
+     unknown = set(value) - allowed
+     if unknown:
+@@ -255,6 +275,11 @@
+                 f"Native PPTX table {label} {field} must be a JSON boolean"
+             )
+         booleans[field] = raw
++    break_before = value.get("break_before", False)
++    if not isinstance(break_before, bool) or (break_before and run_idx == 1):
++        raise RuntimeError(
++            f"Native PPTX table {label} break_before must be a JSON boolean, false on the first run"
++        )
+ 
+     color: str | None = None
+     if value.get("color") is not None:
+@@ -312,6 +337,7 @@
+         font_family=font_family,
+         lang=languages["lang"],
+         alt_lang=languages["alt_lang"],
++        break_before=break_before,
+     )
+ 
+ 
+@@ -652,6 +678,9 @@
+         ("marB", "bottom"),
+     ):
+         value = _table_padding_value(cell_data, style, side)
++        if value is None and side in {"top", "bottom"}:
++            # Match the authored row geometry instead of Office cell insets.
++            value = 0
+         if value is not None:
+             attrs.append(f'{attr}="{value}"')
+     return (" " + " ".join(attrs)) if attrs else ""
+@@ -887,10 +916,8 @@
+                 row_idx != merge_region.row or col_idx != merge_region.col
+             ):
+                 cells_xml.append(
+-                    f'<a:tc{merge_attrs}>'
+-                    '<a:txBody><a:bodyPr/><a:lstStyle/><a:p/></a:txBody>'
+-                    '<a:tcPr/>'
+-                    '</a:tc>'
++                    f'<a:tc{merge_attrs}><a:txBody><a:bodyPr/><a:lstStyle/><a:p/></a:txBody>'
++                    f'<a:tcPr{_table_padding_attrs({}, style)}/></a:tc>'
+                 )
+                 continue
+ 
+@@ -973,6 +1000,13 @@
+                         if paragraph.align is not None or paragraph_align != "l"
+                         else "<a:pPr/>"
+                     )
++                    spacing_xml = "".join(
++                        f'<a:{tag}><a:spcPts val="{value}"/></a:{tag}>'
++                        for tag, value in (("lnSpc", paragraph.line_spacing), ("spcBef", paragraph.space_before))
++                        if value is not None
++                    )
++                    if spacing_xml:
++                        paragraph_props = paragraph_props[:-2] + ">" + spacing_xml + "</a:pPr>"
+                     if paragraph.runs is None:
+                         text_run_xml = _table_text_run(
+                             paragraph.text,
+@@ -985,7 +1019,8 @@
+                         )
+                     else:
+                         text_run_xml = "".join(
+-                            _table_text_run(
++                            ("<a:br/>" if run.break_before else "")
++                            + _table_text_run(
+                                 run.text,
+                                 color=run.color or color,
+                                 bold=run.bold if run.bold is not None else bold,

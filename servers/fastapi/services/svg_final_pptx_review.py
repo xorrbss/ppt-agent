@@ -34,7 +34,7 @@ def final_render_current(proof, *, artifact_digest, operation_id, presentation_i
     if not isinstance(proof, dict):
         return False
     from workers import public_svg_pptx_render
-    from workers.public_svg_pptx_convert import converter_digest
+    from workers.public_svg_converter_aliases import converter_digest_accepted
     pages = proof.get("pages")
     unsigned = {key: value for key, value in proof.items() if key != "evidenceDigest"}
     return (proof.get("schemaVersion") == public_svg_pptx_render.SCHEMA
@@ -53,7 +53,7 @@ def final_render_current(proof, *, artifact_digest, operation_id, presentation_i
         and proof.get("sourceDigests") == source_digests
         and (owner_id is None or proof.get("ownerId") == str(owner_id))
         and (tenant_id is None or proof.get("tenantId") == tenant_id)
-        and proof.get("converterDigest") == converter_digest()
+        and converter_digest_accepted(proof.get("converterDigest"))
         and proof.get("checkerCodeDigest") == public_svg_pptx_render.checker_digest()
         and proof.get("evidenceDigest") == "sha256:" + canonical_json_sha256(unsigned)
         and isinstance(proof.get("availablePhysicalMemoryBytes"), int)

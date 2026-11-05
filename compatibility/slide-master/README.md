@@ -57,8 +57,51 @@ the `xfrm-bounds.1` suffix and the new `utils.py` hash, which changes
 `svg_export_version_mismatch`. `CONVERTER_VERSION` is not extended: it feeds a
 160-character identity field that the longer string would overflow.
 
+`chart-furniture.16` (native chart manual layouts, per-series data labels,
+gap/overlap/vary-colors options, title bold/alignment; table paragraph spacing,
+soft breaks and cell padding in `chart_data.py`, `chart_xml.py`, `table.py`) and
+`native-fixed-text.1` (the trusted fixed-text adapter on the conversion context
+in `conversion_context.py` and `elements.py`) were originally edited into the
+vendor tree without a patch file, so the readback test could not reverse the
+chain. They are recorded as `chart-furniture-16.patch` and
+`native-fixed-text-1.patch`, each derived by diffing the baseline commit plus
+the earlier patches against the shipped vendor tree with `xfrm-bounds-1.patch`
+reversed. They are applied between `text-advance-1.patch` and
+`xfrm-bounds-1.patch`, the order of the shipped version string, and touch
+disjoint files. Any new vendor edit needs a patch file and a `PATCHES` entry in
+`rebuild.py`; the manifest is generated with LF line endings.
+
+`CONVERTER_VERSION` in `workers/public_svg_pptx_convert.py` is the exporter
+identity, not the vendor manifest version: its `native-fixed-text.2` suffix is
+the worker-side revision of `f86ae0f67` (v3 template fixed text), which changed
+no vendored byte. It is intentionally left unchanged; changing it would change
+an adapter file hashed by `converter_digest()` and the `converterVersion` that
+bundles must match.
+
+Rebuilding the manifest for those two patches changed only provenance metadata
+(`presentonPatches`, `patches`, key order, line endings). The executed vendored
+bytes are identical, but `converter_digest()` hashes the manifest bytes, so the
+superseded manifest is kept in
+`servers/fastapi/workers/svg_converter_superseded_manifests/<sha256>.json` and
+registered in `workers/public_svg_converter_aliases.py` (owner decision D5,
+option C). Proof and bundle checks accept the digest computed over a
+registered superseded manifest only while that manifest's `files` map equals
+the current one (whose bytes `converter_digest()` has just verified);
+`tests/unit/test_svg_converter_digest_aliases.py` proves the identity and
+fails once an entry no longer applies. Adapter files are never aliased.
+The alias checks live in files of the whole-page verifier inventory, so adding
+them re-pinned `whole_page_verifier_digest()` once, as any verifier edit does:
+in-flight v4 bundles and completed-identity reuse are recomputed, while stored
+final PPTX render proofs, which do not bind that digest, keep verifying.
+A later split of `converter_digest()` into executed-code identity and
+provenance metadata needs a new digest schema in
+`workers/public_svg_pptx_convert.py`; that file is itself hashed by the current
+schema, so the split cannot be carried by a byte-identity alias and is
+deferred.
+
 Bundle producers import the worker's converter version and current manifest
-digest. Old bundles are rejected with `svg_export_version_mismatch`; reconstruct
+digest. Old bundles are rejected with `svg_export_version_mismatch` (a
+registered byte-identical alias above is the only exception); reconstruct
 an export request under the current producer rather than silently executing an
 old identity with new code. A4 writer activation remains gated on reader and
 physical output evidence. Rebuilding supply and readback are local operations;
