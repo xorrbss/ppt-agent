@@ -180,6 +180,41 @@ def test_a_generated_svg_deck_observes_every_executed_stage_and_seals_valid(monk
     assert chromium_review == observations["render"]["durationMillis"] + observations["quality"]["durationMillis"]
 
 
+def test_header_time_is_its_own_stage_and_outline_excludes_it(monkeypatch):
+    _install_harness(monkeypatch)
+    request = _request()
+    recorder = request._authored_generation_timing_recorder
+
+    async def prepare_with_header(*_args, **_kwargs):
+        for name in ("header_design", "header_representative", "header_selection"):
+            with recorder.observe(f"setup.{name}"):
+                await asyncio.sleep(_TICK)
+        return _ctx()
+
+    monkeypatch.setattr(
+        "services.generation_core.drivers.svg.collect._prepare_generation", prepare_with_header)
+    assert _run(request) == "published"
+
+    observations = recorder.stage_observations()
+    for name in ("header_design", "header_representative", "header_selection"):
+        assert observations[name]["durationMillis"] >= _TICK * 1000 * 0.5, name
+    assert observations["outline"]["durationMillis"] < _TICK * 1000 * 2
+    receipt = _seal_success(request, logical_calls=SLIDE_COUNT)
+    assert receipt["validity"] == "valid"
+    for name in ("headerDesign", "headerRepresentative", "headerSelection"):
+        assert receipt["stages"][name]["state"] == "observed", name
+
+
+def test_a_receipt_without_header_stages_still_validates(monkeypatch):
+    _install_harness(monkeypatch)
+    request = _request()
+    assert _run(request) == "published"
+    receipt = _seal_success(request, logical_calls=SLIDE_COUNT)
+    assert not {"headerDesign", "headerRepresentative", "headerSelection"} & set(receipt["stages"])
+    from services.authored_generation_timing_receipt import _attempt_receipt_v2_from_dict
+    assert _attempt_receipt_v2_from_dict(receipt).validity == "valid"
+
+
 def test_a_fully_resumed_svg_deck_records_zero_page_work_and_seals_valid(monkeypatch):
     saved: dict[int, dict] = {}
     _install_harness(monkeypatch, saved=saved)

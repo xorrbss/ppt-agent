@@ -77,8 +77,11 @@ GENERATION_ATTEMPT_OUTCOMES = frozenset(
         "worker_crash",
     }
 )
+#: M2: header work is booked as its own recorder stages instead of inside
+#: ``outline``. Each maps 1:1 to an optional public stage.
+HEADER_TIMING_STAGES = ("header_design", "header_representative", "header_selection")
 GENERATION_ATTEMPT_TIMING_STAGES = frozenset(
-    (*GENERATION_TIMING_STAGES, "provider")
+    (*GENERATION_TIMING_STAGES, "provider", *HEADER_TIMING_STAGES)
 )
 PUBLIC_GENERATION_TIMING_STAGES = (
     "outline",
@@ -88,6 +91,13 @@ PUBLIC_GENERATION_TIMING_STAGES = (
     "chromiumReview",
     "publication",
 )
+#: Optional public stages. Absent from the serialized receipt unless observed, so
+#: a receipt sealed before M2 keeps its shape and digest and still validates;
+#: the schema version stays ``generation-attempt-timing-receipt/v2``.
+OPTIONAL_PUBLIC_GENERATION_TIMING_STAGES = (
+    "headerDesign", "headerRepresentative", "headerSelection",
+)
+_HEADER_PUBLIC_SOURCES = dict(zip(OPTIONAL_PUBLIC_GENERATION_TIMING_STAGES, HEADER_TIMING_STAGES))
 OPTIONAL_GENERATION_OBSERVATIONS = frozenset({
     "setup.title", "setup.plan_llm", "setup.scenes", "setup.icon_sheets",
     "setup.header_design", "setup.header_representative", "setup.header_selection",
@@ -695,10 +705,14 @@ def _authoring_cooldown_wait(value: float | int) -> float | int:
 def _public_stage_receipts(
     value: object,
 ) -> tuple[tuple[str, dict[str, object]], ...]:
-    if not isinstance(value, Mapping) or set(value) != set(PUBLIC_GENERATION_TIMING_STAGES):
+    if (not isinstance(value, Mapping)
+            or not set(PUBLIC_GENERATION_TIMING_STAGES) <= set(value)
+            or set(value) - set(PUBLIC_GENERATION_TIMING_STAGES)
+            - set(OPTIONAL_PUBLIC_GENERATION_TIMING_STAGES)):
         raise ValueError("generation_attempt_v2_stages_invalid")
     output: list[tuple[str, dict[str, object]]] = []
-    for name in PUBLIC_GENERATION_TIMING_STAGES:
+    for name in (*PUBLIC_GENERATION_TIMING_STAGES, *(
+            item for item in OPTIONAL_PUBLIC_GENERATION_TIMING_STAGES if item in value)):
         raw = value.get(name)
         if not isinstance(raw, Mapping):
             raise ValueError("generation_attempt_v2_stages_invalid")
@@ -1016,7 +1030,7 @@ def create_generation_attempt_timing_receipt_v2(
     ):
         raise ValueError("generation_attempt_timing_receipt_v2_invalid")
     executed = frozenset(executed_stages)
-    if not executed.issubset(PUBLIC_GENERATION_TIMING_STAGES):
+    if not executed.issubset((*PUBLIC_GENERATION_TIMING_STAGES, *OPTIONAL_PUBLIC_GENERATION_TIMING_STAGES)):
         raise ValueError("generation_attempt_v2_executed_stages_invalid")
     normalized_observations: dict[str, dict[str, int]] = {}
     for raw_name, raw_observation in stage_observations.items():
@@ -1043,10 +1057,15 @@ def create_generation_attempt_timing_receipt_v2(
         "repair": ("repair",),
         "chromiumReview": ("render", "quality"),
         "publication": ("publication",),
+        **{name: (source,) for name, source in _HEADER_PUBLIC_SOURCES.items()},
     }
     public_stages: dict[str, dict[str, object]] = {}
     invalid_reasons: list[str] = []
-    for public_name in PUBLIC_GENERATION_TIMING_STAGES:
+    for public_name in (*PUBLIC_GENERATION_TIMING_STAGES, *OPTIONAL_PUBLIC_GENERATION_TIMING_STAGES):
+        if (public_name in OPTIONAL_PUBLIC_GENERATION_TIMING_STAGES
+                and public_name not in executed
+                and _HEADER_PUBLIC_SOURCES[public_name] not in normalized_observations):
+            continue
         source_observations = [
             normalized_observations[source_name]
             for source_name in public_sources[public_name]
@@ -1293,6 +1312,16 @@ class GenerationTimingRecorder:
                 "durationMillis": self._stage_timings_ms[name],
             }
 
+    def record_stage_window(self, name: str, start_ms: object, end_ms: object, duration_ms: object) -> None:
+        """Record a stage from an already-measured window (not ending now)."""
+        if name not in GENERATION_ATTEMPT_TIMING_STAGES:
+            raise ValueError("generation_attempt_timing_stage_invalid")
+        start = _bounded_timing_ms(start_ms, f"{name}_start")
+        end = max(start, _bounded_timing_ms(end_ms, f"{name}_end"))
+        duration = _bounded_timing_ms(duration_ms, name)
+        self._stage_timings_ms[name] = duration
+        self._stage_observations[name] = {"startMillis": start, "endMillis": end, "durationMillis": duration}
+
     def record_stage_ms(self, name: str, value: object) -> None:
         if name not in GENERATION_ATTEMPT_TIMING_STAGES:
             raise ValueError("generation_attempt_timing_stage_invalid")
@@ -1331,6 +1360,7 @@ class GenerationTimingRecorder:
 __all__ = [
     "GENERATION_ATTEMPT_OUTCOMES",
     "GENERATION_ATTEMPT_TIMING_STAGES",
+    "HEADER_TIMING_STAGES",
     "GenerationAttemptTimingReceipt",
     "GenerationAttemptTimingReceiptV2",
     "GenerationTimingRecorder",

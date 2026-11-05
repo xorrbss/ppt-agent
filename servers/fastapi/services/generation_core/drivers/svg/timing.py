@@ -17,6 +17,10 @@ Stage mapping, each observed where the SVG driver runs it (``collect.py``):
 * ``outline`` -- from the operation boundary (``_authored_outline_started_at``,
   pinned before the upstream outline LLM call, the same clock the authored
   driver uses) to the end of the per-deck setup (``_prepare_generation``).
+* ``header_design`` / ``header_representative`` / ``header_selection`` -- the common
+  header's design call, representative-page renders and selection call (public
+  ``headerDesign`` / ``headerRepresentative`` / ``headerSelection``). Their time
+  is excluded from ``outline``; absent when the header ran in no span (replay).
 * ``author`` -- every page's initial author attempt (provider SVG authoring or the
   raster reconstruction), summed across concurrent pages.
 * ``repair`` -- model correction attempts after an initial provider attempt;
@@ -38,7 +42,7 @@ import asyncio
 import logging
 import time
 
-from services.authored_generation_timing_receipt import MAX_RENDER_STAGE_WINDOWS
+from services.authored_generation_timing_receipt import HEADER_TIMING_STAGES, MAX_RENDER_STAGE_WINDOWS
 from utils.datetime_utils import get_current_utc_datetime
 
 _RECORDER_ATTRIBUTE = "_authored_generation_timing_recorder"
@@ -189,7 +193,17 @@ def record_outline(request: object) -> None:
         # No upstream outline clock was pinned: the attempt boundary is the
         # earliest instant this attempt's outline work can have started.
         started_at = recorder.started_at
-    recorder.record_stage_ms("outline", max(0.0, time.monotonic() - started_at) * 1000)
+    # M2: header work is its own stage, so ``outline`` excludes it.
+    header_ms = 0.0
+    observations = recorder.observations()
+    for stage in HEADER_TIMING_STAGES:
+        observed = observations.get(f"setup.{stage}")
+        if observed is None:
+            continue
+        header_ms += observed["durationMillis"]
+        recorder.record_stage_window(
+            stage, observed["startMillis"], observed["endMillis"], observed["durationMillis"])
+    recorder.record_stage_ms("outline", max(0.0, (time.monotonic() - started_at) * 1000 - header_ms))
 
 
 def settle_page_loop(request: object) -> None:
