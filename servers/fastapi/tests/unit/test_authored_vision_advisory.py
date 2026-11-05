@@ -307,8 +307,10 @@ def test_the_advisory_request_has_the_same_message_shape_as_the_critique_call(qu
         sent_context = json.loads(header_messages[1].content[0].text)
         # The existing anonymous projection still omits version metadata;
         # visible geometry, typography, titles and binding evidence stay exact.
+        # The renderer's space-advance provenance is not review input.
         projected_contract, projected_binding = deepcopy(contract), deepcopy(bindings[0])
         projected_contract.pop("version")
+        projected_contract.pop("space_advance")
         projected_binding.pop("version")
         assert sent_context["style"]["common_header"] == projected_contract
         assert sent_context["style"]["common_header"]["font"] == contract["font"]
@@ -1603,7 +1605,7 @@ def test_the_advisory_request_has_the_same_message_shape_as_the_critique_call(qu
         def expected_public_header(value):
             if isinstance(value, dict):
                 return {key: expected_public_header(item) for key, item in value.items()
-                        if key not in {"version", "id", "revision", "profile_version"}}
+                        if key not in {"version", "id", "revision", "profile_version", "space_advance"}}
             if isinstance(value, list):
                 return [expected_public_header(item) for item in value]
             return value

@@ -845,7 +845,9 @@ def _baseline_review_messages(sheet, *, slide_count, pngs, context):
                     if key not in {"policy", "binding", "runtimeBinding", "snapshotDigest", "styleDigest",
                                    "exampleDigests", "authorExampleDigests", "inputDigest", "priorCandidates",
                                    "priorSheet", "examples", "blindVariantLabel", "version", "style_id",
-                                   "id", "revision", "profile_version", "_globalPagePanelImages"}}
+                                   "id", "revision", "profile_version", "_globalPagePanelImages",
+                                   # A header's renderer measurement provenance is not reviewable.
+                                   "space_advance"}}
         if isinstance(value, (list, tuple)):
             return [public(item) for item in value]
         return value

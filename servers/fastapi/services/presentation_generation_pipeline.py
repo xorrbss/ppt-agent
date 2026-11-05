@@ -802,6 +802,12 @@ async def _record_chat_first_generation_admission_failure(
         "retryable": retryable,
         "stage": "admission",
     }
+    if (getattr(request, "strategy", None) != "authored"
+            and getattr(request, "common_header_mode", None) not in {"free", "page_free"}):
+        from services.svg_common_header_space_advance import ensure_space_advance_measurement
+
+        # An svg payload's header preflight measures titles synchronously.
+        await ensure_space_advance_measurement()
     payload = _durable_request_payload(request, admission_retry=True)
     status = AsyncPresentationGenerationTaskModel(
         status="error",

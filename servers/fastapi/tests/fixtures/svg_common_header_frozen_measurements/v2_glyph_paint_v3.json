@@ -1,0 +1,605 @@
+{
+ "slides": [
+  {
+   "page_id": "page-0",
+   "content": "# 2026년 국내 전기차 시장 분석",
+   "title": "2026년 국내 전기차 시장 분석"
+  },
+  {
+   "page_id": "page-1",
+   "content": "# Market share and pricing trend",
+   "title": "Market share and pricing trend"
+  },
+  {
+   "page_id": "page-2",
+   "content": "# 차량, 충전과 고객 데이터를 연결하고 필수 기록 완전성 99%를 관리한다",
+   "title": "차량, 충전과 고객 데이터를 연결하고 필수 기록 완전성 99%를 관리한다"
+  }
+ ],
+ "contract": {
+  "version": "svg-common-header/v2",
+  "origin": "generated-common-header",
+  "candidate_id": "header-a",
+  "revision": 1,
+  "canvas": {
+   "width": 1280,
+   "height": 720
+  },
+  "svg_template": "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"1280\" height=\"720\" viewBox=\"0 0 1280 720\" id=\"node-0\"><text id=\"a-title\" x=\"64\" y=\"96\" font-family=\"Noto Sans KR\" font-size=\"34\" font-weight=\"700\" fill=\"#0F172A\" text-anchor=\"start\" /><text id=\"a-page\" x=\"1136\" y=\"88\" font-family=\"Noto Sans KR\" font-size=\"18\" font-weight=\"700\" fill=\"#2563EB\" text-anchor=\"end\" /><line x1=\"1152\" y1=\"72\" x2=\"1152\" y2=\"90\" stroke=\"#64748B\" stroke-width=\"1\" id=\"node-3\" /><text id=\"a-count\" x=\"1216\" y=\"88\" font-family=\"Noto Sans KR\" font-size=\"18\" font-weight=\"400\" fill=\"#64748B\" text-anchor=\"end\" /><line x1=\"64\" y1=\"164\" x2=\"1216\" y2=\"164\" stroke=\"#64748B\" stroke-width=\"1\" opacity=\"0.25\" id=\"node-5\" /><line x1=\"64\" y1=\"164\" x2=\"144\" y2=\"164\" stroke=\"#2563EB\" stroke-width=\"3\" id=\"node-6\" /></svg>",
+  "fields": [
+   {
+    "node_id": "a-title",
+    "role": "title",
+    "value_ref": "title",
+    "box": {
+     "x": 64,
+     "y": 64,
+     "width": 1000,
+     "height": 88
+    },
+    "font": {
+     "family": "Noto Sans KR",
+     "weight": 700,
+     "size_px": 34,
+     "digest": "sha256:194018e6b2b293a7964f037b25c0249ce1418bc9ab3c971060a03aa57861e252"
+    },
+    "line_height_px": 44,
+    "baseline_offset_px": 32,
+    "max_lines": 2,
+    "alignment": "left",
+    "optional": false,
+    "dependent_node_ids": [],
+    "fill": "#0F172A"
+   },
+   {
+    "node_id": "a-page",
+    "role": "current_page",
+    "value_ref": "page_number",
+    "box": {
+     "x": 1088,
+     "y": 70,
+     "width": 48,
+     "height": 26
+    },
+    "font": {
+     "family": "Noto Sans KR",
+     "weight": 700,
+     "size_px": 18,
+     "digest": "sha256:194018e6b2b293a7964f037b25c0249ce1418bc9ab3c971060a03aa57861e252"
+    },
+    "line_height_px": 26,
+    "baseline_offset_px": 18,
+    "max_lines": 1,
+    "alignment": "right",
+    "optional": false,
+    "dependent_node_ids": [],
+    "fill": "#2563EB"
+   },
+   {
+    "node_id": "a-count",
+    "role": "total_pages",
+    "value_ref": "page_count",
+    "box": {
+     "x": 1168,
+     "y": 70,
+     "width": 48,
+     "height": 26
+    },
+    "font": {
+     "family": "Noto Sans KR",
+     "weight": 400,
+     "size_px": 18,
+     "digest": "sha256:194018e6b2b293a7964f037b25c0249ce1418bc9ab3c971060a03aa57861e252"
+    },
+    "line_height_px": 26,
+    "baseline_offset_px": 18,
+    "max_lines": 1,
+    "alignment": "right",
+    "optional": false,
+    "dependent_node_ids": [],
+    "fill": "#64748B"
+   }
+  ],
+  "body_box": {
+   "x": 64,
+   "y": 188,
+   "width": 1152,
+   "height": 468
+  },
+  "content_top_px": 188,
+  "cover_exception": false,
+  "measurement_version": "svg-common-header-glyph-paint/v3",
+  "fonts": [
+   {
+    "family": "Noto Sans KR",
+    "weight": 700,
+    "size_px": 18,
+    "digest": "sha256:194018e6b2b293a7964f037b25c0249ce1418bc9ab3c971060a03aa57861e252"
+   },
+   {
+    "family": "Noto Sans KR",
+    "weight": 400,
+    "size_px": 18,
+    "digest": "sha256:194018e6b2b293a7964f037b25c0249ce1418bc9ab3c971060a03aa57861e252"
+   }
+  ],
+  "assets": {},
+  "asset_sources": {},
+  "brand_reservations": [],
+  "design_intent": "굵은 좌측 정렬 제목과 우측의 작은 페이지 표기를 결합한 편집형 헤더. 긴 원문 제목은 두 줄로 유지하며, 가는 구분선과 짧은 파란 강조선 아래에 넓은 본문 영역을 확보한다.",
+  "shared_style": {
+   "body_typography": "Noto Sans KR. 본문 22–28px, 보조 설명 16px 이상을 권장하며 제목과 본문 사이의 굵기 대비를 유지한다.",
+   "spacing_and_hierarchy": "64px 좌우 여백을 공유한다. 제목은 최대 두 줄, 구분선 아래 24px 간격 후 본문을 시작하여 노선 기준, 운영 가정, 검증 조건의 관계를 읽기 쉽게 배치할 공간을 남긴다.",
+   "colour_usage": "제목은 #0F172A, 페이지 번호와 짧은 강조선은 #2563EB, 전체 페이지 수와 얇은 구분선은 #64748B. 본문 영역은 투명하게 유지한다."
+  },
+  "digest": "sha256:fcff369c61f2b752b252197a7e877c3a22dbe6a6ded195269cd7e179a4cfada0"
+ },
+ "bindings": [
+  {
+   "version": "svg-common-header-page/v2",
+   "header_digest": "sha256:fcff369c61f2b752b252197a7e877c3a22dbe6a6ded195269cd7e179a4cfada0",
+   "page_id": "page-0",
+   "page_index": 0,
+   "page_count": 3,
+   "applied": true,
+   "title": "2026년 국내 전기차 시장 분석",
+   "title_digest": "sha256:7d9d2559ce5a8fc64a7dc9c806765566ff240532fe61d0a9ce25f7bf031c4c5a",
+   "source_digest": "sha256:07b80ce8cd90e1f73cc3e314d0fe34fc0dce8e4501d0a5161ba8485b3ce83b86",
+   "content_digest": "sha256:07b80ce8cd90e1f73cc3e314d0fe34fc0dce8e4501d0a5161ba8485b3ce83b86",
+   "fields": [
+    {
+     "node_id": "a-title",
+     "role": "title",
+     "value_ref": "title",
+     "value": "2026년 국내 전기차 시장 분석",
+     "source_ref": "sha256:07b80ce8cd90e1f73cc3e314d0fe34fc0dce8e4501d0a5161ba8485b3ce83b86",
+     "user_fixed": false,
+     "lines": [
+      "2026년 국내 전기차 시장 분석"
+     ],
+     "line_widths": [
+      431.1025
+     ],
+     "glyph_boxes": [
+      {
+       "x": 64.0,
+       "y": 67.47399999999999,
+       "width": 431.1025,
+       "height": 31.586000000000002
+      }
+     ],
+     "font": {
+      "family": "Noto Sans KR",
+      "weight": 700,
+      "size_px": 34,
+      "digest": "sha256:194018e6b2b293a7964f037b25c0249ce1418bc9ab3c971060a03aa57861e252"
+     }
+    },
+    {
+     "node_id": "a-page",
+     "role": "current_page",
+     "value_ref": "page_number",
+     "value": "1",
+     "source_ref": "page-order:page-0",
+     "user_fixed": false,
+     "lines": [
+      "1"
+     ],
+     "line_widths": [
+      10.62
+     ],
+     "glyph_boxes": [
+      {
+       "x": 1125.38,
+       "y": 74.662,
+       "width": 10.62,
+       "height": 13.338
+      }
+     ],
+     "font": {
+      "family": "Noto Sans KR",
+      "weight": 700,
+      "size_px": 18,
+      "digest": "sha256:194018e6b2b293a7964f037b25c0249ce1418bc9ab3c971060a03aa57861e252"
+     }
+    },
+    {
+     "node_id": "a-count",
+     "role": "total_pages",
+     "value_ref": "page_count",
+     "value": "3",
+     "source_ref": "document-page-count",
+     "user_fixed": false,
+     "lines": [
+      "3"
+     ],
+     "line_widths": [
+      9.99
+     ],
+     "glyph_boxes": [
+      {
+       "x": 1206.01,
+       "y": 74.572,
+       "width": 9.989999999999998,
+       "height": 13.661999999999999
+      }
+     ],
+     "font": {
+      "family": "Noto Sans KR",
+      "weight": 400,
+      "size_px": 18,
+      "digest": "sha256:194018e6b2b293a7964f037b25c0249ce1418bc9ab3c971060a03aa57861e252"
+     }
+    }
+   ],
+   "paint_boxes": {
+    "svg-system-common-header-a-title-line-1": [
+     {
+      "x": 64.0,
+      "y": 67.47399999999999,
+      "width": 431.1025,
+      "height": 31.586000000000002
+     }
+    ],
+    "svg-system-common-header-a-page-line-1": [
+     {
+      "x": 1125.38,
+      "y": 74.662,
+      "width": 10.62,
+      "height": 13.338
+     }
+    ],
+    "svg-system-common-header-node-3": [
+     {
+      "x": 1151.5,
+      "y": 71.5,
+      "width": 1.0,
+      "height": 19.0
+     }
+    ],
+    "svg-system-common-header-a-count-line-1": [
+     {
+      "x": 1206.01,
+      "y": 74.572,
+      "width": 9.989999999999998,
+      "height": 13.661999999999999
+     }
+    ],
+    "svg-system-common-header-node-5": [
+     {
+      "x": 63.5,
+      "y": 163.5,
+      "width": 1153.0,
+      "height": 1.0
+     }
+    ],
+    "svg-system-common-header-node-6": [
+     {
+      "x": 62.5,
+      "y": 162.5,
+      "width": 83.0,
+      "height": 3.0
+     }
+    ]
+   },
+   "rendered_group_digest": "sha256:93a8e68a690e239ffae8c727da86a7e708ad514f4e304ca282a2b44541d7e503",
+   "digest": "sha256:157c36c6042aae3383d6947930aac22c3bf5bf6da07c1b155b00bdc7e3ba6a85"
+  },
+  {
+   "version": "svg-common-header-page/v2",
+   "header_digest": "sha256:fcff369c61f2b752b252197a7e877c3a22dbe6a6ded195269cd7e179a4cfada0",
+   "page_id": "page-1",
+   "page_index": 1,
+   "page_count": 3,
+   "applied": true,
+   "title": "Market share and pricing trend",
+   "title_digest": "sha256:783b1010a57d82c0cd4944514025c84286f68993e70690a082cb7a72374585df",
+   "source_digest": "sha256:3938efc70390f3f62aba1f80b780fc624cc76f118bcd234d0ecae0e971d19d59",
+   "content_digest": "sha256:3938efc70390f3f62aba1f80b780fc624cc76f118bcd234d0ecae0e971d19d59",
+   "fields": [
+    {
+     "node_id": "a-title",
+     "role": "title",
+     "value_ref": "title",
+     "value": "Market share and pricing trend",
+     "source_ref": "sha256:3938efc70390f3f62aba1f80b780fc624cc76f118bcd234d0ecae0e971d19d59",
+     "user_fixed": false,
+     "lines": [
+      "Market share and pricing trend"
+     ],
+     "line_widths": [
+      519.547125
+     ],
+     "glyph_boxes": [
+      {
+       "x": 64.0,
+       "y": 68.426,
+       "width": 519.5365,
+       "height": 35.836000000000006
+      }
+     ],
+     "font": {
+      "family": "Noto Sans KR",
+      "weight": 700,
+      "size_px": 34,
+      "digest": "sha256:194018e6b2b293a7964f037b25c0249ce1418bc9ab3c971060a03aa57861e252"
+     }
+    },
+    {
+     "node_id": "a-page",
+     "role": "current_page",
+     "value_ref": "page_number",
+     "value": "2",
+     "source_ref": "page-order:page-1",
+     "user_fixed": false,
+     "lines": [
+      "2"
+     ],
+     "line_widths": [
+      10.62
+     ],
+     "glyph_boxes": [
+      {
+       "x": 1125.38,
+       "y": 74.428,
+       "width": 10.62,
+       "height": 13.572
+      }
+     ],
+     "font": {
+      "family": "Noto Sans KR",
+      "weight": 700,
+      "size_px": 18,
+      "digest": "sha256:194018e6b2b293a7964f037b25c0249ce1418bc9ab3c971060a03aa57861e252"
+     }
+    },
+    {
+     "node_id": "a-count",
+     "role": "total_pages",
+     "value_ref": "page_count",
+     "value": "3",
+     "source_ref": "document-page-count",
+     "user_fixed": false,
+     "lines": [
+      "3"
+     ],
+     "line_widths": [
+      9.99
+     ],
+     "glyph_boxes": [
+      {
+       "x": 1206.01,
+       "y": 74.572,
+       "width": 9.989999999999998,
+       "height": 13.661999999999999
+      }
+     ],
+     "font": {
+      "family": "Noto Sans KR",
+      "weight": 400,
+      "size_px": 18,
+      "digest": "sha256:194018e6b2b293a7964f037b25c0249ce1418bc9ab3c971060a03aa57861e252"
+     }
+    }
+   ],
+   "paint_boxes": {
+    "svg-system-common-header-a-title-line-1": [
+     {
+      "x": 64.0,
+      "y": 68.426,
+      "width": 519.5365,
+      "height": 35.836000000000006
+     }
+    ],
+    "svg-system-common-header-a-page-line-1": [
+     {
+      "x": 1125.38,
+      "y": 74.428,
+      "width": 10.62,
+      "height": 13.572
+     }
+    ],
+    "svg-system-common-header-node-3": [
+     {
+      "x": 1151.5,
+      "y": 71.5,
+      "width": 1.0,
+      "height": 19.0
+     }
+    ],
+    "svg-system-common-header-a-count-line-1": [
+     {
+      "x": 1206.01,
+      "y": 74.572,
+      "width": 9.989999999999998,
+      "height": 13.661999999999999
+     }
+    ],
+    "svg-system-common-header-node-5": [
+     {
+      "x": 63.5,
+      "y": 163.5,
+      "width": 1153.0,
+      "height": 1.0
+     }
+    ],
+    "svg-system-common-header-node-6": [
+     {
+      "x": 62.5,
+      "y": 162.5,
+      "width": 83.0,
+      "height": 3.0
+     }
+    ]
+   },
+   "rendered_group_digest": "sha256:574bc2aadfdb3205c7b7e98c994e1a10f9fa62afb5c12a17685aec5974638272",
+   "digest": "sha256:9926efcf8ac21fbab21be7150dd737622dcef40af8c5d8e258ea87e527e6fe77"
+  },
+  {
+   "version": "svg-common-header-page/v2",
+   "header_digest": "sha256:fcff369c61f2b752b252197a7e877c3a22dbe6a6ded195269cd7e179a4cfada0",
+   "page_id": "page-2",
+   "page_index": 2,
+   "page_count": 3,
+   "applied": true,
+   "title": "차량, 충전과 고객 데이터를 연결하고 필수 기록 완전성 99%를 관리한다",
+   "title_digest": "sha256:32f51e364df48102c563015657eb67598ffb94468d28c631956fe66947bda698",
+   "source_digest": "sha256:d3885bd143957068ac8420c18852c5239716dafbeaecb18952fb0ae903dfff04",
+   "content_digest": "sha256:d3885bd143957068ac8420c18852c5239716dafbeaecb18952fb0ae903dfff04",
+   "fields": [
+    {
+     "node_id": "a-title",
+     "role": "title",
+     "value_ref": "title",
+     "value": "차량, 충전과 고객 데이터를 연결하고 필수 기록 완전성 99%를 관리한다",
+     "source_ref": "sha256:d3885bd143957068ac8420c18852c5239716dafbeaecb18952fb0ae903dfff04",
+     "user_fixed": false,
+     "lines": [
+      "차량, 충전과 고객 데이터를 연결하고 필수 기록 완전성 99%를 ",
+      "관리한다"
+     ],
+     "line_widths": [
+      879.477,
+      125.12
+     ],
+     "glyph_boxes": [
+      {
+       "x": 64.0,
+       "y": 67.47399999999999,
+       "width": 879.4770000000001,
+       "height": 35.802
+      },
+      {
+       "x": 64.0,
+       "y": 111.47399999999999,
+       "width": 125.12,
+       "height": 31.586000000000002
+      }
+     ],
+     "font": {
+      "family": "Noto Sans KR",
+      "weight": 700,
+      "size_px": 34,
+      "digest": "sha256:194018e6b2b293a7964f037b25c0249ce1418bc9ab3c971060a03aa57861e252"
+     }
+    },
+    {
+     "node_id": "a-page",
+     "role": "current_page",
+     "value_ref": "page_number",
+     "value": "3",
+     "source_ref": "page-order:page-2",
+     "user_fixed": false,
+     "lines": [
+      "3"
+     ],
+     "line_widths": [
+      10.62
+     ],
+     "glyph_boxes": [
+      {
+       "x": 1125.38,
+       "y": 74.428,
+       "width": 10.62,
+       "height": 13.823999999999998
+      }
+     ],
+     "font": {
+      "family": "Noto Sans KR",
+      "weight": 700,
+      "size_px": 18,
+      "digest": "sha256:194018e6b2b293a7964f037b25c0249ce1418bc9ab3c971060a03aa57861e252"
+     }
+    },
+    {
+     "node_id": "a-count",
+     "role": "total_pages",
+     "value_ref": "page_count",
+     "value": "3",
+     "source_ref": "document-page-count",
+     "user_fixed": false,
+     "lines": [
+      "3"
+     ],
+     "line_widths": [
+      9.99
+     ],
+     "glyph_boxes": [
+      {
+       "x": 1206.01,
+       "y": 74.572,
+       "width": 9.989999999999998,
+       "height": 13.661999999999999
+      }
+     ],
+     "font": {
+      "family": "Noto Sans KR",
+      "weight": 400,
+      "size_px": 18,
+      "digest": "sha256:194018e6b2b293a7964f037b25c0249ce1418bc9ab3c971060a03aa57861e252"
+     }
+    }
+   ],
+   "paint_boxes": {
+    "svg-system-common-header-a-title-line-1": [
+     {
+      "x": 64.0,
+      "y": 67.47399999999999,
+      "width": 879.4770000000001,
+      "height": 35.802
+     }
+    ],
+    "svg-system-common-header-a-title-line-2": [
+     {
+      "x": 64.0,
+      "y": 111.47399999999999,
+      "width": 125.12,
+      "height": 31.586000000000002
+     }
+    ],
+    "svg-system-common-header-a-page-line-1": [
+     {
+      "x": 1125.38,
+      "y": 74.428,
+      "width": 10.62,
+      "height": 13.823999999999998
+     }
+    ],
+    "svg-system-common-header-node-3": [
+     {
+      "x": 1151.5,
+      "y": 71.5,
+      "width": 1.0,
+      "height": 19.0
+     }
+    ],
+    "svg-system-common-header-a-count-line-1": [
+     {
+      "x": 1206.01,
+      "y": 74.572,
+      "width": 9.989999999999998,
+      "height": 13.661999999999999
+     }
+    ],
+    "svg-system-common-header-node-5": [
+     {
+      "x": 63.5,
+      "y": 163.5,
+      "width": 1153.0,
+      "height": 1.0
+     }
+    ],
+    "svg-system-common-header-node-6": [
+     {
+      "x": 62.5,
+      "y": 162.5,
+      "width": 83.0,
+      "height": 3.0
+     }
+    ]
+   },
+   "rendered_group_digest": "sha256:5dd19cbc63cf6f3b1f0185fad5343840c77e0baaa7b4d4af8e9fb931b827b6d9",
+   "digest": "sha256:3218f2414c0dd18030e9b7fee289e9668b2101af2a627523c710692e57ff7ebb"
+  }
+ ]
+}

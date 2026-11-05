@@ -1,0 +1,185 @@
+{
+ "slides": [
+  {
+   "page_id": "page-0",
+   "content": "# 2026년 국내 전기차 시장 분석",
+   "title": "2026년 국내 전기차 시장 분석",
+   "eyebrow": "01 시장 현황",
+   "subline": "Source: internal survey 2026"
+  },
+  {
+   "page_id": "page-1",
+   "content": "# Market share and pricing trend",
+   "title": "Market share and pricing trend",
+   "eyebrow": "02 시장 현황",
+   "subline": "Source: internal survey 2026"
+  },
+  {
+   "page_id": "page-2",
+   "content": "# 차량, 충전과 고객 데이터를 연결하고 필수 기록 완전성 99%를 관리한다",
+   "title": "차량, 충전과 고객 데이터를 연결하고 필수 기록 완전성 99%를 관리한다",
+   "eyebrow": "03 시장 현황",
+   "subline": "Source: internal survey 2026"
+  }
+ ],
+ "contract": {
+  "version": "svg-common-header/v1",
+  "origin": "generated-common-header",
+  "canvas": {
+   "width": 1280,
+   "height": 720
+  },
+  "measurement_version": "svg-common-header-glyph/v2",
+  "font": {
+   "family": "Noto Sans KR",
+   "weight": 800,
+   "size_px": 34,
+   "digest": "sha256:194018e6b2b293a7964f037b25c0249ce1418bc9ab3c971060a03aa57861e252"
+  },
+  "color": "#0F172A",
+  "background": "#FFFFFF",
+  "alignment": "center",
+  "title_box": {
+   "x": 64,
+   "y": 62.2,
+   "width": 1152,
+   "height": 49.232
+  },
+  "line_height_px": 49.232,
+  "baseline_offset_px": 39.44,
+  "title_slot_lines": 1,
+  "content_top_px": 177.43200000000002,
+  "body_box": {
+   "x": 64,
+   "y": 177.43200000000002,
+   "width": 1152,
+   "height": 494.568
+  },
+  "cover_exception": false,
+  "brand_reservations": [],
+  "eyebrow": {
+   "enabled": true,
+   "font": {
+    "family": "Noto Sans KR",
+    "weight": 700,
+    "size_px": 13,
+    "digest": "sha256:194018e6b2b293a7964f037b25c0249ce1418bc9ab3c971060a03aa57861e252"
+   },
+   "color": "#64748B",
+   "box": {
+    "x": 64,
+    "y": 32,
+    "width": 1152,
+    "height": 18.2
+   }
+  },
+  "subline": {
+   "enabled": true,
+   "font": {
+    "family": "Noto Sans KR",
+    "weight": 400,
+    "size_px": 15,
+    "digest": "sha256:194018e6b2b293a7964f037b25c0249ce1418bc9ab3c971060a03aa57861e252"
+   },
+   "color": "#64748B",
+   "box": {
+    "x": 64,
+    "y": 119.432,
+    "width": 1152,
+    "height": 21.0
+   }
+  },
+  "divider": {
+   "enabled": true,
+   "x1": 64,
+   "x2": 1216,
+   "y": 156.43200000000002,
+   "thickness_px": 1,
+   "color": "#E2E8F0"
+  },
+  "digest": "sha256:f5e31c477d081715bbacca27cb4eba029ec839cb848cf7f765a97243bde22aa7"
+ },
+ "bindings": [
+  {
+   "version": "svg-common-header-page/v1",
+   "header_digest": "sha256:f5e31c477d081715bbacca27cb4eba029ec839cb848cf7f765a97243bde22aa7",
+   "page_index": 0,
+   "applied": true,
+   "title": "2026년 국내 전기차 시장 분석",
+   "lines": [
+    "2026년 국내 전기차 시장 분석"
+   ],
+   "title_digest": "sha256:7d9d2559ce5a8fc64a7dc9c806765566ff240532fe61d0a9ce25f7bf031c4c5a",
+   "content_digest": "sha256:07b80ce8cd90e1f73cc3e314d0fe34fc0dce8e4501d0a5161ba8485b3ce83b86",
+   "source_digest": "sha256:07b80ce8cd90e1f73cc3e314d0fe34fc0dce8e4501d0a5161ba8485b3ce83b86",
+   "line_widths": [
+    432.3265
+   ],
+   "glyph_boxes": [
+    {
+     "x": 423.83675,
+     "y": 73.012,
+     "width": 432.3265,
+     "height": 31.824
+    }
+   ],
+   "eyebrow": "01 시장 현황",
+   "subline": "Source: internal survey 2026",
+   "digest": "sha256:f681e55dfee3fd169b3508caeb0f4a70852b1e67eb43f7a243a97ab9c5d4610b"
+  },
+  {
+   "version": "svg-common-header-page/v1",
+   "header_digest": "sha256:f5e31c477d081715bbacca27cb4eba029ec839cb848cf7f765a97243bde22aa7",
+   "page_index": 1,
+   "applied": true,
+   "title": "Market share and pricing trend",
+   "lines": [
+    "Market share and pricing trend"
+   ],
+   "title_digest": "sha256:783b1010a57d82c0cd4944514025c84286f68993e70690a082cb7a72374585df",
+   "content_digest": "sha256:3938efc70390f3f62aba1f80b780fc624cc76f118bcd234d0ecae0e971d19d59",
+   "source_digest": "sha256:3938efc70390f3f62aba1f80b780fc624cc76f118bcd234d0ecae0e971d19d59",
+   "line_widths": [
+    527.42875
+   ],
+   "glyph_boxes": [
+    {
+     "x": 376.285625,
+     "y": 73.726,
+     "width": 527.4245000000001,
+     "height": 36.108000000000004
+    }
+   ],
+   "eyebrow": "02 시장 현황",
+   "subline": "Source: internal survey 2026",
+   "digest": "sha256:06e29dfe0e17dd059cf5b4bf546246cc25431d8d2af198e693f3b4443020ebc8"
+  },
+  {
+   "version": "svg-common-header-page/v1",
+   "header_digest": "sha256:f5e31c477d081715bbacca27cb4eba029ec839cb848cf7f765a97243bde22aa7",
+   "page_index": 2,
+   "applied": true,
+   "title": "차량, 충전과 고객 데이터를 연결하고 필수 기록 완전성 99%를 관리한다",
+   "lines": [
+    "차량, 충전과 고객 데이터를 연결하고 필수 기록 완전성 99%를 관리한다"
+   ],
+   "title_digest": "sha256:32f51e364df48102c563015657eb67598ffb94468d28c631956fe66947bda698",
+   "content_digest": "sha256:d3885bd143957068ac8420c18852c5239716dafbeaecb18952fb0ae903dfff04",
+   "source_digest": "sha256:d3885bd143957068ac8420c18852c5239716dafbeaecb18952fb0ae903dfff04",
+   "line_widths": [
+    1015.540625
+   ],
+   "glyph_boxes": [
+    {
+     "x": 132.2296875,
+     "y": 73.012,
+     "width": 1015.5406250000001,
+     "height": 36.108000000000004
+    }
+   ],
+   "eyebrow": "03 시장 현황",
+   "subline": "Source: internal survey 2026",
+   "digest": "sha256:283b44835d4852d1918a1c7c2f97593f2491dcf81c07e21283fd83a5a73298d5"
+  }
+ ]
+}
