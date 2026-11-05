@@ -1,4 +1,4 @@
-# Template A density and visuals: progress (2026-11-05, in progress)
+# Template A density and visuals: progress and results (2026-11-05)
 
 Branch `claude/template-a-visuals-20261105`, from `main` at `696be2ac`. Goal: raise the vision judge's density and
 visuals axes for `template-redesign` decks on template A (the real customer deck) without lowering first-draft
@@ -181,7 +181,68 @@ model-made from prose, not the source's own. Batch 2 is read per input for that.
 Batch 2 environment: `SVG_TEMPLATE_OUTLINE_SECTIONS=on SVG_TEMPLATE_VISUAL_GUIDANCE=on SVG_TEMPLATE_STEP_PICTURES=on`
 (compare with batch 1 for the pictures, with the baseline for the whole).
 
+## Batch 2: all three knobs on (template A, 4 inputs x 3 runs, paired; code `6a259b9a`)
+
+`SVG_TEMPLATE_OUTLINE_SECTIONS=on SVG_TEMPLATE_VISUAL_GUIDANCE=on SVG_TEMPLATE_STEP_PICTURES=on`. Batch 2 also carries
+the sections clause's table wording fix, so against batch 1 it differs by the step pictures and by that wording. The
+provider account ran out of credit after 4 of the 12 decks; the other 8 were run with `matrix --resume` after the key
+was replaced (same code, same backends, same templates).
+
+Against the baseline (`decide base svp`):
+
+| Metric | Baseline | Batch 2 | B - A | Cells | Verdict |
+|---|---|---|---|---|---|
+| judge overall | 2.74 | 2.95 | +0.20 | 4/4 | better |
+| judge hierarchy | 3.10 | 3.61 | +0.51 | 4/4 | better |
+| judge structure | 3.00 | 3.25 | +0.25 | 4/4 | better |
+| judge tone | 2.98 | 3.09 | +0.12 | 4/4 | no difference |
+| judge density | 2.46 | 2.55 | +0.09 | 2/4 | no difference |
+| judge visuals | 2.18 | 2.23 | +0.05 | 2/4 | no difference |
+| first drafts accepted (of 10) | 8.92 | 8.50 | -0.42 | 4/4 lower | no difference (under 0.5, but every cell lower) |
+| fallback pages | 0.33 | 0.17 | -0.17 | 2/4 | no difference |
+
+Report-only: native tables 5.9 -> 6.4 per deck (batch 1 had 4.0: the table wording restored them, including the
+unstructured input at 8-9), flow shapes 52 -> 70, icons 32 -> 30, words kept 0.72 -> 0.77, numbers kept 0.99 -> 0.98,
+retried pages 1.1 -> 1.5.
+
+Against batch 1 (`decide sv svp`): no metric beyond its threshold; visuals +0.07, density +0.05, first drafts -0.42
+(3/4 cells lower). Step pictures were offered and drawn: 3-15 accepted drawings per deck (one deck 5 of 7: one invalid
+XML, one missing), but neither visuals nor density moved.
+
+## Template B generality (2 inputs x 3 runs, paired; sections + visual guidance, code `bce62345`)
+
+First drafts 7.33 -> 8.00 (better, 2/2 cells), fallback 0.50 -> 0.33, gate passed 7.7 -> 9.2, words kept 0.67 -> 0.80,
+tables 2.8 -> 3.5, flow shapes 39 -> 47; judge hierarchy +0.42 (2/2) and visuals -0.37 (2/2), but B's judge separates
+its own originals (about 2.7) from a plain page (1.4) by only 1.3 points, so B's judge numbers are not used for a
+decision. The sections clause did not lower acceptance on a second, unrelated template.
+
+## Conclusions
+
+* `SVG_TEMPLATE_OUTLINE_SECTIONS` works: hierarchy +0.38 (batch 1) and +0.51 (batch 2) on template A, structure and
+  overall up with batch 2, acceptance unchanged on A in batch 1 and better on B. Proposed: default on (a decision for
+  the user; not changed here). Caveat: the clause with the table wording fix was measured only together with the other
+  two knobs (batch 2), and batch 2's first drafts were lower in every cell (-0.42, under the threshold).
+* `SVG_TEMPLATE_VISUAL_GUIDANCE`: no measured effect on what is drawn, density or visuals. Keep off.
+* `SVG_TEMPLATE_STEP_PICTURES`: drawings were made but visuals did not move and first drafts were lower. Keep off.
+* Density and visuals, the goal, did not move with any prompt-level change. The remaining gap to the originals is
+  pictures and doughnut/diagram figures (47 of 100 template body pages carry page-specific pictures, generated decks 0
+  with image generation off), a body that is about 40 % empty against 15-37 % in the originals, and the author never
+  seeing the template's pages (the registration keeps no reference renders for the author: `references` and
+  `reference_examples` are empty). The next lever is structural: give the author renders of the template body pages
+  that match the page's content kinds (stored at registration), then measure again.
+
+## Cost
+
+Provider calls for this work: about $104 (generation $100.47 in the two harness databases, judging about $4), of
+which about $17 after the key change.
+
 ## Next
 
-Baseline matrix on template A (4 inputs x 3 runs), the change behind an internal knob (default off), independent
-review, the same matrix with the knob on, `decide`; then template B count metrics; then the handoff update.
+1. User decision: `SVG_TEMPLATE_OUTLINE_SECTIONS` default on (and whether to re-run sections alone first).
+2. Template page renders for the author (registration change, re-registration of templates).
+3. Converter digest (`wip/s2n`): decision above, merge after this branch.
+4. Real-bug candidates in `docs/test-failure-baseline-20261105.md` (owner RLS for the `svg_template*` tables first).
+5. The `.venv` Python (uv python-build-standalone) cannot `posix_spawn(setsid=True)`, so template registration fails at
+   the frame preview render on this Linux VM; the measurement backends used a venv built from the system Python 3.11
+   (`docs/svg-user-templates-linux-20261103.md` describes the same). The 2026-11-04 handoff's note that this was not
+   reproduced does not hold here.
