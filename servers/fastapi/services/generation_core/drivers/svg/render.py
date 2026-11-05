@@ -290,6 +290,29 @@ TEXT_OVERLAP_INSTRUCTION = (
 )
 
 
+def with_text_overlap_witnesses(hint: str, witnesses: list[dict], *, limit: int = 3000) -> str:
+    """Whatever branch wrote the repair hint, name the overlapping texts in it (the failure
+    itself names only measurement ids). A JSON object hint stays one JSON object (readers
+    parse it), with as many witnesses as fit in ``limit``; any other hint gets them on a
+    first line."""
+    if not witnesses:
+        return hint
+    try:
+        parsed = json.loads(hint)
+    except ValueError:
+        parsed = None
+    if isinstance(parsed, dict):
+        for count in range(len(witnesses), 0, -1):
+            merged = json.dumps({**parsed, "text_overlap_witnesses": witnesses[:count],
+                "text_overlap_instruction": TEXT_OVERLAP_INSTRUCTION}, ensure_ascii=False, separators=(",", ":"))
+            if len(merged) <= limit:
+                return merged
+        return hint
+    return (json.dumps({"kind": "text_overlap_witnesses", "witnesses": witnesses,
+        "instruction": TEXT_OVERLAP_INSTRUCTION}, ensure_ascii=False, separators=(",", ":"))
+        + "\n" + hint)[:limit]
+
+
 def _common_header_body_repair_hint(quality, contract):
     """Give the bounded author correction the measured reservation witnesses."""
     failures = quality.get("failures", [])
@@ -945,13 +968,7 @@ async def _attempt_render(*, ctx, request, presentation_id, index, content, payl
                 "instruction": "Repair only the smallest failing region, preserving every word, number, unit, relation and page count. Enlarge space or reflow related objects together. Never shrink fonts, hide or delete content. If local repair cannot fit, freely recompose this same page on the exact canvas; if still impossible, fail with physical_space_insufficient."}, ensure_ascii=False)[:3000]
         else:
             hint = json.dumps(measured(), ensure_ascii=False)[:3000]
-        overlap_witnesses = text_overlap_witnesses(measured())
-        if overlap_witnesses:
-            # Whatever branch wrote the hint, name the overlapping texts first (the failure
-            # itself names only measurement ids).
-            hint = (json.dumps({"kind": "text_overlap_witnesses", "witnesses": overlap_witnesses,
-                "instruction": TEXT_OVERLAP_INSTRUCTION}, ensure_ascii=False, separators=(",", ":"))
-                + "\n" + hint)[:3000]
+        hint = with_text_overlap_witnesses(hint, text_overlap_witnesses(measured()))
         if writing_hint:
             hint = (writing_hint + "\n" + hint)[:3000]
         payload["repair_hint"] = hint
