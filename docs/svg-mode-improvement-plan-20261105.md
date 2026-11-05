@@ -496,6 +496,21 @@ Acceptance, Check.
   LibreOffice render diff against the generation PNGs.
 - **Acceptance:** multi-line paragraphs export as one text box, and the
   render diff stays within the current tolerance.
+- **Result (2026-11-05, not enabled):** measured with
+  `servers/fastapi/scripts/svg_paragraph_merge_ab/` (LibreOffice render of the
+  PPTX against a Chromium render of the SVG, 1188x840, Noto Sans KR).
+  - `merge_paragraphs=True` alone changes nothing for authored decks: authors
+    write absolute `y` on every line tspan (`SVG_AUTHOR_RULES`), and the vendored
+    paragraph classifier rejects tspans with `y`. The A/B shows identical output.
+  - With `y` rewritten to the equivalent `dy` first, lines do merge (frames
+    12/11/15 -> 6/5/6 on three fixtures), but the render diff is worse on every
+    slide (mean abs gray diff 6.74/3.15/3.91 -> 6.88/4.16/4.44; mismatching
+    pixels 3.8/1.9/2.3 % -> 4.0/2.4/2.6 %).
+  - Causes: the merged frame is sized to the converter's own width estimate
+    (481 px where the widest line renders 510 px), so lines re-wrap and author
+    line breaks are lost ("...설치합니다. 2단계에서는" joins two lines); the first
+    line also sits 5-6 px lower under exact line spacing. Fixing either needs a
+    change in the vendored converter, so the item stays open until then.
 
 **S5 — Per-object native fallback in v2 export** · P1 · no gate
 - **Change:** a native object that cannot be projected stays a drawn shape
