@@ -32,7 +32,126 @@ def _category_texts(payload: dict, prims: GroupPrimitives) -> list:
     return found
 
 
+_STACKED = ("stacked", "percentStacked")
+_STACK_LABEL_POSITIONS = {"center", "insideEnd", "insideBase"}
+#: A drawn segment may differ from its exact length by rounding only.
+_STACK_ABS_TOLERANCE_PX = 1.0
+_STACK_REL_TOLERANCE = 0.03
+
+
+def _stacked_matrix(payload: dict, prims: GroupPrimitives, labels: list) -> list[list]:
+    """Prove the drawn stack and return ``[series][category]`` segment shapes.
+
+    Per category the segments must be one chain from the shared category
+    baseline outward, in series order, each touching the previous one, all with
+    the same thickness and centred on the category label. Segment lengths are
+    proportional to their values on one scale (stacked) or to their share of
+    the category total, with every stack spanning the same full extent
+    (percentStacked).
+    """
+    horizontal = payload["chartType"] == "bar"
+    axis = "y" if horizontal else "x"
+    count, series = len(labels), payload["series"]
+    coordinates = [_mid(text.box(), axis) for text in labels]
+    if coordinates != sorted(coordinates) or len(set(coordinates)) != len(coordinates):
+        raise NativeRejection("native_chart_category_order_mismatch")
+    spacing = min((b - a for a, b in zip(coordinates, coordinates[1:], strict=False)),
+                  default=float("inf"))
+    values = [item["values"] for item in series]
+    if any(type(value) not in (int, float) or value <= 0 or not math.isfinite(value)
+           for row in values for value in row):
+        raise NativeRejection("native_chart_stack_geometry_invalid")
+
+    def thick(shape):
+        return shape.box.height if horizontal else shape.box.width
+
+    def length(shape):
+        return shape.box.width if horizontal else shape.box.height
+
+    def near_edge(shape):
+        return shape.box.x0 if horizontal else shape.box.y1
+
+    def far_edge(shape):
+        return shape.box.x1 if horizontal else shape.box.y0
+
+    candidates = [shape for shape in prims.shapes if shape.tag == "rect" and shape.fill
+                  and shape.fill_alpha > 0 and length(shape) >= 1 and thick(shape) > 1
+                  and thick(shape) < spacing * .9]
+    # The baseline is the outermost edge from which one segment per category
+    # starts; a legend swatch row can share a coordinate but not every category.
+    rows: dict[int, list] = {}
+    for shape in candidates:
+        rows.setdefault(round(near_edge(shape)), []).append(shape)
+
+    def starts(row):
+        found = []
+        for coordinate in coordinates:
+            near = [shape for shape in row if abs(_mid(shape.box, axis) - coordinate) < spacing / 2]
+            if len(near) != 1:
+                return None
+            found.append(near[0])
+        return found
+
+    proven = [(key, found) for key, row in rows.items() if (found := starts(row)) is not None]
+    if not proven:
+        raise NativeRejection("native_chart_stack_geometry_invalid")
+    _, first = (min if horizontal else max)(proven, key=lambda item: item[0])
+    if max(near_edge(shape) for shape in first) - min(near_edge(shape) for shape in first) > 1:
+        raise NativeRejection("native_chart_stack_baseline_mismatch")
+    chains: list[list] = []
+    for coordinate, start in zip(coordinates, first, strict=True):
+        chain = [start]
+        near = [shape for shape in candidates if shape is not start
+                and abs(_mid(shape.box, axis) - coordinate) < spacing / 2]
+        for _ in range(len(series) - 1):
+            tolerance = max(1.5, length(chain[-1]) * .01)
+            following = [shape for shape in near if shape not in chain
+                         and abs(near_edge(shape) - far_edge(chain[-1])) <= tolerance]
+            if len(following) != 1:
+                raise NativeRejection("native_chart_stack_not_cumulative")
+            chain.append(following[0])
+        if any(shape not in chain and _overlaps_stack(shape, chain, horizontal) for shape in near):
+            raise NativeRejection("native_chart_stack_geometry_invalid")
+        chains.append(chain)
+    thicknesses = [thick(shape) for chain in chains for shape in chain]
+    if max(thicknesses) - min(thicknesses) > 1:
+        raise NativeRejection("native_chart_stack_geometry_invalid")
+    for coordinate, chain in zip(coordinates, chains, strict=True):
+        if any(abs(_mid(shape.box, axis) - coordinate) > max(1.0, spacing * .03) for shape in chain):
+            raise NativeRejection("native_chart_stack_geometry_invalid")
+    lengths = [[length(shape) for shape in chain] for chain in chains]
+    totals = [sum(row) for row in lengths]
+    if payload["grouping"] == "stacked":
+        scale = sum(totals) / sum(value for row in values for value in row)
+        for c in range(count):
+            for s in range(len(series)):
+                expected = values[s][c] * scale
+                if abs(lengths[c][s] - expected) > max(_STACK_ABS_TOLERANCE_PX, _STACK_REL_TOLERANCE * expected):
+                    raise NativeRejection("native_chart_value_geometry_mismatch")
+    else:
+        full = sum(totals) / count
+        if any(abs(total - full) > max(1.5, full * .01) for total in totals):
+            raise NativeRejection("native_chart_stack_extent_mismatch")
+        for c in range(count):
+            column = sum(values[s][c] for s in range(len(series)))
+            for s in range(len(series)):
+                expected = values[s][c] / column * totals[c]
+                if abs(lengths[c][s] - expected) > max(_STACK_ABS_TOLERANCE_PX, _STACK_REL_TOLERANCE * expected):
+                    raise NativeRejection("native_chart_value_geometry_mismatch")
+    return [[chains[c][s] for c in range(count)] for s in range(len(series))]
+
+
+def _overlaps_stack(shape, chain, horizontal: bool) -> bool:
+    """Whether an unclaimed rect sits on the stack's own ink (a stray segment)."""
+    low = min((b.box.x0 if horizontal else b.box.y0) for b in chain)
+    high = max((b.box.x1 if horizontal else b.box.y1) for b in chain)
+    a0, a1 = (shape.box.x0, shape.box.x1) if horizontal else (shape.box.y0, shape.box.y1)
+    return a0 < high - 1 and a1 > low + 1
+
+
 def _bar_matrix(payload: dict, prims: GroupPrimitives, labels: list) -> list[list]:
+    if payload.get("grouping") in _STACKED:
+        return _stacked_matrix(payload, prims, labels)
     axis = "y" if payload["chartType"] == "bar" else "x"
     coordinates = [_mid(text.box(), axis) for text in labels]
     if coordinates != sorted(coordinates) or len(set(coordinates)) != len(coordinates):
@@ -130,6 +249,11 @@ def chart_appearance(raw: dict, payload: dict, prims: GroupPrimitives) -> dict |
             or labels_decl["position"] not in (_POSITIONS[chart_type] if labels_decl["shown"] else {None})
             or (markers and chart_type != "line")):
         raise NativeRejection("native_chart_appearance_invalid")
+    stacked = payload.get("grouping") in _STACKED
+    if (stacked and labels_decl["shown"]
+            and labels_decl["position"] not in _STACK_LABEL_POSITIONS):
+        # Office has no outside-end label for a stacked bar.
+        raise NativeRejection("native_chart_appearance_invalid")
     categories = _category_texts(payload, prims)
     matrix = _bar_matrix(payload, prims, categories) if chart_type in {"bar", "column"} else []
     if chart_type in {"line", "area"}:
@@ -183,8 +307,14 @@ def chart_appearance(raw: dict, payload: dict, prims: GroupPrimitives) -> dict |
                 if not matches:
                     raise NativeRejection("native_chart_value_labels_mismatch")
                 shape = matrix[series_index][index] if matrix else None
-                text = (min(matches, key=lambda item: abs(_mid(item.box(), "x") - _mid(shape.box, "x")))
-                        if shape else matches[0])
+                if stacked:
+                    # Segments of one stack share a category coordinate; the label sits in its segment.
+                    text = min(matches, key=lambda item: math.hypot(
+                        _mid(item.box(), "x") - _mid(shape.box, "x"),
+                        _mid(item.box(), "y") - _mid(shape.box, "y")))
+                else:
+                    text = (min(matches, key=lambda item: abs(_mid(item.box(), "x") - _mid(shape.box, "x")))
+                            if shape else matches[0])
                 remaining.remove(text)
                 if shape:
                     label_box = text.box()
@@ -221,6 +351,8 @@ def chart_appearance(raw: dict, payload: dict, prims: GroupPrimitives) -> dict |
             if len(set(drawn_positions)) != 1:
                 raise NativeRejection("native_chart_value_label_position_mismatch")
             labels_decl["position"] = drawn_positions[0]
+            if stacked and labels_decl["position"] not in _STACK_LABEL_POSITIONS:
+                raise NativeRejection("native_chart_value_label_position_mismatch")
     if markers:
         circles = [shape for shape in prims.shapes if shape.tag in {"circle", "ellipse"}]
         if len(circles) < len(payload["categories"]):
