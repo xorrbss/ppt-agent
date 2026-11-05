@@ -250,3 +250,12 @@ Every run record carries its `cell` (`<input>__<template id>`). `decide`:
 The thresholds are a floor against noise, not a significance test: with few cells (three inputs x one template) a
 verdict is a strong hint to look at the pages, not proof. Use as many cells as the budget allows, keep the judge model,
 effort and references fixed between A and B, and use a fresh database per batch (see above).
+
+## Sized inputs (2026-11-06)
+
+`inputs/requests/*_sized.json` are the four inputs with `n_slides` set to one body slide per 650 source characters
+(whitespace excluded) plus the cover: data 5, dense 9, structured 4, unstructured 6. The 10-slide requests spread
+about 386 characters over a page where the real template carries about 816, which caps the judge's density near 2.5
+whatever the change (docs/template-a-visuals-progress-20261105.md). Measure density and visuals changes with the
+sized set (`--inputs data_report_ko_sized,dense_proposal_ko_sized,structured_proposal_ko_sized,unstructured_report_ko_sized`);
+results of the two sets are not comparable. A matrix without `--inputs` now runs both sets.
