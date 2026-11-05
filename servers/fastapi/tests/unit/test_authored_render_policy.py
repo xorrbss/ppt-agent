@@ -19,6 +19,7 @@ import tempfile
 import pytest
 from PIL import Image
 
+from tests.support.environment_requirements import skip_unless_one_shot_headless_render
 from utils import slide_capture
 
 
@@ -179,6 +180,7 @@ def test_actual_render_preserves_small_text_crop_overlap_and_image_geometry():
 @pytest.mark.skipif(slide_capture.find_chrome() is None, reason="headless Chrome is required")
 def test_windows_headless_shell_preserves_font_metrics_text_and_table_chart_geometry():
     """Exercise small Korean/English text through the real Windows headless shell."""
+    skip_unless_one_shot_headless_render()
     metrics = _dump_font_metrics_in_headless_shell(_FONT_MATRIX_HTML)
 
     assert metrics["english"]["family"] == "Arial, sans-serif"
