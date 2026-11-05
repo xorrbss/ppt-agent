@@ -189,8 +189,9 @@ pytest baseline classified (`docs/test-failure-baseline-20261105.md`).
 1. Have the user judge the final deck in PowerPoint against the original.
 2. `SVG_TEMPLATE_OUTLINE_SECTIONS` now defaults to on; watch first-draft acceptance on template decks (the progress
    note's caveat: measured alone only before the table wording fix).
-3. Density and visuals: the author sees no template page renders; store body-page renders at registration and give
-   the author the ones matching the page's content kinds, then measure.
+3. Density and visuals: masked template body renders were built and measured with no effect (#138). The loss map,
+   the plan (charts surviving validation, LLM-drawn SVG pictures for template decks, content sizing) and the
+   source-sized baseline are in `docs/original-level-handoff-20261106.md`; continue there.
 4. Calibrate the judge on template B (human scores) before relying on B's numbers.
 
 ## How to run a live test
