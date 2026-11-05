@@ -216,8 +216,9 @@ def _representative_index(ctx, outline, cover_exception, stage_plan=None, plan=N
             objects = sum(block.kind in {"table", "chart", "image"} for block in page.blocks)
             return (objects, len(page.model_dump_json()), -index)
         source = outline.slides[index].content
-        from services.generation_core.drivers.svg.native_requirements import requested_native_data
-        native = requested_native_data(source)
+        from services.generation_core.drivers.svg.native_requirements import (
+            requested_native_data, requirements_revision)
+        native = requested_native_data(source, requirements_revision(ctx.snapshot))
         return (len(native or []), offered(index), len(source), -index)
     return max(eligible, key=risk)
 

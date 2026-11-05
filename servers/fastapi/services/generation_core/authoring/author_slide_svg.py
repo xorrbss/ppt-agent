@@ -18,7 +18,10 @@ from services.generation_core.drivers.svg.reference_selection import select_refe
 from services.generation_core.drivers.svg.native_declarations import (
     declaration_receipt, extract_native_declarations, native_author_rules,
 )
-from services.generation_core.drivers.svg.native_requirements import format_requested_native_data
+from services.generation_core.drivers.svg.native_requirements import (
+    format_requested_native_data,
+    requirements_revision,
+)
 from services.generation_core.drivers.svg.visual_intent import (
     SOURCE_GROUNDED_INTENT_RULES, VISUAL_INTENT_RULES, enrich_visual_intent, visual_intent_receipt,
 )
@@ -1076,7 +1079,7 @@ async def author_slide_svg(content: str, style_snapshot: dict, role: str, index:
                                               if header_page is not None and header_page.get("applied") else {}),
                                            **({"visual_intent": visual_intent} if visual_intent is not None else {})},
                                           ensure_ascii=False)
-    requested_data = format_requested_native_data(content)
+    requested_data = format_requested_native_data(content, requirements_revision(style_snapshot))
     if requested_data:
         prompt += "\n\n" + requested_data
     # Revision nine shares revision eight's rules; only its request layout differs.

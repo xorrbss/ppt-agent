@@ -248,9 +248,10 @@ async def attempt_author(*, ctx, request, index, content, role, count, payload, 
             intent_kwargs["visual_intent"] = intent
             payload["visual_intent"] = intent
     if not (ctx.source_reflow or ctx.raster_reconstruction):
-        from services.generation_core.drivers.svg.native_requirements import requested_native_data
+        from services.generation_core.drivers.svg.native_requirements import (
+            requested_native_data, requirements_revision)
 
-        requirements = requested_native_data(content)
+        requirements = requested_native_data(content, requirements_revision(ctx.snapshot))
         if requirements:
             payload["nativeRequirements"] = requirements
         else:

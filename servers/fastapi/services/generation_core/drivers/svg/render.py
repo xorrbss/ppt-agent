@@ -873,11 +873,13 @@ async def _attempt_render(*, ctx, request, presentation_id, index, content, payl
     if not (ctx.source_reflow or ctx.raster_reconstruction):
         from services.authored_canvas import request_canvas_metadata
         from services.generation_core.drivers.svg.native_publish import canvas_point_per_px
-        from services.generation_core.drivers.svg.native_requirements import apply_requested_native_quality
+        from services.generation_core.drivers.svg.native_requirements import (
+            apply_requested_native_quality, requirements_revision)
         source_pages = getattr(request, "slides_markdown", None)
         native_source = source_pages[index] if source_pages and len(source_pages) == ctx.count else content
         apply_requested_native_quality(rendered.quality, payload, final, native_source,
-            pt_per_px=canvas_point_per_px(request_canvas_metadata(request)))
+            pt_per_px=canvas_point_per_px(request_canvas_metadata(request)),
+            revision=requirements_revision(ctx.snapshot))
     elif ctx.source_reflow and payload.get("source_preservation", {}).get("whole_page_native_groups"):
         from services.authored_canvas import request_canvas_metadata
         from services.generation_core.drivers.svg.native_publish import canvas_point_per_px, page_native_objects

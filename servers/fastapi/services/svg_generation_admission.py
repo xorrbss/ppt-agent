@@ -299,6 +299,11 @@ def pin_svg_style(request: object) -> dict:
                     request_canvas_metadata(request), source_restyle=source_restyle,
                     instructions=getattr(request, "instructions", None),
                 )
+                # Native chart/table requirement revision, pinned once so a resumed deck keeps the
+                # literal grammar (and outline-time prose chart lines) it was authored with.
+                from services.generation_core.drivers.svg.native_requirements import (
+                    ADMITTED_REQUIREMENTS_REVISION, SNAPSHOT_REVISION_KEY)
+                frozen[SNAPSHOT_REVISION_KEY] = ADMITTED_REQUIREMENTS_REVISION
                 if getattr(request, "source_mode", None) == "source_content_restyle":
                     frozen["source_authoring_contract"] = {"version": "svg-source-whole-page/v1"}
                     from services.svg_source_charts import admitted_source_chart_contract

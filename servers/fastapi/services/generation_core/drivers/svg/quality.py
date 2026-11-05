@@ -177,7 +177,7 @@ def _design_context(ctx, pages, *, job, read_png, review_principles_version=None
     mandatory = _measurement_valid if measurement_evidence else _candidate_local_valid
     from utils.owner_context import get_current_owner_id, get_current_tenant_id
     from services.generation_core.drivers.svg.quality_recovery import _quality_json_value
-    from services.generation_core.drivers.svg.native_requirements import requested_native_data
+    from services.generation_core.drivers.svg.native_requirements import requested_native_data, requirements_revision
     snapshot = _quality_json_value(ctx.snapshot)
     references = snapshot.get("references") or {}
     roles = getattr(ctx, "roles", [])
@@ -241,7 +241,8 @@ def _design_context(ctx, pages, *, job, read_png, review_principles_version=None
     source_pages = []
     for index, (payload, _) in enumerate(pages):
         source_pages.append(dict(index=index, content=contents[index] if index < len(contents) else None,
-            sourceNativeRequirements=requested_native_data(contents[index] if index < len(contents) else None),
+            sourceNativeRequirements=requested_native_data(contents[index] if index < len(contents) else None,
+                                                           requirements_revision(snapshot)),
             referenceRoles=page_reference_roles.get(index, [roles[index] if index < len(roles) else "content"]),
             authorExampleDigests=page_example_digests.get(index),
             preservation=payload.get("source_preservation"), visualIntent=payload.get("visual_intent"),

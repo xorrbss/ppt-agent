@@ -1221,6 +1221,17 @@ async def generate_presentation_handler(
                         continue
                     raise HTTPException(status_code=400, detail=error.detail) from None
 
+            native_revision = None
+            if resolve_generation_strategy(request) == "svg":
+                # A numeric series the slide's prose states becomes the ``chart:`` line the
+                # native requirement parser reads (only for a deck pinned to that revision);
+                # it is part of the outline pinned below, so a resume keeps these exact lines.
+                from services.generation_core.drivers.svg.native_requirements import requirements_revision
+                from services.outline_chart_grounding import derive_outline_chart_literals
+
+                native_revision = requirements_revision(getattr(request, "_svg_style_snapshot", None))
+                presentation_outlines, _derived_charts = derive_outline_chart_literals(
+                    presentation_outlines, revision=native_revision)
             if not request.web_search:
                 # A chart line may carry only values the source writes (web search brings its own
                 # sources, which this text does not hold). The reason is logged by the guard.
@@ -1229,6 +1240,7 @@ async def generate_presentation_handler(
                 presentation_outlines, _dropped_charts = ground_outline_charts(
                     presentation_outlines,
                     "\n".join(part for part in (request.content, additional_context, request.instructions) if part),
+                    revision=native_revision,
                 )
 
             total_outlines = len(presentation_outlines.slides)

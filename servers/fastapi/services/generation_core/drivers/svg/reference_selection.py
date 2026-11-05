@@ -4,7 +4,7 @@ from __future__ import annotations
 import json
 import re
 
-from services.generation_core.drivers.svg.native_requirements import requested_native_data
+from services.generation_core.drivers.svg.native_requirements import requested_native_data, requirements_revision
 from services.generation_core.drivers.svg.visual_intent import enrich_visual_intent, source_content_evidence
 from services.svg_authoring_profile import behaviour_profile, read_authoring_profile, read_quality_recovery_policy
 from services.svg_contract import source_digest
@@ -34,7 +34,7 @@ def select_reference_role(style_snapshot: dict, page_role: str, content: str,
         return None
     target, basis = page_role, "page_role"
     if page_role != "cover":
-        native = requested_native_data(content)
+        native = requested_native_data(content, requirements_revision(style_snapshot))
         dated_tasks = sum(bool(_DATE_RANGE.search(line) or _PERIOD_RANGE.search(line))
                           for line in content.splitlines())
         edges = [match for match in _EDGE.finditer(content)
@@ -116,7 +116,8 @@ def _select_quality_references(style_snapshot: dict, page_role: str, content: st
     if page_role in {"cover", "section", "closing"}:
         consider(page_role, "page_purpose", "Give the supplied main statement a distinctive hierarchy and sufficient supporting context.")
     else:
-        native = requested_native_data(source_text if source_grounded else content)
+        native = requested_native_data(source_text if source_grounded else content,
+                                       requirements_revision(style_snapshot))
         if native.get("tables") or native.get("charts") or source_kinds & {"table", "chart"}:
             advice = ("Keep exact native values with their labels and explanations. Their presence alone does not establish the page's main message; preserve the relative importance of source statements, relationships and images."
                       if source_grounded else "Let exact native evidence carry the main field; associate each supplied explanation with its values.")
