@@ -252,11 +252,15 @@ class SvgTemplateBodyRenderMask(FrameModel):
     #: Text objects of the page replaced by bars, and the text characters left afterwards (always 0).
     text_objects: int = Field(ge=0)
     residual_chars: int = Field(ge=0, le=0)
-    #: Pictures larger than an icon inside the body, and how many of them were covered by a block.
+    #: Pictures inside the body that were checked, and how many of them were covered.
     pictures: int = Field(ge=0)
     pictures_covered: int = Field(ge=0)
-    #: The OCR runtime that checked those pictures; ``unavailable`` covers every one of them.
+    #: Pictures removed as a drop shadow or a text effect (bitmaps that may hold a blurred copy of a text).
+    text_effects: int = Field(ge=0)
+    #: The OCR runtime that checked those pictures; ``unavailable`` covers every one with sharp edges.
     ocr: Literal["tesseract", "liteparse", "unavailable"]
+    #: OCR of the whole masked crop (text drawn as paths): ``passed``, or ``unavailable`` without OCR.
+    final_check: Literal["passed", "unavailable"]
 
 
 class SvgTemplateBodyRender(FrameModel):

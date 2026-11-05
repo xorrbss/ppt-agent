@@ -9,10 +9,15 @@ the middle of its line, then cropped to the page's body region (the frame furnit
 logos and page number is cut away) and checked:
 
 * the masked page's text layer must hold no character at all (deterministic; else no render);
-* a picture larger than an icon inside the body may carry words the text layer does not see (a
-  screenshot, a logo with letters). When an OCR runtime is available it reads each such picture and
-  any recognised text covers the picture with a flat block of its mean colour; without OCR every such
-  picture is covered (fail safe). The receipt records which path ran.
+* annotations and form fields are not drawn;
+* every picture inside the body, icons included, may carry words the text layer does not see (a
+  screenshot, a logo with letters). When an OCR runtime is available it reads each picture and any
+  recognised text covers the picture with one colour in place; without OCR every picture with sharp
+  edges is covered (fail safe), and only a flat one (a soft shadow, a gradient) is kept;
+* text drawn as paths (WordArt, outlined text, an embedded metafile) is no text object: when an OCR
+  runtime is available the final masked crop is read once more, and a page on which OCR still finds
+  a word (three Hangul syllables or five Latin letters in a row; calibrated on the real template's
+  ten renders, whose bar noise reached two and four) gets no render. The receipt records both paths.
 
 Pure apart from the OCR runtime: no artifact store, no database. Registration stores the result
 (``services/svg_templates/body_renders.py``).
@@ -34,8 +39,12 @@ from PIL import Image, ImageStat
 LOGGER = logging.getLogger(__name__)
 
 RENDER_VERSION = "svg-template-body-render/v1"
-#: A picture at most this many canvas pixels on both edges is an icon: kept without OCR.
-ICON_EDGE_PX = 120
+#: A picture with fewer strong-edge pixels than this (a soft shadow, a gradient) cannot carry a
+#: legible letter: without OCR it is kept, every other picture is covered.
+MIN_EDGE_PIXELS = 16
+_EDGE_STEP = 48
+_FINAL_HANGUL = re.compile(r"[가-힣]{3,}")
+_FINAL_LATIN = re.compile(r"[A-Za-z]{5,}")
 #: Stored and sent renders are at most this long on their long edge (about 800 input tokens).
 MAX_RENDER_EDGE = 1024
 #: A text line's bar covers this middle share of the text object's height.
@@ -63,10 +72,15 @@ class MaskedRender:
     pictures: int
     pictures_covered: int
     ocr: str
+    #: Pictures removed as a shadow or a text effect (bitmaps that may hold a blurred copy of a text).
+    text_effects: int = 0
+    #: ``passed``: OCR read the final crop and found no word; ``unavailable``: no OCR runtime.
+    final_check: str = "unavailable"
 
     def mask_receipt(self) -> dict:
         return {"version": RENDER_VERSION, "text_objects": self.text_objects, "residual_chars": 0,
-                "pictures": self.pictures, "pictures_covered": self.pictures_covered, "ocr": self.ocr}
+                "pictures": self.pictures, "pictures_covered": self.pictures_covered,
+                "text_effects": self.text_effects, "ocr": self.ocr, "final_check": self.final_check}
 
 
 def recognised_text(text: str | None) -> bool:
@@ -75,6 +89,29 @@ def recognised_text(text: str | None) -> bool:
     picture, a miss would leak a word."""
     text = text or ""
     return bool(_HANGUL_RUN.search(text) or _LATIN_RUN.search(text) or _DIGIT_RUN.search(text))
+
+
+def final_text_found(text: str | None) -> bool:
+    """Whether OCR of a whole masked crop found a word: three Hangul syllables or five Latin letters
+    in a row. Bars and pictograms read as noise of up to two syllables and four letters on the real
+    template's renders; digits are left out, since bars read as long digit runs."""
+    text = text or ""
+    return bool(_FINAL_HANGUL.search(text) or _FINAL_LATIN.search(text))
+
+
+def strong_edge_pixels(image: Image.Image) -> int:
+    """Pixels on a strong grey-level edge, at full resolution (a letter's stroke keeps its edges)."""
+    from PIL import ImageFilter
+
+    grey = image.convert("L")
+    if grey.width < 3 or grey.height < 3:
+        return 0
+    edges = grey.filter(ImageFilter.FIND_EDGES).crop((1, 1, grey.width - 1, grey.height - 1))
+    return sum(edges.histogram()[_EDGE_STEP + 1:])
+
+
+def _uniform(image: Image.Image) -> bool:
+    return all(high - low <= 2 for low, high in image.getextrema())
 
 
 def _tesseract_reader() -> OcrReader | None:
@@ -139,13 +176,6 @@ def resolve_ocr_reader() -> tuple[OcrReader | None, str]:
     return None, "unavailable"
 
 
-#: A picture whose in-body pixels have almost no sharp edge (a soft shadow, a gradient, a flat panel)
-#: cannot carry legible text: it is neither checked nor covered. Letters, screenshots and drawings
-#: are made of sharp edges (measured on template A: soft shadows 0, pictures from 0.01 up).
-PLAIN_SHARP_EDGE_SHARE = 0.002
-_SHARP_STEP = 48
-
-
 def _fill(raw, handle) -> tuple[int, int, int, int]:
     channels = [ctypes.c_uint() for _ in range(4)]
     if not raw.FPDFPageObj_GetFillColor(handle, *channels) or channels[3].value == 0:
@@ -163,19 +193,29 @@ def _page_bounds(obj) -> tuple[float, float, float, float]:
     return bounds
 
 
-def sharp_edge_share(image: Image.Image) -> float:
-    """The share of neighbouring pixel pairs whose grey levels differ by a sharp step."""
-    grey = image.convert("L")
-    if max(grey.size) > 256:
-        ratio = 256 / max(grey.size)
-        grey = grey.resize((max(1, round(grey.width * ratio)), max(1, round(grey.height * ratio))), Image.NEAREST)
-    width, height = grey.size
-    if width < 2 or height < 2:
-        return 0.0
-    pixels = grey.load()
-    sharp = sum((abs(pixels[x + 1, y] - pixels[x, y]) > _SHARP_STEP) + (abs(pixels[x, y + 1] - pixels[x, y]) > _SHARP_STEP)
-                for y in range(height - 1) for x in range(width - 1))
-    return sharp / (2 * (width - 1) * (height - 1))
+def _soft_shadow(obj) -> bool:
+    """A translucent grey picture: the PDF export's drop shadow of a shape (with a blurred copy of the
+    shape's text in it, readable once the text itself is gone). Measured on the real template: every
+    card and label shadow is a soft-masked grey bitmap."""
+    try:
+        bitmap = obj.get_bitmap(render=True)
+    except Exception:  # noqa: BLE001 - not a readable shadow
+        return False
+    try:
+        image = bitmap.to_pil()
+    finally:
+        bitmap.close()
+    if image.mode not in {"RGBA", "LA"}:
+        return False
+    rgba = image.convert("RGBA")
+    if rgba.getchannel("A").getextrema()[0] >= 250:
+        return False  # opaque: a picture, not a shadow
+    red, green, blue = (channel for channel in rgba.convert("RGB").split())
+    from PIL import ImageChops
+
+    spread = ImageChops.subtract(ImageChops.lighter(ImageChops.lighter(red, green), blue),
+                                 ImageChops.darker(ImageChops.darker(red, green), blue))
+    return spread.getextrema()[1] <= 16
 
 
 def _picture_part(obj, page_box, body_box) -> Image.Image | None:
@@ -237,21 +277,33 @@ def mask_pdf_page(pdf_bytes: bytes, page_index: int, *, canvas_width_px: int,
             raise BodyRenderRejected("svg_template_body_render_page_missing")
         page = document[page_index]
         try:
-            image, counts = _mask_and_render(pdfium, raw, page, canvas_width_px, crop, ocr)
+            image, check, counts = _mask_and_render(pdfium, raw, page, canvas_width_px, crop, ocr)
         finally:
             page.close()
     finally:
         document.close()
     x, y, width, height = crop
-    body = image.crop((max(0, x), max(0, y), min(image.width, x + width), min(image.height, y + height)))
+    box = (max(0, x), max(0, y), min(image.width, x + width), min(image.height, y + height))
+    body = image.crop(box)
+    final_check = "unavailable"
+    if check is not None:
+        # Text that was never a text object (paths, metafiles, clip text) is caught here.
+        crop_png = io.BytesIO()
+        check.crop(box).save(crop_png, format="PNG")
+        text = ocr(crop_png.getvalue())
+        if text is None:
+            raise BodyRenderRejected("svg_template_body_render_final_ocr_failed")
+        if final_text_found(text):
+            raise BodyRenderRejected("svg_template_body_render_final_ocr_text")
+        final_check = "passed"
     if max(body.size) > MAX_RENDER_EDGE:
         ratio = MAX_RENDER_EDGE / max(body.size)
         body = body.resize((max(1, round(body.width * ratio)), max(1, round(body.height * ratio))), Image.LANCZOS)
     output = io.BytesIO()
     body.save(output, format="PNG", optimize=True)
     return MaskedRender(png=output.getvalue(), width=body.width, height=body.height, text_objects=counts[0],
-                        pictures=counts[1], pictures_covered=counts[2],
-                        ocr=ocr_name if ocr is not None else "unavailable")
+                        pictures=counts[1], pictures_covered=counts[2], text_effects=counts[3],
+                        ocr=ocr_name if ocr is not None else "unavailable", final_check=final_check)
 
 
 def _mask_and_render(pdfium, raw, page, canvas_width_px, crop, ocr):
@@ -265,47 +317,49 @@ def _mask_and_render(pdfium, raw, page, canvas_width_px, crop, ocr):
         raise BodyRenderRejected("svg_template_body_render_crop_invalid")
     body_box = (x, y, x + width, y + height)
     objects = list(page.get_objects(max_depth=15))
-    pictures = covered = 0
+    text_boxes = [_page_bounds(obj) for obj in objects if obj.type == raw.FPDF_PAGEOBJ_TEXT]
+    pictures = covered = effects = 0
     for obj in objects:
         if obj.type != raw.FPDF_PAGEOBJ_IMAGE:
             continue
         left, bottom, right, top = _page_bounds(obj)
+        if _text_effect((left, bottom, right, top), text_boxes) or _soft_shadow(obj):
+            # A text's shadow or glow, or a shape's drop shadow, exported as a bitmap that may hold a
+            # blurred copy of the text: removed with the text.
+            page.remove_obj(obj)
+            obj.close()
+            effects += 1
+            continue
         box = (left * scale, (height_pt - top) * scale, right * scale, (height_pt - bottom) * scale)
         inside = (max(box[0], body_box[0]), max(box[1], body_box[1]),
                   min(box[2], body_box[2]), min(box[3], body_box[3]))
         if inside[2] - inside[0] < 1 or inside[3] - inside[1] < 1:
             continue
-        if box[2] - box[0] <= ICON_EDGE_PX and box[3] - box[1] <= ICON_EDGE_PX:
-            continue
         part = _picture_part(obj, box, inside)
-        if part is not None and sharp_edge_share(part) < PLAIN_SHARP_EDGE_SHARE:
-            continue
+        if part is not None and _uniform(part):
+            continue  # one colour: nothing to read
         pictures += 1
         if part is not None and ocr is not None:
             text = ocr(_ocr_png(part))
             # An OCR call that failed on this picture counts as unread: the picture is covered.
             if text is not None and not recognised_text(text):
                 continue
+        elif part is not None and strong_edge_pixels(part) < MIN_EDGE_PIXELS:
+            continue  # no OCR, but no edge a letter could be made of
         if part is None:
             page.remove_obj(obj)
             obj.close()
         else:
             _cover(pdfium, obj, tuple(round(value) for value in ImageStat.Stat(part).mean[:3]))
         covered += 1
-    texts = 0
+    texts, bars = 0, []
     for obj in objects:
         if obj.type != raw.FPDF_PAGEOBJ_TEXT:
             continue
         left, bottom, right, top = _page_bounds(obj)
         if (raw.FPDFTextObj_GetTextRenderMode(obj.raw) != raw.FPDF_TEXTRENDERMODE_INVISIBLE
                 and right > left and top > bottom):
-            red, green, blue, alpha = _fill(raw, obj.raw)
-            line = top - bottom
-            bar = raw.FPDFPageObj_CreateNewRect(left, bottom + line * (1 - BAR_SHARE) / 2, right - left,
-                                                line * BAR_SHARE)
-            raw.FPDFPageObj_SetFillColor(bar, red, green, blue, alpha or 255)
-            raw.FPDFPath_SetDrawMode(bar, raw.FPDF_FILLMODE_WINDING, 0)
-            raw.FPDFPage_InsertObject(page.raw, bar)
+            bars.append((left, bottom, right, top, _fill(raw, obj.raw)))
         page.remove_obj(obj)
         obj.close()
         texts += 1
@@ -318,12 +372,42 @@ def _mask_and_render(pdfium, raw, page, canvas_width_px, crop, ocr):
         textpage.close()
     if residual:
         raise BodyRenderRejected("svg_template_body_render_text_survived")
-    bitmap = page.render(scale=scale)
+    # The page without its text objects and before any bar: what OCR may still read here was never a
+    # text object (paths, metafiles, clip text). Bars would only add noise to that reading.
+    check = _render(page, scale) if ocr is not None else None
+    for left, bottom, right, top, (red, green, blue, alpha) in bars:
+        line = top - bottom
+        bar = raw.FPDFPageObj_CreateNewRect(left, bottom + line * (1 - BAR_SHARE) / 2, right - left,
+                                            line * BAR_SHARE)
+        raw.FPDFPageObj_SetFillColor(bar, red, green, blue, alpha or 255)
+        raw.FPDFPath_SetDrawMode(bar, raw.FPDF_FILLMODE_WINDING, 0)
+        raw.FPDFPage_InsertObject(page.raw, bar)
+    page.gen_content()
+    return _render(page, scale), check, (texts, pictures, covered, effects)
+
+
+def _text_effect(box, text_boxes) -> bool:
+    """Whether a picture lies within the text it overlaps, grown by most of a line: a shadow, glow or
+    reflection the PDF export drew as a bitmap of that text (measured on the real template: blurred
+    copies of the lines a few points off them, readable once the text itself is gone)."""
+    left, bottom, right, top = box
+    touching = [text for text in text_boxes
+                if text[0] < right and text[2] > left and text[1] < top and text[3] > bottom]
+    if not touching:
+        return False
+    lines = sorted(text[3] - text[1] for text in touching)
+    margin = max(4.0, 0.75 * lines[len(lines) // 2])
+    return (left >= min(text[0] for text in touching) - margin and right <= max(text[2] for text in touching) + margin
+            and bottom >= min(text[1] for text in touching) - margin and top <= max(text[3] for text in touching) + margin)
+
+
+def _render(page, scale) -> Image.Image:
+    # Annotations (stamps, free text) and form fields carry text of their own: never drawn.
+    bitmap = page.render(scale=scale, draw_annots=False, may_draw_forms=False)
     try:
-        image = bitmap.to_pil().convert("RGB")
+        return bitmap.to_pil().convert("RGB")
     finally:
         bitmap.close()
-    return image, (texts, pictures, covered)
 
 
 def _ocr_png(region: Image.Image) -> bytes:
@@ -337,5 +421,5 @@ def _ocr_png(region: Image.Image) -> bytes:
     return output.getvalue()
 
 
-__all__ = ["BodyRenderRejected", "ICON_EDGE_PX", "MAX_RENDER_EDGE", "MaskedRender", "PLAIN_SHARP_EDGE_SHARE",
-           "RENDER_VERSION", "mask_pdf_page", "recognised_text", "resolve_ocr_reader", "sharp_edge_share"]
+__all__ = ["BodyRenderRejected", "MAX_RENDER_EDGE", "MIN_EDGE_PIXELS", "MaskedRender", "RENDER_VERSION",
+           "final_text_found", "mask_pdf_page", "recognised_text", "resolve_ocr_reader", "strong_edge_pixels"]
