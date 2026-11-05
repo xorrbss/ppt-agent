@@ -6,6 +6,20 @@ import pytest
 import sqlalchemy
 from fastapi import HTTPException
 
+from models.authored_vnext.deck import MasterDigestPin
+from models.authored_vnext.master.contract import DeckMasterContract
+from models.generate_presentation_request import AuthoredMasterPinInput, GeneratePresentationRequest
+from services.authored_vnext.generation.errors import PublishedMasterRequiredError
+from services.authored_vnext.generation.legacy_pin import ResolvedLegacyMasterPin
+from services.public_operation_admission import PUBLIC_DEFAULT_MAX_SLIDES, PUBLIC_DEFAULT_POLICY_VERSION
+from services.svg_generation_admission import (
+    _resolve_design_reference,
+    _resolve_master_rules,
+    require_svg_creation_admission,
+    source_svg_capability,
+)
+from tests.support.authored_vnext_master_fixture import master_contract_payload
+
 
 def _json_plain(value):
     if isinstance(value, SimpleNamespace):
@@ -41,21 +55,6 @@ def _source_manifest_reference(created_by_operation_id):
         media_type="application/json",
         created_by_operation_id=created_by_operation_id,
     )
-
-
-from models.authored_vnext.deck import MasterDigestPin
-from models.authored_vnext.master.contract import DeckMasterContract
-from models.generate_presentation_request import AuthoredMasterPinInput, GeneratePresentationRequest
-from services.authored_vnext.generation.errors import PublishedMasterRequiredError
-from services.authored_vnext.generation.legacy_pin import ResolvedLegacyMasterPin
-from services.public_operation_admission import PUBLIC_DEFAULT_MAX_SLIDES, PUBLIC_DEFAULT_POLICY_VERSION
-from services.svg_generation_admission import (
-    _resolve_design_reference,
-    _resolve_master_rules,
-    require_svg_creation_admission,
-    source_svg_capability,
-)
-from tests.support.authored_vnext_master_fixture import master_contract_payload
 
 
 def _v2_header_request():
