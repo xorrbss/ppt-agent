@@ -696,9 +696,11 @@ async def render_svg_with_metrics(svg: str, *, width: int = DEFAULT_CANVAS_WIDTH
             "worker_materialized": bool(text) and all(item.get("font_loaded") is True for item in text)}
     from services.svg_default_fonts import FONT_PROFILE as DEFAULT_FONT_PROFILE
     if f'<html title="{DEFAULT_FONT_PROFILE}|' in wrapper:
+        from services.svg_default_fonts import default_font_subset_provenance
         from services.svg_trusted_fonts import DEFAULT_FONT_FAMILY
         font_profile = {"profile": DEFAULT_FONT_PROFILE, "family": DEFAULT_FONT_FAMILY,
-            "worker_materialized": bool(text) and all(item.get("font_loaded") is True for item in text)}
+            "worker_materialized": bool(text) and all(item.get("font_loaded") is True for item in text),
+            "subset": default_font_subset_provenance(_svg_fragment(wrapper).group(1))}
     quality = {"contract_version": SVG_CONTRACT_VERSION, "renderer_version": SVG_RENDERER_VERSION,
                "source_digest": source_digest(svg), "png_digest": capture.png_digest,
                "wrapper_digest": capture.html_digest, "metrics_digest": capture.metrics_digest,

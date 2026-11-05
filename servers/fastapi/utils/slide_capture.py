@@ -1140,7 +1140,7 @@ async def ensure_browser_metrics(
                 # gathered slide.  The one-shot headless-shell path has its own
                 # profile, process-tree timeout, virtual-time budget, and the
                 # same instrumented DOM payload used by the primary renderer.
-                admitted = _admit_render_source(html)
+                admitted = await asyncio.to_thread(_admit_render_source, html)
                 await _render_html_to_png_subprocess(
                     admitted.html,
                     timeout=timeout,
@@ -1872,7 +1872,9 @@ async def _render_html_to_png_uncached(
     _bind_worker_client()
     ensure_renderer_enabled()
     mode = renderer_mode()
-    admitted = _admit_render_source(html)
+    # Admission can build a per-page font subset (CPU-bound); keep it off the
+    # event loop.
+    admitted = await asyncio.to_thread(_admit_render_source, html)
     if mode == "legacy":
         # Kept only for legacy read/export migrations.  New authored requests use
         # isolated mode and never auto-downgrade here after a worker failure.
