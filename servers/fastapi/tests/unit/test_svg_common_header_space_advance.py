@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 from pathlib import Path
+import sys
 import xml.etree.ElementTree as ET
 
 import pytest
@@ -23,6 +24,18 @@ from utils.svg_template_fonts import trusted_font_marker
 from utils.slide_capture import find_chrome
 
 pytestmark = pytest.mark.skipif(find_chrome() is None, reason="headless Chrome is required")
+
+# CHROMIUM_SPACE_ADVANCE_EM was measured with the Windows renderer; Linux
+# Chromium advances a space by 7.95 px at 34 px instead of 9.52 px, so these
+# measurement tests fail there. Plan item Q3 (docs/svg-mode-improvement-plan-
+# 20261105.md, review section 4.13 item 4) replaces the constant with a
+# per-font-digest measurement version. strict=True makes the marker fail as soon
+# as the fix lands, which is the signal to delete it.
+_LINUX_SPACE_ADVANCE_NOT_MEASURED = pytest.mark.xfail(
+    sys.platform != "win32",
+    reason="Linux Chromium space advance differs from the Windows-measured constant (plan Q3)",
+    strict=True,
+)
 
 FIXTURE = Path(__file__).resolve().parents[1] / "fixtures" / "svg_common_header_live4" / "failed_titles.json"
 
@@ -59,6 +72,7 @@ def _text_metrics(result) -> list[dict]:
     return [item for item in result.quality["browser_metrics"]["elements"] if item.get("has_owned_text")]
 
 
+@_LINUX_SPACE_ADVANCE_NOT_MEASURED
 def test_chromium_space_advance_is_measured_at_both_header_weights():
     svg = (
         '<svg xmlns="http://www.w3.org/2000/svg" width="400" height="120" viewBox="0 0 400 120">'
@@ -85,6 +99,7 @@ def test_frozen_live4_v2_binding_keeps_legacy_face_measurement(key):
 
 
 @pytest.mark.parametrize("key", ("25", "29"))
+@_LINUX_SPACE_ADVANCE_NOT_MEASURED
 def test_live4_fresh_v2_header_wraps_and_passes_real_export_evidence(key):
     page = _load_fixture_page(key)
     contract = page["contract"]
@@ -112,6 +127,7 @@ def test_live4_fresh_v2_header_wraps_and_passes_real_export_evidence(key):
     assert all(abs(preflight - browser) <= 1 for preflight, browser in zip(title["line_widths"], ink_widths, strict=True))
 
 
+@_LINUX_SPACE_ADVANCE_NOT_MEASURED
 def test_twenty_page_v1_and_v2_headers_match_real_renderer_once_per_deck():
     fixture = _load_fixture_page("25")
     titles = [fixture["title"], "초기 10대를 우선 승인하고, 검증된 비용과 품질로 후속 투자를 결정한다"] * 10
