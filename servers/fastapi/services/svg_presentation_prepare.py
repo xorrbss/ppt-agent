@@ -620,6 +620,12 @@ async def _prepare_generation(request, presentation_id, outline, session, job) -
     canvas = request_canvas_contract(request)
     physical_kwargs = ({"physical_canvas": request._document_canvas}
                        if getattr(request, "_document_canvas", None) is not None else {})
+    if getattr(request, "common_header_mode", None) not in {"free", "page_free"}:
+        from services.svg_common_header_space_advance import ensure_space_advance_measurement
+
+        # Header preparation below, and prepare_document_header after it, measure
+        # titles synchronously against this renderer's measured space advance.
+        await ensure_space_advance_measurement()
     snapshot = await _pin_owned_svg_style(
         request, job, pin_style=pin_svg_style, session_maker=async_session_maker, owned_job=owned_job,
         outline=outline, canvas=canvas,

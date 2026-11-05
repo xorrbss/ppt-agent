@@ -187,6 +187,12 @@ COMMON_HEADER_VERIFIER_LEDGER = VerifierRevisionLedger(
         # Migration commit: the digest now resolves through this ledger; no header
         # measurement or verification behaviour changed.
         "sha256:2e52a0e56674690a607fc214c78206e9425c54bb293929f6f5babef6a688d700": "svg-common-header-verifier/1",
+        # #126 measured header space advance: adds measurement versions glyph/v3 and
+        # paint/v4 (self-describing; older code rejects them by version) and seals a
+        # fallback record on glyph/v2 / paint/v3 when the probe cannot measure. The
+        # verification of every earlier version is byte-identical, so stored
+        # evidence keeps this revision.
+        "sha256:c58474633c70f87addab8165499a0b3ecb577badd57b461534796976f5518638": "svg-common-header-verifier/1",
     }),
 )
 

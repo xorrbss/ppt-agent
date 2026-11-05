@@ -1,43 +1,38 @@
-"""Chromium's bundled-header space advance is a sealed layout contract."""
+"""The bundled-header space advance is measured on the renderer and sealed in the contract."""
 
 from __future__ import annotations
 
 import asyncio
 import json
 from pathlib import Path
-import sys
 import xml.etree.ElementTree as ET
 
 import pytest
 
+from services import svg_common_header_space_advance as space_advance
 from services.svg_common_header import (
-    CHROMIUM_SPACE_ADVANCE_EM,
+    MEASUREMENT_VERSION,
+    _advance,
+    _font,
     prepare_common_header,
     render_common_header,
     validate_common_header_binding,
 )
 from services.svg_common_header_export_evidence import apply_common_header_v2_quality
-from services.svg_common_header_v2 import prepare_common_header_v2, render_common_header_v2
+from services.svg_common_header_v2 import (
+    MEASUREMENT_VERSION as V2_MEASUREMENT_VERSION,
+    prepare_common_header_v2,
+    render_common_header_v2,
+)
 from services.svg_renderer import render_svg_with_metrics
-from services.svg_text_advance import text_advance
 from utils.svg_template_fonts import trusted_font_marker
 from utils.slide_capture import find_chrome
 
 pytestmark = pytest.mark.skipif(find_chrome() is None, reason="headless Chrome is required")
 
-# CHROMIUM_SPACE_ADVANCE_EM was measured with the Windows renderer; Linux
-# Chromium advances a space by 7.95 px at 34 px instead of 9.52 px, so these
-# measurement tests fail there. Plan item Q3 (docs/svg-mode-improvement-plan-
-# 20261105.md, review section 4.13 item 4) replaces the constant with a
-# per-font-digest measurement version. strict=True makes the marker fail as soon
-# as the fix lands, which is the signal to delete it.
-_LINUX_SPACE_ADVANCE_NOT_MEASURED = pytest.mark.xfail(
-    sys.platform != "win32",
-    reason="Linux Chromium space advance differs from the Windows-measured constant (plan Q3)",
-    strict=True,
-)
-
-FIXTURE = Path(__file__).resolve().parents[1] / "fixtures" / "svg_common_header_live4" / "failed_titles.json"
+FIXTURES = Path(__file__).resolve().parents[1] / "fixtures"
+FIXTURE = FIXTURES / "svg_common_header_live4" / "failed_titles.json"
+FROZEN = FIXTURES / "svg_common_header_frozen_measurements"
 
 
 def _load_fixture_page(key: str) -> dict:
@@ -72,23 +67,86 @@ def _text_metrics(result) -> list[dict]:
     return [item for item in result.quality["browser_metrics"]["elements"] if item.get("has_owned_text")]
 
 
-@_LINUX_SPACE_ADVANCE_NOT_MEASURED
-def test_chromium_space_advance_is_measured_at_both_header_weights():
-    svg = (
-        '<svg xmlns="http://www.w3.org/2000/svg" width="400" height="120" viewBox="0 0 400 120">'
-        '<text x="0" y="50" font-family="Noto Sans KR" font-size="34" font-weight="400" fill="#000000">A A</text>'
-        '<text x="0" y="100" font-family="Noto Sans KR" font-size="34" font-weight="700" fill="#000000">A A</text>'
-        "</svg>"
-    )
-    result = asyncio.run(render_svg_with_metrics(
-        svg, width=400, height=120, timeout=90, source_font_profile=trusted_font_marker(),
-    ))
-    metrics = _text_metrics(result)
-    assert len(metrics) == 2
-    for metric, weight in zip(metrics, (400, 700), strict=True):
+def _render_texts(texts: list[tuple[str, str, int, int]], width=1280, height=720) -> list[dict]:
+    nodes = "".join(
+        f'<text x="20" y="{60 + index * 60}" font-family="{family}" font-size="{size}" '
+        f'font-weight="{weight}" fill="#000000">{text}</text>'
+        for index, (text, family, weight, size) in enumerate(texts))
+    svg = (f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" '
+           f'viewBox="0 0 {width} {height}">{nodes}</svg>')
+    return _text_metrics(asyncio.run(render_svg_with_metrics(svg, width=width, height=height, timeout=90)))
+
+
+@pytest.mark.parametrize(("family", "weight"), space_advance.PROBE_FACES)
+def test_measured_space_advance_matches_the_renderer_at_every_header_face(family, weight):
+    font = _font(family, weight, 34)
+    evidence = space_advance.space_advance_evidence([font])
+    # A space in a Latin run and one in a Hangul run: Noto Sans KR's Korean
+    # locl draws the second wider in Chromium, which the font alone omits.
+    texts = ["A A", "가 가"]
+    metrics = _render_texts([(text, family, weight, 34) for text in texts])
+    assert len(metrics) == len(texts)
+    for metric, text in zip(metrics, texts, strict=True):
         browser_width = metric["text_fragments"][0]["width"]
-        face_width = text_advance("AA", 34, str(weight), "Noto Sans KR")
-        assert browser_width - face_width == pytest.approx(CHROMIUM_SPACE_ADVANCE_EM * 34, abs=0.05)
+        assert browser_width == pytest.approx(_advance(text, font, MEASUREMENT_VERSION, evidence), abs=0.05)
+
+
+def test_measurement_provenance_names_the_renderer_and_is_sealed():
+    slides = [{"page_id": "p", "content": "x", "title": "가격대별 판매 비중과 향후 전망"}]
+    contract, bindings = prepare_common_header({"tokens": {"heading_font": "Noto Sans KR"}},
+                                               {"slides": slides}, {"width": 1280, "height": 720})
+    assert contract["measurement_version"] == MEASUREMENT_VERSION
+    evidence = contract["space_advance"]
+    assert evidence["version"] == space_advance.PROBE_VERSION
+    assert evidence["renderer"] == space_advance.renderer_identity()
+    assert [(face["family"], face["weight"]) for face in evidence["faces"]] == [("Noto Sans KR", 800)]
+    validate_common_header_binding(contract, bindings[0])
+    face = evidence["faces"][0]
+    assert set(face["contexts"]) == set(space_advance.SPACE_CONTEXTS)
+    # This title's spaces all sit between Hangul syllables.
+    assert space_advance.space_contexts(slides[0]["title"]) == ["hangul|hangul"] * 4
+    hangul = face["contexts"]["hangul|hangul"][0]
+    tampered = {**contract, "space_advance": {**evidence, "faces": [{**face, "contexts": {
+        **face["contexts"], "hangul|hangul": [{**hangul, "space_delta_em": hangul["space_delta_em"] + 1e-6}]}}]}}
+    with pytest.raises(ValueError, match="svg_common_header_digest_mismatch"):
+        validate_common_header_binding(tampered, bindings[0])
+
+
+@pytest.mark.parametrize("alignment", ("left", "center", "right"))
+def test_fresh_v1_header_lines_land_where_the_renderer_draws_them(alignment):
+    titles = ["2026년 국내 전기차 시장 분석", "Market share and pricing trend", "AI 전략 (2026) 수립과 실행 계획"]
+    slides = [{"page_id": f"p{index}", "content": "x", "title": title} for index, title in enumerate(titles)]
+    contract, bindings = prepare_common_header(
+        {"tokens": {"heading_font": "Noto Sans KR"}, "common_header": {"alignment": alignment}},
+        {"slides": slides}, {"width": 1280, "height": 720})
+    box = contract["title_box"]
+    for index, binding in enumerate(bindings):
+        svg = _svg_for_group(render_common_header(contract, binding, index=index, count=len(slides)), 1280, 720)
+        result = asyncio.run(render_svg_with_metrics(svg, width=1280, height=720, timeout=90))
+        fragments = [metric["text_fragments"][0] for metric in _text_metrics(result)]
+        assert len(fragments) == len(binding["lines"])
+        for fragment, width in zip(fragments, binding["line_widths"], strict=True):
+            expected_x = box["x"] + {"left": 0, "center": (box["width"] - width) / 2,
+                                     "right": box["width"] - width}[alignment]
+            assert abs(fragment["width"] - width) <= 1
+            assert abs(fragment["x"] - expected_x) <= 1
+
+
+@pytest.mark.parametrize("name", ("v1_glyph_v2.json", "v2_glyph_paint_v3.json"))
+def test_frozen_sealed_constant_contracts_still_validate_and_render(name):
+    frozen = json.loads((FROZEN / name).read_text(encoding="utf-8"))
+    contract, bindings, slides = frozen["contract"], frozen["bindings"], frozen["slides"]
+    assert contract["measurement_version"] in ("svg-common-header-glyph/v2", "svg-common-header-glyph-paint/v3")
+    assert "space_advance" not in contract
+    for index, (binding, slide) in enumerate(zip(bindings, slides, strict=True)):
+        validate_common_header_binding(contract, binding, index=index, count=len(slides),
+                                       content=slide["content"], title=slide["title"])
+        assert render_common_header(contract, binding, index=index, count=len(slides)) is not None
+    # The sealed constant cannot be swapped for this host's measurement.
+    resealed = {**contract, "space_advance": space_advance.space_advance_evidence(
+        [contract["font"]] if "font" in contract else [field["font"] for field in contract["fields"]])}
+    with pytest.raises(ValueError, match="svg_common_header_digest_mismatch"):
+        validate_common_header_binding(resealed, bindings[0], index=0, count=len(slides))
 
 
 @pytest.mark.parametrize("key", ("25", "29"))
@@ -99,7 +157,6 @@ def test_frozen_live4_v2_binding_keeps_legacy_face_measurement(key):
 
 
 @pytest.mark.parametrize("key", ("25", "29"))
-@_LINUX_SPACE_ADVANCE_NOT_MEASURED
 def test_live4_fresh_v2_header_wraps_and_passes_real_export_evidence(key):
     page = _load_fixture_page(key)
     contract = page["contract"]
@@ -108,6 +165,7 @@ def test_live4_fresh_v2_header_wraps_and_passes_real_export_evidence(key):
         for index in range(page["binding"]["page_count"])
     ]}
     prepared, bindings = prepare_common_header_v2(_candidate(contract), outline, contract["canvas"], snapshot={})
+    assert prepared["measurement_version"] == V2_MEASUREMENT_VERSION
     binding = bindings[page["page_index"]]
     title = next(field for field in binding["fields"] if field["role"] == "title")
     title_field = next(field for field in prepared["fields"] if field["role"] == "title")
@@ -127,7 +185,6 @@ def test_live4_fresh_v2_header_wraps_and_passes_real_export_evidence(key):
     assert all(abs(preflight - browser) <= 1 for preflight, browser in zip(title["line_widths"], ink_widths, strict=True))
 
 
-@_LINUX_SPACE_ADVANCE_NOT_MEASURED
 def test_twenty_page_v1_and_v2_headers_match_real_renderer_once_per_deck():
     fixture = _load_fixture_page("25")
     titles = [fixture["title"], "초기 10대를 우선 승인하고, 검증된 비용과 품질로 후속 투자를 결정한다"] * 10

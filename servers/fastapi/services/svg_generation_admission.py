@@ -186,6 +186,12 @@ async def prepare_private_svg_recovery_authority(request: object, session) -> li
     from services.svg_authoring_profile import request_quality_recovery_policy, read_quality_recovery_policy
     from services.svg_recovery_source_evidence import verified_recovery_source_evidence
 
+    if getattr(request, "common_header_mode", None) not in {"free", "page_free"}:
+        # Every svg admission awaits this step before pin_svg_style, whose
+        # header preflight measures titles synchronously.
+        from services.svg_common_header_space_advance import ensure_space_advance_measurement
+
+        await ensure_space_advance_measurement()
     request._svg_recovery_source_evidence = []
     frozen = getattr(request, "_svg_style_snapshot", None)
     policy = read_quality_recovery_policy(frozen) if frozen is not None else request_quality_recovery_policy(request)
