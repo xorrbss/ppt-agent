@@ -22,18 +22,26 @@ from models.canvas_defaults import DEFAULT_CANVAS_HEIGHT_PX, DEFAULT_CANVAS_WIDT
 from utils.authored_font_stack import LOCAL_FONT_FALLBACKS, css_font_stack  # noqa: F401
 
 
+def resolve_style_primary(brand: Any, style: Any | None) -> Any:
+    """The primary colour the author uses: an explicit brand colour, else the style's, else the brand's."""
+    primary = getattr(brand, "primary", None)
+    if style is None or getattr(style, "id", None) == "default":
+        return primary
+    if getattr(brand, "primary_is_explicit", False):
+        return primary
+    return (
+        getattr(style, "primary_color", None)
+        or getattr(style, "preview_accent", None)
+        or primary
+    )
+
+
 def apply_style_defaults(brand: Any, style: Any | None) -> Any:
     """Apply preset brand defaults without overriding explicit request values."""
     if style is None or style.id == "default":
         return brand
-    primary = brand.primary
+    primary = resolve_style_primary(brand, style)
     fonts = brand.fonts
-    if not brand.primary_is_explicit:
-        primary = (
-            getattr(style, "primary_color", None)
-            or getattr(style, "preview_accent", None)
-            or primary
-        )
     if not brand.fonts_are_explicit:
         fonts = (
             getattr(style, "body_font", None)

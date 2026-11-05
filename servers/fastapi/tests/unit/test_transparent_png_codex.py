@@ -21,7 +21,6 @@ from services.generation_core.assets import infographic_assets, infographic_plan
 from services.generation_core.assets.icon_pack import provider as provider_mod
 from services.generation_core.assets.icon_pack.scene import generate_scene_cutout
 from services.generation_core.assets.icon_pack.service import resolve_icons
-from services.generation_core.assets.icon_pack.sheet import layout_for
 from services.generation_core.assets.icon_pack.store import IconPack
 from utils.runtime_settings import RuntimeSettings
 
