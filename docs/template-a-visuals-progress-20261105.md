@@ -78,6 +78,46 @@ Hypotheses to test against the baseline measurement, not conclusions:
 * Docs vs code: `docs/template-body-composition-20261105.md` (opening section) still says the exemplars are off by default; the
   code default is on.
 
+## Smoke data against the hypotheses (2026-11-05, template A, data_report_ko, N=1 per backend)
+
+Two decks, both judge overall 2.74 (structure 3.1 / 2.8, density 2.5 / 2.6, hierarchy 2.8 / 3.0, tone 3.0 / 2.8,
+visuals 2.3 / 2.5); first drafts 8 and 10 of 10, fallback 1 and 0. Per-page judge evidence and the stored decks say:
+
+* Sections: the judge counted 0 sections on 13 of 20 pages (1-3 on the rest); every outline page held one `##`
+  title and 4-7 bullets (`content_kinds` sections = 1 on all 20). The best page of both decks (structure 4,
+  hierarchy 4) is the one where the author invented three numbered sub-headings on its own. Supports the outline
+  hypothesis. The first two baseline decks agree (sections 0 on 5 and 4 pages of 10).
+* Visuals: 0 polygons in both decks (no chevron or arrowhead), 0 pictures (icons only, image generation off),
+  23-26 icons per deck, offered on 7-9 pages and left out entirely on 3-4 of them (the writing policy makes them
+  optional). Pages that used 3-5 icons scored visuals 2-3, pages without 2-3: icons alone do not move the axis.
+  Visuals never reached 4; the rubric's 5 needs the anchors' mix (step shapes, charts, icon tiles, tables).
+* Density: text items 40-62 on 7 of 10 pages (the rubric's 5 needs 40 or more), but the judge's empty share was
+  30-62 % (measured blank share 0.32-0.62 against 0.15-0.37 on the originals), which caps density at 3: pages use
+  40-50 px figures and tall cards whose lower halves are empty. The grammar line "when the facts are few, enlarge
+  the components" reads as "enlarge the type".
+* The author sees no render of the template at all: the frozen snapshot's `references` is empty for this
+  registration (`reference_examples: []`), so the only picture of the template it has is the exemplar outline text.
+  The earlier note that it sees fixed pages 1, 2, middle and last was wrong for this registration.
+* The cover scores 1.6-1.8 as a body page (KPI cards, 48-62 % empty) and costs the deck mean about 0.1; not changed.
+
+## Knobs added (commit `ed925305`, both internal, default off, prompt only)
+
+* `SVG_TEMPLATE_OUTLINE_SECTIONS=on`: the outline system prompt of a template-redesign deck ends with
+  `TEMPLATE_SECTIONS_CLAUSE` (`utils/svg_template_outline.py`; wired in `generate_presentation_outlines.py` and
+  `presentation_generation_pipeline.template_outline_sections`): a key-message line, then two to four `###`
+  sub-sections numbered with a single digit (`### 1. ...`; `01` would become a required figure), each holding its
+  own bullets, table rows or series, every source fact kept, never padding. `explicit_outline_title` still finds
+  one `##` title; `content_kinds` sees the sections and matches multi-section exemplars. Expected: judge sections,
+  hierarchy and structure up; density through more text items per section; risk: longer bodies (body-outside,
+  overlap retries). Tests: `tests/unit/test_svg_template_outline_sections.py`.
+* `SVG_TEMPLATE_VISUAL_GUIDANCE=on`: `services/svg_templates/generation.template_composition_guidance` freezes
+  `TEMPLATE_VOCABULARY_LINE` instead of "Decorative cards, icons or visual difference are not evidence of
+  improvement" (a snapshot digest input, so new decks only), and `body_composition.composition_rules` closes its
+  density line with `FILL_BY_EXPLAINING` (full explanations, caption rows, icons beside labels, compact key figures
+  at most about three times the body size) instead of `FILL_BY_ENLARGING`. Expected: visuals (icons used, step
+  shapes where the source states a sequence), density (empty share down); risk: low, no new check. Tests:
+  `tests/unit/test_svg_template_visual_guidance.py`.
+
 ## Next
 
 Baseline matrix on template A (4 inputs x 3 runs), the change behind an internal knob (default off), independent
