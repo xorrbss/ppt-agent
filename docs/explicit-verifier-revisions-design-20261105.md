@@ -412,7 +412,16 @@ Facts on `9d389ba80`:
   statement was inaccurate. The README now says 128.
 
 Every patch suffix makes the string longer, so the scheme cannot grow at all.
-Proposal (design only, not implemented):
+
+**Owner decision (c), 2026-11-05: the short-revision form below is adopted.**
+The current 125-character `CONVERTER_VERSION`
+(`slide-master/166472bd…698ef+document-canvas.2+text-advance.1+chart-furniture.16+native-fixed-text.2`)
+is frozen as the `exporter_version` of `svg-pptx-converter/1`. From the next
+converter behaviour change on, the exporter version is `svg-pptx-converter/N`
+(the bumped `CONVERTER_EXECUTION_REVISION`), and patch details live only in the
+vendor manifest. No code changes until that bump: it is the change that
+switches `CONVERTER_VERSION` to the revision string, and no suffix may be
+appended to the frozen value before it. The rule, as proposed:
 
 1. Keep the current 125-character `CONVERTER_VERSION` as the frozen
    `exporter_version` of `svg-pptx-converter/1`, so that stored identities and
@@ -448,4 +457,5 @@ migration on SQLite and PostgreSQL. With explicit revisions it is unnecessary.
   - (a) migrate #3 and #4/#5 next: done (§5.1); #11 and #6 remain design only;
   - (b) #8: delete: done (§5.2), except the lineage proof of stored children,
     which can go once no succeeded cached-author-render child is confirmed;
-  - adopting §7 for the next converter behaviour change.
+  - (c) §7 short-revision `exporter_version`: adopted; applied by the next
+    converter behaviour change.
