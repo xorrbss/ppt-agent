@@ -222,13 +222,14 @@ async def _fallback(*, ctx, request, index, content, payload, error, job, checkp
         svg = fallback_page_svg(content=content, role=ctx.roles[index], index=index, count=ctx.count,
                                 width=ctx.canvas.width_px, height=ctx.canvas.height_px,
                                 style_snapshot=ctx.snapshot,
-                                header_page=header_pages[index] if header_pages else None)
+                                header_page=header_pages[index] if header_pages else None,
+                                minimum_font_px=_page_font_floor(ctx, request))
         async with ctx.render_semaphore:
             rendered = await render_svg_with_metrics(
                 svg, width=ctx.canvas.width_px, height=ctx.canvas.height_px,
                 instructions=request.instructions, required_text=_required_numeric_claims(content),
                 **ctx.physical_kwargs)
-    except ValueError:
+    except (ValueError, TypeError, KeyError, IndexError):
         LOGGER.warning("[svg] fallback page render failed slide=%d", index + 1, exc_info=True)
         return None
     return await _publish_substitute(ctx=ctx, svg=svg, rendered=rendered, index=index, payload=payload, error=error,
@@ -310,7 +311,7 @@ async def _template_fallback(*, ctx, request, index, content, payload, error, jo
             body_region=context["body_region"], title_in_frame="title" in context["dynamic_fields"],
             title_face=title_face, body_face=body_face, style_snapshot=ctx.snapshot,
             body_background=context.get("body_background"), role=ctx.roles[index],
-            body_photo=_picture_under_body(frame))
+            body_photo=_picture_under_body(frame), minimum_font_px=_page_font_floor(ctx, request))
         svg = compose_template_page(ctx.snapshot, body, context)
         furniture = master_furniture_receipt(svg, ctx.snapshot, index=index, n=ctx.count,
             width=ctx.canvas.width_px, height=ctx.canvas.height_px, template_page_context=context)
@@ -364,6 +365,18 @@ async def _publish_substitute(*, ctx, svg, rendered, index, payload, error, job,
     await checkpoint(job, index, payload=rescued)
     LOGGER.warning("[svg] terminal page replaced slide=%d outcome=%s code=%s", index + 1, outcome, error.code)
     return rescued, (rendered.png if png_returned else None)
+
+
+def _page_font_floor(ctx, request):
+    """The readability floor an authored page of this deck is held to (CSS px)."""
+    from services.document_canvas_generation import generation_font_floor
+
+    floor = generation_font_floor(request.instructions, getattr(request, "_document_canvas", None))
+    if ctx.snapshot.get("readability_policy") is not None:
+        from services.document_canvas_generation import svg_quality_font_floor
+
+        floor = max(floor, svg_quality_font_floor(ctx.snapshot["readability_policy"]))
+    return floor
 
 
 def _source_fallback_floor(ctx, request):
@@ -460,12 +473,13 @@ async def _placeholder(*, ctx, request, index, content, payload, error, job, che
             header_pages = getattr(ctx, "header_pages", None)
             svg = placeholder_page_svg(title=str(content or ""), width=width, height=height,
                 font_family=DEFAULT_FONT_FAMILY, index=index, count=ctx.count, style_snapshot=ctx.snapshot,
-                header_page=header_pages[index] if header_pages else None)
+                header_page=header_pages[index] if header_pages else None,
+                minimum_font_px=_page_font_floor(ctx, request))
             render_kwargs = {"instructions": request.instructions}
         async with ctx.render_semaphore:
             rendered = await render_svg_with_metrics(svg, width=width, height=height, **render_kwargs,
                                                      **ctx.physical_kwargs)
-    except ValueError:
+    except (ValueError, TypeError, KeyError, IndexError):
         LOGGER.error("[svg] failure placeholder render failed slide=%d", index + 1, exc_info=True)
         return None
     return await _publish_substitute(ctx=ctx, svg=svg, rendered=rendered, index=index, payload=payload, error=error,

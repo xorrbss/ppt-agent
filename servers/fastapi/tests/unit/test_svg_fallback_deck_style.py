@@ -175,3 +175,111 @@ def test_only_a_background_picture_over_the_body_counts_as_a_picture_under_it():
     assert not _picture_under_body(_frame(("background", "image", 0, 0, 1000, 90)))  # header art
     assert not _picture_under_body(_frame(("background", "rect", 0, 0, 1000, 700)))
     assert not _picture_under_body(_frame(("foreground", "image", 0, 0, 1000, 700)))
+
+
+# --- Q2: fallback pages that look like the deck ---------------------------------
+
+D2_TITLE = "2026년 국내 전기차 시장 분석: 판매 추이, 점유율, 가격대, 전망"
+NAVY = {"tokens": {"background": "#051C2C", "primary": "#00A3E0", "body_font": "Pretendard",
+                   "heading_font": "Pretendard", "palette": ["#051C2C", "#FFFFFF", "#2E3338", "#00A3E0", "#A7B0B7"]}}
+DEFAULT_STYLE = {"tokens": {"background": "#FFFFFF", "primary": "#2563EB", "body_font": "Noto Sans KR",
+                            "palette": ["#FFFFFF", "#111827", "#2563EB"]}}
+
+
+def _page_texts(svg):
+    return [node for node in ET.fromstring(svg).iter(f"{{{SVG_NS}}}text")
+            if node.get("id") != "svg-system-page-number"]
+
+
+@pytest.mark.parametrize("snapshot", [NAVY, DEFAULT_STYLE])
+def test_d2_cover_title_wraps_at_a_space_without_an_ellipsis_and_is_drawn_once(snapshot):
+    svg = _plain(f"# {D2_TITLE}\n- 2026년 11월\n- 시장조사팀", snapshot, role="cover")
+    texts = _page_texts(svg)
+    assert "…" not in "".join(node.text for node in texts)
+    title_lines = [node.text for node in texts if float(node.get("font-size")) >= 36]
+    assert len(title_lines) == 2 and " ".join(title_lines) == D2_TITLE
+    assert sum(node.text.count("판매 추이") for node in texts) == 1
+    background = snapshot["tokens"]["background"].upper()
+    assert all(_contrast(node.get("fill"), background) >= 4.5 for node in texts)
+
+
+@pytest.mark.parametrize("snapshot", [NAVY, DEFAULT_STYLE])
+def test_a_long_content_title_wraps_and_is_neither_cut_nor_repeated(snapshot):
+    title = f"{D2_TITLE} 그리고 두 번째 줄로 넘어가는 아주 긴 부제 문장"
+    svg = _plain(f"# {title}\n- 본문 한 줄", snapshot)
+    texts = _page_texts(svg)
+    assert "…" not in "".join(node.text for node in texts)
+    heading = [node.text for node in texts if node.get("font-weight") == "700"]
+    assert " ".join(heading) == title
+    assert sum(node.text.count("본문 한 줄") for node in texts) == 1
+
+
+def test_a_page_does_not_draw_the_title_the_applied_header_already_shows(monkeypatch):
+    import services.svg_common_header as header
+
+    monkeypatch.setattr(header, "render_common_header", lambda *args, **kwargs: None)
+    snapshot = {**DEFAULT_STYLE, "common_header": {"content_top_px": 120}}
+    for role in ("content", "cover"):
+        svg = fallback_page_svg(content="# 겹치지 않는 제목\n- 본문 한 줄", role=role, index=1, count=5, width=1280,
+                                height=720, style_snapshot=snapshot, header_page={"applied": True})
+        shown = " ".join(node.text for node in _page_texts(svg))
+        assert "겹치지 않는 제목" not in shown and "본문 한 줄" in shown
+    plain = _plain("# 겹치지 않는 제목\n- 본문 한 줄", DEFAULT_STYLE)
+    assert "겹치지 않는 제목" in " ".join(node.text for node in _page_texts(plain))
+
+
+def test_the_body_font_never_drops_below_the_readability_floor():
+    lines = "\n".join(f"- 항목 {n} " + "내용 " * 25 for n in range(40))
+    content = f"# 제목\n{lines}"
+    free = _plain(content, NAVY)
+    floored = fallback_page_svg(content=content, role="content", index=1, count=5, width=1280, height=720,
+                                style_snapshot=NAVY, minimum_font_px=12)
+    assert min(float(node.get("font-size")) for node in _page_texts(free)) < 12
+    assert min(float(node.get("font-size")) for node in _page_texts(floored)) >= 12
+    shown = "".join(node.text for node in _page_texts(floored)).replace(" ", "")
+    assert all(f"항목{n}" in shown for n in range(40))
+
+
+@pytest.mark.parametrize("snapshot", [NAVY, DEFAULT_STYLE])
+def test_the_placeholder_takes_the_deck_colours_and_fonts(snapshot):
+    from services.generation_core.drivers.svg.fallback import placeholder_page_svg
+
+    svg = placeholder_page_svg(title=D2_TITLE, width=1280, height=720, font_family="Other", index=1, count=5,
+                               style_snapshot=snapshot)
+    background = snapshot["tokens"]["background"].upper()
+    assert _nodes(svg, "rect")[0].get("fill") == background
+    texts = _page_texts(svg)
+    assert all(_contrast(node.get("fill"), background) >= 4.5 for node in texts)
+    assert {node.get("font-family") for node in texts} == {
+        snapshot["tokens"].get("heading_font") or snapshot["tokens"]["body_font"]}
+    assert "…" not in svg and sum(node.text.count("판매 추이") for node in texts) == 1
+
+
+def test_a_placeholder_without_a_style_keeps_its_plain_page():
+    from services.generation_core.drivers.svg.fallback import placeholder_page_svg
+
+    svg = placeholder_page_svg(title="제목", width=1280, height=720, font_family="Pretendard")
+    assert _nodes(svg, "rect")[0].get("fill") == "#FFFFFF"
+    assert {node.get("font-family") for node in _nodes(svg, "text")} == {"Pretendard"}
+
+
+@pytest.mark.parametrize("background", ["#051C2C", "#FFFFFF", "#F4EDE0"])
+def test_source_fallback_ink_and_table_cells_follow_the_page_background(background):
+    from test_svg_source_layout import manifest_for
+    from services.generation_core.drivers.svg.source_fallback import source_fallback_page
+    from services.svg_source_layout import verify_source_receipt
+
+    manifest = manifest_for([
+        ("text", {"text": "분기 실적 요약"}),
+        ("table", {"rows": [[{"text": "구분"}, {"text": "값"}], [{"text": "매출"}, {"text": "12%"}]],
+                   "columnWidthsEmu": [300, 100]}),
+    ])
+    snapshot = {"digest": "sha256:style", "source_authoring_contract": {"version": "svg-source-whole-page/v1"},
+                "source_template": {"tokens": {"background": background}}}
+    svg, receipt = source_fallback_page(manifest, 0, snapshot, image_slots={}, width=1280, height=720,
+                                        minimum_font_px=12)
+    assert verify_source_receipt(svg, receipt, manifest, 0)
+    pairs = _text_vs_fill(svg, page=background)
+    assert pairs and len(pairs) >= 5
+    for text, fill in pairs:
+        assert _contrast(text, fill) >= 4.5, (text, fill)
