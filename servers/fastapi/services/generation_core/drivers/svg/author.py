@@ -28,6 +28,7 @@ from services.generation_core.drivers.svg.native_declarations import bind_native
 from services.provider_usage_instrumentation import provider_usage_scope
 from services.svg_presentation_checkpoint import _provider_attempt_count
 from utils.ppt_writing_prompt import WRITING_POLICY_ID
+from services.authored_batch_policy import OVERLOAD_COOLDOWN_MAX_SECONDS
 from utils.provider_overload import ProviderOutcomeError, is_page_recoverable_overload
 
 _LOCAL_ESCALATION_REASONS = {
@@ -79,6 +80,9 @@ class AuthorAttempt:
     """Result of one author attempt; ``payload`` is mutated in place."""
     svg: str | None
     retry: bool = False
+    #: Overload cooldown the caller must wait out after releasing its provider
+    #: permit (0 = retry immediately).
+    cooldown_seconds: float = 0.0
 
 
 _DISPATCH_STOPPED = {"streamStage": "before_stream", "failureKind": "dispatch_stopped"}
@@ -538,8 +542,17 @@ async def attempt_author(*, ctx, request, index, content, role, count, payload, 
             await checkpoint(job, index, payload=payload)
             if len(failures) >= 2:
                 raise
-            await asyncio.sleep(min(60., max(30., error.cooldown_seconds or 30.)))
-            return AuthorAttempt(svg=None, retry=True)
+            # The caller sleeps this outside its provider permit (collect.py).
+            # A provider Retry-After is honoured up to the overload ceiling;
+            # otherwise the default backoff keeps its 30-60 s window.
+            if getattr(error, "cooldown_from_retry_after", False) and error.cooldown_seconds is not None:
+                cooldown = min(OVERLOAD_COOLDOWN_MAX_SECONDS, max(0., error.cooldown_seconds))
+            else:
+                cooldown = min(60., max(30., error.cooldown_seconds or 30.))
+            deck_cooldown = getattr(ctx, "overload_cooldown", None)
+            if deck_cooldown is not None:
+                deck_cooldown.register(cooldown)
+            return AuthorAttempt(svg=None, retry=True, cooldown_seconds=cooldown)
         except Exception as error:
             from services.generation_core.drivers.svg.partial_quality_recovery import is_current_provider_control_error
             if getattr(state, "terminal_drain_enabled", False) and is_current_provider_control_error(error):

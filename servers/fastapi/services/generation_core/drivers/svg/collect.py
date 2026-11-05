@@ -1403,6 +1403,17 @@ async def _page(ctx, request, presentation_id, outline, language, job, index, st
             return rescued
 
 
+async def _sleep_overload_cooldown(ctx, cooldown_seconds):
+    """Wait out the deck's shared overload deadline (own cooldown if none shared)."""
+    from services.generation_core.runtime.deck_cooldown import retry_jitter
+
+    deck_cooldown = getattr(ctx, "overload_cooldown", None)
+    if deck_cooldown is None:
+        await asyncio.sleep(cooldown_seconds)
+        return
+    await deck_cooldown.wait(jitter=retry_jitter(cooldown_seconds))
+
+
 async def _attempt_loop(ctx, request, presentation_id, index, content, payload, job, state, hooks):
     """Author -> render; a source structural correction may precede one visual correction."""
     role = ctx.roles[index]
@@ -1465,6 +1476,11 @@ async def _attempt_loop(ctx, request, presentation_id, index, content, payload, 
                         state=state, checkpoint=hooks.checkpoint, async_session_maker=hooks.async_session_maker,
                         receipt_attempt_ordinal=receipt_attempt_ordinal)
             if author_result.retry:
+                if author_result.cooldown_seconds > 0.0:
+                    # Slept after the provider permit is released, so other pages
+                    # keep authoring; re-acquired by the next loop iteration.
+                    with timing.observe_stage(request, "repair" if ordinal > 0 else "author"):
+                        await _sleep_overload_cooldown(ctx, author_result.cooldown_seconds)
                 continue
             svg = author_result.svg
         render_environment = _page_render_environment(ctx, request, index)

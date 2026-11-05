@@ -87,6 +87,7 @@ class GenerationContext:
     partial_recovery_manifest: dict | None = None
     header_pages: list | None = None
     provider_permits: object = None
+    overload_cooldown: object = None
 
 
 def _preflight_svg_input_values(*, canvas, physical_kwargs, snapshot, source_document, source_units,
@@ -809,6 +810,7 @@ async def _prepare_generation(request, presentation_id, outline, session, job) -
     # author concurrency) and renders keep their own gate, so a page renders
     # while another authors. A timeout repurchase pins a cached-first serial
     # profile and keeps the single page gate exactly as before.
+    from services.generation_core.runtime.deck_cooldown import DeckCooldown
     from services.generation_core.runtime.profile import ProviderPermits
     pipelined = recovery_cached_first is None
     semaphore = asyncio.Semaphore(runtime_profile.author_concurrency
@@ -824,6 +826,7 @@ async def _prepare_generation(request, presentation_id, outline, session, job) -
         source_pointer=source_pointer, asset_context=asset_context, asset_revision=asset_revision,
         service=service, semaphore=semaphore, render_semaphore=render_semaphore,
         runtime_profile=runtime_profile, provider_permits=provider_permits,
+        overload_cooldown=DeckCooldown(),
         runtime_profile_provenance=runtime_profile_provenance,
         recovery_cached_first=recovery_cached_first,
         asset_offer=asset_offer,

@@ -246,6 +246,46 @@ def safe_provider_diagnostics(
     return safe
 
 
+_RETRY_AFTER_TEXT = re.compile(r"(?:retry|try)\s+again\s+(?:in|after)\s+([\d.]+)\s*s", re.IGNORECASE)
+
+
+def provider_retry_after_seconds(error: BaseException | None) -> float | None:
+    """Seconds the provider asked us to wait (``Retry-After``), or ``None``.
+
+    Reads the structured header first (on the error or its response), then the
+    SDK's "try again in Ns" prose. The value is clamped to the overload cooldown
+    ceiling; a missing, negative, non-finite or HTTP-date value yields ``None``.
+    """
+
+    if error is None:
+        return None
+    attribute = getattr(error, "retry_after_seconds", None)
+    if isinstance(attribute, (int, float)) and not isinstance(attribute, bool) \
+            and math.isfinite(attribute) and attribute >= 0:
+        return min(float(attribute), OVERLOAD_COOLDOWN_MAX_SECONDS)
+    for candidate in (error, getattr(error, "response", None)):
+        headers = getattr(candidate, "headers", None)
+        if headers is None:
+            continue
+        try:
+            raw = headers.get("retry-after") or headers.get("Retry-After")
+            if raw is not None:
+                value = float(raw)
+                if math.isfinite(value) and value >= 0.0:
+                    return min(value, OVERLOAD_COOLDOWN_MAX_SECONDS)
+        except (AttributeError, TypeError, ValueError):
+            pass
+    match = _RETRY_AFTER_TEXT.search(str(error))
+    if match:
+        try:
+            value = float(match.group(1))
+        except ValueError:
+            return None
+        if math.isfinite(value) and value >= 0.0:
+            return min(value, OVERLOAD_COOLDOWN_MAX_SECONDS)
+    return None
+
+
 class ProviderOutcomeError(RuntimeError):
     """Content-free provider outcome that survives the authored job boundary."""
 
@@ -256,9 +296,13 @@ class ProviderOutcomeError(RuntimeError):
         recovery_allowed: bool,
         overload: bool = False,
         cooldown_seconds: float | None = None,
+        cooldown_from_retry_after: bool = False,
         diagnostics: Mapping[str, Any] | None = None,
     ) -> None:
         self.code = code
+        #: True when ``cooldown_seconds`` is the provider's own ``Retry-After``
+        #: rather than our default backoff.
+        self.cooldown_from_retry_after = cooldown_from_retry_after
         self.retryable = False
         self.recovery_allowed = recovery_allowed
         self.overload = overload
@@ -516,9 +560,14 @@ class BoundedProviderCall:
                     self._receipt["replayUnavailable"] = declined
                     raise
                 retry_ordinal = int(self._receipt["physicalCallCount"]) + 1
-                cooldown = min(
-                    OVERLOAD_COOLDOWN_BASE_SECONDS * (2 ** (retry_ordinal - 2)),
-                    OVERLOAD_COOLDOWN_MAX_SECONDS,
+                retry_after = provider_retry_after_seconds(error)
+                cooldown = (
+                    retry_after
+                    if retry_after is not None
+                    else min(
+                        OVERLOAD_COOLDOWN_BASE_SECONDS * (2 ** (retry_ordinal - 2)),
+                        OVERLOAD_COOLDOWN_MAX_SECONDS,
+                    )
                 )
                 if deadline is not None and self._clock() + cooldown >= deadline:
                     self._receipt["deadlineExhausted"] = True
