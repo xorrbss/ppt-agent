@@ -23,6 +23,12 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv pip install --python /opt/venv/bin/python \
     "https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0-py3-none-any.whl"
+# Static Noto Sans KR 400/700 instances for SVG PPTX font embedding. The
+# isolated export worker loads them read-only (digest-pinned in
+# services/svg_pptx_font_subset.py) instead of instancing the variable face on
+# every export; the script fails the build if the bytes differ from the pins.
+COPY servers/nextjs/public/fonts/noto-sans-kr/NotoSansKR-Variable.ttf /app/servers/nextjs/public/fonts/noto-sans-kr/NotoSansKR-Variable.ttf
+RUN /opt/venv/bin/python scripts/build_svg_pptx_font_instances.py
 ENV HF_HOME=/root/.cache/huggingface \
     PRESENTON_FASTEMBED_ICON_CACHE_DIR=/root/.cache/presenton/fastembed-icons
 # Warm FastEmbed caches into the image (not a BuildKit cache mount, or HF weights would be missing).

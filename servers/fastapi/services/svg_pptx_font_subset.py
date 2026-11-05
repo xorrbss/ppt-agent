@@ -16,12 +16,24 @@ Output is byte-deterministic for the same input (timestamps are not
 recalculated), because the whole-page converter builds the expected faces and
 compares them with what was embedded. A face whose OS/2 ``fsType`` forbids
 subsetting (bit 8) is returned unchanged.
+
+Instancing the variable Noto face takes 8-24 s, and every export runs in a
+fresh isolated worker whose environment carries no writable cache root. So the
+static instances of the pinned Noto source at 400 and 700 are built once, at
+image build time, by ``scripts/build_svg_pptx_font_instances.py`` into
+``PREBUILT_INSTANCE_DIRECTORY`` (read-only at run time). The digest of each
+instance is pinned in ``PREBUILT_INSTANCE_DIGESTS`` and checked on every load;
+the pinned bytes are exactly what ``instantiate_static_face`` produces for that
+source and weight, so embedded faces (and their receipt digests) do not change.
+A checkout that has not run the build script falls back to instancing at
+export time, with the ``APP_DATA_DIRECTORY`` cache when one is set.
 """
 
 from __future__ import annotations
 
 from functools import lru_cache
 from io import BytesIO
+import logging
 import os
 from pathlib import Path
 import re
@@ -30,6 +42,7 @@ import zipfile
 from xml.etree import ElementTree as ET
 
 from utils.hashing import sha256_prefixed
+from utils.svg_template_fonts import FONT_DIGEST as NOTO_VARIABLE_FONT_DIGEST
 
 #: Characters always kept so light edits stay in the embedded face.
 BASELINE_TEXT = (
@@ -40,6 +53,26 @@ BASELINE_TEXT = (
 _FS_TYPE_NO_SUBSETTING = 0x0100
 _XML_PART = re.compile(r"ppt/.+\.xml")
 _INSTANCE_CACHE_SCHEMA = "svg-pptx-font-instance/v1"
+
+#: Read-only directory of the static instances built at image build time.
+PREBUILT_INSTANCE_DIRECTORY = (
+    Path(__file__).resolve().parents[1] / "assets" / "font_instances"
+    / _INSTANCE_CACHE_SCHEMA.replace("/", "-")
+)
+
+#: ``(variable source digest, weight) -> static instance digest``. The values
+#: are what ``instantiate_static_face`` produces with the locked fontTools
+#: (``uv.lock``); the build script refuses to write anything else, so a
+#: dependency change that alters the bytes fails the image build instead of
+#: silently changing exported PPTX bytes.
+PREBUILT_INSTANCE_DIGESTS: dict[tuple[str, int], str] = {
+    (NOTO_VARIABLE_FONT_DIGEST, 400):
+        "sha256:4609a7b62a6da24cae3a8b73ecde7003581b8f60662d60cc8f55a3793de07763",
+    (NOTO_VARIABLE_FONT_DIGEST, 700):
+        "sha256:cf93c6acfa4c4adcb580d156aa46fc3614ed0310f1e2ef23b5954476e85c872e",
+}
+
+_LOGGER = logging.getLogger(__name__)
 
 
 def package_text(target: Path) -> str:
@@ -106,20 +139,56 @@ def _static_instance(payload: bytes, weight: int) -> bytes:
 
 @lru_cache(maxsize=4)
 def _cached_static_instance(source_digest: str, weight: int, payload: bytes) -> bytes:
-    # Export workers are short-lived processes, and instancing the variable
-    # Noto face takes several seconds, so the instance is also kept on disk.
+    prebuilt = prebuilt_static_instance(source_digest, weight)
+    if prebuilt is not None:
+        return prebuilt
+    # Without a prebuilt instance (a checkout that has not run the build
+    # script), the instance is also kept on disk when a cache root is set.
     path = _instance_cache_path(source_digest, weight)
     if path is not None:
         cached = _read_cached_instance(path)
         if cached is not None:
             return cached
-    instance = _instantiate(payload, weight)
+    instance = instantiate_static_face(payload, weight)
     if path is not None:
         _write_cached_instance(path, instance)
     return instance
 
 
-def _instantiate(payload: bytes, weight: int) -> bytes:
+def prebuilt_instance_path(source_digest: str, weight: int, directory: Path | None = None) -> Path:
+    root = PREBUILT_INSTANCE_DIRECTORY if directory is None else directory
+    return root / f"{source_digest.removeprefix('sha256:')}-{weight}.ttf"
+
+
+def prebuilt_static_instance(source_digest: str, weight: int) -> bytes | None:
+    """The pinned prebuilt instance; ``None`` if none is pinned or it is not built.
+
+    A present file whose digest differs from the pin fails closed: it is a
+    trusted asset, not a cache that may be stale.
+    """
+
+    expected = PREBUILT_INSTANCE_DIGESTS.get((source_digest, weight))
+    if expected is None:
+        return None
+    path = prebuilt_instance_path(source_digest, weight)
+    try:
+        payload = path.read_bytes()
+    except (FileNotFoundError, NotADirectoryError):
+        _LOGGER.warning(
+            "svg_pptx_font_instance_not_built: %s; instancing at export time "
+            "(run scripts/build_svg_pptx_font_instances.py)", path.name,
+        )
+        return None
+    except OSError as error:
+        raise ValueError("svg_pptx_font_instance_unreadable") from error
+    if sha256_prefixed(payload) != expected:
+        raise ValueError("svg_pptx_font_instance_digest_mismatch")
+    return payload
+
+
+def instantiate_static_face(payload: bytes, weight: int) -> bytes:
+    """Instantiate a variable face at ``weight`` as a static Regular/Bold face."""
+
     from fontTools.ttLib import TTFont
     from fontTools.varLib import instancer
 
@@ -177,4 +246,8 @@ def _write_cached_instance(path: Path, payload: bytes) -> None:
         return
 
 
-__all__ = ["BASELINE_TEXT", "package_text", "subset_face", "subset_faces", "subset_text"]
+__all__ = [
+    "BASELINE_TEXT", "PREBUILT_INSTANCE_DIGESTS", "PREBUILT_INSTANCE_DIRECTORY",
+    "instantiate_static_face", "package_text", "prebuilt_instance_path",
+    "prebuilt_static_instance", "subset_face", "subset_faces", "subset_text",
+]
