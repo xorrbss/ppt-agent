@@ -2,6 +2,7 @@ import asyncio
 import base64
 import io
 import json
+import os
 import pathlib
 import socket
 import sys
@@ -277,6 +278,76 @@ def test_posix_chrome_spawn_receives_only_scrubbed_renderer_environment(
     assert "ANTHROPIC_TOKEN" not in environment
     assert "APP_DATA_DIRECTORY" not in environment
     assert captured["setsid"] is True
+
+
+def test_chrome_pipe_falls_back_to_popen_without_posix_spawn_setsid(monkeypatch) -> None:
+    calls: dict[str, object] = {}
+
+    class FakeProcess:
+        pid = 4343
+
+        def poll(self):
+            return 0
+
+        def communicate(self, timeout=None):
+            calls["communicate_timeout"] = timeout
+            return None, None
+
+    def fake_popen(chrome, args, child_read, child_write):
+        calls.update(chrome=chrome, args=list(args), fds=(child_read, child_write))
+        return FakeProcess()
+
+    def refuse_posix_spawn(*args, **kwargs):
+        raise AssertionError("posix_spawn must not run without POSIX_SPAWN_SETSID")
+
+    monkeypatch.setattr(slide_capture_pipe, "_posix_spawn_setsid_supported", lambda: False)
+    monkeypatch.setattr(slide_capture_pipe, "_spawn_chrome_pipe_popen", fake_popen)
+    monkeypatch.setattr(slide_capture_pipe.os, "posix_spawn", refuse_posix_spawn, raising=False)
+
+    pipe = slide_capture_pipe._ChromePipe("/runtime/chrome", pathlib.Path("/tmp/profile"))
+
+    assert pipe.process.pid == 4343
+    assert calls["chrome"] == "/runtime/chrome"
+    assert "--remote-debugging-pipe" in calls["args"]
+    read_fd, write_fd = calls["fds"]
+    assert isinstance(read_fd, int) and isinstance(write_fd, int)
+    pipe.close()
+    assert calls.get("communicate_timeout") is not None
+
+
+def test_popen_fallback_maps_cdp_pipes_to_fd_3_and_4_in_a_new_session() -> None:
+    if os.name == "nt":
+        pytest.skip("POSIX pipe mapping only")
+    child_read, parent_write = os.pipe()
+    parent_read, child_write = os.pipe()
+    child_code = (
+        "import os\n"
+        "os.write(4, ('sid=%d pgid=%d pid=%d;' % (os.getsid(0), os.getpgid(0), os.getpid())).encode())\n"
+        "os.write(4, os.read(3, 4).upper())\n"
+    )
+    process = slide_capture_pipe._spawn_chrome_pipe_popen(
+        sys.executable, [sys.executable, "-c", child_code], child_read, child_write
+    )
+    try:
+        os.close(child_read)
+        os.close(child_write)
+        os.write(parent_write, b"ping")
+        received = b""
+        while not received.endswith(b"PING"):
+            chunk = os.read(parent_read, 256)
+            if not chunk:
+                break
+            received += chunk
+        assert process.wait(timeout=20) == 0
+        handshake, _, reply = received.partition(b";")
+        assert handshake == f"sid={process.pid} pgid={process.pid} pid={process.pid}".encode()
+        assert reply == b"PING"
+    finally:
+        if process.poll() is None:
+            process.kill()
+            process.wait(timeout=20)
+        for fd in (parent_read, parent_write):
+            os.close(fd)
 
 
 def test_production_worker_command_is_json_argv_absolute_and_required(monkeypatch) -> None:

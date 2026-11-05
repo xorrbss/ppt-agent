@@ -67,6 +67,58 @@ def _spawn_chrome_pipe_posix(
     return _SpawnedProcess(pid)
 
 
+def _posix_spawn_setsid_supported() -> bool:
+    """Whether this interpreter's ``os.posix_spawn`` accepts ``setsid=True``.
+
+    CPython defines ``os.POSIX_SPAWN_SETSID`` only when the C library provides
+    setsid support for posix_spawn. uv's python-build-standalone does not, and
+    there ``posix_spawn(setsid=True)`` raises ``NotImplementedError``.
+    """
+    return hasattr(os, "POSIX_SPAWN_SETSID")
+
+
+def _spawn_chrome_pipe_popen(
+    chrome: str,
+    args: List[str],
+    child_read: int,
+    child_write: int,
+) -> subprocess.Popen:
+    """Fallback spawn for interpreters without ``POSIX_SPAWN_SETSID``.
+
+    Keeps the same contract as ``_spawn_chrome_pipe_posix``: the child becomes
+    a session and process-group leader (so ``os.killpg(pid)`` still reaches the
+    whole tree), gets only the renderer allowlist environment, and sees the CDP
+    pipe ends as fd 3 (read) and fd 4 (write). ``subprocess`` has no fd-remap
+    argument, so the mapping runs in ``preexec_fn`` in the child only.
+    """
+    import fcntl
+
+    def _map_pipe_fds() -> None:
+        # Duplicate to fds >= 5 first, so a source fd that is itself 3 or 4
+        # is not clobbered before it is copied.
+        read_tmp = fcntl.fcntl(child_read, fcntl.F_DUPFD, 5)
+        write_tmp = fcntl.fcntl(child_write, fcntl.F_DUPFD, 5)
+        os.dup2(read_tmp, 3)
+        os.dup2(write_tmp, 4)
+        os.close(read_tmp)
+        os.close(write_tmp)
+
+    return subprocess.Popen(
+        args,
+        executable=chrome,
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        env=build_worker_environment(os.environ),
+        start_new_session=True,
+        preexec_fn=_map_pipe_fds,
+        # Keep False: with close_fds=True, subprocess closes fds 3 and 4 after
+        # preexec_fn has mapped the pipes there. The parent's pipe ends are
+        # non-inheritable (os.pipe), so inheriting here matches posix_spawn.
+        close_fds=False,
+    )
+
+
 class _ChromePipe:
     """Minimal null-delimited CDP transport with no listening network socket."""
 
@@ -127,26 +179,33 @@ class _ChromePipe:
                         pass
         else:
             # Chromium's POSIX pipe contract is fixed at child fd 3 (read) and
-            # fd 4 (write). posix_spawn file actions map those only in the child,
-            # avoiding both a child pre-execution hook and clobbering worker fds.
+            # fd 4 (write). The preferred posix_spawn path maps those with file
+            # actions, which needs no child pre-execution hook. Interpreters
+            # without POSIX_SPAWN_SETSID fall back to Popen, which maps them in
+            # preexec_fn instead (see _spawn_chrome_pipe_popen).
             self._write_fd = parent_write_raw
             self._read_fd = parent_read_raw
             os.set_inheritable(self._read_fd, False)
             os.set_inheritable(self._write_fd, False)
-            actions = [
-                (os.POSIX_SPAWN_DUP2, child_read, 3),
-                (os.POSIX_SPAWN_DUP2, child_write, 4),
-            ]
-            if parent_write_raw not in {3, 4}:
-                actions.append((os.POSIX_SPAWN_CLOSE, parent_write_raw))
-            if parent_read_raw not in {3, 4}:
-                actions.append((os.POSIX_SPAWN_CLOSE, parent_read_raw))
-            if child_read not in {3, 4}:
-                actions.append((os.POSIX_SPAWN_CLOSE, child_read))
-            if child_write not in {3, 4}:
-                actions.append((os.POSIX_SPAWN_CLOSE, child_write))
             try:
-                self.process = _spawn_chrome_pipe_posix(chrome, args, actions)
+                if _posix_spawn_setsid_supported():
+                    actions = [
+                        (os.POSIX_SPAWN_DUP2, child_read, 3),
+                        (os.POSIX_SPAWN_DUP2, child_write, 4),
+                    ]
+                    if parent_write_raw not in {3, 4}:
+                        actions.append((os.POSIX_SPAWN_CLOSE, parent_write_raw))
+                    if parent_read_raw not in {3, 4}:
+                        actions.append((os.POSIX_SPAWN_CLOSE, parent_read_raw))
+                    if child_read not in {3, 4}:
+                        actions.append((os.POSIX_SPAWN_CLOSE, child_read))
+                    if child_write not in {3, 4}:
+                        actions.append((os.POSIX_SPAWN_CLOSE, child_write))
+                    self.process = _spawn_chrome_pipe_posix(chrome, args, actions)
+                else:
+                    self.process = _spawn_chrome_pipe_popen(
+                        chrome, args, child_read, child_write
+                    )
             finally:
                 for fd in {child_read, child_write}:
                     try:
