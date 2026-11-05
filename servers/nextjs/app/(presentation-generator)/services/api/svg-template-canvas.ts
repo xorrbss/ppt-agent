@@ -1,6 +1,7 @@
 import { parseDocumentCanvas, documentCanvasForOrientation, type DocumentCanvas } from "@/lib/document-canvas";
 import { CANVAS_ROW_GEOMETRY } from "../../upload/utils/autoCanvas";
 import type { PresentationConfig } from "../../upload/type";
+import { AUTHORED_SLIDE_WIDTH_PX } from "@/lib/authored-hybrid/schema";
 
 const object = (value: unknown): Record<string, unknown> => value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
 
@@ -53,7 +54,7 @@ function savedSvgTemplateCanvasOrNull(canvas: DocumentCanvas): Partial<Presentat
 export function sourceSlideCanvas(widthEmu: number, heightEmu: number): DocumentCanvas {
   const widthMm = widthEmu / 36000, heightMm = heightEmu / 36000;
   const legacyA4 = widthMm >= 296 && widthMm <= 298 && heightMm >= 209 && heightMm <= 211;
-  const logicalWidth = legacyA4 ? 1188 : Math.round(1280 * widthMm / Math.max(widthMm, heightMm));
+  const logicalWidth = legacyA4 ? 1188 : Math.round(AUTHORED_SLIDE_WIDTH_PX * widthMm / Math.max(widthMm, heightMm));
   const margin = legacyA4 ? 60 : 64;
   const logicalHeight = Math.round(logicalWidth * heightEmu / widthEmu);
   return { contractVersion: "document-canvas/v1", logicalSize: { width: logicalWidth, height: logicalHeight },
