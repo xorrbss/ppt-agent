@@ -397,6 +397,9 @@ PARTIAL_RECOVERY_CODE_LEDGER = VerifierRevisionLedger(
         # design view drops that key, which no stored snapshot holds. Stored decks recover
         # byte-identically.
         "25e50dffd2ee74f3b2d8afe433314e7e860ce9b654aeb608bb397d1b9e568200": "svg-partial-recovery-code/1",
+        # Template body renders review fixes: the render block is left out when no render was sent
+        # (same pin condition as above). Stored decks recover byte-identically.
+        "6d2edfe0a0038e4acc657fefe9239f254159fa0e2ef68eb2d1e5651afb7f15ad": "svg-partial-recovery-code/1",
     }),
 )
 
@@ -430,6 +433,8 @@ PAGE_RENDER_CODE_LEDGER = VerifierRevisionLedger(
         # Template body renders (same edit as the code ledger entry): pages of snapshots
         # without the ``template_body_renders`` pin are authored from byte-identical prompts.
         "216b7a9c6d1657134ab86a340a1248080d2e3b42894baf23fb80cad6d225de73": "svg-page-render-code/1",
+        # Template body renders review fixes (same edit as the code ledger entry).
+        "e5321183bd24087425804c01919016eae2e35fe58835c6de7b0b6c72674de7bd": "svg-page-render-code/1",
     }),
 )
 

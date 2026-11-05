@@ -1193,9 +1193,10 @@ async def author_slide_svg(content: str, style_snapshot: dict, role: str, index:
                              **({"design_example_inputs": example_inputs} if quality_policy is not None else {})}
     if body_renders:
         from services.svg_templates.body_renders import render_prompt_block, render_receipt
-        prompt += render_prompt_block(body_renders, len(images))
-        images.extend(ImageContentPart(data=entry["png"], mime_type="image/png")
-                      for entry in body_renders if entry.get("png"))
+        if any(entry.get("png") for entry in body_renders):
+            prompt += render_prompt_block(body_renders, len(images))
+            images.extend(ImageContentPart(data=entry["png"], mime_type="image/png")
+                          for entry in body_renders if entry.get("png"))
         reference_receipt = {**reference_receipt, "template_body_renders": render_receipt(body_renders)}
     if previous_render_part is not None:
         previous_image_index = len(images)

@@ -11,6 +11,7 @@ import hashlib
 import io
 import json
 import uuid
+from pathlib import Path
 from types import SimpleNamespace
 
 import pypdfium2 as pdfium
@@ -128,7 +129,7 @@ def test_every_text_becomes_a_bar_and_no_character_survives():
     assert _pixel(result.png, 2 * 100, (PAGE_H - 100) * 2) == (200, 220, 240)
     receipt = result.mask_receipt()
     assert receipt == {"version": mask.RENDER_VERSION, "text_objects": 3, "residual_chars": 0, "pictures": 0,
-                       "pictures_covered": 0, "ocr": "unavailable"}
+                       "pictures_covered": 0, "text_effects": 0, "ocr": "unavailable", "final_check": "unavailable"}
 
 
 def test_the_masked_pdf_page_has_an_empty_text_layer(monkeypatch):
@@ -181,42 +182,170 @@ def test_unverifiable_pages_are_rejected(pages, expected, crop, code):
                            expected_pages=expected)
 
 
-def test_without_ocr_every_picture_larger_than_an_icon_is_covered_and_icons_stay():
+def _flat_block(png: bytes, box_pt) -> bool:
+    """Whether the picture at ``box_pt`` (PDF x0, y0, x1, y1) is one colour in the render (covered)."""
+    image = Image.open(io.BytesIO(png)).convert("RGB")
+    ratio = image.width / BODY[2]
+    x0, y0, x1, y1 = box_pt
+    box = tuple(round(value * ratio) for value in (2 * x0 - BODY[0] + 4, (PAGE_H - y1) * 2 - BODY[1] + 4,
+                                                   2 * x1 - BODY[0] - 4, (PAGE_H - y0) * 2 - BODY[1] - 4))
+    return len(image.crop(box).getcolors(maxcolors=4) or ()) == 1
+
+
+def test_without_ocr_every_picture_with_edges_is_covered_icons_included():
     result = mask.mask_pdf_page(_deck(picture=_worded_picture(), icon=True), 0, canvas_width_px=CANVAS_W, crop=BODY,
                                 ocr=None, ocr_name="unavailable")
-    assert (result.pictures, result.pictures_covered, result.ocr) == (1, 1, "unavailable")
-    # The covered picture is one flat colour now.
-    image = Image.open(io.BytesIO(result.png)).convert("RGB")
-    ratio = image.width / BODY[2]
-    box = tuple(round(value * ratio) for value in (2 * 330 - BODY[0] + 4, (PAGE_H - 140) * 2 - BODY[1] + 4,
-                                                   2 * 570 - BODY[0] - 4, (PAGE_H - 60) * 2 - BODY[1] - 4))
-    assert len(image.crop(box).getcolors(maxcolors=4) or ()) == 1
+    assert (result.pictures, result.pictures_covered, result.ocr) == (2, 2, "unavailable")
+    assert _flat_block(result.png, (330, 60, 570, 140)) and _flat_block(result.png, (300, 180, 340, 220))
 
 
-def test_with_ocr_only_a_picture_that_reads_as_text_is_covered():
+def test_an_icon_sized_logo_with_a_word_is_read_and_covered():
+    # A 105 x 38 px logo: icon-sized, but it carries a word.
+    logo = _worded_picture("ACMECORP", (220, 80))
+    document = pdfium.PdfDocument.new()
+    page = document.new_page(PAGE_W, PAGE_H)
+    _picture(document, page, logo, 320, 200, 52, 19)
+    page.gen_content()
+    output = io.BytesIO()
+    document.save(output)
     read = []
 
     def ocr_text(png):
         read.append(png)
-        return "Quokkafield 2027"
+        return "ACMECORP" if len(read) == 1 else ""
 
-    worded = mask.mask_pdf_page(_deck(picture=_worded_picture()), 0, canvas_width_px=CANVAS_W, crop=BODY,
-                                ocr=ocr_text, ocr_name="liteparse")
-    assert (worded.pictures, worded.pictures_covered, worded.ocr) == (1, 1, "liteparse") and len(read) == 1
+    result = mask.mask_pdf_page(output.getvalue(), 0, canvas_width_px=CANVAS_W, crop=BODY, ocr=ocr_text,
+                                ocr_name="liteparse")
+    assert (result.pictures, result.pictures_covered) == (1, 1) and len(read) == 2  # the logo, then the final crop
+    assert _flat_block(result.png, (320, 200, 372, 219))
+    without = mask.mask_pdf_page(output.getvalue(), 0, canvas_width_px=CANVAS_W, crop=BODY, ocr=None,
+                                 ocr_name="unavailable")
+    assert without.pictures_covered == 1
+
+
+def test_a_near_white_picture_with_a_small_caption_is_always_read_and_has_edges():
+    big = Image.new("RGB", (1600, 1000), (245, 245, 245))
+    draw = ImageDraw.Draw(big)
+    try:
+        font = ImageFont.load_default(size=47)
+    except TypeError:
+        font = ImageFont.load_default()
+    draw.text((60, 860), "Falcon", fill=(30, 30, 30), font=font)
+    # Without OCR the strokes keep their edges at full resolution, so the picture is covered.
+    assert mask.strong_edge_pixels(big) >= mask.MIN_EDGE_PIXELS
+    assert mask.strong_edge_pixels(Image.new("RGB", (1600, 1000), (245, 245, 245))) == 0
+    read = []
+    result = mask.mask_pdf_page(_deck(picture=big), 0, canvas_width_px=CANVAS_W, crop=BODY,
+                                ocr=lambda png: read.append(png) or ("Falcon" if len(read) == 1 else ""),
+                                ocr_name="liteparse")
+    assert result.pictures_covered == 1 and len(read) == 2
+    without = mask.mask_pdf_page(_deck(picture=big), 0, canvas_width_px=CANVAS_W, crop=BODY, ocr=None,
+                                 ocr_name="unavailable")
+    assert without.pictures_covered == 1
+
+
+def test_with_ocr_only_a_picture_that_reads_as_text_is_covered():
+    calls = []
+
+    def worded(png):
+        calls.append(png)
+        return "Quokkafield 2027" if len(calls) == 1 else ""
+
+    result = mask.mask_pdf_page(_deck(picture=_worded_picture()), 0, canvas_width_px=CANVAS_W, crop=BODY,
+                                ocr=worded, ocr_name="liteparse")
+    assert (result.pictures, result.pictures_covered, result.ocr, result.final_check) == (1, 1, "liteparse", "passed")
     clean = mask.mask_pdf_page(_deck(picture=_worded_picture()), 0, canvas_width_px=CANVAS_W, crop=BODY,
                                ocr=lambda png: " ~ | ", ocr_name="tesseract")
     assert (clean.pictures, clean.pictures_covered, clean.ocr) == (1, 0, "tesseract")
-    # An OCR call that fails on a picture leaves it unread: covered.
+    # An OCR call that fails on a picture leaves it unread: covered (the final crop then reads fine).
+    reads = []
     failed = mask.mask_pdf_page(_deck(picture=_worded_picture()), 0, canvas_width_px=CANVAS_W, crop=BODY,
-                                ocr=lambda png: None, ocr_name="liteparse")
+                                ocr=lambda png: reads.append(png) or (None if len(reads) == 1 else ""),
+                                ocr_name="liteparse")
     assert failed.pictures_covered == 1
 
 
-def test_a_flat_picture_cannot_carry_text_and_is_neither_read_nor_covered():
+def test_a_one_colour_picture_is_neither_read_nor_covered():
     flat = Image.new("RGB", (480, 160), (180, 180, 180))
+    reads = []
     result = mask.mask_pdf_page(_deck(picture=flat), 0, canvas_width_px=CANVAS_W, crop=BODY,
-                                ocr=lambda png: pytest.fail("a flat picture is not read"), ocr_name="liteparse")
-    assert (result.pictures, result.pictures_covered) == (0, 0)
+                                ocr=lambda png: reads.append(png) or "", ocr_name="liteparse")
+    assert (result.pictures, result.pictures_covered) == (0, 0) and len(reads) == 1  # the final crop only
+
+
+def test_annotations_and_form_fields_are_not_drawn():
+    document = pdfium.PdfDocument.new()
+    page = document.new_page(PAGE_W, PAGE_H)
+    annot = raw.FPDFPage_CreateAnnot(page.raw, raw.FPDF_ANNOT_STAMP)
+    raw.FPDFAnnot_SetRect(annot, raw.FS_RECTF(100, 150, 500, 250))
+    font = raw.FPDFText_LoadStandardFont(document.raw, b"Helvetica")
+    text = raw.FPDFPageObj_CreateTextObj(document.raw, font, 48.0)
+    buffer = ctypes.create_string_buffer((SECRET_WORDS[0] + "\x00").encode("utf-16-le"))
+    raw.FPDFText_SetText(text, ctypes.cast(buffer, raw.FPDF_WIDESTRING))
+    raw.FPDFPageObj_SetFillColor(text, 0, 0, 0, 255)
+    raw.FPDFPageObj_Transform(text, 1, 0, 0, 1, 120, 180)
+    assert raw.FPDFAnnot_AppendObject(annot, text)
+    raw.FPDFPage_CloseAnnot(annot)
+    page.gen_content()
+    output = io.BytesIO()
+    document.save(output)
+    result = mask.mask_pdf_page(output.getvalue(), 0, canvas_width_px=CANVAS_W, crop=BODY, ocr=None,
+                                ocr_name="unavailable")
+    image = Image.open(io.BytesIO(result.png)).convert("L")
+    assert image.getextrema()[0] > 240  # nothing dark: the stamp's text was not drawn
+
+
+def test_text_that_is_no_text_object_fails_the_final_check():
+    """Path-drawn text (WordArt, metafiles) is read on the masked crop before any bar is drawn."""
+    seen = []
+
+    def final_reads_a_word(png):
+        seen.append(png)
+        return "Quokkafield"
+
+    with pytest.raises(mask.BodyRenderRejected, match="final_ocr_text"):
+        mask.mask_pdf_page(_deck(), 0, canvas_width_px=CANVAS_W, crop=BODY, ocr=final_reads_a_word,
+                           ocr_name="liteparse")
+    # The crop OCR reads carries no bar: the red heading's bar is not in it.
+    check = Image.open(io.BytesIO(seen[-1])).convert("RGB")
+    red, green, blue = check.getpixel((2 * 320 + 20 - BODY[0], (PAGE_H - 260 - 7) * 2 - BODY[1]))
+    assert not (red > 150 and green < 90 and blue < 90)
+    with pytest.raises(mask.BodyRenderRejected, match="final_ocr_failed"):
+        mask.mask_pdf_page(_deck(), 0, canvas_width_px=CANVAS_W, crop=BODY, ocr=lambda png: None, ocr_name="liteparse")
+    noise = mask.mask_pdf_page(_deck(), 0, canvas_width_px=CANVAS_W, crop=BODY, ocr=lambda png: "가나 abcd 123456 |",
+                               ocr_name="liteparse")
+    assert noise.final_check == "passed"
+
+
+@pytest.mark.parametrize(("text", "expected"), [
+    ("", False), ("가나 abcd 1234567", False), ("가나다", True), ("Hello", True), ("Dress", True),
+])
+def test_final_text_rule(text, expected):
+    assert mask.final_text_found(text) is expected
+
+
+def test_a_translucent_grey_shadow_holding_a_blurred_text_is_removed():
+    shadow = Image.new("RGBA", (480, 160), (0, 0, 0, 0))
+    ImageDraw.Draw(shadow).text((20, 40), "SHADOWED WORDS", fill=(90, 90, 90, 120),
+                                font=ImageFont.load_default(size=40) if hasattr(ImageFont, "load_default") else None)
+    result = mask.mask_pdf_page(_deck(picture=shadow), 0, canvas_width_px=CANVAS_W, crop=BODY, ocr=None,
+                                ocr_name="unavailable")
+    assert result.text_effects == 1 and result.pictures == 0
+
+
+def test_a_picture_inside_a_text_line_is_removed_with_the_text():
+    glow = Image.new("RGB", (200, 30), (250, 200, 40))
+    ImageDraw.Draw(glow).rectangle((10, 5, 190, 25), fill=(30, 30, 30))
+    document = pdfium.PdfDocument.new()
+    page = document.new_page(PAGE_W, PAGE_H)
+    _picture(document, page, glow, 318, 256, 100, 22)          # within the 24 pt heading below
+    _text(document, page, SECRET_WORDS[1], 320, 260, size=24)
+    page.gen_content()
+    output = io.BytesIO()
+    document.save(output)
+    result = mask.mask_pdf_page(output.getvalue(), 0, canvas_width_px=CANVAS_W, crop=BODY, ocr=None,
+                                ocr_name="unavailable")
+    assert (result.text_effects, result.pictures) == (1, 0)
 
 
 @pytest.mark.parametrize(("text", "expected"), [
@@ -237,7 +366,7 @@ def test_the_product_ocr_runtime_reads_a_worded_picture_when_installed():
     assert mask.recognised_text(reader(buffer.getvalue()))
     result = mask.mask_pdf_page(_deck(picture=_worded_picture()), 0, canvas_width_px=CANVAS_W, crop=BODY,
                                 ocr=reader, ocr_name=name)
-    assert result.pictures_covered == 1 and result.ocr == name
+    assert result.pictures_covered == 1 and result.ocr == name and result.final_check == "passed"
 
 
 # --- registration -------------------------------------------------------------------------------------
@@ -281,56 +410,130 @@ def test_render_exemplar_pages_masks_each_exemplar_and_honours_the_exclusions(tm
     _no_text_left(rendered[0].png)
 
 
-def test_attach_body_renders_stores_owner_bound_references_and_recomputes_the_digest(monkeypatch, tmp_path):
-    from services.svg_templates.frame_fonts import artifact_digest
+class _Session:
+    """Records the savepoints the store calls run in."""
 
+    def __init__(self):
+        self.savepoints = 0
+
+    def begin_nested(self):
+        session = self
+
+        class Savepoint:
+            async def __aenter__(self):
+                session.savepoints += 1
+
+            async def __aexit__(self, *exc):
+                return False
+        return Savepoint()
+
+
+class _Package(SimpleNamespace):
+    def model_copy(self, update):
+        return _Package(**{**vars(self), **update})
+
+
+def _stub_attach(monkeypatch, renders_by_index, fail_on=()):
     stored = []
 
     class Service:
         async def persist_bytes(self, session, **kwargs):
+            if len(stored) in fail_on:
+                stored.append(None)
+                raise RuntimeError("object store down")
             stored.append(kwargs)
             digest = hashlib.sha256(kwargs["payload"]).hexdigest()
             return SimpleNamespace(artifact_id=uuid.uuid4(), owner_id=kwargs["owner_id"],
                                    tenant_id=kwargs["tenant_id"], sha256=digest)
 
-    composition = _composition(_exemplar(0, region_x=BODY[0], region_y=BODY[1]))
-    package = SimpleNamespace(body_composition=composition, source_canvas=SimpleNamespace(width_px=CANVAS_W))
-
-    class Package(SimpleNamespace):
-        def model_copy(self, update):
-            return Package(**{**vars(self), **update})
-
-    package = Package(body_composition=composition, source_canvas=SimpleNamespace(width_px=CANVAS_W), digest="old")
-    masked = mask.mask_pdf_page(_deck(), 0, canvas_width_px=CANVAS_W, crop=BODY, ocr=None, ocr_name="unavailable")
-    monkeypatch.setattr(renders, "render_exemplar_pages", lambda *a, **k: ({0: masked}, {"status": "rendered"}))
+    monkeypatch.setattr(renders, "render_exemplar_pages",
+                        lambda *a, **k: (renders_by_index, {"status": "rendered", "rendered": len(renders_by_index),
+                                                            "ocr": "unavailable"}))
     monkeypatch.setattr("services.artifact_store.configured_public_artifact_service", lambda: Service())
     monkeypatch.setattr("services.svg_templates.catalog.principal", lambda: (OWNER, TENANT))
     monkeypatch.setattr("services.svg_templates.frame_fonts.artifact_digest", lambda value: "sha256:new")
-    updated, ids = asyncio.run(renders.attach_body_renders(None, package, tmp_path / "deck.pptx", captured_pdf=None,
-                                                          operation_id=uuid.uuid4()))
-    assert artifact_digest  # the real function exists; the stub keeps the test independent of the package model
+    return stored
+
+
+def test_attach_body_renders_stores_owner_bound_references_and_recomputes_the_digest(monkeypatch, tmp_path):
+    composition = _composition(_exemplar(0, region_x=BODY[0], region_y=BODY[1]))
+    package = _Package(body_composition=composition, source_canvas=SimpleNamespace(width_px=CANVAS_W), digest="old")
+    masked = mask.mask_pdf_page(_deck(), 0, canvas_width_px=CANVAS_W, crop=BODY, ocr=None, ocr_name="unavailable")
+    stored = _stub_attach(monkeypatch, {0: masked})
+    session = _Session()
+    updated, ids, receipt = asyncio.run(renders.attach_body_renders(session, package, tmp_path / "deck.pptx",
+                                                                    captured_pdf=None, operation_id=uuid.uuid4()))
     render = updated.body_composition.exemplars[0].render
     assert isinstance(render, SvgTemplateBodyRender)
     assert (render.owner_id, render.tenant_id) == (str(OWNER), TENANT) and ids == [render.artifact_id]
     assert render.sha256 == hashlib.sha256(masked.png).hexdigest() and updated.digest == "sha256:new"
     assert stored[0]["kind"] == "image-derivative" and stored[0]["retention_class"] == "published"
+    assert session.savepoints == 1 and receipt == {"status": "rendered", "rendered": 1, "ocr": "unavailable"}
     # Nothing stored about the render is text of the page.
     strings = list(_strings(updated.body_composition.model_dump(mode="json")))
     assert not any(word in value for word in SECRET_WORDS for value in strings)
+
+
+def test_a_render_that_cannot_be_stored_is_left_out_and_the_registration_goes_on(monkeypatch, tmp_path):
+    composition = _composition(_exemplar(0, region_x=BODY[0], region_y=BODY[1]),
+                               _exemplar(1, region_x=BODY[0], region_y=BODY[1]))
+    package = _Package(body_composition=composition, source_canvas=SimpleNamespace(width_px=CANVAS_W), digest="old")
+    masked = mask.mask_pdf_page(_deck(), 0, canvas_width_px=CANVAS_W, crop=BODY, ocr=None, ocr_name="unavailable")
+    _stub_attach(monkeypatch, {0: masked, 1: masked}, fail_on={0})
+    updated, ids, receipt = asyncio.run(renders.attach_body_renders(_Session(), package, tmp_path / "deck.pptx",
+                                                                    captured_pdf=None, operation_id=uuid.uuid4()))
+    exemplars = updated.body_composition.exemplars
+    assert exemplars[0].render is None and exemplars[1].render is not None and len(ids) == 1
+    assert receipt["rendered"] == 1 and receipt["unstored"] == 1
+    # No store at all: the package is registered without renders.
+    monkeypatch.setattr("services.artifact_store.configured_public_artifact_service",
+                        lambda: (_ for _ in ()).throw(RuntimeError("no store")))
+    same, ids, receipt = asyncio.run(renders.attach_body_renders(_Session(), package, tmp_path / "deck.pptx",
+                                                                 captured_pdf=None, operation_id=None))
+    assert same is package and ids == [] and receipt["unstored"] == 2
 
 
 def test_attach_body_renders_leaves_the_package_alone_when_nothing_renders(monkeypatch, tmp_path):
     package = SimpleNamespace(body_composition=_composition(_exemplar(0)), digest="old")
     monkeypatch.setattr(renders, "render_exemplar_pages", lambda *a, **k: ({}, {"status": "pdf_unavailable"}))
     assert asyncio.run(renders.attach_body_renders(None, package, tmp_path / "x.pptx", captured_pdf=None,
-                                                   operation_id=None)) == (package, [])
+                                                   operation_id=None)) == (package, [], {"status": "pdf_unavailable"})
 
     def boom(*a, **k):
         raise RuntimeError("libreoffice crashed")
 
     monkeypatch.setattr(renders, "render_exemplar_pages", boom)
     assert asyncio.run(renders.attach_body_renders(None, package, tmp_path / "x.pptx", captured_pdf=None,
-                                                   operation_id=None)) == (package, [])
+                                                   operation_id=None)) == (
+        package, [], {"status": "error", "reason": "RuntimeError"})
+
+
+def test_the_deck_pdf_keeps_hidden_slides_and_is_converted_once(monkeypatch, tmp_path):
+    from services.svg_templates import source_review
+
+    calls = []
+
+    def run(args, **kwargs):
+        calls.append(args)
+        (tmp_path / "out").mkdir(exist_ok=True)
+        Path(args[args.index("--outdir") + 1], "source.pdf").write_bytes(_deck(1))
+        return SimpleNamespace(returncode=0)
+
+    source = tmp_path / "deck.pptx"
+    source.write_bytes(b"deck")
+    package = SimpleNamespace(source_digest=source_review.bytes_digest(b"deck"),
+                              source_canvas=SimpleNamespace(width_px=CANVAS_W, height_px=800),
+                              frames=(SimpleNamespace(source_page=0),), font_manifest=None)
+    monkeypatch.setattr(source_review, "_libreoffice_executable", lambda: "soffice")
+    monkeypatch.setattr(source_review, "_libreoffice_version", lambda executable: "LibreOffice 24.2")
+    monkeypatch.setattr(source_review, "_private_fontconfig", lambda directory, package: {})
+    monkeypatch.setattr(source_review.subprocess, "run", run)
+    version, pdf = source_review.convert_source_pdf_libreoffice(source, package)
+    assert version == "LibreOffice 24.2" and pdf.startswith(b"%PDF")
+    assert '"ExportHiddenSlides":{"type":"boolean","value":"true"}' in calls[0][calls[0].index("--convert-to") + 1]
+    # The source review rasterises from the same PDF without a second conversion.
+    _version, images = source_review._render_source_libreoffice(source, package, (version, pdf))
+    assert len(calls) == 1 and list(images) == [0]
 
 
 # --- generation: owner-scoped loading, selection, prompt -------------------------------------------
@@ -374,8 +577,10 @@ def test_renders_load_only_for_the_owner_of_the_template_pin(monkeypatch):
     counts = asyncio.run(renders.ensure_body_renders(None, {"mode": "template-redesign"}))
     assert counts == {"loaded": 1, "cached": 0, "missing": 0, "scope_mismatch": 2}
     assert store.resolved == [(OWNER, TENANT)]
-    assert renders.cached_render(hashlib.sha256(mine).hexdigest()) == mine
-    assert renders.cached_render(hashlib.sha256(theirs).hexdigest()) is None
+    assert renders.cached_render(str(OWNER), TENANT, hashlib.sha256(mine).hexdigest()) == mine
+    assert renders.cached_render(str(OWNER), TENANT, hashlib.sha256(theirs).hexdigest()) is None
+    # A render loaded for one owner is never served to another, even with the same digest.
+    assert renders.cached_render(str(uuid.uuid4()), TENANT, hashlib.sha256(mine).hexdigest()) is None
     # A second load is served from the process cache; a free-design selection loads nothing.
     assert asyncio.run(renders.ensure_body_renders(None, {"mode": "template-redesign"}))["cached"] == 1
     assert asyncio.run(renders.ensure_body_renders(None, {"mode": "free-design"}))["loaded"] == 0
@@ -389,7 +594,7 @@ def test_renders_load_only_for_the_owner_of_the_template_pin(monkeypatch):
     renders.clear_render_cache()
     store.resolved.clear()
     assert asyncio.run(renders.ensure_body_renders(None, {"mode": "template-redesign"}))["scope_mismatch"] == 3
-    assert store.resolved == [] and renders.cached_render(hashlib.sha256(mine).hexdigest()) is None
+    assert store.resolved == [] and renders.cached_render(str(OWNER), TENANT, hashlib.sha256(mine).hexdigest()) is None
 
 
 def test_a_render_whose_bytes_do_not_match_is_missing(monkeypatch):
@@ -402,7 +607,11 @@ def test_a_render_whose_bytes_do_not_match_is_missing(monkeypatch):
     monkeypatch.setattr("services.svg_templates.catalog.principal", lambda: (OWNER, TENANT))
     renders.clear_render_cache()
     assert asyncio.run(renders.ensure_body_renders(None, {"mode": "template-redesign"}))["missing"] == 1
-    assert renders.cached_render(render["sha256"]) is None
+    assert renders.cached_render(str(OWNER), TENANT, render["sha256"]) is None
+    # A store that cannot even be configured fails open too.
+    monkeypatch.setattr("services.artifact_store.configured_public_artifact_service",
+                        lambda: (_ for _ in ()).throw(RuntimeError("no store")))
+    assert asyncio.run(renders.ensure_body_renders(None, {"mode": "template-redesign"}))["missing"] == 1
 
 
 def _stub_page(monkeypatch, exemplars, role="body"):
@@ -419,7 +628,8 @@ def test_a_page_gets_the_renders_of_its_exemplars_only_when_the_deck_was_admitte
     exemplars = [{"render": _render(shown)}, {"render": _render(_png((1, 1, 1)))}]
     _stub_page(monkeypatch, exemplars)
     renders.clear_render_cache()
-    renders._remember(exemplars[0]["render"]["sha256"], shown)
+    renders._remember((str(OWNER), TENANT, exemplars[0]["render"]["sha256"]), shown)
+    monkeypatch.setattr("services.svg_templates.catalog.principal", lambda: (OWNER, TENANT))
     context = {"page_index": 1, "page_count": 3}
     monkeypatch.delenv("SVG_TEMPLATE_BODY_EXEMPLARS", raising=False)
     assert renders.page_body_renders({}, context, "## T") == []
@@ -429,6 +639,10 @@ def test_a_page_gets_the_renders_of_its_exemplars_only_when_the_deck_was_admitte
     assert renders.render_receipt(pages) == {"offered": 2, "sent": 1, "missing": 1,
                                              "digests": [exemplars[0]["render"]["sha256"]]}
     assert renders.page_body_renders(on, context, "## T", source_preserved=True) == []
+    # Another principal gets no picture of this owner's template, even from the process cache.
+    monkeypatch.setattr("services.svg_templates.catalog.principal", lambda: (uuid.uuid4(), TENANT))
+    assert [entry["png"] for entry in renders.page_body_renders(on, context, "## T")] == [None, None]
+    monkeypatch.setattr("services.svg_templates.catalog.principal", lambda: (OWNER, TENANT))
     assert renders.page_body_renders(on, None, "## T") == []
     monkeypatch.setenv("SVG_TEMPLATE_BODY_EXEMPLARS", "grammar")
     assert renders.page_body_renders(on, context, "## T") == []
@@ -517,6 +731,7 @@ def test_the_author_sends_the_render_images_and_their_block(monkeypatch):
 
     plain_body, plain_receipt = run([])
     body, receipt = run(entries)
+    unsent_body, unsent_receipt = run([{**entry, "png": None} for entry in entries])
 
     def images(request):
         return [part for message in request["messages"] for part in message["content"]
@@ -530,6 +745,9 @@ def test_the_author_sends_the_render_images_and_their_block(monkeypatch):
     assert "TEMPLATE BODY RENDERS" in texts(body) and "TEMPLATE BODY RENDERS" not in texts(plain_body)
     assert receipt["template_body_renders"] == {"offered": 2, "sent": 1, "missing": 1, "digests": [entries[0]["sha256"]]}
     assert "template_body_renders" not in plain_receipt
+    # Nothing sent: no block and no image, but the receipt says what was missing.
+    assert "TEMPLATE BODY RENDERS" not in texts(unsent_body) and len(images(unsent_body)) == len(images(plain_body))
+    assert unsent_receipt["template_body_renders"] == {"offered": 2, "sent": 0, "missing": 2, "digests": []}
     # The deck-stable system block is the same with and without renders (the prompt cache holds).
     assert plain_body["system"] == body["system"]
 

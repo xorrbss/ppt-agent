@@ -261,8 +261,14 @@ def _private_fontconfig(directory: Path, package) -> dict:
     return {"FONTCONFIG_FILE": str(config)}
 
 
+#: Hidden slides are exported too: every page index of the package (``frame.source_page``, an
+#: exemplar's ``source_page``) counts hidden slides, and LibreOffice leaves them out by default.
+_PDF_FILTER = 'pdf:impress_pdf_Export:{"ExportHiddenSlides":{"type":"boolean","value":"true"}}'
+
+
 def convert_source_pdf_libreoffice(path: Path, package) -> tuple[str, bytes]:
-    """The source deck as a PDF converted by LibreOffice with the template's own fonts: ``(version, bytes)``."""
+    """The source deck as a PDF converted by LibreOffice with the template's own fonts, hidden slides
+    included: ``(version, bytes)``."""
     if bytes_digest(path.read_bytes()) != package.source_digest:
         raise ValueError("svg_template_source_digest_mismatch")
     executable = _libreoffice_executable()
@@ -276,7 +282,7 @@ def convert_source_pdf_libreoffice(path: Path, package) -> tuple[str, bytes]:
         environment = {**os.environ, **_private_fontconfig(directory, package), "HOME": str(directory)}
         completed = subprocess.run([executable, "--headless", "--norestore", "--nolockcheck",
                                     f"-env:UserInstallation={(directory / 'profile').as_uri()}",
-                                    "--convert-to", "pdf", "--outdir", str(directory), str(source)],
+                                    "--convert-to", _PDF_FILTER, "--outdir", str(directory), str(source)],
                                    capture_output=True, timeout=_LIBREOFFICE_TIMEOUT_SECONDS,
                                    env=environment, check=False)
         pdf_path = directory / "source.pdf"
@@ -285,10 +291,11 @@ def convert_source_pdf_libreoffice(path: Path, package) -> tuple[str, bytes]:
         return version, pdf_path.read_bytes()
 
 
-def _render_source_libreoffice(path: Path, package):
-    """Convert the source deck to PDF with LibreOffice and rasterize each frame's page."""
+def _render_source_libreoffice(path: Path, package, source_pdf: tuple[str, bytes] | None = None):
+    """Convert the source deck to PDF with LibreOffice (or take ``source_pdf``, the same conversion
+    made once by the caller) and rasterize each frame's page."""
     import pypdfium2 as pdfium
-    version, pdf_bytes = convert_source_pdf_libreoffice(path, package)
+    version, pdf_bytes = source_pdf or convert_source_pdf_libreoffice(path, package)
     width, height = package.source_canvas.width_px, package.source_canvas.height_px
     images = {}
     document = pdfium.PdfDocument(pdf_bytes)
@@ -432,7 +439,8 @@ def _blocking_cause(frame, code: str) -> str:
     return code
 
 
-async def prepare_source_review(session, package, source_path, operation_id, *, captured_pdf=None, capture_receipt=None):
+async def prepare_source_review(session, package, source_path, operation_id, *, captured_pdf=None, capture_receipt=None,
+                                libreoffice_pdf: tuple[str, bytes] | None = None):
     """Render exact source and frame pairs; only a later human decision can approve them."""
     from services.svg_templates.catalog import principal
     from services.artifact_store import configured_public_artifact_service
@@ -467,7 +475,8 @@ async def prepare_source_review(session, package, source_path, operation_id, *, 
                 version = capture_receipt["producer_version"]
             elif renderer_kind == LIBREOFFICE_RENDERER:
                 if libreoffice_pages is None:
-                    libreoffice_pages = await asyncio.to_thread(_render_source_libreoffice, Path(source_path), package)
+                    libreoffice_pages = await asyncio.to_thread(_render_source_libreoffice, Path(source_path), package,
+                                                                libreoffice_pdf)
                 version, source_image = libreoffice_pages[0], libreoffice_pages[1][frame.source_page]
             else:
                 version, source_image = await _render_source_isolated(Path(source_path), package, frame)
