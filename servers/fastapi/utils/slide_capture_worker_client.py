@@ -322,6 +322,10 @@ async def render_with_lease(  # noqa: ASYNC109
         )
     if not (is_authored_renderer_lease_enabled() and renderer_requires_external_worker()):
         return await dimensioned_exchange(html, timeout)
+    # A lease keeps the exchange (and session viewport) of the render that
+    # opened it, so a deck rendering at another canvas size gets its own lease.
+    if not is_default_landscape(width_px, height_px):
+        deck_scope = f"{deck_scope}|{int(width_px)}x{int(height_px)}"
     if is_authored_renderer_framed_protocol_enabled():
         lease = await acquire_lease(
             deck_scope,

@@ -464,13 +464,33 @@ def _svg_prompt_cache_key(presentation_id, job):
     return f"svg-{digest[:CACHE_KEY_CHARS]}"
 
 
+def _svg_render_deck_scope(presentation_id):
+    """The renderer lease scope of one svg deck attempt, or ``None`` (per render).
+
+    Bound only when the framed worker protocol is on: only then does a lease
+    keep a worker process and its Chromium across the deck's renders, with
+    the lease pool size as the deck's render concurrency. Without it a lease
+    reuses nothing and serializes every render of its scope behind one lock,
+    so the deck keeps single-use scopes and its render concurrency. The scope
+    names this deck only, so no other deck or owner joins its workers.
+    """
+    from utils.get_env_programme import is_authored_renderer_framed_protocol_enabled
+
+    if not presentation_id or not is_authored_renderer_framed_protocol_enabled():
+        return None
+    return f"svg:{presentation_id}"
+
+
 async def _generate(request, presentation_id, outline, language, session, job, *, stage_plan=None, review_stage=None):
     from utils.llm_calls.author_prompt_cache_key import set_prompt_cache_key
+    from utils.slide_capture_deck_scope import set_render_deck_scope
 
     # Page tasks copy this context when created, so every author call of this
     # deck attempt (pages, header representatives, recovery repairs) carries
-    # the lane and nothing outside the attempt does.
-    with set_prompt_cache_key(_svg_prompt_cache_key(presentation_id, job)):
+    # the lane and nothing outside the attempt does. The renderer lease scope
+    # is bound the same way (see _svg_render_deck_scope).
+    with (set_prompt_cache_key(_svg_prompt_cache_key(presentation_id, job)),
+          set_render_deck_scope(_svg_render_deck_scope(presentation_id))):
         return await _generate_deck(request, presentation_id, outline, language, session, job,
                                     stage_plan=stage_plan, review_stage=review_stage)
 
