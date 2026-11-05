@@ -173,7 +173,7 @@ _NATIVE_LITERAL_VISUAL_REQUEST = re.compile(
 
 def _native_literal_pages(request, outline, *, style_snapshot, has_source_assets):
     """Require complete literal coverage, rather than finding a chart inside prose."""
-    from services.generation_core.drivers.svg.native_requirements import requested_native_data
+    from services.generation_core.drivers.svg.native_requirements import requested_native_data, requirements_revision
 
     if (has_source_assets is not False or getattr(request, "strategy", None) != "svg"
             or getattr(request, "generation_mode", None) not in {"auto", "free-design"}
@@ -196,8 +196,9 @@ def _native_literal_pages(request, outline, *, style_snapshot, has_source_assets
     if _NATIVE_LITERAL_VISUAL_REQUEST.search("\n".join([getattr(request, "instructions", None) or "", *contents])):
         return None
     pages = []
+    revision = requirements_revision(style_snapshot)
     for content in contents:
-        wanted = requested_native_data(content)
+        wanted = requested_native_data(content, revision)
         if not wanted:
             return None
         rows, charts = [], []
@@ -213,7 +214,7 @@ def _native_literal_pages(request, outline, *, style_snapshot, has_source_assets
                     continue
                 rows.append(cells)
             elif re.fullmatch(r"(?:chart|차트)\s*[:：]\s*.+", line, re.I):
-                literal = requested_native_data(line).get("charts", [])
+                literal = requested_native_data(line, revision).get("charts", [])
                 if len(literal) != 1:
                     return None
                 parts = re.split(r"[,;]\s*(?!\d{3}(?:\D|$))", re.split(r"[:：]", line, maxsplit=1)[1])

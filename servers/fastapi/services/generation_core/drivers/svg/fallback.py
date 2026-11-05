@@ -850,6 +850,11 @@ def validated_recovery_candidates(snapshot: Mapping | None, content: str | Mappi
     profile = _recovery_content_profile(content)
     if profile is None:
         return []
+    from services.generation_core.drivers.svg.native_requirements import same_requirements_as_v2
+    # Enrolled scopes digest the v2 requirements; a deck on a later revision may reuse a
+    # candidate only for content whose requirements that revision reads identically.
+    if not same_requirements_as_v2(content["text"], snapshot):
+        return []
     raw = snapshot.get("validated_recovery_candidates", [])
     if not isinstance(raw, Sequence) or isinstance(raw, (str, bytes)):
         return []
