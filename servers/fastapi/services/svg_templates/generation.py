@@ -407,7 +407,7 @@ def template_exemplar_facts(snapshot: dict, context: dict | None, content: str, 
     from utils.get_env_concurrency import get_svg_template_body_exemplars_env
     if not context or source_preserved or get_svg_template_body_exemplars_env() != "on":
         return {}
-    frame = context_frame(snapshot, context)
+    frame = page_frame(snapshot, context["page_index"], context["page_count"])
     if frame.role != "body":
         return {}
     from services.svg_templates.body_composition import page_exemplars
@@ -420,7 +420,7 @@ def template_text_metrics(snapshot: dict, context: dict) -> list[dict]:
     """:func:`face_text_metrics` of every face the page's frame offers (prompt only)."""
     from services.svg_templates.frame_fonts import face_text_metrics
 
-    frame = context_frame(snapshot, context)
+    frame = page_frame(snapshot, context["page_index"], context["page_count"])
     return [face_text_metrics(asset) for asset in frame.font_manifest.assets]
 
 
