@@ -218,6 +218,22 @@ def get_svg_template_body_exemplars_env(settings: RuntimeSettings | None = None)
     return "grammar" if value == "grammar" else "off"
 
 
+def get_svg_common_header_default_env(settings: RuntimeSettings | None = None) -> str:
+    """Header of a fresh prompt-only svg request that names no ``common_header_mode``
+    (``SVG_COMMON_HEADER_DEFAULT``): ``designed`` (also when unset or unknown) the model-designed
+    header, ``reduced`` the deterministic reduced header with its cover exception
+    (``services/svg_common_header_design_plan.py``, decision D1 in
+    ``docs/svg-mode-improvement-plan-20261105.md``).
+
+    Read at admission only: the pinned mode and the sealed snapshot carry the choice, so a change
+    affects new jobs only.
+    """
+    from utils.get_env import get_setting_env
+
+    value = (get_setting_env("SVG_COMMON_HEADER_DEFAULT", settings) or "").strip().lower()
+    return "reduced" if value == "reduced" else "designed"
+
+
 def get_svg_template_component_style_env(settings: RuntimeSettings | None = None) -> bool:
     """Whether a template-redesign deck's author rules carry the template's body component styles
     (``SVG_TEMPLATE_COMPONENT_STYLE``: ``on`` / ``off``; unset or unknown: off).

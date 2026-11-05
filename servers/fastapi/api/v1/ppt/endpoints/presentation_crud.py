@@ -399,7 +399,7 @@ async def create_presentation(
     include_title_slide: Annotated[bool, Body()] = True,
     web_search: Annotated[bool, Body()] = False,
     strategy: Annotated[Literal["authored", "svg"], Body()] = "svg",
-    common_header_mode: Annotated[Optional[Literal["uniform", "free"]], Body()] = None,
+    common_header_mode: Annotated[Optional[Literal["uniform", "free", "reduced"]], Body()] = None,
     common_header_design: Annotated[Optional[CommonHeaderDesignInput], Body()] = None,
     common_header_cover_exception: Annotated[bool, Body()] = False,
     theme: Annotated[Optional[dict], Body()] = None,
@@ -434,7 +434,8 @@ async def create_presentation(
         if svg_design_reference_snapshot_id is not None:
             raise HTTPException(status_code=422, detail="svg_template_selection_conflict")
         if svg_template_mode == "template-redesign" and (
-            common_header_mode == "uniform" or common_header_design is not None or common_header_cover_exception
+            common_header_mode in {"uniform", "reduced"} or common_header_design is not None
+            or common_header_cover_exception
         ):
             raise HTTPException(status_code=422, detail="svg_template_common_header_conflict")
     if svg_design_reference_snapshot_id is not None and strategy != "svg":
@@ -442,14 +443,14 @@ async def create_presentation(
     if common_header_mode is not None and strategy != "svg":
         raise HTTPException(status_code=422, detail="common_header_svg_strategy_required")
     if common_header_design is not None:
-        if strategy != "svg" or common_header_mode == "free":
+        if strategy != "svg" or common_header_mode in {"free", "reduced"}:
             raise HTTPException(status_code=422, detail="common_header_design_requires_svg_uniform")
         # Header references reuse only the separately owner-admitted style
         # reference below; body/document references cannot grant this access.
         if any(reference_id != svg_design_reference_snapshot_id
                for reference_id in common_header_design.reference_snapshot_ids):
             raise HTTPException(status_code=422, detail="svg_common_header_design_reference_admission_required")
-    if common_header_cover_exception and common_header_mode != "uniform":
+    if common_header_cover_exception and common_header_mode not in {"uniform", "reduced"}:
         raise HTTPException(status_code=422, detail="common_header_cover_exception_requires_uniform")
     if svg_design_reference_snapshot_id is not None:
         from services.references.service import admit_reference_snapshot

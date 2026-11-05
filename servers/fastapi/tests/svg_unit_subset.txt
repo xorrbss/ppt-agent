@@ -334,6 +334,7 @@ tests/unit/test_svg_checkpoint_bootstrap.py
 tests/unit/test_svg_checkpoint_progress_contract.py
 tests/unit/test_svg_checkpoint_recovery_contract.py
 tests/unit/test_svg_common_header_builtin_styles.py
+tests/unit/test_svg_common_header_reduced_default.py
 tests/unit/test_svg_common_header_space_advance.py
 tests/unit/test_svg_common_header_space_advance_fallback.py
 tests/unit/test_svg_common_header_v2_font_stack.py

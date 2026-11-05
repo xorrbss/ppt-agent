@@ -133,7 +133,10 @@ class PresentationGenerationRequestV2(PublicWireModel):
     # services.generation_core.admission.resolve_generation_strategy. Never
     # read this field directly; every decision goes through the resolver.
     strategy: Literal["authored", "svg"] | None = None
-    common_header_mode: Literal["uniform", "free"] | None = Field(default=None, exclude_if=lambda value: value is None)
+    # "reduced" is the deterministic reduced header (no header design calls);
+    # the internal request admits it as "uniform" without a design plan.
+    common_header_mode: Literal["uniform", "free", "reduced"] | None = Field(
+        default=None, exclude_if=lambda value: value is None)
     common_header_cover_exception: bool = False
     common_header_design: CommonHeaderDesignInput | None = Field(
         default=None, exclude_if=lambda value: value is None,
@@ -213,12 +216,12 @@ class PresentationGenerationRequestV2(PublicWireModel):
     def validate_generation_mode(self) -> "PresentationGenerationRequestV2":
         validate_svg_template_selection(self)
         if self.common_header_design is not None and (
-            self.strategy == "authored" or self.common_header_mode == "free"
+            self.strategy == "authored" or self.common_header_mode in {"free", "reduced"}
         ):
             raise ValueError("common_header_design_requires_svg_uniform")
         if self.common_header_mode is not None and self.strategy == "authored":
             raise ValueError("common_header_svg_strategy_required")
-        if self.common_header_cover_exception and self.common_header_mode != "uniform":
+        if self.common_header_cover_exception and self.common_header_mode not in {"uniform", "reduced"}:
             raise ValueError("common_header_cover_exception_requires_uniform")
         if self.svg_design_reference_snapshot_id is not None and self.master_pin is not None:
             raise ValueError("svg_design_reference_conflict")

@@ -193,6 +193,13 @@ COMMON_HEADER_VERIFIER_LEDGER = VerifierRevisionLedger(
         # verification of every earlier version is byte-identical, so stored
         # evidence keeps this revision.
         "sha256:c58474633c70f87addab8165499a0b3ecb577badd57b461534796976f5518638": "svg-common-header-verifier/1",
+        # P8 (decision D1): prepare_common_header gives a new reduced header v1 a
+        # divider, a page-position eyebrow and one deck-wide title size from a short
+        # ladder only when its snapshot seals ``reduced_header_style``. Those fields
+        # already exist in v1 and are verified and rendered by unchanged code; every
+        # contract without the seal is built, verified and rendered byte-identically,
+        # so stored evidence keeps this revision.
+        "sha256:5321677d0117b03a618aee5e15703e59f406f0b1996a47488830c8dbc4565e72": "svg-common-header-verifier/1",
     }),
 )
 

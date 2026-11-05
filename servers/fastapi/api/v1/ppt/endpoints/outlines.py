@@ -81,9 +81,10 @@ async def _outline_common_header_mode(session, presentation) -> str:
     mode = settings.get("common_header_mode")
     if mode is None:
         return "free"
-    if mode not in {"uniform", "free"}:
+    if mode not in {"uniform", "free", "reduced"}:
         raise ValueError("svg_common_header_mode_invalid")
-    return mode
+    # The reduced header draws the same bound page titles as a designed one.
+    return "uniform" if mode == "reduced" else mode
 
 
 def _retain_outline_header_titles(outline) -> None:

@@ -78,6 +78,20 @@ def fresh_header_mode(request):
     } else "uniform")
 
 
+def reduced_header_by_default(request, *, explicit_mode=False):
+    """Whether this fresh request takes decision D1's reduced-header defaults.
+
+    ``explicit_mode`` asks about the cover-exception default, which also
+    applies to an explicit "uniform" request under the reduced setting.
+    """
+    if getattr(request, "_common_header_reduced", False):
+        return True
+    from utils.get_env_concurrency import get_svg_common_header_default_env
+    if get_svg_common_header_default_env() != "reduced":
+        return False
+    return explicit_mode or getattr(request, "common_header_design", None) is None
+
+
 def fresh_header_mode_conflict(request):
     return (getattr(request, "common_header_mode", None) == "uniform"
             and fresh_header_mode(request) == "free"
@@ -374,6 +388,7 @@ def seal_new_header_design_plan(request, *, explicit_revision=False):
         return require_header_design_plan(request)
     from services.svg_generation_admission import _common_header_preservation_conflict
     if (getattr(request, "common_header_mode", None) != "uniform"
+            or getattr(request, "_common_header_reduced", False)
             or _common_header_preservation_conflict(request)):
         return None
     frozen = getattr(request, "_svg_style_snapshot", None)
