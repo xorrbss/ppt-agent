@@ -2601,6 +2601,10 @@ def test_partial_svg_deadline_retry_enters_verified_append_only_fork(monkeypatch
             async def execute(self, statement):
                 if statement.is_update:
                     return SimpleNamespace(scalar_one_or_none=lambda: None)
+                if statement.column_descriptions[0]["name"] == "id":
+                    # The early duplicate-retry probe (``select(WorkspaceOperation.id)``):
+                    # no earlier retry of this operation exists.
+                    return SimpleNamespace(first=lambda: None)
                 self.reads += 1
                 return SimpleNamespace(scalar_one_or_none=lambda: source if self.reads == 1 else None)
 

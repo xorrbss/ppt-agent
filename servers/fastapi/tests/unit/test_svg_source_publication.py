@@ -349,7 +349,12 @@ def test_source_publication_preserves_verified_svg_and_rejects_mutations(monkeyp
                     owner_id=owner, attempt_number=1, attempt_token="current", fencing_token=2,
                     expected_revision=3, kind="export.pptx")
                 transaction = object()
+                # The source-input snapshot lookup runs first; with no producer job
+                # row it yields no snapshot and the legacy proof below is used.
+                no_job = SimpleNamespace(first=lambda: None)
                 exporting = SimpleNamespace(get=AsyncMock(return_value=target),
+                    execute=AsyncMock(return_value=no_job),
+                    get_bind=lambda: SimpleNamespace(dialect=SimpleNamespace(name="sqlite")),
                     refresh=AsyncMock(), get_transaction=lambda: transaction)
                 current = SimpleNamespace(presentation_id=target.id, expected_revision=3,
                     cancel_requested_at=None,
