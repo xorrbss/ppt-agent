@@ -1155,6 +1155,9 @@ def _cache_browser_metrics(
         metric_bytes = len(json.dumps(metrics, sort_keys=True, separators=(",", ":"), ensure_ascii=False, default=str).encode("utf-8"))
     except Exception:
         metric_bytes = 0
+    else:
+        # The same footprint the budget measures; record it once.
+        _metrics_cache_sizes[key] = (id(metrics), metric_bytes)
     _count_runtime("metrics_cache_bytes", metric_bytes)
     max_entries, max_bytes = _dom_metrics_cache_limits()
     while (
@@ -2162,6 +2165,9 @@ def _dom_metrics_cache_limits() -> "tuple[int, int]":
 
 _browser_metrics_cache: "OrderedDict[tuple[str, str, str], Mapping[str, Any]]" = OrderedDict()
 _browser_metrics_inflight: Dict[tuple[str, str, str], "asyncio.Task[Mapping[str, Any] | None]"] = {}
+#: Footprint memos of the two payload caches (see utils.render_cache_budget).
+_metrics_cache_sizes: Dict[tuple[str, str, str], tuple[int, int]] = {}
+_capture_cache_sizes: Dict[tuple[str, str, str], tuple[int, int]] = {}
 _observed_cache_identities: "OrderedDict[str, _RenderCacheIdentity]" = OrderedDict()
 _CACHE_IDENTITY_OBSERVATION_LIMIT = 256
 # The authored override remains authoritative.  Managed stacks already expose
@@ -2181,13 +2187,15 @@ def _render_cache_resident_bytes() -> int:
 
 def _metrics_cache_resident_bytes() -> int:
     return metrics_cache_resident_bytes(
-        _browser_metrics_cache, overflow_bytes=_dom_metrics_cache_limits()[1]
+        _browser_metrics_cache, overflow_bytes=_dom_metrics_cache_limits()[1],
+        sizes=_metrics_cache_sizes,
     )
 
 
 def _capture_cache_resident_bytes() -> int:
     return capture_cache_resident_bytes(
-        _capture_cache, overflow_bytes=_dom_metrics_cache_limits()[1]
+        _capture_cache, overflow_bytes=_dom_metrics_cache_limits()[1],
+        sizes=_capture_cache_sizes,
     )
 
 
@@ -2263,6 +2271,8 @@ def reset_render_runtime(
         _render_cache.clear()
         _browser_metrics_cache.clear()
         _capture_cache.clear()
+        _metrics_cache_sizes.clear()
+        _capture_cache_sizes.clear()
         _observed_cache_identities.clear()
         _count_runtime("cache_resets")
         _count_runtime("cache_invalidated_entries", invalidated_entries)

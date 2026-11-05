@@ -2,6 +2,7 @@
 from __future__ import annotations
 # ruff: noqa: ASYNC109
 
+import asyncio
 from dataclasses import dataclass
 import base64
 import json
@@ -529,6 +530,15 @@ def _template_fallback_evidence(svg: str, wrapper: str, *, authorized_raster=Fal
     return canonical, measured_proof
 
 
+def _portable_metrics(browser_metrics) -> dict:
+    """An independent JSON copy of the browser metrics.
+
+    Probe cache keys contain NUL separators, which PostgreSQL JSON operators
+    cannot decode. They are diagnostic keys, never source text.
+    """
+    return json.loads(json.dumps(browser_metrics or {}).replace("\\u0000", "\\u241f"))
+
+
 @dataclass(frozen=True)
 class SvgRenderResult:
     png: bytes
@@ -604,9 +614,8 @@ async def render_svg_with_metrics(svg: str, *, width: int = DEFAULT_CANVAS_WIDTH
     else:
         capture = await render_html_to_png_with_metrics(wrapper, timeout=timeout,
                 width_px=width, height_px=height, deck_scope=deck_scope, fit=False)
-    # Probe cache keys contain NUL separators, which PostgreSQL JSON operators
-    # cannot decode. They are diagnostic keys, never source text.
-    metrics = json.loads(json.dumps(capture.browser_metrics or {}).replace("\\u0000", "\\u241f"))
+    # The copy of a large page's metrics is CPU-bound; keep it off the loop.
+    metrics = await asyncio.to_thread(_portable_metrics, capture.browser_metrics)
     elements = metrics.get("elements") or []
     text = [item for item in elements if item.get("has_owned_text")]
     failures = []
