@@ -28,7 +28,7 @@ def list_inputs() -> list[str]:
 
 def load_request_template(name: str) -> dict:
     body = json.loads((INPUTS / "requests" / f"{name}.json").read_text(encoding="utf-8"))
-    body["content"] = (INPUTS / f"{name}.txt").read_text(encoding="utf-8")
+    body["content"] = input_source_text(name)
     return body
 
 
