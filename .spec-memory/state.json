@@ -197,7 +197,8 @@
     "generation-core.svg-native-chart-fidelity": "decisions/generation-core.svg-native-chart-fidelity.1.json",
     "generation.svg-smoke-contract": "decisions/generation.svg-smoke-contract.1.json",
     "codex.default-generation-model": "decisions/codex.default-generation-model.1.json",
-    "raster.analysis-process-pool": "decisions/raster.analysis-process-pool.1.json"
+    "raster.analysis-process-pool": "decisions/raster.analysis-process-pool.1.json",
+    "generation.no-source-skeleton-reuse": "decisions/generation.no-source-skeleton-reuse.1.json"
   },
   "readFirst": [
     "docs/composer-source-preservation-and-7px-fit-design-20260913.md"

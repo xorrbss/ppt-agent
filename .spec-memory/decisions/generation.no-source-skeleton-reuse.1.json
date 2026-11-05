@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 1,
+  "key": "generation.no-source-skeleton-reuse",
+  "revision": 1,
+  "status": "accepted",
+  "authority": "user",
+  "summary": "Do not build generation on reusing original template pages as skeletons (copying a source page's body shapes and layout and swapping only text and data). Deck IR, Design Packs (source-native routes, server-owned source frames) and fixed-slot filling took this route and failed repeatedly; do not attempt it again.",
+  "scope": [
+    "generation",
+    "svg",
+    "authored",
+    "template-redesign",
+    "architecture"
+  ],
+  "invariants": [
+    "Every generation path (svg, authored, template-redesign) composes page bodies itself; a registered template supplies frames, furniture, fonts, colours, composition guidance and references, not page bodies to fill.",
+    "authored.generation.original-level-visual-acceptance keeps its goal (output close to the supplied template's level); this decision rules out source-skeleton reuse as the means to reach it.",
+    "Proposals to raise template fidelity must say how they differ from source-skeleton reuse before implementation."
+  ],
+  "forbidden": [
+    "Cloning a source or template page's body shapes and layout and replacing only its text, table values or chart data",
+    "Replacing free authoring with a fixed-slot IR or a Deck IR slot schema",
+    "Reintroducing Design Pack source frames, source-native routes or an equivalent under another name"
+  ],
+  "evidence": [
+    "User instruction 2026-11-06: 원본 페이지를 뼈대로 쓰기 이건 그동안 수많은 실패를 했던 deck-ir 디자인팩 같은 방식이잖아 이런 방식은 하지말라고 기록하라고 했는데 없어?",
+    "User decision 2026-11-06: keep the original-level goal, forbid the means (option a)",
+    "CLAUDE.md: Design packs removed 2026-11-03 after their only successful run was rated the quality floor (docs/generation-quality-root-cause-and-composer-architecture-20260904.md)",
+    ".spec-memory/decisions/authored.capture-final-html-immutable.1.json and authored.osb-density-aware-typography.1.json rejected Deck IR and fixed slots within authored scope only"
+  ],
+  "recordedAt": "2026-11-05T18:42:40.527187+00:00"
+}
