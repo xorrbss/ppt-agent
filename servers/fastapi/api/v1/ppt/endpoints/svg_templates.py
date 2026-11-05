@@ -228,7 +228,12 @@ async def preview(template_id: uuid.UUID, revision: int, session=Depends(get_asy
     material = await load_material(session, version)
     examples = material["style_projection"].get("references", {}).get("content", [])
     if not examples:
-        raise HTTPException(404, "svg_template_preview_unavailable")
+        from services.svg_templates.storage import template_frame_preview
+        payload = await template_frame_preview(session, version, material)
+        if payload is None:
+            raise HTTPException(404, "svg_template_preview_unavailable")
+        return Response(payload, media_type="image/png",
+            headers={"Cache-Control": "private, max-age=300", "X-Content-Type-Options": "nosniff"})
     data_url = examples[0].get("data_url", "")
     if not data_url.startswith(("data:image/png;base64,", "data:image/jpeg;base64,", "data:image/webp;base64,")):
         raise HTTPException(409, "svg_template_preview_invalid")

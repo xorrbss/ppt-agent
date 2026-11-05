@@ -89,3 +89,34 @@ async def load_adaptation_material(session, envelope):
             or not isinstance(material.get("adaptation"), dict)):
         raise ValueError("svg_template_adaptation_material_invalid")
     return material["adaptation"]
+
+
+async def template_frame_preview(session, version, material) -> bytes | None:
+    """The retained review render of the template's own cover frame (else its first frame).
+
+    A template whose source deck could not be rendered for the design reference
+    (for example a deck with embedded content) has no reference picture, but every
+    published framed version keeps the frame renders it was approved on.
+    """
+    import uuid
+    from services.svg_templates.catalog import principal
+    owner, tenant = principal()
+    entries = {entry.get("frame_id"): entry for entry in (version.review_evidence or {}).get("frames", [])
+               if isinstance(entry, dict)}
+    frames = material["package"].get("frames", [])
+    ordered = sorted(frames, key=lambda frame: frame.get("role") != "cover")
+    service = configured_public_artifact_service()
+    for frame in ordered:
+        ref = (entries.get(frame.get("frame_id")) or {}).get("frame_image_ref")
+        if not isinstance(ref, dict) or not ref.get("artifact_id") or not ref.get("sha256"):
+            continue
+        try:
+            current = await service.resolve_ref(session, artifact_id=uuid.UUID(str(ref["artifact_id"])),
+                owner_id=owner, tenant_id=tenant, expected_digest=ref["sha256"], check_object=False)
+            if current.kind != "image-derivative" or current.media_type != "image/png":
+                continue
+            payload, _ = await service.read_verified_ref_bytes(current, max_bytes=MAX_MATERIAL_BYTES)
+        except (ArtifactStoreError, ValueError):
+            continue
+        return payload
+    return None

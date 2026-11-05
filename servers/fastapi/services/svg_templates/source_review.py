@@ -9,6 +9,7 @@ import sys
 import os
 from pathlib import Path
 import platform
+import re
 import tempfile
 import time
 import uuid
@@ -339,7 +340,7 @@ def _compare_fixed_regions(source: bytes, rendered: bytes, frame):
                         "bounds": rect.model_dump(mode="json"),
                         "mean_absolute_channel_error": sum(mean) / 3})
     if not results:
-        raise ValueError("svg_template_review_regions_missing")
+        raise ValueError("svg_template_review_no_fixed_region")
     return {"method": "fixed-region-pixel-diff/v1", "regions": results}
 
 
@@ -404,6 +405,27 @@ def _render_pdf_source(pdf_bytes, frame):
         pdf.close()
 
 
+_CAUSE_MASKED_CODES = frozenset({"svg_template_review_render_unavailable", "svg_template_review_no_fixed_region",
+                                 "svg_template_font_unavailable"})
+
+
+def _blocking_cause(frame, code: str) -> str:
+    """Name the extraction problem behind a comparison that could not run.
+
+    A page whose furniture could not be converted (a font the server cannot use, an
+    unsupported effect) has nothing, or too little, to compare; saying only that the
+    comparison failed hides what the person has to fix. The extractor's own blocked
+    issue is a safe code and says it.
+    """
+    if code not in _CAUSE_MASKED_CODES:
+        return code
+    for issue in frame.issues:
+        reason = getattr(issue, "reason_code", "")
+        if getattr(issue, "severity", "") == "blocked" and re.fullmatch(r"svg_template_[a-z0-9_]+", reason or ""):
+            return reason
+    return code
+
+
 async def prepare_source_review(session, package, source_path, operation_id, *, captured_pdf=None, capture_receipt=None):
     """Render exact source and frame pairs; only a later human decision can approve them."""
     from services.svg_templates.catalog import principal
@@ -455,8 +477,10 @@ async def prepare_source_review(session, package, source_path, operation_id, *, 
                 "svg_template_libreoffice_unavailable", "svg_template_libreoffice_render_failed",
                 "svg_template_powerpoint_ownership_unproven", "svg_template_source_digest_mismatch",
                 "svg_template_source_page_missing", "svg_template_review_image_size_mismatch",
-                "svg_template_review_region_invalid", "svg_template_review_regions_missing"}
+                "svg_template_review_region_invalid", "svg_template_review_no_fixed_region",
+                "svg_template_font_unavailable"}
             code = str(error) if str(error) in safe_codes else "svg_template_review_render_unavailable"
+            code = _blocking_cause(frame, code)
             blocked.append({"frame_id": frame.frame_id, "frame_digest": frame.digest,
                 "font_manifest_digest": frame.font_manifest.digest, "status": "blocked", "reason": code})
     if not prepared:

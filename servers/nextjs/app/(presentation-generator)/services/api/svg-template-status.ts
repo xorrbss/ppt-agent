@@ -10,6 +10,7 @@ export function templateReason(value: string | null | undefined): string {
   if (code === "svg_template_raster_renderer_unavailable") return "지원하지 않는 장식을 이미지로 보존할 LibreOffice를 사용할 수 없습니다. 서버 준비 상태를 확인해 주세요.";
   if (code.startsWith("svg_template_raster_")) return "장식을 이미지로 보존하는 렌더링을 완료하지 못했습니다. 분석을 다시 실행해 주세요.";
   if (code === "svg_template_fullslide_raster_forbidden") return "슬라이드 전체를 덮는 그림은 다른 양식 요소보다 아래에 있을 때만 배경으로 보존할 수 있습니다.";
+  if (code === "svg_template_fixed_furniture_missing" || code === "svg_template_review_no_fixed_region") return "이 장표에서 보존할 양식 요소를 찾지 못해 원본과 비교할 수 없습니다. 글꼴이 준비되지 않았거나 요소가 본문으로 분류되었을 수 있으니, 글꼴 대체를 지정하거나 '보존할 원본 요소'를 선택해 다시 분석해 주세요. 그래도 안 되면 이 장표는 빼고 등록해 주세요.";
   if (code === "svg_template_font_substitution_invalid") return "글꼴 대체 설정이 올바르지 않습니다. 원본 글꼴마다 대체 글꼴을 하나씩 지정해 주세요.";
   if (code === "svg_template_source_pages_invalid") return "분석할 원본 장 번호가 올바르지 않습니다.";
   if (code.includes("libreoffice")) return "원본 미리보기를 만들 LibreOffice를 사용할 수 없습니다. 서버 준비 상태를 확인해 주세요.";
