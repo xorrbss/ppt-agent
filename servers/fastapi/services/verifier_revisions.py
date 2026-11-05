@@ -208,6 +208,16 @@ COMMON_HEADER_VERIFIER_LEDGER = VerifierRevisionLedger(
         # Cached-author-render deletion: drivers/svg/render.py imports approved_sidecars
         # from svg_cached_author_render_lineage; no header verification changed.
         "sha256:598ff7b694423b562370cb5c50b52acded95917c9b574408cc0242ca098e33cb": "svg-common-header-verifier/1",
+        # P8 (decision D1): prepare_common_header gives a new reduced header v1 a
+        # divider, a page-position eyebrow and one deck-wide title size from a short
+        # ladder only when its snapshot seals ``reduced_header_style``. Those fields
+        # already exist in v1 and are verified and rendered by unchanged code; every
+        # contract without the seal is built, verified and rendered byte-identically,
+        # so stored evidence keeps this revision.
+        "sha256:5321677d0117b03a618aee5e15703e59f406f0b1996a47488830c8dbc4565e72": "svg-common-header-verifier/1",
+        # P8 merged onto main (#132, #133): the combined source state of the two
+        # behaviour-unchanged entries above.
+        "sha256:8a7c3138c5515f3423038b1d419a6ed643f6e5769572a1f4765800abd1934ab8": "svg-common-header-verifier/1",
     }),
 )
 
@@ -363,6 +373,10 @@ PARTIAL_RECOVERY_CODE_LEDGER = VerifierRevisionLedger(
         # (admissions still pin v9 by default); v9 and earlier prompts are
         # byte-identical (pinned digests), so recovery of stored decks is unchanged.
         "64ad5a76691fb115fbe7932497489ed2a53cb5fd48e4a11f3c96d55fcb09584a": "svg-partial-recovery-code/1",
+        # P8 (decision D1): the reduced header default sits behind the registered
+        # SVG_COMMON_HEADER_DEFAULT setting (default "designed") and a pinned
+        # reduced_header_style; decks without them recover byte-identically.
+        "7492d3fbc8b5bb316e1cf62db8fbe2f05a816a460ef859e74e956a7f3c4ae894": "svg-partial-recovery-code/1",
     }),
 )
 
@@ -386,6 +400,9 @@ PAGE_RENDER_CODE_LEDGER = VerifierRevisionLedger(
         # S3 authoring profile v10 (same edit as the code ledger entry): pages of
         # v9-and-earlier decks render from byte-identical prompts.
         "b12bbf894bf36535708a8ffea10ce5f14f46a0a45f46482afb3d468745e4be48": "svg-page-render-code/1",
+        # P8 (same edit as the code ledger entry): pages without the pinned
+        # reduced_header_style render byte-identically.
+        "97655caf4437ec7e8aff84152784b96d1c8dad102a0ac9119ed25d7052ed9931": "svg-page-render-code/1",
     }),
 )
 

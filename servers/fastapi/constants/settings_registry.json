@@ -1649,6 +1649,16 @@
       "description": "Spawned workers for CPU-bound raster page analysis. Zero selects min(4, cpu count minus one); positive values set a fixed cap. Each worker holds one page image."
     },
     {
+      "key": "SVG_COMMON_HEADER_DEFAULT",
+      "type": "enum",
+      "default": "designed",
+      "secret": false,
+      "choices": ["designed", "reduced"],
+      "targets": ["fastapi.runtime"],
+      "group": "svg.header",
+      "description": "Common header of a fresh prompt-only svg request that does not choose one: designed keeps the model-designed header (one design call, two representative pages and a selection call before body pages); reduced takes the deterministic reduced header with a divider and a page-position eyebrow, no header model calls, and leaves the cover page without the header unless the request says otherwise. Read at admission only; an explicit common_header_mode always wins."
+    },
+    {
       "key": "SVG_USER_TEMPLATES_ENABLED",
       "type": "boolean",
       "default": false,

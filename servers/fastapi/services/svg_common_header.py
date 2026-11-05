@@ -46,6 +46,21 @@ GROUP_ID = "svg-system-common-header"
 TITLE_ID = GROUP_ID + "-title"
 SVG_NS = "http://www.w3.org/2000/svg"
 _MISSING = object()
+#: Sealed into the style snapshot of a request that takes the deterministic
+#: reduced header by choice (``common_header_mode="reduced"`` or the
+#: SVG_COMMON_HEADER_DEFAULT=reduced default, decision D1). It gives the
+#: reduced header a divider and a page-position eyebrow ("02 / 06"), and takes
+#: the first title size of ``title_px`` at which every page title fits in two
+#: lines, one size for the whole deck (such a request has no designed header to
+#: fall back from). The contract stays svg-common-header/v1, whose eyebrow and
+#: divider fields already exist; snapshots without this key keep the plain
+#: reduced header they were frozen with, and frozen contracts are never remeasured.
+REDUCED_HEADER_STYLE_KEY = "reduced_header_style"
+REDUCED_HEADER_STYLE = {"version": "svg-reduced-header-style/v1", "eyebrow": "page-position", "divider": True,
+                        "title_px": [34, 30, 26]}
+#: Small bold text needs body-text contrast, not the 3:1 of the title.
+_EYEBROW_CONTRAST = 4.5
+_DIVIDER_MIX = 0.18
 
 
 def _digest(value: object) -> str:
@@ -156,6 +171,44 @@ def _contrast(first, second):
         return sum(value * factor for value, factor in zip(linear, (.2126, .7152, .0722), strict=False))
     low, high = sorted((luminance(first), luminance(second)))
     return (high + .05) / (low + .05)
+
+
+def _hex_token(value):
+    return value.upper() if isinstance(value, str) and re.fullmatch(r"#[0-9A-Fa-f]{6}", value) else None
+
+
+def _mix(first, second, ratio):
+    channels = [round(int(first[i:i + 2], 16) * (1 - ratio) + int(second[i:i + 2], 16) * ratio)
+                for i in (1, 3, 5)]
+    return "#" + "".join(f"{value:02X}" for value in channels)
+
+
+def _reduced_style_options(snapshot, tokens):
+    """Eyebrow and divider options a sealed reduced header style adds, or ``{}``."""
+    style = snapshot.get(REDUCED_HEADER_STYLE_KEY)
+    if style is None:
+        return {}
+    if style != REDUCED_HEADER_STYLE:
+        raise ValueError("svg_common_header_contract_invalid")
+    background = _hex_token(tokens.get("background")) or "#FFFFFF"
+    foreground = _hex_token(tokens.get("foreground")) or "#0F172A"
+    # The title colour prepare_common_header resolves for a style without options.
+    if _contrast(foreground, background) < 3:
+        foreground = max(("#0F172A", "#FFFFFF"), key=lambda candidate: _contrast(candidate, background))
+    accent = _hex_token(tokens.get("primary"))
+    if accent is None or _contrast(accent, background) < _EYEBROW_CONTRAST:
+        accent = foreground if _contrast(foreground, background) >= _EYEBROW_CONTRAST else max(
+            ("#0F172A", "#FFFFFF"), key=lambda candidate: _contrast(candidate, background))
+    options = {"divider": {"enabled": True, "color": _mix(background, foreground, _DIVIDER_MIX)}}
+    # A company master that draws its own page number keeps the only one.
+    if not any(item.get("kind") == "pageNumber" and item.get("visibility") != "hidden"
+               for item in master_furniture(snapshot).get("elements", [])):
+        options["eyebrow"] = {"enabled": True, "font_size_px": 14, "gap_px": 8, "color": accent}
+    return options
+
+
+def _page_position(index, count):
+    return f"{index + 1:02d} / {count:02d}"
 
 
 def _font(family, weight, size):
@@ -360,7 +413,8 @@ def _line_evidence(lines, font, box, baseline, line_height, alignment,
     return list(widths), [dict(zip(("x", "y", "width", "height"), values, strict=False)) for values in boxes]
 
 
-def prepare_common_header(snapshot: dict, outline, canvas, *, mode="uniform", cover_exception=False):
+def prepare_common_header(snapshot: dict, outline, canvas, *, mode="uniform", cover_exception=False,
+                          _reduced_title_px=None):
     """Return style and title bindings without mutating snapshot or outline.
 
     Callers atomically store the first value in snapshot.common_header and each
@@ -388,6 +442,20 @@ def prepare_common_header(snapshot: dict, outline, canvas, *, mode="uniform", co
     if not isinstance(options, dict):
         raise ValueError("svg_common_header_contract_invalid")
     tokens = snapshot.get("tokens", {})
+    styled = _reduced_style_options(snapshot, tokens) if not options else {}
+    if styled and _reduced_title_px is None:
+        *larger, smallest = REDUCED_HEADER_STYLE["title_px"]
+        for size in larger:
+            try:
+                return prepare_common_header(snapshot, outline, canvas, mode=mode,
+                                             cover_exception=cover_exception, _reduced_title_px=size)
+            except ValueError as error:
+                if str(error) != "svg_common_header_title_overflow":
+                    raise
+        _reduced_title_px = smallest
+    if styled:
+        styled = {**styled, "font_size_px": _reduced_title_px}
+    options = options or styled
     width, height = geometry["width"], geometry["height"]
     spec = HeaderTitleSpec()
     family = options.get("font_family", _reduced_header_family(tokens.get("heading_font")))
@@ -511,7 +579,8 @@ def prepare_common_header(snapshot: dict, outline, canvas, *, mode="uniform", co
             binding["title_source_digest"] = _value(slide, "title_source_digest")
         for name in ("eyebrow", "subline"):
             if contract[name]["enabled"]:
-                text = _value(slide, name, "") or ""
+                text = (_page_position(index, len(slides)) if name in styled
+                        else _value(slide, name, "") or "")
                 part = contract[name]
                 if (not isinstance(text, str) or "\n" in text
                         or _advance(text, part["font"], measurement_version, space_advance) > part["box"]["width"]):

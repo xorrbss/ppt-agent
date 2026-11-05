@@ -1,5 +1,5 @@
 "use client";
-import { commonHeaderDesignForConfig } from "@/lib/common-header-design";
+import { commonHeaderDesignForConfig, hasCommonHeader } from "@/lib/common-header-design";
 
 import type { Dispatch, SetStateAction, MutableRefObject } from "react";
 import type { useRouter } from "next/navigation";
@@ -101,7 +101,7 @@ export function createUploadGenerationHandlers({
         ...(generationStrategy === "svg" ? {
           commonHeaderMode: config.commonHeaderMode ?? "uniform",
           commonHeaderDesign: commonHeaderDesignForConfig(config),
-          commonHeaderCoverException: (config.commonHeaderMode ?? "uniform") === "uniform" && (config.commonHeaderCoverException ?? false),
+          commonHeaderCoverException: hasCommonHeader(config.commonHeaderMode) && (config.commonHeaderCoverException ?? false),
         } : {}),
         language:
           config.language && config.language !== LanguageType.Auto
@@ -307,7 +307,7 @@ export function createUploadGenerationHandlers({
       ...(generationStrategy === "svg" ? {
         common_header_mode: config.commonHeaderMode ?? "uniform",
         common_header_design: commonHeaderDesignForConfig(config),
-        common_header_cover_exception: (config.commonHeaderMode ?? "uniform") === "uniform" && (config.commonHeaderCoverException ?? false),
+        common_header_cover_exception: hasCommonHeader(config.commonHeaderMode) && (config.commonHeaderCoverException ?? false),
       } : {}),
       ...(generationStrategy === "svg" && config.svgDesignReferenceSnapshotId ? { svg_design_reference_snapshot_id: config.svgDesignReferenceSnapshotId } : {}),
       ...(generationStrategy === "svg" && config.svgTemplatePin ? { svgTemplatePin: config.svgTemplatePin, svgTemplateMode: config.svgTemplateMode, svgTemplateFrameMap: config.svgTemplateFrameMap } : {}),
@@ -385,7 +385,7 @@ export function createUploadGenerationHandlers({
       ...(generationStrategy === "svg" ? {
         common_header_mode: config.commonHeaderMode ?? "uniform",
         common_header_design: commonHeaderDesignForConfig(config),
-        common_header_cover_exception: (config.commonHeaderMode ?? "uniform") === "uniform" && (config.commonHeaderCoverException ?? false),
+        common_header_cover_exception: hasCommonHeader(config.commonHeaderMode) && (config.commonHeaderCoverException ?? false),
       } : {}),
       ...(generationStrategy === "svg" && config.svgDesignReferenceSnapshotId ? { svg_design_reference_snapshot_id: config.svgDesignReferenceSnapshotId } : {}),
       ...(generationStrategy === "svg" && config.svgTemplatePin ? { svgTemplatePin: config.svgTemplatePin, svgTemplateMode: config.svgTemplateMode, svgTemplateFrameMap: config.svgTemplateFrameMap } : {}),

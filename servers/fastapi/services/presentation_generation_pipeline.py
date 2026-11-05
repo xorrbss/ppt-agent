@@ -2356,7 +2356,8 @@ async def queue_presentation_generation(
     } if INTERNAL_HEADER_TITLE_PLAN_KEY in submitted_payload else set()
     header_legacy_payloads = []
     if (getattr(request, "_common_header_defaulted", False)
-            and not getattr(request, "common_header_cover_exception", False)):
+            and (not getattr(request, "common_header_cover_exception", False)
+                 or getattr(request, "_common_header_cover_defaulted", False))):
         for candidate in (submitted_payload, legacy_payload):
             candidate = dict(candidate)
             candidate.pop("common_header_mode", None)

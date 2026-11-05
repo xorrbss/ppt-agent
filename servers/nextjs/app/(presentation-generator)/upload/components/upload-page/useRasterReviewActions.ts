@@ -1,5 +1,5 @@
 "use client";
-import { commonHeaderDesignForConfig } from "@/lib/common-header-design";
+import { commonHeaderDesignForConfig, hasCommonHeader } from "@/lib/common-header-design";
 import { useTranslations as useA2bTranslations } from "next-intl";
 /**
  * Owns the raster review's operation/page state and its per-request actions
@@ -175,7 +175,7 @@ export const useRasterReviewActions = ({
       }),
       commonHeaderMode: config.commonHeaderMode ?? "uniform",
       commonHeaderDesign: commonHeaderDesignForConfig(config),
-      commonHeaderCoverException: (config.commonHeaderMode ?? "uniform") === "uniform" && (config.commonHeaderCoverException ?? false),
+      commonHeaderCoverException: hasCommonHeader(config.commonHeaderMode) && (config.commonHeaderCoverException ?? false),
     });
     return rasterApprovalForUi(approved);
   }, [rasterOperation, rasterRecovery, pendingPresentationId, config, authoredStyle, handoffRasterGeneration]);
@@ -186,7 +186,7 @@ export const useRasterReviewActions = ({
     const snapshotId = recovery?.referenceSnapshotId ?? operation?.reference_snapshot_id;
     if (!operation || !recovery || !snapshotId || recovery.analysisMode === "auto_preserve" ||
         startInFlightRef.current) return;
-    if ((config.commonHeaderMode ?? "uniform") === "uniform") {
+    if (hasCommonHeader(config.commonHeaderMode)) {
       notify.warning(tA2b("commonHeaderModeRequired"), tA2b("commonHeaderRasterPreservationRequired"));
       return;
     }

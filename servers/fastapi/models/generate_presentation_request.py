@@ -122,9 +122,27 @@ def validate_svg_template_selection(request: Any) -> None:
     if mode == "template-redesign":
         if request.source_mode is not None:
             raise ValueError("svg_template_source_mode_unsupported")
-        if (request.common_header_mode == "uniform" or request.common_header_design is not None
+        if (request.common_header_mode in {"uniform", "reduced"} or request.common_header_design is not None
                 or request.common_header_cover_exception):
             raise ValueError("svg_template_common_header_conflict")
+
+
+def normalize_reduced_common_header(request: Any) -> None:
+    """Admit ``common_header_mode="reduced"`` as the deterministic reduced header.
+
+    The request continues as "uniform" (the header contract, title binding and
+    every worker treat it so) and is marked so that admission seals no header
+    design plan. Its cover exception defaults to true unless the caller set it.
+    """
+    if request.common_header_mode != "reduced":
+        return
+    if request.common_header_design is not None:
+        raise ValueError("common_header_design_requires_svg_uniform")
+    request.common_header_mode = "uniform"
+    request._common_header_reduced = True
+    if "common_header_cover_exception" not in request.model_fields_set:
+        request.common_header_cover_exception = True
+        request._common_header_cover_defaulted = True
 
 
 class GeneratePresentationRequest(BaseModel):
@@ -132,6 +150,12 @@ class GeneratePresentationRequest(BaseModel):
 
     _request_id: Optional[str] = PrivateAttr(default=None)
     _common_header_defaulted: bool = PrivateAttr(default=False)
+    # True when this fresh request takes the deterministic reduced header:
+    # ``common_header_mode="reduced"`` or the SVG_COMMON_HEADER_DEFAULT=reduced
+    # default. The durable payload keeps the historical "uniform" without a
+    # header design plan, which every worker already runs as that header.
+    _common_header_reduced: bool = PrivateAttr(default=False)
+    _common_header_cover_defaulted: bool = PrivateAttr(default=False)
     _authored_exact_snapshot_id: Optional[str] = PrivateAttr(default=None)
     _authored_master_pin: Any = PrivateAttr(default=None)
     _authored_master_contract: Any = PrivateAttr(default=None)
@@ -300,7 +324,9 @@ class GeneratePresentationRequest(BaseModel):
     )
     # None is the historical request contract. Fresh SVG admission pins an
     # explicit choice; restoring an older durable job must keep None.
-    common_header_mode: Optional[Literal["uniform", "free"]] = Field(
+    # "reduced" is admission-only input: validation turns it into "uniform"
+    # without a header design plan (see normalize_reduced_common_header).
+    common_header_mode: Optional[Literal["uniform", "free", "reduced"]] = Field(
         default=None, exclude_if=lambda value: value is None,
     )
     common_header_cover_exception: bool = False
@@ -406,6 +432,7 @@ class GeneratePresentationRequest(BaseModel):
 
     @model_validator(mode="after")
     def validate_generation_mode(self) -> "GeneratePresentationRequest":
+        normalize_reduced_common_header(self)
         validate_svg_template_selection(self)
         if self.common_header_design is not None and (
             self.strategy == "authored" or self.common_header_mode == "free"

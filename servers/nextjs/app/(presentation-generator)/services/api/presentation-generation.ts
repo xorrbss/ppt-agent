@@ -392,7 +392,7 @@ export class PresentationGenerationApi {
     include_title_slide?: boolean;
     web_search?: boolean;
     common_header_design?: import("@/lib/common-header-design").CommonHeaderDesign;
-    common_header_mode?: "uniform" | "free";
+    common_header_mode?: import("@/lib/common-header-design").CommonHeaderMode;
     common_header_cover_exception?: boolean;
     aspect_ratio?: "16:9" | "9:16" | "9:13" | "1:1" | "21:9" | "4:3";
     svg_canvas?: import("../../upload/utils/svgCanvasSelection").SvgCanvasSelection;
@@ -430,7 +430,7 @@ export class PresentationGenerationApi {
             include_title_slide,
             web_search,
             ...(strategy === "svg" && (common_header_mode ?? "uniform") === "uniform" && common_header_design ? { common_header_design } : {}),
-            ...(strategy === "svg" && common_header_mode ? { common_header_mode, common_header_cover_exception: common_header_cover_exception ?? false } : {}),
+            ...(strategy === "svg" && common_header_mode ? { common_header_mode, common_header_cover_exception: (common_header_mode !== "free") && (common_header_cover_exception ?? false) } : {}),
             ...(svg_canvas ? { svg_canvas } : page_size && orientation
               ? { page_size, orientation }
               : { aspect_ratio }),
@@ -758,7 +758,7 @@ export class PresentationGenerationApi {
       vision_qa?: boolean;
       strategy?: "authored" | "svg";
       common_header_design?: import("@/lib/common-header-design").CommonHeaderDesign;
-    common_header_mode?: "uniform" | "free";
+    common_header_mode?: import("@/lib/common-header-design").CommonHeaderMode;
       common_header_cover_exception?: boolean;
       authored_style?: string;
       aspect_ratio?: "16:9" | "9:16" | "9:13" | "1:1" | "21:9" | "4:3";

@@ -1,6 +1,6 @@
 import { useSavedSvgTemplate } from "./useSavedSvgTemplate";
 import { AUTH_SESSION_EXPIRED_EVENT } from "../../services/api/api-error-handler";
-import { commonHeaderDesignForConfig } from "@/lib/common-header-design";
+import { commonHeaderDesignForConfig, hasCommonHeader } from "@/lib/common-header-design";
 import { isAmbiguousGenerationTransportError, isRetryableGenerationStartError, hasRecoverableChatFirstWorkspace, isCompanyStandardAdmissionError } from "./generationStartErrors";
 import { useTranslations as useA2bTranslations } from "next-intl";
 import { useState, useCallback, useEffect, useRef } from "react";
@@ -309,7 +309,7 @@ export const usePresentationGeneration = (
       ...(generationStrategy === "svg" ? {
         commonHeaderMode: generationConfig?.commonHeaderMode ?? "uniform",
         commonHeaderDesign: commonHeaderDesignForConfig(generationConfig ?? {}),
-        commonHeaderCoverException: (generationConfig?.commonHeaderMode ?? "uniform") === "uniform" && (generationConfig?.commonHeaderCoverException ?? false),
+        commonHeaderCoverException: hasCommonHeader(generationConfig?.commonHeaderMode) && (generationConfig?.commonHeaderCoverException ?? false),
       } : {}),
       ...(generationStrategy === "svg" && generationConfig?.svgDesignReferenceSnapshotId ? { svgDesignReferenceSnapshotId: generationConfig.svgDesignReferenceSnapshotId } : {}),
       ...(generationStrategy === "svg" && generationConfig?.svgTemplatePin ? { svgTemplatePin: generationConfig.svgTemplatePin, svgTemplateMode: generationConfig.svgTemplateMode, svgTemplateFrameMap: generationConfig.svgTemplateFrameMap } : {}),

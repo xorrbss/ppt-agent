@@ -1,5 +1,5 @@
 "use client";
-import { commonHeaderDesignForConfig } from "@/lib/common-header-design";
+import { commonHeaderDesignForConfig, hasCommonHeader } from "@/lib/common-header-design";
 import { useTranslations as useA2bTranslations } from "next-intl";
 /**
  * On mount, restores an in-progress raster review from sessionStorage (a
@@ -76,7 +76,7 @@ export const useRasterSessionRecovery = ({
       svgDesignReferenceSnapshotId: recovery.svgDesignReferenceSnapshotId,
       commonHeaderMode: recovery.commonHeaderMode ?? "uniform",
       commonHeaderDesign: commonHeaderDesignForConfig(recovery),
-      commonHeaderCoverException: recovery.commonHeaderMode === "uniform" && (recovery.commonHeaderCoverException ?? false),
+      commonHeaderCoverException: recovery.commonHeaderMode !== undefined && hasCommonHeader(recovery.commonHeaderMode) && (recovery.commonHeaderCoverException ?? false),
       svgCanvas: recovery.svgCanvas,
       ...(recovery.svgCanvas ? { pageSize: undefined, orientation: undefined }
         : recovery.aspectRatio ? { pageSize: undefined, orientation: undefined, aspectRatio: recovery.aspectRatio }

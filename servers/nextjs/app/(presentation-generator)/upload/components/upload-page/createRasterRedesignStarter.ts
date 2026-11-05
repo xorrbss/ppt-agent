@@ -1,5 +1,5 @@
 "use client";
-import { commonHeaderDesignForConfig } from "@/lib/common-header-design";
+import { commonHeaderDesignForConfig, hasCommonHeader } from "@/lib/common-header-design";
 /**
  * Starts the "image-only source, A4 SVG" raster-redesign flow: creates the
  * presentation, kicks off raster analysis, waits for it, and either hands
@@ -93,7 +93,7 @@ export function createRasterRedesignStarter({
         web_search: false,
         common_header_mode: config.commonHeaderMode ?? "uniform",
         common_header_design: commonHeaderDesignForConfig(config),
-        common_header_cover_exception: (config.commonHeaderMode ?? "uniform") === "uniform" && (config.commonHeaderCoverException ?? false),
+        common_header_cover_exception: hasCommonHeader(config.commonHeaderMode) && (config.commonHeaderCoverException ?? false),
         ...(config.svgDesignReferenceSnapshotId ? { svg_design_reference_snapshot_id: config.svgDesignReferenceSnapshotId } : {}),
         ...documentCanvasRequestForConfig(config),
         theme,
@@ -117,7 +117,7 @@ export function createRasterRedesignStarter({
         svgDesignReferenceSnapshotId: config.svgDesignReferenceSnapshotId,
         commonHeaderMode: config.commonHeaderMode ?? "uniform",
         commonHeaderDesign: commonHeaderDesignForConfig(config),
-        commonHeaderCoverException: (config.commonHeaderMode ?? "uniform") === "uniform" && (config.commonHeaderCoverException ?? false),
+        commonHeaderCoverException: hasCommonHeader(config.commonHeaderMode) && (config.commonHeaderCoverException ?? false),
         ...(config.svgCanvas ? { svgCanvas: config.svgCanvas } : config.pageSize !== "A4" ? { aspectRatio: config.aspectRatio } : {}),
         orientation: config.orientation ?? "landscape",
         authoredStyle,

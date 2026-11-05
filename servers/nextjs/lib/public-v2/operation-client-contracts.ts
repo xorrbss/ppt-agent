@@ -54,7 +54,7 @@ export type PublicV2GenerationRequest = {
   generationMode?: PublicV2RequestGenerationMode;
   strategy?: "authored" | "svg";
   commonHeaderDesign?: import("@/lib/common-header-design").CommonHeaderDesign;
-  commonHeaderMode?: "uniform" | "free";
+  commonHeaderMode?: import("@/lib/common-header-design").CommonHeaderMode;
   commonHeaderCoverException?: boolean;
   svgTemplatePin?: import("@/app/(presentation-generator)/services/api/svg-templates").SvgTemplatePin;
   svgTemplateMode?: import("@/app/(presentation-generator)/services/api/svg-templates").SvgTemplateMode;
