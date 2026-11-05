@@ -7,15 +7,17 @@ digests act as authority") and the follow-ups noted in PRs #109 (E3, converter
 manifest alias), #121 (E6, per-process digest cache; header digest left
 uncached) and #122 (S4/S5, `CONVERTER_VERSION` could not be bumped).
 
-Status in this change:
+Status:
 
 | Identity | Status |
 |---|---|
-| `converter_digest()` | **implemented** (§5) |
-| `common_header_verifier_digest()` | **implemented** (§5) |
+| `converter_digest()` | **implemented** (§5, #130) |
+| `common_header_verifier_digest()` | **implemented** (§5, #130) |
+| `whole_page_verifier_digest()` | **implemented** (§5.1, wave 2) |
+| `_code_digest()` / `_page_render_code_digest()` | **implemented** (§5.1, wave 2) |
 | every other identity in §2 | design only (§6) |
 
-Baseline: `origin/main` at `9d389ba80`.
+Baseline: `origin/main` at `9d389ba80` for #130, `49e529d6b` for wave 2.
 
 ## 1. Problem
 
@@ -230,27 +232,60 @@ named in the forcing test. If it reaches main **after** this change, the
 forcing test fails on that branch, and its author re-pins or bumps. The same
 applies to the converter adapters (#1).
 
+### 5.1 Wave 2: whole-page verifier and partial recovery (owner decision 2026-11-05 (a))
+
+The owner chose to migrate #3, #4 and #5 next, with the same method. All three
+ledgers are anchored to `origin/main` `49e529d6b`:
+
+| Ledger (revision) | Identity | Stored value on an LF checkout |
+|---|---|---|
+| `svg-whole-page-verifier/1` | `whole_page_verifier_digest()` (#3) | `aa559f55…2469` |
+| `svg-partial-recovery-code/1` | `_code_digest()` (#4) | `91280a73…de1a` |
+| `svg-page-render-code/1` | `_page_render_code_digest()` (#5) | `80cbd150…ce36` |
+
+| File | Change |
+|---|---|
+| `services/verifier_revisions.py` | `VerifierRevisionLedger.state()` builds a `SourceState` from file digests that are already computed (`source_state()` now delegates to it). An optional `reviewed_formula` computes the reviewed key with checkout-independent inputs other than line endings. New ledgers `WHOLE_PAGE_VERIFIER_LEDGER`, `PARTIAL_RECOVERY_CODE_LEDGER` and `PAGE_RENDER_CODE_LEDGER`. The two partial recovery ledgers share one anchor table: each formula reads only its own files. |
+| `utils/code_file_digest.py` | The per-process cache (#121) now holds `CodeFileDigest(raw, lf, crlf)`, so the ledger keeps reading each partial recovery file once per process. `code_file_sha256()` is unchanged. |
+| `services/svg_export_whole_page_verifier.py` | `whole_page_verifier_identity()` is the unchanged formula. `whole_page_verifier_source_state()` / `_source_digest()` give the raw value. `whole_page_verifier_digest()` resolves through the ledger. |
+| `services/svg_partial_recovery.py` | `code_identity()` and `page_render_identity()` are the unchanged formulas over `CODE_IDENTITY_FILES` (`CODE_FILES` plus the five final-selected sources) and `PAGE_RENDER_CODE_FILES`. `_code_digest()` and `_page_render_code_digest()` resolve through their ledgers. `_base_code_digest()` stays the raw base recipe. |
+| `tests/unit/test_svg_verifier_revisions.py` | One table drives every check of §3.3 for all five ledgers. It adds the published-recipe check for partial recovery, the path-text independence of its reviewed key, and that an authority-only edit keeps the page-render identity. |
+| `tests/unit/test_svg_source_generation_flow.py` | Simulated code bytes bypass the new cache entry point (`code_file_digest`). |
+
+Notes:
+
+- **Windows path text.** `_code_digest()` names the five final-selected sources
+  with `str(Path)`, so a Windows checkout's stored value uses backslashes as well
+  as CRLF bytes. The raw value and the anchor keep the platform's path text, so
+  Windows-stored approvals keep validating; the reviewed key uses POSIX path
+  text, so it is one key on every OS. The Windows test simulates both.
+- **Each edit re-pins only the ledgers it touches.** The migration commit edits
+  `svg_partial_recovery.py` and `svg_export_whole_page_verifier.py`, so the
+  partial recovery code ledger and the whole-page ledger record a second reviewed
+  key. The page-render identity excludes `svg_partial_recovery.py` (an authority
+  file), so its key did not move.
+- **Behaviour that compares code identities.** `_historical_uniform_grid_rejection`
+  requires the approval's `code_digest` to differ from the current one. It now
+  differs only when the revision changed, which is what the proof is about: the
+  old *behaviour* rejected the grid.
+- **Parallel edits.** `CODE_FILES` includes files that are edited constantly,
+  among them `services/generation_core/authoring/author_slide_svg.py`. An edit
+  of any of them that reaches `main` after this change fails the forcing test,
+  and its author re-pins (behaviour unchanged for recovery) or bumps. One that
+  reaches `main` before this change moves the anchor, which must then be
+  re-derived from `main` at merge time (as for #130 above).
+
 ## 6. Design only: remaining identities
 
 Each one follows the same pattern: split `*_source_digest()` from the identity,
 add a ledger anchored to the current digest, and pin the source digest in the
 forcing test. Specific notes:
 
-- **#3 `whole_page_verifier_digest()`.** It is the next most valuable target,
-  and it would also have removed the one-time re-pin that #109 caused. Its
-  definition lives in a file of its own inventory, so the migration commit must
-  record two reviewed digests, as in §4. It was not done here because the task
-  limited implementation to #1 and #2, and because its inventory overlaps the
-  files that callers of #1 import (`svg_export_bundle.py`,
-  `svg_export_identity.py`, `svg_export_quality.py`), so migrating both in one
-  commit widens the review.
-- **#4 and #5, partial recovery.** Use one ledger for `code_digest`.
-  `_page_render_code_digest` is a reuse key and can stay byte-keyed or follow
-  the same ledger. In-flight approvals carry the current `_code_digest()`, so an
-  anchor keeps them valid. The 67-file inventory is far wider than what
-  determines recovery behaviour. A ledger turns each unrelated edit (for
-  example in `workspace_service.py`) into a one-line re-pin instead of a
-  re-approval.
+- **#3 `whole_page_verifier_digest()`.** Implemented in wave 2 (§5.1).
+- **#4 and #5, partial recovery.** Implemented in wave 2 (§5.1), as two ledgers
+  so that an authority-only edit does not re-pin the page-render reuse key. A
+  ledger turns each unrelated edit (for example in `workspace_service.py`) into
+  a one-line re-pin instead of a re-approval.
 - **#6, materializer.** It is stored in registered templates, so the anchor
   approach avoids re-registration on refactors. The value format is
   `sha256:<file hash>`. `frame_glyphs.materializer_code_digest()` and the
@@ -325,13 +360,13 @@ migration on SQLite and PostgreSQL. With explicit revisions it is unnecessary.
   - the forcing test message spells out the two options;
   - reviewers should treat a ledger diff like a verifier change.
 - **Merge order** with parallel edits of the header and adapter inventories
-  (§5).
+  (§5), and of the wide partial recovery inventory (§5.1).
 - **Checkout assumption.** The per-checkout anchor assumes that one checkout
   applies one line-ending policy. A Windows tree whose `autocrlf` setting
   changed between checkouts can hold mixed files, and its pre-migration
   evidence may then not be reproduced. Before this change, such a tree's
   evidence was equally fragile.
-- **Owner decisions needed:**
+- **Owner decisions** (2026-11-05):
+  - (a) migrate #3 and #4/#5 next: done (§5.1); #11 and #6 remain design only;
   - #8: re-review or delete;
-  - whether to migrate #3 and #4 next (recommended order: #3, #4, #11, #6);
   - adopting §7 for the next converter behaviour change.

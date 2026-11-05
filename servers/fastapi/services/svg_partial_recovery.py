@@ -9,7 +9,7 @@ from __future__ import annotations
 from copy import deepcopy
 from collections import OrderedDict
 from dataclasses import dataclass, field
-from pathlib import Path
+from pathlib import Path, PurePath
 from threading import RLock
 from types import SimpleNamespace
 from typing import Any, get_args
@@ -30,7 +30,7 @@ from models.sql.workspace import WorkspaceOperation
 from services.svg_cached_author_render_recovery import _unknown_provider, author_witness, digest
 from services.svg_timeout_repurchase import _live
 from utils.datetime_utils import get_current_utc_datetime
-from utils.code_file_digest import code_file_sha256
+from utils.code_file_digest import code_file_digest
 from utils.hashing import sha256_hex
 
 REVISION = "svg-partial-recovery/v1"
@@ -1845,9 +1845,17 @@ async def _verify_append_only_edge(session, child, parent, *, verification=None,
 
 def _base_code_digest(files=None):
     # Source bytes are fixed for the life of the process; each file is hashed once.
+    files = CODE_FILES if files is None else files
+    return _base_identity({name: digests.raw for name, digests in _code_file_digests(files).items()}, files)
+
+
+def _base_identity(hashes, files):
+    return digest([{ "path": name, "sha256": hashes[name]} for name in files])
+
+
+def _code_file_digests(files):
     root = Path(__file__).resolve().parents[1]
-    return digest([{ "path": name, "sha256": code_file_sha256(root / name)}
-                   for name in (CODE_FILES if files is None else files)])
+    return {name: code_file_digest(root / name) for name in files}
 
 
 # Authority remains pinned by _code_digest(). Measured page equivalence excludes
@@ -1867,10 +1875,66 @@ _PAGE_RENDER_AUTHORITY_FILES = frozenset({
 })
 
 
+PAGE_RENDER_CODE_FILES = (tuple(name for name in CODE_FILES if name not in _PAGE_RENDER_AUTHORITY_FILES)
+                          + ("services/svg_final_selected_continuation.py",))
+# _code_digest() also binds these sources, named relative to services/ with the
+# platform's path text (str(Path)), as it always has.
+_FINAL_SELECTED_SOURCES = (
+    "svg_final_selected_continuation.py", "svg_authoring_profile.py",
+    "generation_core/drivers/svg/quality.py", "generation_core/drivers/svg/quality_recovery.py",
+    "generation_core/drivers/svg/collect.py",
+)
+#: Every file either code identity reads.
+CODE_IDENTITY_FILES = tuple(dict.fromkeys(
+    (*CODE_FILES, *("services/" + name for name in _FINAL_SELECTED_SOURCES))))
+
+
+def _native_path_text(name):
+    return str(PurePath(name))
+
+
+def code_identity(hashes, *, path_text=None):
+    """Identity formula of ``_code_digest`` over ``{CODE_IDENTITY_FILES name: SHA-256}``."""
+    path_text = path_text or _native_path_text
+    return digest({"base": _base_identity(hashes, CODE_FILES),
+                   "final_selected_sources": {path_text(name): hashes["services/" + name]
+                                              for name in _FINAL_SELECTED_SOURCES}})
+
+
+def _reviewed_code_identity(hashes):
+    """``code_identity`` with POSIX path text, so a reviewed key is the same on every OS."""
+    return code_identity(hashes, path_text=str)
+
+
+def page_render_identity(hashes):
+    """Identity formula of ``_page_render_code_digest`` over ``{file: SHA-256}``."""
+    return _base_identity(hashes, PAGE_RENDER_CODE_FILES)
+
+
+def code_source_state():
+    from services.verifier_revisions import PARTIAL_RECOVERY_CODE_LEDGER
+
+    return PARTIAL_RECOVERY_CODE_LEDGER.state(_code_file_digests(CODE_IDENTITY_FILES), code_identity,
+                                              reviewed_formula=_reviewed_code_identity)
+
+
+def page_render_source_state():
+    from services.verifier_revisions import PAGE_RENDER_CODE_LEDGER
+
+    # Both identities share one anchor table; the formula reads only its own files.
+    return PAGE_RENDER_CODE_LEDGER.state(_code_file_digests(CODE_IDENTITY_FILES), page_render_identity)
+
+
 def _page_render_code_digest():
-    return _base_code_digest(tuple(name for name in CODE_FILES
-                                   if name not in _PAGE_RENDER_AUTHORITY_FILES)
-                             + ("services/svg_final_selected_continuation.py",))
+    """The measured page-equivalence code identity in the checkpoint reuse key.
+
+    It is the reviewed revision's identity (``services/verifier_revisions``) while
+    the running source is a reviewed state of that revision, and the raw
+    ``page_render_source_state().raw`` otherwise.
+    """
+    from services.verifier_revisions import PAGE_RENDER_CODE_LEDGER
+
+    return PAGE_RENDER_CODE_LEDGER.resolve(page_render_source_state())
 
 
 def _frozen_payload(payload):
@@ -5256,11 +5320,12 @@ async def bind_admission(session, operation, recovery):
 
 
 def _code_digest():
-    from pathlib import Path
-    root = Path(__file__).resolve().parent
-    paths = [root / "svg_final_selected_continuation.py", root / "svg_authoring_profile.py",
-             root / "generation_core/drivers/svg/quality.py",
-             root / "generation_core/drivers/svg/quality_recovery.py",
-             root / "generation_core/drivers/svg/collect.py"]
-    return digest({"base": _base_code_digest(),
-                   "final_selected_sources": {str(p.relative_to(root)): code_file_sha256(p) for p in paths}})
+    """The partial recovery code identity that approval manifests and runtime digests carry.
+
+    It is the reviewed revision's identity (``services/verifier_revisions``) while
+    the running source is a reviewed state of that revision, and the raw
+    ``code_source_state().raw`` otherwise.
+    """
+    from services.verifier_revisions import PARTIAL_RECOVERY_CODE_LEDGER
+
+    return PARTIAL_RECOVERY_CODE_LEDGER.resolve(code_source_state())
