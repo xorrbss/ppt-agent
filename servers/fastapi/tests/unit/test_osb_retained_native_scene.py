@@ -14,6 +14,7 @@ from services.authored_vnext.retained_reference_marker import (
     encode_reference_layout_marker,
 )
 from models.authored_vnext.master.contract import SemanticElementContent
+from tests.support.environment_requirements import requires_osb_retained_reference
 
 
 _A = "http://schemas.openxmlformats.org/drawingml/2006/main"
@@ -32,6 +33,7 @@ _EXPECTED_SLIDES = {
 }
 
 
+@requires_osb_retained_reference
 def test_osb_retained_layout_seals_materializable_full_frame_scene() -> None:
     retained = compile_retained_reference_layout(
         OSB_RETAINED_REFERENCE_ID,
@@ -112,6 +114,7 @@ def test_osb_retained_layout_seals_materializable_full_frame_scene() -> None:
     assert decode_reference_layout_marker("".join(normalized_chunks)) == retained
 
 
+@requires_osb_retained_reference
 def test_osb_process_native_scene_materializes_browser_preview_layer() -> None:
     retained = compile_retained_reference_layout(
         OSB_RETAINED_REFERENCE_ID,
@@ -140,6 +143,7 @@ def test_osb_process_native_scene_materializes_browser_preview_layer() -> None:
     )
 
 
+@requires_osb_retained_reference
 def test_osb_cover_native_scene_stays_inside_browser_renderer_admission() -> None:
     retained = compile_retained_reference_layout(
         OSB_RETAINED_REFERENCE_ID,
