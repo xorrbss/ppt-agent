@@ -481,9 +481,9 @@ async def attempt_author(*, ctx, request, index, content, role, count, payload, 
                 repair_kwargs = {}
                 repair_kwargs.update(recovery_kwargs)
                 if hint:
-                    from services.svg_authoring_profile import read_authoring_profile
+                    from services.svg_authoring_profile import behaviour_profile, read_authoring_profile
 
-                    profile = read_authoring_profile(ctx.snapshot)
+                    profile = behaviour_profile(read_authoring_profile(ctx.snapshot))
                     if profile and profile["version"] == 8:
                         previous_svg = payload.get("last_valid_svg") or payload.get("svg_content")
                         if previous_svg:

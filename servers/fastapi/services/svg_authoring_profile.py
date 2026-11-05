@@ -10,7 +10,7 @@ INTERNAL_SVG_AUTHORING_PROFILE_KEY = "_internal_svg_authoring_profile"
 
 class SvgAuthoringProfile(TypedDict):
     id: Literal["art-direction-v1"]
-    version: Literal[1, 2, 3, 4, 5, 6, 7, 8]
+    version: Literal[1, 2, 3, 4, 5, 6, 7, 8, 9]
 
 
 ART_DIRECTION_PROFILE: SvgAuthoringProfile = {"id": "art-direction-v1", "version": 1}
@@ -21,6 +21,15 @@ ART_DIRECTION_PROFILE_V5: SvgAuthoringProfile = {"id": "art-direction-v1", "vers
 ART_DIRECTION_PROFILE_V6: SvgAuthoringProfile = {"id": "art-direction-v1", "version": 6}
 ART_DIRECTION_PROFILE_V7: SvgAuthoringProfile = {"id": "art-direction-v1", "version": 7}
 ART_DIRECTION_PROFILE_V8: SvgAuthoringProfile = {"id": "art-direction-v1", "version": 8}
+# Revision nine keeps revision eight's rules, gates and receipts. It changes only the
+# author request layout -- a deck-stable system block (rules and design JSON; a
+# prompt-cache breakpoint on Anthropic) with the per-call correction and visual-intent
+# rules in the user message -- and drops operational plans from the design JSON.
+ART_DIRECTION_PROFILE_V9: SvgAuthoringProfile = {"id": "art-direction-v1", "version": 9}
+#: The revision a fresh svg admission freezes.
+CURRENT_ART_DIRECTION_PROFILE = ART_DIRECTION_PROFILE_V9
+#: Revisions that behave as revision eight everywhere outside the author request layout.
+_REVISION_EIGHT_BEHAVIOUR = frozenset({8, 9})
 
 QUALITY_RECOVERY_POLICY = {"id": "svg-quality-first", "version": 1}
 QUALITY_RECOVERY_POLICY_V2 = {"id": "svg-quality-first", "version": 2}
@@ -104,7 +113,7 @@ def read_quality_recovery_policy(snapshot: Mapping | None) -> dict | None:
     if snapshot is None:
         return None
     policy = validate_quality_recovery_policy(snapshot.get("quality_recovery_policy"))
-    if policy is not None and read_authoring_profile(snapshot) != ART_DIRECTION_PROFILE_V8:
+    if policy is not None and (read_authoring_profile(snapshot) or {}).get("version") not in _REVISION_EIGHT_BEHAVIOUR:
         raise ValueError("svg_quality_recovery_profile_invalid")
     return policy
 
@@ -318,7 +327,8 @@ def svg_quality_review_admission_budget(request: object, slide_count: int) -> in
             if request_quality_recovery_policy(request) is None:
                 raise ValueError("svg_quality_recovery_plan_invalid")
             # Validate the same immutable representation admission will freeze.
-            snapshot = {"authoring_profile": dict(ART_DIRECTION_PROFILE_V8),
+            snapshot = {"authoring_profile": dict(request_authoring_profile(request)
+                                                  or CURRENT_ART_DIRECTION_PROFILE),
                         "quality_recovery_policy": request_quality_recovery_policy(request),
                         "quality_recovery_plan": dict(plan)}
             snapshot["digest"] = canonical_json_digest(snapshot, allow_nan=True)
@@ -353,16 +363,19 @@ def validate_authoring_profile(value: object) -> SvgAuthoringProfile | None:
         return dict(ART_DIRECTION_PROFILE_V7)
     if value == "art-direction-v1@8":
         return dict(ART_DIRECTION_PROFILE_V8)
+    if value == "art-direction-v1@9":
+        return dict(ART_DIRECTION_PROFILE_V9)
     if (
         isinstance(value, Mapping)
         and set(value) == {"id", "version"}
         and value.get("id") == ART_DIRECTION_PROFILE["id"]
         and type(value.get("version")) is int
-        and value["version"] in {1, 2, 3, 4, 5, 6, 7, 8}
+        and value["version"] in {1, 2, 3, 4, 5, 6, 7, 8, 9}
     ):
         return dict({1: ART_DIRECTION_PROFILE, 2: ART_DIRECTION_PROFILE_V2, 3: ART_DIRECTION_PROFILE_V3,
                      4: ART_DIRECTION_PROFILE_V4, 5: ART_DIRECTION_PROFILE_V5, 6: ART_DIRECTION_PROFILE_V6,
-                     7: ART_DIRECTION_PROFILE_V7, 8: ART_DIRECTION_PROFILE_V8}[value["version"]])
+                     7: ART_DIRECTION_PROFILE_V7, 8: ART_DIRECTION_PROFILE_V8,
+                     9: ART_DIRECTION_PROFILE_V9}[value["version"]])
     raise ValueError("svg_authoring_profile_invalid")
 
 
@@ -385,9 +398,25 @@ def new_svg_admission_profile(request: object) -> dict[str, object] | None:
     profile = request_authoring_profile(request)
     if profile is not None or getattr(request, "_svg_authoring_profile_selected", False):
         return profile
-    profile = validate_authoring_profile("art-direction-v1@8")
+    profile = dict(CURRENT_ART_DIRECTION_PROFILE)
     request._svg_authoring_profile = profile
     return profile
+
+
+def behaviour_profile(profile: SvgAuthoringProfile | None) -> SvgAuthoringProfile | None:
+    """The revision whose rules, quality gates and receipts ``profile`` follows.
+
+    Revision nine is revision eight with a cacheable author request layout, so every
+    check outside that layout reads it as revision eight.
+    """
+    if profile is not None and profile["version"] in _REVISION_EIGHT_BEHAVIOUR:
+        return dict(ART_DIRECTION_PROFILE_V8)
+    return profile
+
+
+def uses_cacheable_author_layout(profile: SvgAuthoringProfile | None) -> bool:
+    """Whether the author request splits into a deck-stable system block and a per-call part."""
+    return profile is not None and profile["version"] == 9
 
 
 def read_authoring_profile(snapshot: Mapping) -> SvgAuthoringProfile | None:

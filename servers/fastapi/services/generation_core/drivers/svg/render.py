@@ -547,12 +547,12 @@ async def _attempt_render(*, ctx, request, presentation_id, index, content, payl
     from services.svg_contract import finalize_svg
     from services.svg_renderer import render_svg_with_metrics
     from services.svg_source_layout import verify_source_receipt
-    from services.svg_authoring_profile import read_authoring_profile, read_quality_recovery_policy
+    from services.svg_authoring_profile import behaviour_profile, read_authoring_profile, read_quality_recovery_policy
     from services.generation_core.drivers.svg.timeline_ink_guard import (
         apply_timeline_ink_quality, source_timeline_rows,
     )
 
-    profile = read_authoring_profile(ctx.snapshot)
+    profile = behaviour_profile(read_authoring_profile(ctx.snapshot))
     header_pages = getattr(ctx, "header_pages", None)
     header_page = header_pages[index] if header_pages else None
     readability_policy = recovery_readability_policy or ctx.snapshot.get("readability_policy")
