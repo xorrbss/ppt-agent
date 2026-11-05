@@ -275,6 +275,12 @@ WHOLE_PAGE_VERIFIER_LEDGER = VerifierRevisionLedger(
         # Migration commit: the digest now resolves through this ledger; no export
         # verification behaviour changed.
         "1f50d4b5f2c023e84264e04ec18f58ca094fbb2c7677330ee90a341ed11e2bc4": "svg-whole-page-verifier/1",
+        # Template A visuals (svg_contract.py): finalize_svg gives the page number a
+        # readable ink (white or near-black when the style primary fails 4.5:1) only
+        # when the snapshot pins ``page_number_ink`` (set by fresh admissions); every
+        # stored snapshot lacks it and finalizes byte-identically. validate_svg and
+        # every export verification input are unchanged.
+        "8416e5b6508fd714bee8039acd9355438341379b368175789e1cbbb8d273d2cd": "svg-whole-page-verifier/1",
     }),
 )
 
@@ -377,6 +383,14 @@ PARTIAL_RECOVERY_CODE_LEDGER = VerifierRevisionLedger(
         # SVG_COMMON_HEADER_DEFAULT setting (default "designed") and a pinned
         # reduced_header_style; decks without them recover byte-identically.
         "7492d3fbc8b5bb316e1cf62db8fbe2f05a816a460ef859e74e956a7f3c4ae894": "svg-partial-recovery-code/1",
+        # Template A visuals: (1) finalize_svg's readable page-number ink applies only to
+        # snapshots pinning ``page_number_ink`` (fresh admissions), so replaying a stored
+        # candidate yields its stored bytes; (2) SVG_TEMPLATE_OUTLINE_SECTIONS is read only
+        # while a fresh outline is requested, and recovery reuses the job's pinned
+        # authored_outline; (3) SVG_TEMPLATE_STEP_PICTURES and the vector scene demotion in
+        # offer.py act only when an asset offer is built, while recovery replays the
+        # assetOfferPlan sealed in the page-0 checkpoint. Stored decks recover byte-identically.
+        "83057000cd28d3e85f6cd5751d1870a91bd49c2e6bd070226d7feab818675921": "svg-partial-recovery-code/1",
     }),
 )
 
@@ -403,6 +417,10 @@ PAGE_RENDER_CODE_LEDGER = VerifierRevisionLedger(
         # P8 (same edit as the code ledger entry): pages without the pinned
         # reduced_header_style render byte-identically.
         "97655caf4437ec7e8aff84152784b96d1c8dad102a0ac9119ed25d7052ed9931": "svg-page-render-code/1",
+        # Template A visuals (same edit as the code ledger entry): pages of snapshots
+        # without the ``page_number_ink`` pin finalize byte-identically, and pinned
+        # outlines and sealed asset offers are replayed, not rebuilt.
+        "1eb28c7bb992e469a3f880719a08f22f318179e583291cc34191a39732dfec1f": "svg-page-render-code/1",
     }),
 )
 

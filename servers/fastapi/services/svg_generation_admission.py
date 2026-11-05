@@ -330,6 +330,10 @@ def pin_svg_style(request: object) -> dict:
                 from services.generation_core.drivers.svg.native_requirements import (
                     ADMITTED_REQUIREMENTS_REVISION, SNAPSHOT_REVISION_KEY)
                 frozen[SNAPSHOT_REVISION_KEY] = ADMITTED_REQUIREMENTS_REVISION
+                # Page-number ink rule, pinned the same way: a fresh deck's page number
+                # reads on its page; a stored deck without the pin keeps the style primary.
+                from services.svg_contract import PAGE_NUMBER_INK_KEY, PAGE_NUMBER_INK_READABLE
+                frozen[PAGE_NUMBER_INK_KEY] = PAGE_NUMBER_INK_READABLE
                 if getattr(request, "source_mode", None) == "source_content_restyle":
                     frozen["source_authoring_contract"] = {"version": "svg-source-whole-page/v1"}
                     from services.svg_source_charts import admitted_source_chart_contract

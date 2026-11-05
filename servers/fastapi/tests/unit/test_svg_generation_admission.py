@@ -2178,19 +2178,22 @@ def test_authoring_profile_staging_preserves_legacy_and_frozen_new_identity(monk
     expected = {'art-direction-v1': ART_DIRECTION_PROFILE, 'art-direction-v1@2': ART_DIRECTION_PROFILE_V2, 'art-direction-v1@3': ART_DIRECTION_PROFILE_V3, 'art-direction-v1@4': ART_DIRECTION_PROFILE_V4, 'art-direction-v1@5': ART_DIRECTION_PROFILE_V5, 'art-direction-v1@6': ART_DIRECTION_PROFILE_V6, 'art-direction-v1@7': ART_DIRECTION_PROFILE_V7, None: {'id': 'art-direction-v1', 'version': 9}, 'art-direction-v1@8': {'id': 'art-direction-v1', 'version': 8}, 'art-direction-v1@9': {'id': 'art-direction-v1', 'version': 9}, 'art-direction-v1@10': {'id': 'art-direction-v1', 'version': 10}}[profile_id]
     assert payload[INTERNAL_SVG_AUTHORING_PROFILE_KEY] == expected
     assert snapshot["authoring_profile"] == expected
-    new_contract_keys = ({"readability_policy", "common_header_design_plan", "native_requirements_revision"}
+    new_contract_keys = ({"readability_policy", "common_header_design_plan", "native_requirements_revision",
+                          "page_number_ink"}
                          if profile_id is None else set())
     if profile_id is None:
         from services.document_canvas_generation import validate_svg_readability_policy
         from services.svg_common_header_design_plan import validate_header_design_plan
 
         assert snapshot["native_requirements_revision"] == "svg-native-requirements/v3"
+        assert snapshot["page_number_ink"] == "svg-page-number-ink/v1"
 
         assert validate_svg_readability_policy(snapshot["readability_policy"])["minimum_font_pt"] == 9
         assert validate_header_design_plan(snapshot["common_header_design_plan"])["schema"] == "svg-common-header-design-plan/v3"
     else:
         assert "readability_policy" not in snapshot
         assert "native_requirements_revision" not in snapshot
+        assert "page_number_ink" not in snapshot
     assert {key: value for key, value in snapshot.items() if key not in {"authoring_profile", "digest"} | new_contract_keys} == {
         key: value for key, value in baseline["_internal_svg_style_snapshot"].items() if key != "digest"
     }
