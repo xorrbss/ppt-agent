@@ -291,7 +291,7 @@ def run(args: argparse.Namespace) -> None:
 
 def matrix(args: argparse.Namespace) -> None:
     """One variant label over input x template cells, ``--runs`` runs per cell (cell id on every run record)."""
-    from request_builder import INPUTS, build_cells, judge_selection, list_inputs, load_template_spec
+    from request_builder import build_cells, input_source_text, judge_selection, list_inputs, load_template_spec
 
     names = [name.strip() for name in args.inputs.split(",")] if args.inputs else list_inputs()
     specs = [load_template_spec(path) for path in args.templates]
@@ -332,7 +332,7 @@ def matrix(args: argparse.Namespace) -> None:
             if cell["cell"] not in todo:
                 continue
             start, count = todo[cell["cell"]]
-            source = (INPUTS / f"{cell['input']}.txt").read_text(encoding="utf-8")
+            source = input_source_text(cell['input'])
             runs += _sample_runs(client, conn, _make_judge_for(args, cell["judge"], cache), args, cell["payload"],
                                  source, cell["cell"], cell["judge"], first=start, count=count, on_run=save,
                                  template=template_text(cell["spec"].get("template_text")))
@@ -366,7 +366,7 @@ def _pptx_from_store(conn, app_dir: Path, presentation_id: str, operation_id: st
 
 def recover(args: argparse.Namespace) -> None:
     """Rebuild the result file of a matrix whose process died, from the completed decks in the database."""
-    from request_builder import INPUTS, build_cells, judge_selection, list_inputs, load_template_spec
+    from request_builder import build_cells, input_source_text, judge_selection, list_inputs, load_template_spec
 
     names = [name.strip() for name in args.inputs.split(",")] if args.inputs else list_inputs()
     specs = [load_template_spec(path) for path in args.templates]
@@ -374,7 +374,7 @@ def recover(args: argparse.Namespace) -> None:
     for cell in cells:
         cell["judge"] = judge_selection(cell["spec"], args.judge_references, args.judge_anchor_high,
                                         args.judge_anchor_low)
-    inputs = {name: (INPUTS / f"{name}.txt").read_text(encoding="utf-8") for name in names}
+    inputs = {name: input_source_text(name) for name in names}
     conn = _db(args.dsn)
     after = args.after
     if args.after_dsn:

@@ -14,6 +14,14 @@ HERE = Path(__file__).resolve().parent
 INPUTS = HERE / "inputs"
 
 
+def input_source_text(name: str) -> str:
+    """The source text of an input; a ``*_sized`` request reuses its base input's ``.txt``."""
+    path = INPUTS / f"{name}.txt"
+    if not path.exists() and name.endswith("_sized"):
+        path = INPUTS / f"{name[:-len('_sized')]}.txt"
+    return path.read_text(encoding="utf-8")
+
+
 def list_inputs() -> list[str]:
     return sorted(path.stem for path in (INPUTS / "requests").glob("*.json"))
 
