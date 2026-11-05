@@ -49,6 +49,19 @@ MIGRATION_PATH = (
     / "versions"
     / "b5a0d3e7c9f1_enable_owner_row_level_security.py"
 )
+# The SVG user-template tables were created after the owner RLS migration and
+# carry their own policies from the revision that created them.
+SVG_TEMPLATE_MIGRATION_PATH = (
+    FASTAPI_ROOT / "alembic" / "versions" / "d8f0a2b4c6e9_add_svg_user_templates.py"
+)
+# Spelled out for the same reason as the owner predicate above.  Owner AND
+# tenant must both match the transaction principal; an empty or unset setting
+# matches no row, so an identity-less connection that is not the controller
+# role sees nothing.
+EXPECTED_SVG_TEMPLATE_PREDICATE = (
+    "owner_id::text = current_setting('presenton.owner_id', true) "
+    "AND tenant_id = current_setting('presenton.tenant_id', true)"
+)
 
 
 def _alembic_config(database_url: str) -> Config:
@@ -62,6 +75,16 @@ def _alembic_config(database_url: str) -> Config:
 def migration_module():
     spec = importlib.util.spec_from_file_location(
         "owner_rls_migration", MIGRATION_PATH
+    )
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+@pytest.fixture(scope="module")
+def svg_template_migration():
+    spec = importlib.util.spec_from_file_location(
+        "svg_template_rls_migration", SVG_TEMPLATE_MIGRATION_PATH
     )
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
@@ -82,8 +105,26 @@ class _RecordingOp:
         self.statements.append(str(statement))
 
 
-def _run(module, direction: str, dialect: str) -> list[str]:
-    recorder = _RecordingOp(dialect)
+class _SchemaRecordingOp(_RecordingOp):
+    """Also accepts the DDL helpers a table-creating revision calls.
+
+    Only raw SQL is recorded; table and index creation are not under test.
+    """
+
+    def create_table(self, *_args, **_kwargs) -> None:
+        pass
+
+    def create_index(self, *_args, **_kwargs) -> None:
+        pass
+
+    def drop_table(self, *_args, **_kwargs) -> None:
+        pass
+
+
+def _run(
+    module, direction: str, dialect: str, recorder_type: type = _RecordingOp
+) -> list[str]:
+    recorder = recorder_type(dialect)
     original = module.op
     module.op = recorder
     try:
@@ -141,7 +182,7 @@ def test_owner_rls_revision_round_trips_on_sqlite(tmp_path) -> None:
 
 
 def test_owner_rls_policy_set_covers_every_owner_scoped_table(
-    migration_module,
+    migration_module, svg_template_migration
 ) -> None:
     # ``template_v2`` had a policy from this migration but the table itself
     # was dropped by f432fc854225 on 2026-09-25; it can never reappear in the
@@ -158,11 +199,58 @@ def test_owner_rls_policy_set_covers_every_owner_scoped_table(
     # here.  ``owner_scoped_table_names`` is the full ORM-guarded set, so a
     # model added later fails this until a follow-up migration covers it --
     # which is how ``template_v2`` was found missing.
-    assert frozen_tenant == set(tenant_scoped_table_names())
-    assert frozen_policy | frozen_tenant == set(owner_scoped_table_names())
+    #
+    # The SVG user-template tables are such later models.  They are owner AND
+    # tenant scoped, so d8f0a2b4c6e9 gave them the strict tenant+owner policy
+    # when it created them (pinned by
+    # ``test_svg_template_tables_carry_the_strict_tenant_owner_policy``).
+    # They must not also receive the owner policy: permissive policies are
+    # OR-ed, and the owner predicate would admit cross-tenant reads, admin
+    # reads and identity-less worker reads that the strict one refuses.
+    svg_tenant = set(svg_template_migration.TABLES)
+    assert svg_tenant.isdisjoint(frozen_policy | frozen_tenant)
+    assert frozen_tenant | svg_tenant == set(tenant_scoped_table_names())
+    assert frozen_policy | frozen_tenant | svg_tenant == set(
+        owner_scoped_table_names()
+    )
     assert (
         set(migration_module._CATALOG_SHARED_TABLES) - tables_removed_after_this_migration
     ) == set(catalog_shared_table_names())
+
+
+def test_svg_template_tables_carry_the_strict_tenant_owner_policy(
+    svg_template_migration,
+) -> None:
+    """Forced RLS, the exact tenant+owner predicate, and nothing wider."""
+
+    statements = _run(
+        svg_template_migration, "upgrade", "postgresql", _SchemaRecordingOp
+    )
+    for table in svg_template_migration.TABLES:
+        assert f'ALTER TABLE "{table}" ENABLE ROW LEVEL SECURITY' in statements
+        assert f'ALTER TABLE "{table}" FORCE ROW LEVEL SECURITY' in statements
+        policies = [
+            statement
+            for statement in statements
+            if statement.startswith("CREATE POLICY")
+            and f' ON "{table}" ' in statement
+        ]
+        assert sorted(policies) == sorted(
+            [
+                f'CREATE POLICY svg_template_principal ON "{table}" FOR ALL '
+                f"USING ({EXPECTED_SVG_TEMPLATE_PREDICATE}) "
+                f"WITH CHECK ({EXPECTED_SVG_TEMPLATE_PREDICATE})",
+                f'CREATE POLICY svg_template_controller ON "{table}" FOR ALL '
+                "TO presenton_public_controller USING (true) WITH CHECK (true)",
+            ]
+        )
+    assert not any(
+        "presenton_owner_row_visible" in statement for statement in statements
+    )
+    # SQLite has no row-level security: only the schema DDL runs there.
+    assert (
+        _run(svg_template_migration, "upgrade", "sqlite", _SchemaRecordingOp) == []
+    )
 
 
 def test_owner_rls_predicate_is_the_exact_visibility_call(

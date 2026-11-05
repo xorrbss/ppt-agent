@@ -176,11 +176,22 @@ Details and tables: `docs/content-structure-policy-20261104.md`.
   section / table-of-contents frames still need a frame map; authored tests are not run any more
   (the product uses svg only).
 
+## Results of the 2026-11-05 evening work
+
+Details: `docs/template-a-visuals-progress-20261105.md`. Three internal knobs, default off: the outline sections clause
+(`SVG_TEMPLATE_OUTLINE_SECTIONS`) raised hierarchy on template A (+0.38 / +0.51 in two paired batches, overall +0.20
+with all three knobs) and did not lower acceptance on template B; the visual guidance line and model-drawn step
+pictures moved nothing. Density and visuals stayed where they were. Page-number contrast fixed (`1b78f2b1`); full
+pytest baseline classified (`docs/test-failure-baseline-20261105.md`).
+
 ## Next, in order
 
 1. Have the user judge the final deck in PowerPoint against the original.
-2. Density and visuals: the lowest judge axes; compare page by page with the original.
-3. Calibrate the judge on template B (human scores) before relying on B's numbers.
+2. `SVG_TEMPLATE_OUTLINE_SECTIONS` now defaults to on; watch first-draft acceptance on template decks (the progress
+   note's caveat: measured alone only before the table wording fix).
+3. Density and visuals: the author sees no template page renders; store body-page renders at registration and give
+   the author the ones matching the page's content kinds, then measure.
+4. Calibrate the judge on template B (human scores) before relying on B's numbers.
 
 ## How to run a live test
 

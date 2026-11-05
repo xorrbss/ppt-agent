@@ -263,6 +263,16 @@ async def _native_literal_offer(pages, request):
         "eligibilityVersion": "svg-native-literal-offer/v1"})
 
 
+def template_step_pictures(request) -> bool:
+    """Whether this deck gets model-drawn step pictures: a template-redesign deck with
+    ``SVG_TEMPLATE_STEP_PICTURES`` on (``utils/get_env_concurrency.py``)."""
+    from utils.get_env_concurrency import get_svg_template_step_pictures_env
+
+    return (getattr(request, "svg_template_pin", None) is not None
+            and getattr(request, "svg_template_mode", None) == "template-redesign"
+            and get_svg_template_step_pictures_env())
+
+
 async def resolve_offer(request, outline, roles, job, *, profile, checkpoint, durable: bool,
                         style_snapshot: dict | None = None, has_source_assets: bool | None = None) -> AssetOffer:
     """Replay the persisted offer on resume, or build and persist a new one."""
@@ -285,14 +295,20 @@ async def resolve_offer(request, outline, roles, job, *, profile, checkpoint, du
     literal_pages = _native_literal_pages(request, outline, style_snapshot=style_snapshot,
                                           has_source_assets=has_source_assets)
     image_service = ImageGenerationService(get_images_directory()) if literal_pages is None else None
-    mode = get_svg_illustration_mode_env()
+    mode, parts = get_svg_illustration_mode_env(), get_svg_illustration_parts_env()
+    step_pictures = mode == "off" and template_step_pictures(request)
+    if step_pictures:
+        # SVG_TEMPLATE_STEP_PICTURES: step pictures only, no cover or scene drawing.
+        mode, parts = "vector", ("spots",)
     if literal_pages is not None:
         offer = await _native_literal_offer(literal_pages, request)
     elif mode != "off":
         provider = not (image_service.is_image_generation_disabled or image_service.image_gen_func is None)
         offer = await _build(request, outline, roles, job, profile, image_service if provider else None,
-                             icons_only=not provider, illustration_mode=mode,
-                             illustration_parts=get_svg_illustration_parts_env())
+                             icons_only=not provider, illustration_mode=mode, illustration_parts=parts)
+        if step_pictures:
+            # Names the route in the receipt; every other receipt keeps its bytes.
+            offer = replace(offer, receipt={**offer.receipt, "templateStepPictures": True})
     elif image_service.is_image_generation_disabled or image_service.image_gen_func is None:
         # No picture can be made, but the bundled vector library needs no
         # provider: the plan still places icons, with no illustration or sprite
@@ -339,4 +355,4 @@ def legacy_manifest(page: dict) -> dict:
     return manifest
 
 
-__all__ = ["SvgAssetOffer", "legacy_manifest", "project_offer", "resolve_offer"]
+__all__ = ["SvgAssetOffer", "legacy_manifest", "project_offer", "resolve_offer", "template_step_pictures"]

@@ -381,6 +381,7 @@ tests/unit/test_svg_native_template_tables.py
 tests/unit/test_svg_output_view.py
 tests/unit/test_svg_overload_cooldown.py
 tests/unit/test_svg_page_error_class.py
+tests/unit/test_svg_page_number_contrast.py
 tests/unit/test_svg_page_publication.py
 tests/unit/test_svg_page_publish.py
 tests/unit/test_svg_page_quality.py
@@ -439,12 +440,15 @@ tests/unit/test_svg_template_glyph_frame_fallback.py
 tests/unit/test_svg_template_header_slots.py
 tests/unit/test_svg_template_linux_preview.py
 tests/unit/test_svg_template_native_fixed_text.py
+tests/unit/test_svg_template_outline_sections.py
 tests/unit/test_svg_template_raster_preservation.py
 tests/unit/test_svg_template_real_deck_registration.py
 tests/unit/test_svg_template_review_cause_and_preview.py
 tests/unit/test_svg_template_rules.py
 tests/unit/test_svg_template_selection_material.py
 tests/unit/test_svg_template_source_pdf_cleanup.py
+tests/unit/test_svg_template_step_pictures.py
+tests/unit/test_svg_template_visual_guidance.py
 tests/unit/test_svg_terminal_policy_flow.py
 tests/unit/test_svg_terminal_rescue.py
 tests/unit/test_svg_terminal_rescue_stages.py

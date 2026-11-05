@@ -1,7 +1,10 @@
 """SVG service finalization over the shared validation contract."""
 from __future__ import annotations
 
+import re
 import xml.etree.ElementTree as ET
+
+from utils.color_contrast import readable_ink
 
 from utils.svg_validation import (
     SVG_CONTRACT_VERSION as SVG_CONTRACT_VERSION,
@@ -22,6 +25,55 @@ from utils.svg_validation import (
     DEFAULT_CANVAS_HEIGHT_PX as DEFAULT_CANVAS_HEIGHT_PX,
     DEFAULT_CANVAS_WIDTH_PX as DEFAULT_CANVAS_WIDTH_PX,
 )
+
+
+_HEX_COLOR = re.compile(r"#[0-9A-Fa-f]{6}")
+_DEFAULT_PAGE_NUMBER_FILL = "#2563EB"
+
+#: The page-number ink rule a deck's frozen style snapshot pins. A fresh svg admission
+#: pins :data:`PAGE_NUMBER_INK_READABLE` (``services/svg_generation_admission.pin_svg_style``):
+#: the style primary only while it reads (4.5:1) on the page, else white or near-black. A
+#: snapshot without the key (every deck admitted before the rule) keeps the unconditional
+#: style primary, so finalizing, recovering or replaying a stored deck stays byte-identical.
+PAGE_NUMBER_INK_KEY = "page_number_ink"
+PAGE_NUMBER_INK_READABLE = "svg-page-number-ink/v1"
+
+
+def _page_background(root: ET.Element, tokens: dict, width: int, height: int) -> str:
+    """The colour the page number sits on: the topmost full-canvas ``rect`` fill, else the style's canvas colour."""
+    background = tokens.get("background")
+    background = background if isinstance(background, str) and _HEX_COLOR.fullmatch(background) else "#FFFFFF"
+    for node in root:
+        if node.tag != f"{{{SVG_NS}}}rect":
+            continue
+        fill = node.get("fill") or ""
+        try:
+            covers = (float(node.get("x", 0)) <= 0 and float(node.get("y", 0)) <= 0
+                      and float(node.get("width", 0)) >= width and float(node.get("height", 0)) >= height)
+        except ValueError:
+            continue
+        if covers and _HEX_COLOR.fullmatch(fill):
+            background = fill
+    return background
+
+
+def _page_number_fill(root: ET.Element, style_snapshot: dict | None, width: int, height: int) -> str:
+    """The page number's fill under the ink rule the snapshot pins.
+
+    Pinned :data:`PAGE_NUMBER_INK_READABLE`: the style primary while it reads (4.5:1)
+    on the page, else white or near-black. Unpinned: the style primary, unconditionally.
+    """
+    snapshot = style_snapshot or {}
+    tokens = snapshot.get("tokens", {})
+    primary = tokens.get("primary") or _DEFAULT_PAGE_NUMBER_FILL
+    rule = snapshot.get(PAGE_NUMBER_INK_KEY)
+    if rule is None:
+        return primary
+    if rule != PAGE_NUMBER_INK_READABLE:
+        raise ValueError("svg_page_number_ink_invalid")
+    if not isinstance(primary, str) or not _HEX_COLOR.fullmatch(primary):
+        return primary
+    return readable_ink(_page_background(root, tokens, width, height), primary)
 
 
 def finalize_svg(
@@ -85,7 +137,7 @@ def finalize_svg(
                 "y": str(height - 20),
                 "font-family": tokens.get("body_font") or "Noto Sans KR",
                 "font-size": "12",
-                "fill": tokens.get("primary") or "#2563EB",
+                "fill": _page_number_fill(root, style_snapshot, width, height),
                 "text-anchor": "end",
             },
         )

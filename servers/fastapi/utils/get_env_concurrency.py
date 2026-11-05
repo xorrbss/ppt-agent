@@ -218,6 +218,62 @@ def get_svg_template_body_exemplars_env(settings: RuntimeSettings | None = None)
     return "grammar" if value == "grammar" else "off"
 
 
+def get_svg_template_outline_sections_env(settings: RuntimeSettings | None = None) -> bool:
+    """Whether a template-redesign deck's outline is asked for the template's page structure
+    (``SVG_TEMPLATE_OUTLINE_SECTIONS``: ``on``, also when unset: the default since the paired
+    measurement in docs/template-a-visuals-progress-20261105.md; ``off`` or an unknown value: off).
+
+    On, the outline prompt adds :data:`utils.svg_template_outline.TEMPLATE_SECTIONS_CLAUSE`:
+    a key-message line and two to four ``###`` sub-sections per content slide, each holding
+    its own facts, so the body author gets sections to compose (measured 2026-11-05: the
+    judge counted 0 sections on 13 of 20 generated pages while every outline page held one
+    ``##`` title and bullets only). Internal knob read when the outline is requested, listed
+    in ``tests/support/internal_env_names.py``.
+    """
+    from utils.get_env import get_setting_env
+
+    value = (get_setting_env("SVG_TEMPLATE_OUTLINE_SECTIONS", settings) or "").strip().lower()
+    return value in {"", "on", "true", "1"}
+
+
+def get_svg_template_visual_guidance_env(settings: RuntimeSettings | None = None) -> bool:
+    """Whether a template-redesign author is told to use the template's body vocabulary
+    (``SVG_TEMPLATE_VISUAL_GUIDANCE``: ``on`` / ``off``; unset or unknown: off).
+
+    On, the frozen composition guidance of a template-redesign snapshot names the
+    template's components where the content has their shape instead of saying that icons
+    and visual difference are not evidence of improvement, and the composition grammar's
+    density line asks for secondary components and full explanations instead of enlarged
+    components (``services/svg_templates/generation.py``, ``body_composition.py``). Prompt
+    only. Internal knob read at admission and when a page is authored, listed in
+    ``tests/support/internal_env_names.py``.
+    """
+    from utils.get_env import get_setting_env
+
+    value = (get_setting_env("SVG_TEMPLATE_VISUAL_GUIDANCE", settings) or "").strip().lower()
+    return value in {"on", "true", "1"}
+
+
+def get_svg_template_step_pictures_env(settings: RuntimeSettings | None = None) -> bool:
+    """Whether a template-redesign deck gets model-drawn step pictures
+    (``SVG_TEMPLATE_STEP_PICTURES``: ``on`` / ``off``; unset or unknown: off).
+
+    On, and only while ``SVG_ILLUSTRATION_MODE`` is off, the asset offer of a template-redesign
+    deck runs in vector mode with the ``spots`` part alone (``drivers/svg/asset_slots.py``): a
+    process, cycle, timeline or roadmap page with three to six planned steps gets one small
+    vector picture per step, drawn in the deck palette (``assets/vector_offer.py``), offered as
+    optional slots; scenes are demoted to icons as in off mode and no cover picture is drawn.
+    Measured 2026-11-05 on template A: the judge's visuals axis stayed at 2.2 with icons only
+    ("no charts, diagrams or figures like the anchors") while the template's own pages carry
+    small pictures above their step boxes. Internal knob read when the offer is built, listed in
+    ``tests/support/internal_env_names.py``.
+    """
+    from utils.get_env import get_setting_env
+
+    value = (get_setting_env("SVG_TEMPLATE_STEP_PICTURES", settings) or "").strip().lower()
+    return value in {"on", "true", "1"}
+
+
 def get_svg_common_header_default_env(settings: RuntimeSettings | None = None) -> str:
     """Header of a fresh prompt-only svg request that names no ``common_header_mode``
     (``SVG_COMMON_HEADER_DEFAULT``): ``designed`` (also when unset or unknown) the model-designed

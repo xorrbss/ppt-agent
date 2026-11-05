@@ -61,6 +61,11 @@ def _principal(owner_id, tenant_id, request_scope):
         reset_current_owner_id(owner_token)
 
 
+def _principal_parameters(connection: _RecordingConnection) -> dict:
+    """Parameters of the statement that publishes the principal (other SET LOCAL stamps are ignored)."""
+    return next(p for statement, p in connection.calls if statement == EXPECTED_PRINCIPAL_SQL)
+
+
 def _emit(dialect: str) -> _RecordingConnection:
     connection = _RecordingConnection(dialect)
     _set_postgres_transaction_principal(None, None, connection)
@@ -76,8 +81,8 @@ def test_request_publishes_owner_tenant_and_request_scope() -> None:
     with _principal(owner_id, "default", True):
         connection = _emit("postgresql")
     assert connection.calls[0][0] == "SET LOCAL row_security = on"
-    statement, parameters = connection.calls[1]
-    assert statement == EXPECTED_PRINCIPAL_SQL
+    assert connection.calls[1][0] == "SET LOCAL presenton.generation_lineage_writer_revision = 'e4b7c9d2a1f0'"
+    parameters = _principal_parameters(connection)
     assert parameters == {
         "owner_id": str(owner_id),
         "tenant_id": "default",
@@ -89,7 +94,7 @@ def test_identity_less_request_still_declares_the_request_scope() -> None:
     """This is the state the policies must refuse rather than read openly."""
 
     with _principal(None, "default", True):
-        _, parameters = _emit("postgresql").calls[1]
+        parameters = _principal_parameters(_emit("postgresql"))
     assert parameters == {
         "owner_id": "",
         "tenant_id": "default",
@@ -99,12 +104,12 @@ def test_identity_less_request_still_declares_the_request_scope() -> None:
 
 def test_worker_context_publishes_an_empty_request_scope() -> None:
     with _principal(None, None, False):
-        _, parameters = _emit("postgresql").calls[1]
+        parameters = _principal_parameters(_emit("postgresql"))
     assert parameters == {"owner_id": "", "tenant_id": "", "request_scope": ""}
 
 
 def test_disabled_auth_keeps_the_fail_open_profile(monkeypatch) -> None:
     monkeypatch.setenv("DISABLE_AUTH", "true")
     with _principal(None, "default", True):
-        _, parameters = _emit("postgresql").calls[1]
+        parameters = _principal_parameters(_emit("postgresql"))
     assert parameters["request_scope"] == ""
