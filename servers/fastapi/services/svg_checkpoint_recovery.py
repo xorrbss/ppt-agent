@@ -28,7 +28,7 @@ async def verified_svg_recovery_checkpoints(session, operation, request, *, pres
                                    presentation_revision=presentation_revision)
     if request.recovery_revision in {SVG_CACHED_AUTHOR_RENDER, SVG_CACHED_AUTHOR_RENDER_V2,
                                      SVG_CACHED_AUTHOR_RENDER_V3}:
-        from services.svg_cached_author_render_recovery import verify_action
+        from services.svg_cached_author_render_lineage import verify_action
 
         return await verify_action(session, operation, request,
                                    presentation_revision=presentation_revision)

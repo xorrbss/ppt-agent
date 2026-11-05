@@ -7,15 +7,17 @@ digests act as authority") and the follow-ups noted in PRs #109 (E3, converter
 manifest alias), #121 (E6, per-process digest cache; header digest left
 uncached) and #122 (S4/S5, `CONVERTER_VERSION` could not be bumped).
 
-Status in this change:
+Status:
 
 | Identity | Status |
 |---|---|
-| `converter_digest()` | **implemented** (§5) |
-| `common_header_verifier_digest()` | **implemented** (§5) |
+| `converter_digest()` | **implemented** (§5, #130) |
+| `common_header_verifier_digest()` | **implemented** (§5, #130) |
+| `whole_page_verifier_digest()` | **implemented** (§5.1, wave 2) |
+| `_code_digest()` / `_page_render_code_digest()` | **implemented** (§5.1, wave 2) |
 | every other identity in §2 | design only (§6) |
 
-Baseline: `origin/main` at `9d389ba80`.
+Baseline: `origin/main` at `9d389ba80` for #130, `49e529d6b` for wave 2.
 
 ## 1. Problem
 
@@ -52,7 +54,7 @@ edit" means an edit of any listed file, even one that changes no behaviour.
 | 5 | `_page_render_code_digest()` (same module) | `CODE_FILES` minus 10 authority files, plus `svg_final_selected_continuation.py`. | Quality recovery page checkpoint reuse key (`drivers/svg/collect.py`, `render_code`). | Any edit misses the checkpoint reuse key, so pages are rendered again. This costs work and gives no wrong answer. |
 | 6 | `materializer_code_digest()` (`utils/svg_template_glyph_materialization.py`; mirrored and cached in `services/svg_templates/frame_glyphs.py`) | Bytes of the materializer file. | Registered svg template frame v3 `fixed_glyph_preview.materializer_code_digest`, checked by `validate_frame_glyph_authority`. Glyph markers (`svg_templates/generation.py`, `svg_asset_resolver.py`). Renderer handshake (`utils/slide_capture_worker_client.py`). | Any edit invalidates every registered v3 (fixed-glyph) template, which then has to be registered again. |
 | 7 | `private_diagnostic_pipe_code_digest()` (`utils/slide_capture_pipe_render.py`) | Bytes of that file. | Echoed by the capture worker in `privateDiagnosticRaster.pipeCodeDigest` and compared by the client in the same call. Not stored. | Only fails when the worker and the client run different bytes. Low impact. It is listed because it is a renderer contract keyed by source bytes. |
-| 8 | `APPROVED_CONVERTER_CODE_DIGEST` and `converter_code_digest()` (`services/svg_cached_author_render_recovery.py`) | 12 files, including two vendored chart files, the vendor manifest and `workers/public_svg_pptx_convert.py`. | Checked against the approval manifest and the constant (`drivers/svg/collect.py`). | Already stale. It was pinned 2026-10-07, and on `9d389ba80` the files hash to `aa4f99ec…` instead of `52b0a07b…`. The cached-author-render recovery therefore always rejects. Every edit of those files moves it further away. |
+| 8 | `APPROVED_CONVERTER_CODE_DIGEST` and `converter_code_digest()` (`services/svg_cached_author_render_recovery.py`) | 12 files, including two vendored chart files, the vendor manifest and `workers/public_svg_pptx_convert.py`. | Checked against the approval manifest and the constant (`drivers/svg/collect.py`). | Already stale. It was pinned 2026-10-07, and on `9d389ba80` the files hash to `aa4f99ec…` instead of `52b0a07b…`. The cached-author-render recovery therefore always rejects. Every edit of those files moves it further away. **Deleted in wave 2 (§5.2).** |
 | 9 | `template_export_verifier_digest()` (`services/svg_templates/export_evidence.py`) | 15 files. | Export identity `svgTemplateVerifierDigest` for template decks. | Any edit retires reuse of template exports, which are then exported again. |
 | 10 | `compute_public_export_worker_bundle()` (`services/public_export_worker_bundle.py`) | Node worker sources, svg worker/contract/convert/readback, `native_objects/*.py`, export scene/projection/wire, the whole vendor tree. | Authored export canonical identity `exporter_digest`. Receipt `exporterWorkerBundle`. | Any edit means completed authored exports are no longer reused (one re-export each). This is intentional: a worker fix must not be masked by the cache. Nothing re-validates stored receipts against it. |
 | 11 | `checker_digest()` (`workers/public_svg_pptx_render.py`) | The renderer file and `utils/powerpoint_ownership.py`. | Final PPTX render proofs `checkerCodeDigest` (`final_render_current`). | Any edit makes stored final render proofs stop verifying, so the final review runs again. |
@@ -230,27 +232,141 @@ named in the forcing test. If it reaches main **after** this change, the
 forcing test fails on that branch, and its author re-pins or bumps. The same
 applies to the converter adapters (#1).
 
+### 5.1 Wave 2: whole-page verifier and partial recovery (owner decision 2026-11-05 (a))
+
+The owner chose to migrate #3, #4 and #5 next, with the same method. All three
+ledgers are anchored to `origin/main` `49e529d6b`:
+
+| Ledger (revision) | Identity | Stored value on an LF checkout |
+|---|---|---|
+| `svg-whole-page-verifier/1` | `whole_page_verifier_digest()` (#3) | `aa559f55…2469` |
+| `svg-partial-recovery-code/1` | `_code_digest()` (#4) | `91280a73…de1a` |
+| `svg-page-render-code/1` | `_page_render_code_digest()` (#5) | `80cbd150…ce36` |
+
+| File | Change |
+|---|---|
+| `services/verifier_revisions.py` | `VerifierRevisionLedger.state()` builds a `SourceState` from file digests that are already computed (`source_state()` now delegates to it). An optional `reviewed_formula` computes the reviewed key with checkout-independent inputs other than line endings. New ledgers `WHOLE_PAGE_VERIFIER_LEDGER`, `PARTIAL_RECOVERY_CODE_LEDGER` and `PAGE_RENDER_CODE_LEDGER`. The two partial recovery ledgers share one anchor table: each formula reads only its own files. |
+| `utils/code_file_digest.py` | The per-process cache (#121) now holds `CodeFileDigest(raw, lf, crlf)`, so the ledger keeps reading each partial recovery file once per process. `code_file_sha256()` is unchanged. |
+| `services/svg_export_whole_page_verifier.py` | `whole_page_verifier_identity()` is the unchanged formula. `whole_page_verifier_source_state()` / `_source_digest()` give the raw value. `whole_page_verifier_digest()` resolves through the ledger. |
+| `services/svg_partial_recovery.py` | `code_identity()` and `page_render_identity()` are the unchanged formulas over `CODE_IDENTITY_FILES` (`CODE_FILES` plus the five final-selected sources) and `PAGE_RENDER_CODE_FILES`. `_code_digest()` and `_page_render_code_digest()` resolve through their ledgers. `_base_code_digest()` stays the raw base recipe. |
+| `tests/unit/test_svg_verifier_revisions.py` | One table drives every check of §3.3 for all five ledgers. It adds the published-recipe check for partial recovery, the path-text independence of its reviewed key, and that an authority-only edit keeps the page-render identity. |
+| `tests/unit/test_svg_source_generation_flow.py` | Simulated code bytes bypass the new cache entry point (`code_file_digest`). |
+
+Notes:
+
+- **Windows path text.** `_code_digest()` names the five final-selected sources
+  with `str(Path)`, so a Windows checkout's stored value uses backslashes as well
+  as CRLF bytes. The raw value and the anchor keep the platform's path text, so
+  Windows-stored approvals keep validating; the reviewed key uses POSIX path
+  text, so it is one key on every OS. The Windows test simulates both.
+- **Each edit re-pins only the ledgers it touches.** The migration commit edits
+  `svg_partial_recovery.py` and `svg_export_whole_page_verifier.py`, so the
+  partial recovery code ledger and the whole-page ledger record a second reviewed
+  key. The page-render identity excludes `svg_partial_recovery.py` (an authority
+  file), so its key did not move.
+- **Behaviour that compares code identities.** `_historical_uniform_grid_rejection`
+  requires the approval's `code_digest` to differ from the current one. It now
+  differs only when the revision changed, which is what the proof is about: the
+  old *behaviour* rejected the grid.
+- **Parallel edits.** `CODE_FILES` includes files that are edited constantly,
+  among them `services/generation_core/authoring/author_slide_svg.py`. An edit
+  of any of them that reaches `main` after this change fails the forcing test,
+  and its author re-pins (behaviour unchanged for recovery) or bumps. One that
+  reaches `main` before this change moves the anchor, which must then be
+  re-derived from `main` at merge time (as for #130 above).
+
+### 5.2 Wave 2: cached-author-render recovery deleted (owner decision 2026-11-05 (b))
+
+The owner chose to delete the staged cached-author-render recovery (#8) rather
+than re-review it. Its approval was bound to `APPROVED_CONVERTER_CODE_DIGEST`
+(`52b0a07b…0ad0`), the digest of its twelve converter files. That digest
+matched only from `7bc32584b` (2026-10-07 12:22) to `306c3ea9f` (2026-10-08
+08:38); after that, every new approval, every replay and every marker
+projection was rejected.
+
+What was deleted:
+
+- `services/svg_cached_author_render_recovery.py` (1,261 lines): the manifest
+  builders (`build_manifest`, `_v2`, `_v3`), the converter approval
+  (`APPROVED_CONVERTER_CODE_DIGEST`, `CONVERTER_FILES`, `converter_code_*`), the
+  fixed-axis sidecar construction and the retry-fenced failure recognition.
+- `collect._cached_author_render_page`'s replay: it is now the
+  `svg_cached_author_render_invalid` rejection that every stored marker page
+  already reached (the stale converter check sat in its first condition chain,
+  and every other condition of that chain raised the same code).
+- The workspace admission that consumed a successful approval
+  (`_fork_cached_author_render_job`, `_verify_zero_provider_cached_admission`,
+  the retry payload fields) and the pipeline's
+  `zero_provider_cached_author_recovery` flag. All of them ran only after
+  `verify_action` had returned, which it never did.
+- The `build_manifest` half of
+  `test_authored_page_waiting_for_render_satisfies_real_recovery_predicates`.
+  Its partial recovery half is kept.
+
+What was moved, unchanged:
+
+- `services/svg_recovery_witness.py` (new, small): `digest`, `author_witness`
+  and `unknown_provider` (formerly `_unknown_provider`). Partial recovery, the
+  final-selected and source-local continuations, quality and partial quality
+  recovery used them from the deleted module; stored manifests carry their
+  bytes.
+- `services/svg_cached_author_render_lineage.py` (new): the revision and marker
+  constants, `CachedAuthorRenderRejected`, `approved_sidecars` and
+  `verify_action` reduced to the rejections they always reached, and the lineage
+  proof moved verbatim (`verify_child_lineage`, `derived_child_request_valid`,
+  the prior-child witnesses, `child_checkpoint_payload`, `cached_svg`,
+  `source_receipt_witness`, `operation_request_hash`, `action_id_for`).
+
+**Why the lineage proof stays.** `verify_child_lineage` does not check the
+converter digest. It proves that a child presentation's inherited source
+manifest belongs to its immutable parent, and
+`svg_generation_assets._verify_inherited_source_manifest` calls it for
+published children too (slide edits through
+`svg_document_mutations._verified_inherited_slide_source`, and the source
+preparation of a later recovery). A child that one of these recoveries created
+and completed inside the 20-hour window above would stop being editable if it
+were deleted. Whether such a child exists cannot be told from the repository,
+so the migration keeps the proof. It can be deleted once the owner confirms
+that no stored operation carries `svg-cached-author-render/v1`–`/v3` with
+state `succeeded`.
+
+Rejection is unchanged, code for code:
+
+| Entry point | Rejection |
+|---|---|
+| `verify_action` (retry action) | `…_approval_required`; for v2/v3 the same prior-child lookups, with the same `FOR UPDATE` statements in the same order, then `…_prior_child_unproven`; otherwise `…_converter_unapproved`. |
+| `approved_sidecars` (render, publish, header revision authority) | no marker: `{}`; any marker: `…_sidecar_untrusted`. |
+| `collect` page with a marker | `…_operation_missing` without a manifest hash, otherwise `…_invalid`. |
+| stored operation recognition (`collect`, `svg_generation_assets`, `quality`, `render`, `publish`, `author`, the runner's terminal codes) | unchanged. |
+
+A one-off check loaded the deleted module and the previous `collect.py` from
+`origin/main` and compared both implementations: the same codes and the same
+SQL statements for every `verify_action` branch, the same `approved_sidecars`
+and page outcomes, and byte-identical source for every moved function.
+`tests/unit/test_svg_cached_author_render_lineage.py` keeps the codes pinned.
+
+**Ledgers.** The deletion edits files of the partial recovery inventory and
+`drivers/svg/render.py` (header inventory). The new source states are
+registered under the same revisions (`svg-partial-recovery-code/1`,
+`svg-page-render-code/1`, `svg-common-header-verifier/1`), each with a reason
+comment: no recovery, rendering or header verification behaviour changed.
+
+`.gitattributes` keeps the `-text` attributes that the deleted converter
+digest introduced. The converter, whole-page and partial recovery ledgers
+record those paths as byte-exact on every OS (`crlf` is `None`), so removing
+them would change Windows source digests.
+
 ## 6. Design only: remaining identities
 
 Each one follows the same pattern: split `*_source_digest()` from the identity,
 add a ledger anchored to the current digest, and pin the source digest in the
 forcing test. Specific notes:
 
-- **#3 `whole_page_verifier_digest()`.** It is the next most valuable target,
-  and it would also have removed the one-time re-pin that #109 caused. Its
-  definition lives in a file of its own inventory, so the migration commit must
-  record two reviewed digests, as in §4. It was not done here because the task
-  limited implementation to #1 and #2, and because its inventory overlaps the
-  files that callers of #1 import (`svg_export_bundle.py`,
-  `svg_export_identity.py`, `svg_export_quality.py`), so migrating both in one
-  commit widens the review.
-- **#4 and #5, partial recovery.** Use one ledger for `code_digest`.
-  `_page_render_code_digest` is a reuse key and can stay byte-keyed or follow
-  the same ledger. In-flight approvals carry the current `_code_digest()`, so an
-  anchor keeps them valid. The 67-file inventory is far wider than what
-  determines recovery behaviour. A ledger turns each unrelated edit (for
-  example in `workspace_service.py`) into a one-line re-pin instead of a
-  re-approval.
+- **#3 `whole_page_verifier_digest()`.** Implemented in wave 2 (§5.1).
+- **#4 and #5, partial recovery.** Implemented in wave 2 (§5.1), as two ledgers
+  so that an authority-only edit does not re-pin the page-render reuse key. A
+  ledger turns each unrelated edit (for example in `workspace_service.py`) into
+  a one-line re-pin instead of a re-approval.
 - **#6, materializer.** It is stored in registered templates, so the anchor
   approach avoids re-registration on refactors. The value format is
   `sha256:<file hash>`. `frame_glyphs.materializer_code_digest()` and the
@@ -259,11 +375,8 @@ forcing test. Specific notes:
   the worker and the client. Nothing stored depends on it, so no migration is
   needed. It is deferred because `utils/slide_capture_pipe*.py` is being edited
   in parallel.
-- **#8, cached-author-render.** It is already stale, so the feature is
-  disabled. This needs an owner decision: re-review the fixed-axis converter
-  path and express the approval as "converter revision R plus fixed-axis
-  revision F" (the approval would survive refactors), or delete the staged
-  module.
+- **#8, cached-author-render.** Deleted in wave 2 (§5.2); only the read-only
+  lineage proof of stored children remains.
 - **#9 and #12.** These are reuse and sealed-runtime keys. The ledger is
   optional, and their invalidation costs work, not correctness.
 - **#10, worker bundle.** Invalidating reuse on worker code change is the
@@ -299,7 +412,16 @@ Facts on `9d389ba80`:
   statement was inaccurate. The README now says 128.
 
 Every patch suffix makes the string longer, so the scheme cannot grow at all.
-Proposal (design only, not implemented):
+
+**Owner decision (c), 2026-11-05: the short-revision form below is adopted.**
+The current 125-character `CONVERTER_VERSION`
+(`slide-master/166472bd…698ef+document-canvas.2+text-advance.1+chart-furniture.16+native-fixed-text.2`)
+is frozen as the `exporter_version` of `svg-pptx-converter/1`. From the next
+converter behaviour change on, the exporter version is `svg-pptx-converter/N`
+(the bumped `CONVERTER_EXECUTION_REVISION`), and patch details live only in the
+vendor manifest. No code changes until that bump: it is the change that
+switches `CONVERTER_VERSION` to the revision string, and no suffix may be
+appended to the frozen value before it. The rule, as proposed:
 
 1. Keep the current 125-character `CONVERTER_VERSION` as the frozen
    `exporter_version` of `svg-pptx-converter/1`, so that stored identities and
@@ -325,13 +447,15 @@ migration on SQLite and PostgreSQL. With explicit revisions it is unnecessary.
   - the forcing test message spells out the two options;
   - reviewers should treat a ledger diff like a verifier change.
 - **Merge order** with parallel edits of the header and adapter inventories
-  (§5).
+  (§5), and of the wide partial recovery inventory (§5.1).
 - **Checkout assumption.** The per-checkout anchor assumes that one checkout
   applies one line-ending policy. A Windows tree whose `autocrlf` setting
   changed between checkouts can hold mixed files, and its pre-migration
   evidence may then not be reproduced. Before this change, such a tree's
   evidence was equally fragile.
-- **Owner decisions needed:**
-  - #8: re-review or delete;
-  - whether to migrate #3 and #4 next (recommended order: #3, #4, #11, #6);
-  - adopting §7 for the next converter behaviour change.
+- **Owner decisions** (2026-11-05):
+  - (a) migrate #3 and #4/#5 next: done (§5.1); #11 and #6 remain design only;
+  - (b) #8: delete: done (§5.2), except the lineage proof of stored children,
+    which can go once no succeeded cached-author-render child is confirmed;
+  - (c) §7 short-revision `exporter_version`: adopted; applied by the next
+    converter behaviour change.

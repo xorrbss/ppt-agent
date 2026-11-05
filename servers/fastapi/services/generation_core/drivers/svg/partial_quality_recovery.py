@@ -17,7 +17,7 @@ def is_current_provider_control_error(error):
 
 
 def _history_prefix(ctx, payload, index):
-    from services.svg_cached_author_render_recovery import author_witness
+    from services.svg_recovery_witness import author_witness
 
     manifest = getattr(ctx, "partial_recovery_manifest", None)
     if not manifest or index not in manifest["known_indices"]:

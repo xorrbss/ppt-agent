@@ -327,6 +327,7 @@ tests/unit/test_svg_author_prompt_cache.py
 tests/unit/test_svg_author_timeout_recovery.py
 tests/unit/test_svg_axis_review.py
 tests/unit/test_svg_bar_proportion.py
+tests/unit/test_svg_cached_author_render_lineage.py
 tests/unit/test_svg_canvas_brief.py
 tests/unit/test_svg_chart_fidelity.py
 tests/unit/test_svg_chart_label_units.py

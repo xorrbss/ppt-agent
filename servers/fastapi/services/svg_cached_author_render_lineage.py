@@ -1,7 +1,22 @@
-"""Candidate: locked, zero-provider rerender of known authored SVG pages.
+"""Retired cached-author-render recovery: its stored markers and the lineage it created.
 
-This staged module is deliberately disabled until a reviewed fixed-axis code
-digest is set below. It is not wired into the running product.
+The zero-provider cached-author-render recovery (``svg-cached-author-render/v1``
+to ``/v3``) bound every approval to ``APPROVED_CONVERTER_CODE_DIGEST``
+(``52b0a07b...0ad0``), the digest of twelve converter source files on 2026-10-07.
+No converter source state matched it after 2026-10-08 (``306c3ea9f``), so every
+new approval, every replay and every marker projection was rejected. The
+admission, manifest builder and replay were deleted on 2026-11-05 (owner
+decision, ``docs/explicit-verifier-revisions-design-20261105.md``).
+
+What remains is what stored records still need, unchanged:
+
+* the revision and marker constants, so stored operations and checkpoints are
+  still recognised;
+* ``verify_action`` and ``approved_sidecars``, which reject exactly as the
+  stale approval did, with the same codes and in the same order;
+* ``verify_child_lineage`` and the witnesses it rebuilds, moved verbatim: a
+  child that one of these recoveries created and completed while the approval
+  matched still proves its inherited source manifest through it.
 """
 
 from __future__ import annotations
@@ -9,7 +24,6 @@ from __future__ import annotations
 from copy import deepcopy
 from dataclasses import dataclass
 import json
-from pathlib import Path
 
 from sqlalchemy import select
 
@@ -19,11 +33,11 @@ from models.sql.public_admission import PublicOperationAdmission, PublicProvider
 from models.sql.provider_runtime_reservation import ProviderRuntimeBudget, ProviderRuntimeReservation
 from models.sql.slide import SlideModel
 from models.sql.presentation import PresentationModel
-from models.sql.source_content import SourceContentManifestRecord
 from models.sql.workspace import WorkspaceOperation, WorkspaceArtifact
+from services.svg_recovery_witness import author_witness, digest, unknown_provider as _unknown_provider
 from services.svg_timeout_repurchase import _live
 from utils.datetime_utils import get_current_utc_datetime
-from utils.hashing import canonical_json_sha256, sha256_hex
+from utils.hashing import sha256_hex
 
 
 REVISION = "svg-cached-author-render/v1"
@@ -47,24 +61,6 @@ def marker_schema(revision: str) -> str:
         return MARKER_SCHEMA_V3
     _reject("svg_cached_author_render_revision_invalid")
 
-# Filled only after the fixed-axis owner's exact production patch is reviewed.
-# The digest covers every parser/projection file that changes that conversion.
-APPROVED_CONVERTER_CODE_DIGEST = "52b0a07b7d21957896d327f49be977a90523555b2c3c95401323a5455d590ad0"
-CONVERTER_FILES = (
-    "services/generation_core/drivers/svg/native_chart.py",
-    "services/generation_core/drivers/svg/native_declarations.py",
-    "services/generation_core/drivers/svg/native_publish.py",
-    "services/generation_core/drivers/svg/fixed_axis_migration.py",
-    "services/generation_core/drivers/svg/export_projection.py",
-    "services/generation_core/drivers/svg/export_scene.py",
-    "services/generation_core/native_objects/payload.py",
-    "services/generation_core/drivers/svg/export_chart_style.py",
-    "vendor/slide_master/svg_to_pptx/native_objects/chart_data.py",
-    "vendor/slide_master/svg_to_pptx/native_objects/chart_xml.py",
-    "vendor/slide_master/MANIFEST.json",
-    "workers/public_svg_pptx_convert.py",
-)
-
 
 class CachedAuthorRenderRejected(ValueError):
     def __init__(self, code: str):
@@ -77,10 +73,6 @@ def _reject(code: str = "svg_cached_author_render_not_safe") -> None:
     raise CachedAuthorRenderRejected(code)
 
 
-def digest(value: object) -> str:
-    return canonical_json_sha256(value, allow_nan=True)
-
-
 def operation_request_hash(payload: dict) -> str:
     """Match the workspace operation's durable request hash contract."""
     return sha256_hex(json.dumps(payload, ensure_ascii=False, allow_nan=False,
@@ -88,42 +80,10 @@ def operation_request_hash(payload: dict) -> str:
                                  default=str).encode("utf-8"))
 
 
-def author_witness(payload: dict) -> str:
-    from services.svg_classification_remeasurement import author_witness_digest
-
-    return author_witness_digest(payload)
-
-
 def source_receipt_witness(payload: dict) -> str:
     receipt = payload.get("source_preservation") or {}
     return digest({key: value for key, value in receipt.items()
                    if key != "rendering_verified"})
-
-
-def _unknown_provider(value: object) -> bool:
-    if isinstance(value, dict):
-        return any(_unknown_provider(item) for item in value.values())
-    if isinstance(value, list):
-        return any(_unknown_provider(item) for item in value)
-    return value in {
-        "public_provider_result_unknown", "public_provider_timeout",
-        "provider_outcome:public_provider_result_unknown",
-    } if isinstance(value, str) else False
-
-
-def converter_code_hashes() -> list[dict[str, str]]:
-    root = Path(__file__).resolve().parents[1]
-    entries = []
-    for relative in CONVERTER_FILES:
-        path = root / relative
-        if not path.is_file():
-            _reject("svg_cached_author_render_converter_missing")
-        entries.append({"path": relative, "sha256": sha256_hex(path.read_bytes())})
-    return entries
-
-
-def converter_code_digest() -> str:
-    return digest(converter_code_hashes())
 
 
 def cached_svg(payload: dict) -> str:
@@ -136,148 +96,17 @@ def cached_svg(payload: dict) -> str:
     return candidates[0]
 
 
-def verified_fixed_axis_migrations(payload: dict, svg: str, *,
-                                   failed_drops: set[str]) -> dict[str, dict]:
-    """Construct trusted sidecars from a bound raw declaration, never client data."""
-    from services.generation_core.drivers.svg.native_declarations import bound_declarations
-    from services.generation_core.drivers.svg.fixed_axis_migration import (
-        MIGRATION_CONTRACT, COHERENT_GRID_V1, declaration_sha256,
-    )
-
-    record, current = bound_declarations({**payload, "svg_content": svg}, svg)
-    if not current or not isinstance(record, dict):
-        _reject("svg_cached_author_render_declaration_unbound")
-    objects = record.get("objects") or []
-    by_id = {item.get("id"): item for item in objects if isinstance(item, dict)}
-    if len(by_id) != len(objects) or not failed_drops.issubset(by_id):
-        _reject("svg_cached_author_render_declaration_unbound")
-    sidecars = {}
-    for element_id, item in by_id.items():
-        raw = item.get("raw")
-        if item.get("kind") != "chart" or not isinstance(raw, dict):
-            continue
-        if (raw.get("geometryContract") != COHERENT_GRID_V1
-                or "axisContract" in raw):
-            continue
-        if (raw.get("chartType") not in {"bar", "column"}
-                or raw.get("grouping") != "clustered"
-                or payload.get("source_preservation", {}).get("source_native_charts") != []):
-            _reject("svg_cached_author_render_declaration_unbound")
-        sidecars[element_id] = {
-            "contract": MIGRATION_CONTRACT,
-            "rawSvgSha256": sha256_hex(svg.encode()),
-            "rawDeclarationSha256": declaration_sha256(raw),
-        }
-    if not failed_drops.issubset(sidecars):
-        _reject("svg_cached_author_render_declaration_unbound")
-    return sidecars
-
-
-def fixed_axis_failed_drops(payload: dict) -> set[str]:
-    """Only the measured, exact converter defect can authorize migration."""
-    initial = payload.get("initial_quality") or payload.get("quality") or {}
-    failures = initial.get("failures") or []
-    if not failures:
-        return set()
-    if len(failures) != 1 or failures[0].get("kind") != "source_native_chart_unprojectable":
-        _reject("svg_cached_author_render_wrong_failure")
-    dropped = (failures[0].get("native_summary") or {}).get("dropped") or []
-    if (not dropped or failures[0].get("missing_count") != len(dropped)
-            or any(item.get("kind") != "chart"
-                   or item.get("reason") != "native_chart_json_invalid"
-                   or not isinstance(item.get("id"), str) for item in dropped)):
-        _reject("svg_cached_author_render_wrong_failure")
-    ids = {item["id"] for item in dropped}
-    if len(ids) != len(dropped):
-        _reject("svg_cached_author_render_wrong_failure")
-    return ids
-
-
-def retry_fenced_axis_failure(row: AuthoredSlideCheckpoint, payload: dict) -> bool:
-    """Recognize the measured render RETRY that cleared svg_content before budget exit."""
-    if (row.author_status != "running" or row.render_status != "pending"
-            or row.persist_status != "pending" or row.failed_stage is not None
-            or row.error is not None or row.render_sha256 is not None
-            or payload.get("svg_content") is not None
-            or not isinstance(payload.get("last_valid_svg"), str)
-            or not payload["last_valid_svg"]
-            or payload.get("quality") not in (None, {})
-            or payload.get("png_sha256") is not None
-            or payload.get("png_path") is not None
-            or payload.get("inflight") is not None):
-        return False
-    initial = payload.get("initial_quality")
-    attempts = payload.get("attempts")
-    repair = payload.get("local_readability_repair")
-    if (not isinstance(initial, dict) or not isinstance(attempts, list)
-            or len(attempts) != 1 or not isinstance(attempts[0], dict)
-            or initial.get("stage") != "first_response"
-            or initial.get("measurement_complete") is not True
-            or initial.get("passed") is not False
-            or attempts[0].get("quality") != {
-                key: value for key, value in initial.items() if key != "stage"}
-            or repair != {
-                "status": "page_recomposition_required",
-                "reason": "native_data_requires_recomposition",
-                "provider_call_authorized": False,
-            }):
-        return False
-    try:
-        hint = json.loads(payload.get("repair_hint"))
-        drops = fixed_axis_failed_drops(payload)
-    except (TypeError, ValueError, CachedAuthorRenderRejected):
-        return False
-    return (isinstance(hint, dict)
-            and hint.get("kind") == "svg_readability_repair"
-            and hint.get("failures") == initial.get("failures")
-            and bool(drops))
-
-
 def approved_sidecars(payload: dict) -> dict[str, dict]:
-    """Reprove a server-created locked marker at every native projection."""
+    """Fixed-axis sidecars that a cached-author-render marker approves: none any more.
+
+    A page without a marker has none. A page with one could only be reproved
+    against the stale approved converter digest, so it was rejected here, and it
+    still is, with the same code.
+    """
     marker = payload.get("cached_author_render") or {}
     if not marker:
         return {}
-    archive = payload.get("cached_author_render_archive") or {}
-    manifest = archive.get("approval_manifest") or {}
-    original_row = archive.get("checkpoint_row") or {}
-    original = original_row.get("svg_checkpoint") or {}
-    from utils.owner_context import get_current_owner_id, get_current_tenant_id
-    index = marker.get("slide_index")
-    pages = manifest.get("pages") or []
-    witness = next((page for page in pages if page.get("slide_index") == index), None)
-    revision = manifest.get("recovery_revision")
-    if (revision not in REVISIONS or witness is None
-            or marker.get("schema") != marker_schema(revision)
-            or marker.get("revision") != revision
-            or marker.get("approval_manifest_hash") != digest(manifest)
-            or archive.get("approval_manifest_hash") != digest(manifest)
-            or marker.get("source_operation_id") != manifest.get("operation_id")
-            or str(get_current_owner_id()) != manifest.get("owner_id")
-            or get_current_tenant_id() != manifest.get("tenant_id")
-            or digest(original_row) != witness.get("row_digest")
-            or not APPROVED_CONVERTER_CODE_DIGEST
-            or converter_code_hashes() != manifest.get("converter_code_hashes")
-            or converter_code_digest() != APPROVED_CONVERTER_CODE_DIGEST
-            or manifest.get("converter_code_digest") != APPROVED_CONVERTER_CODE_DIGEST
-            or payload.get("nativeDeclarations") != original.get("nativeDeclarations")
-            or payload.get("source_preservation", {}).get("manifest_digest")
-            != manifest.get("source_manifest_digest")
-            or source_receipt_witness(payload) != witness.get("source_receipt_digest")
-            or payload.get("source_manifest_ref") != original.get("source_manifest_ref")
-            or payload.get("source_manifest_digest") != original.get("source_manifest_digest")):
-        _reject("svg_cached_author_render_sidecar_untrusted")
-    svg = cached_svg(original)
-    if (sha256_hex(svg.encode()) != witness.get("svg_sha256")
-            or payload.get("svg_content") != svg
-            or marker.get("verified_fixed_axis_migrations")
-            != witness.get("verified_fixed_axis_migrations")):
-        _reject("svg_cached_author_render_sidecar_untrusted")
-    expected = verified_fixed_axis_migrations(
-        original, svg, failed_drops=set(witness.get("failed_fixed_axis_ids") or []))
-    if expected != witness.get("verified_fixed_axis_migrations"):
-        _reject("svg_cached_author_render_sidecar_untrusted")
-    return expected
+    _reject("svg_cached_author_render_sidecar_untrusted")
 
 
 def derived_child_request_valid(job, manifest: dict, *,
@@ -791,329 +620,6 @@ class CachedAuthorRenderRecovery:
         return digest(self.manifest)
 
 
-async def build_manifest(session, operation, *, presentation_revision: int,
-                         recovery_revision: str = REVISION, action_operation=None,
-                         action_presentation_revision: int | None = None) -> CachedAuthorRenderRecovery:
-    """Rebuild every witness under the workspace action's open DB transaction."""
-    from services.presentation_generation_staging import _request_from_durable_payload
-    from services.source_content.manifest_store import admit_source_content_manifest_pin
-    from services.svg_source_layout import verify_source_receipt
-    from services.svg_asset_persistence import load_source_manifest_pointer
-    from services.artifact_store import configured_public_artifact_service
-    from services.generation_core.drivers.svg.native_publish import page_native_objects, canvas_point_per_px
-    from services.authored_canvas import request_canvas_metadata
-    from services.document_canvas_generation import (
-        svg_readability_policy, validate_svg_readability_policy,
-    )
-    from models.sql.provider_usage_receipt import ProviderUsageReceipt
-    from models.sql.async_presentation_generation_status import AsyncPresentationGenerationTaskModel
-    from utils.owner_context import get_current_owner_id, get_current_tenant_id
-
-    now = get_current_utc_datetime()
-    owner, tenant = get_current_owner_id(), get_current_tenant_id()
-    if (recovery_revision not in REVISIONS
-            or (recovery_revision == REVISION) != (action_operation is None)):
-        _reject("svg_cached_author_render_revision_invalid")
-    if not APPROVED_CONVERTER_CODE_DIGEST or converter_code_digest() != APPROVED_CONVERTER_CODE_DIGEST:
-        _reject("svg_cached_author_render_converter_unapproved")
-    if (owner is None or not tenant or operation.owner_id != owner
-            or operation.kind != "presentation.generate" or operation.state != "failed"
-            or operation.error_code != "public_provider_retry_limit_exceeded"
-            or not isinstance(operation.error_detail, dict)
-            or operation.error_detail.get("retryable") is not False
-            or operation.result_revision is not None or _live(operation.lease_expires_at, now)):
-        _reject()
-    parent_presentation = await session.scalar(select(PresentationModel).where(
-        PresentationModel.id == operation.presentation_id,
-        PresentationModel.owner_id == owner,
-    ).with_for_update())
-    if parent_presentation is None or parent_presentation.revision != presentation_revision:
-        _reject("svg_cached_author_render_presentation_changed")
-    prior_children = []
-    if recovery_revision == REVISION:
-        existing_child = await session.scalar(select(WorkspaceOperation).where(
-            WorkspaceOperation.retry_of_operation_id == operation.id,
-            WorkspaceOperation.owner_scope == operation.owner_scope,
-        ).with_for_update())
-        if existing_child is not None:
-            _reject("svg_cached_author_render_child_exists")
-    else:
-        action_presentation = await session.scalar(select(PresentationModel).where(
-            PresentationModel.id == action_operation.presentation_id,
-            PresentationModel.owner_id == owner,
-        ).with_for_update())
-        if (action_presentation is None
-                or action_presentation.revision != action_presentation_revision
-                or action_operation.owner_id != owner
-                or action_operation.owner_scope != operation.owner_scope
-                or action_operation.retry_of_operation_id != operation.id):
-            _reject("svg_cached_author_render_prior_child_unproven")
-        prior_children = await _prior_child_witnesses(
-            session, operation, now=now, lock=True)
-        if (len(prior_children) != 1
-                or prior_children[0]["operation_id"] != str(action_operation.id)
-                or prior_children[0]["operation_digest"]
-                != digest(action_operation.model_dump(mode="json"))
-                or prior_children[0]["operation_version"] != action_operation.version
-                or prior_children[0]["presentation_digest"]
-                != digest(action_presentation.model_dump(mode="json"))):
-            _reject("svg_cached_author_render_prior_child_unproven")
-    job = await session.scalar(select(PresentationGenerationJob).where(
-        PresentationGenerationJob.workspace_operation_id == operation.id,
-        PresentationGenerationJob.presentation_id == operation.presentation_id,
-    ).with_for_update())
-    if (job is None or job.state != "failed" or job.resume_allowed is not False
-            or not isinstance(job.total_slides, int) or job.total_slides < 1
-            or job.completed_slides != 0
-            or job.request_payload.get("strategy") != "svg"
-            or not isinstance(job.request_sha256, str)
-            or len(job.request_sha256) != 64
-            or job.request_sha256 != operation.request_hash
-            or operation.request_payload.get("generation_request") != job.request_payload
-            or str(operation.request_payload.get("job_id")) != str(job.id)
-            or str(operation.request_payload.get("task_id")) != str(job.task_id)
-            or str(job.id) != str(operation.request_payload.get("job_id"))
-            or _live(job.lease_expires_at, now)):
-        _reject()
-    parent_task = await session.scalar(select(AsyncPresentationGenerationTaskModel).where(
-        AsyncPresentationGenerationTaskModel.id == job.task_id,
-    ).with_for_update())
-    if parent_task is None:
-        _reject("svg_cached_author_render_parent_task_missing")
-    admission = await session.scalar(select(PublicOperationAdmission).where(
-        PublicOperationAdmission.operation_id == operation.id,
-    ).with_for_update())
-    if (admission is None or admission.state not in {"failed", "budget_exhausted"}
-            or admission.terminal_at is None
-            or admission.owner_id != owner or admission.tenant_id != tenant
-            or admission.initial_request_count != job.total_slides
-            or admission.retry_request_count != 0
-            or admission.estimated_reserved_microunits or admission.actual_reserved_microunits):
-        _reject()
-    leases = list(await session.scalars(select(PublicResourceLease).where(
-        PublicResourceLease.admission_id == admission.id,
-    ).order_by(PublicResourceLease.id).with_for_update()))
-    if any(item.state not in {"released", "cancelled", "expired"} for item in leases):
-        _reject("svg_cached_author_render_live_lease")
-    calls = list(await session.scalars(select(PublicProviderLogicalCall).where(
-        PublicProviderLogicalCall.admission_id == admission.id,
-    ).order_by(PublicProviderLogicalCall.slide_index).with_for_update()))
-    if (len(calls) != job.total_slides
-            or [item.slide_index for item in calls] != list(range(job.total_slides))
-            or any(item.stage != "author"
-                   or type(item.logical_call_ordinal) is not int
-                   or item.logical_call_ordinal < 1
-                   or item.state != "reported" or item.outcome != "succeeded"
-                   or item.reconciled_at is None for item in calls)):
-        _reject("svg_cached_author_render_provider_unresolved")
-    usage = list(await session.scalars(select(ProviderUsageReceipt).where(
-        ProviderUsageReceipt.job_id == job.id,
-    ).order_by(ProviderUsageReceipt.id).with_for_update()))
-    if (len(usage) != job.total_slides
-            or any(item.stage != "author" or item.outcome != "succeeded"
-                   or item.request_count != 1
-                               for item in usage)):
-        _reject("svg_cached_author_render_usage_unresolved")
-    budgets = list(await session.scalars(select(ProviderRuntimeBudget).where(
-        ProviderRuntimeBudget.job_id == job.id,
-    ).order_by(ProviderRuntimeBudget.id).with_for_update()))
-    reservations = list(await session.scalars(select(ProviderRuntimeReservation).join(
-        ProviderRuntimeBudget, ProviderRuntimeBudget.id == ProviderRuntimeReservation.budget_id,
-    ).where(ProviderRuntimeBudget.job_id == job.id)
-        .order_by(ProviderRuntimeReservation.id).with_for_update()))
-    if (any(item.estimated_reserved for item in budgets)
-            or any(item.state in {"reserved", "uncertain"} for item in reservations)):
-        _reject("svg_cached_author_render_provider_unresolved")
-    published = await session.scalar(select(SlideModel.id).where(
-        SlideModel.presentation == operation.presentation_id,
-        SlideModel.svg_content.is_not(None),
-        SlideModel.svg_content != "",
-    ).with_for_update())
-    if published is not None:
-        _reject("svg_cached_author_render_already_published")
-
-    request = _request_from_durable_payload(job.request_payload)
-    pin = request.source_content_manifest_pin
-    if (pin is None or request.vision_qa or request.web_search
-            or request.n_slides != job.total_slides):
-        _reject("svg_cached_author_render_source_plan_changed")
-    source_record = await session.scalar(select(SourceContentManifestRecord).where(
-        SourceContentManifestRecord.manifest_id == pin.manifest_id,
-        SourceContentManifestRecord.owner_id == owner,
-    ).with_for_update())
-    if source_record is None:
-        _reject("svg_cached_author_render_source_missing")
-    try:
-        source_manifest = await admit_source_content_manifest_pin(
-            session, owner_id=owner, manifest_id=pin.manifest_id, digest=pin.digest,
-        )
-    except Exception as error:
-        raise CachedAuthorRenderRejected("svg_cached_author_render_source_pin_invalid") from error
-    if len(source_manifest.units) != job.total_slides:
-        _reject("svg_cached_author_render_source_page_count_changed")
-    recovery_policy = svg_readability_policy(
-        request_canvas_metadata(request), source_restyle=True,
-        instructions=request.instructions)
-    if recovery_policy.get("quality_target_font_pt", 0) < 9.5:
-        _reject("svg_cached_author_render_quality_policy_invalid")
-    rows = list(await session.scalars(select(AuthoredSlideCheckpoint).where(
-        AuthoredSlideCheckpoint.job_id == job.id,
-    ).order_by(AuthoredSlideCheckpoint.slide_index).with_for_update()))
-    if [row.slide_index for row in rows] != list(range(job.total_slides)):
-        _reject("svg_cached_author_render_page_count_changed")
-    pages = []
-    source_asset_binding = None
-    for row in rows:
-        index = row.slide_index
-        payload = row.svg_checkpoint or {}
-        retry_fenced = (admission.state == "budget_exhausted"
-                        and retry_fenced_axis_failure(row, payload))
-        if (not (row.author_status == "completed" or retry_fenced)
-                or row.render_status not in {"pending", "failed"}
-                or row.persist_status != "pending"
-                or (row.render_status == "failed" and row.failed_stage != "render")
-                or (row.render_status == "pending" and (
-                    row.failed_stage is not None or row.render_sha256 is not None
-                    or (isinstance(payload.get("quality"), dict)
-                        and payload["quality"].get("measurement_complete") is True)))):
-            _reject("svg_cached_author_render_checkpoint_changed")
-        attempts = payload.get("attempts") or []
-        preservation = payload.get("source_preservation") or {}
-        if (len(attempts) != 1 or attempts[0].get("kind") != "provider"
-                or payload.get("inflight") is not None or payload.get("terminal")
-                or _unknown_provider(payload)
-                or payload.get("schema_version") != "svg-slide-checkpoint/v2"
-                or payload.get("source_format") != "svg"
-                or (payload.get("readability_policy") or {}).get("version")
-                not in {"svg-physical-readability/v1", "svg-physical-readability/v2"}
-                or preservation.get("contract_version") != "svg-source-preservation/v1"
-                or (preservation.get("source_authoring_contract") or {}).get("version")
-                != "svg-source-whole-page/v1"
-                or (preservation.get("source_chart_contract") or {}).get("version")
-                != "svg-source-native-chart/v1"
-                or payload.get("cache_only_remeasurement")
-                or payload.get("append_only_cache") or payload.get("recovery_revision")
-                or payload.get("model_attempt_count") != 1
-                or not isinstance(payload.get("input_digest"), str)):
-            _reject("svg_cached_author_render_checkpoint_changed")
-        try:
-            historical_policy = validate_svg_readability_policy(payload.get("readability_policy"))
-        except ValueError as error:
-            raise CachedAuthorRenderRejected(
-                "svg_cached_author_render_checkpoint_policy_invalid") from error
-        if historical_policy != (job.svg_style_snapshot or {}).get("readability_policy"):
-            _reject("svg_cached_author_render_checkpoint_policy_changed")
-        receipt = attempts[0].get("receipt") or {}
-        raw = attempts[0].get("raw_response")
-        svg = cached_svg(payload)
-        if (not isinstance(raw, str) or not raw or not isinstance(svg, str) or not svg
-                or receipt.get("validation_error") is not None
-                or str(receipt.get("raw_digest", "")).removeprefix("sha256:") != sha256_hex(raw.encode())
-                or str(receipt.get("source_digest", "")).removeprefix("sha256:") != sha256_hex(svg.encode())
-                or (payload.get("source_preservation") or {}).get("manifest_digest")
-                != source_manifest.manifest_digest):
-            _reject("svg_cached_author_render_svg_witness_changed")
-        try:
-            asset_manifest = await load_source_manifest_pointer(
-                session, configured_public_artifact_service(),
-                pointer=payload.get("source_manifest_ref"), owner_id=owner, tenant_id=tenant,
-            )
-            if asset_manifest.digest != payload.get("source_manifest_digest"):
-                _reject("svg_cached_author_render_asset_pin_changed")
-            binding = {
-                "source_manifest_presentation_id": str(asset_manifest.presentation_id),
-                "source_manifest_revision": asset_manifest.source_revision,
-                "source_manifest_digest": asset_manifest.digest,
-                "source_manifest_pointer_digest": digest(payload.get("source_manifest_ref")),
-            }
-            if source_asset_binding is None:
-                source_asset_binding = binding
-            elif binding != source_asset_binding:
-                _reject("svg_cached_author_render_asset_pin_changed")
-            verify_source_receipt(svg, payload.get("source_preservation"), source_manifest, index)
-            measured_failure = row.render_status == "failed" or retry_fenced
-            failed_drops = fixed_axis_failed_drops(payload) if measured_failure else set()
-            if measured_failure and not failed_drops:
-                _reject("svg_cached_author_render_wrong_failure")
-            measured = payload.get("quality") or {}
-            if (measured_failure and measured.get("failures")
-                    and fixed_axis_failed_drops({"quality": measured}) != failed_drops):
-                _reject("svg_cached_author_render_wrong_failure")
-            sidecars = verified_fixed_axis_migrations(payload, svg, failed_drops=failed_drops)
-            projected, summary = page_native_objects(
-                {**payload, "svg_content": svg},
-                pt_per_px=canvas_point_per_px(request_canvas_metadata(request)),
-                verified_fixed_axis_migrations=sidecars)
-        except Exception as error:
-            raise CachedAuthorRenderRejected("svg_cached_author_render_projection_unproven") from error
-        required = {item["element_id"] for item in
-                    (payload.get("source_preservation") or {}).get("whole_page_native_groups", [])}
-        accepted = {item["id"] for item in (projected or {}).get("objects", [])}
-        if not required or not required.issubset(accepted) or summary.get("dropped"):
-            _reject("svg_cached_author_render_projection_unproven")
-        if failed_drops and not failed_drops.issubset(required):
-            _reject("svg_cached_author_render_wrong_failure")
-        pages.append({
-            "slide_index": index,
-            "row_id": str(row.id),
-            "row_digest": digest(row.model_dump(mode="json")),
-            "raw_sha256": sha256_hex(raw.encode()),
-            "svg_sha256": sha256_hex(svg.encode()),
-            "input_digest": payload["input_digest"],
-            "author_receipt_digest": author_witness(payload),
-            "source_receipt_digest": source_receipt_witness(payload),
-            "failed_fixed_axis_ids": sorted(failed_drops),
-            "verified_fixed_axis_migrations": sidecars,
-            "retry_fenced_author": retry_fenced,
-        })
-    if not any(page["failed_fixed_axis_ids"] for page in pages):
-        _reject("svg_cached_author_render_wrong_failure")
-    manifest = {
-        "recovery_revision": recovery_revision,
-        "operation_id": str(operation.id),
-        "operation_version": operation.version,
-        "operation_request_digest": digest(operation.request_payload),
-        "operation_digest": digest(operation.model_dump(mode="json")),
-        "operation_error_digest": digest(operation.error_detail),
-        "presentation_id": str(operation.presentation_id),
-        "presentation_revision": presentation_revision,
-        "presentation_digest": digest(parent_presentation.model_dump(mode="json")),
-        "owner_id": str(owner), "tenant_id": tenant,
-        "job_id": str(job.id), "job_request_digest": digest(job.request_payload),
-        "job_request_presentation_id_present": "presentation_id" in job.request_payload,
-        "job_request_presentation_id": job.request_payload.get("presentation_id"),
-        "submitted_request_sha256": job.request_sha256,
-        "job_digest": digest(job.model_dump(mode="json")),
-        "parent_task_digest": digest(parent_task.model_dump(mode="json")),
-        "style_digest": digest(job.svg_style_snapshot),
-        "source_pin_digest": digest(pin.model_dump(mode="json")),
-        "source_manifest_digest": source_manifest.manifest_digest,
-        "source_manifest_asset_binding": source_asset_binding,
-        "recovery_readability_policy": recovery_policy,
-        "converter_code_hashes": converter_code_hashes(),
-        "converter_code_digest": converter_code_digest(),
-        "old_admission_digest": digest(admission.model_dump(mode="json")),
-        "old_logical_calls_digest": digest([item.model_dump(mode="json") for item in calls]),
-        "old_usage_digest": digest([item.model_dump(mode="json") for item in usage]),
-        "old_resource_leases_digest": digest([item.model_dump(mode="json") for item in leases]),
-        "old_runtime_budgets_digest": digest([item.model_dump(mode="json") for item in budgets]),
-        "old_runtime_reservations_digest": digest([item.model_dump(mode="json") for item in reservations]),
-        "pages": pages,
-        "max_additional_provider_calls": 0,
-        "expected_page_count": job.total_slides,
-        "append_only_recovery": True,
-    }
-    if recovery_revision == REVISION_V2:
-        manifest.update({
-            "action_operation_id": str(action_operation.id),
-            "action_operation_version": action_operation.version,
-            "action_presentation_id": str(action_operation.presentation_id),
-            "action_presentation_revision": action_presentation_revision,
-            "prior_children": prior_children,
-        })
-    return CachedAuthorRenderRecovery(rows, manifest)
-
-
 def action_id_for(operation, presentation_revision: int, *, revision: str = REVISION) -> str:
     if revision not in REVISIONS:
         _reject("svg_cached_author_render_revision_invalid")
@@ -1123,93 +629,13 @@ def action_id_for(operation, presentation_revision: int, *, revision: str = REVI
             + ":" + str(presentation_revision))
 
 
-async def build_manifest_v2(session, action_operation, *, presentation_revision: int):
-    """Reprove the failed zero-call action child and the original cache parent."""
-    if action_operation.retry_of_operation_id is None:
-        _reject("svg_cached_author_render_prior_child_unproven")
-    parent = await session.scalar(select(WorkspaceOperation).where(
-        WorkspaceOperation.id == action_operation.retry_of_operation_id,
-        WorkspaceOperation.owner_scope == action_operation.owner_scope,
-    ).with_for_update())
-    if parent is None:
-        _reject("svg_cached_author_render_prior_child_unproven")
-    parent_presentation = await session.scalar(select(PresentationModel).where(
-        PresentationModel.id == parent.presentation_id,
-        PresentationModel.owner_id == parent.owner_id,
-    ).with_for_update())
-    if parent_presentation is None:
-        _reject("svg_cached_author_render_prior_child_unproven")
-    return await build_manifest(
-        session, parent, presentation_revision=parent_presentation.revision,
-        recovery_revision=REVISION_V2, action_operation=action_operation,
-        action_presentation_revision=presentation_revision)
-
-
-async def build_manifest_v3(session, action_operation, *, presentation_revision: int):
-    """Rebuild original cached pages and bind both failed zero-call children."""
-    from uuid import UUID
-
-    if action_operation.retry_of_operation_id is None:
-        _reject("svg_cached_author_render_prior_child_unproven")
-    v1_child = await session.scalar(select(WorkspaceOperation).where(
-        WorkspaceOperation.id == action_operation.retry_of_operation_id,
-        WorkspaceOperation.owner_scope == action_operation.owner_scope,
-    ).with_for_update())
-    if v1_child is None or v1_child.retry_of_operation_id is None:
-        _reject("svg_cached_author_render_prior_child_unproven")
-    v1_presentation = await session.scalar(select(PresentationModel).where(
-        PresentationModel.id == v1_child.presentation_id,
-        PresentationModel.owner_id == v1_child.owner_id,
-    ).with_for_update())
-    if v1_presentation is None:
-        _reject("svg_cached_author_render_prior_child_unproven")
-    base = await build_manifest_v2(
-        session, v1_child, presentation_revision=v1_presentation.revision)
-    if (base.manifest.get("operation_id") != str(v1_child.retry_of_operation_id)
-            or len(base.manifest.get("prior_children") or []) != 1):
-        _reject("svg_cached_author_render_prior_child_unproven")
-    parent = await session.scalar(select(WorkspaceOperation).where(
-        WorkspaceOperation.id == UUID(base.manifest["operation_id"]),
-        WorkspaceOperation.owner_scope == action_operation.owner_scope,
-    ).with_for_update())
-    action_presentation = await session.scalar(select(PresentationModel).where(
-        PresentationModel.id == action_operation.presentation_id,
-        PresentationModel.owner_id == action_operation.owner_id,
-    ).with_for_update())
-    if parent is None or action_presentation is None:
-        _reject("svg_cached_author_render_prior_child_unproven")
-    witness = await _rendered_v2_child_witness(
-        session, parent, base.manifest["prior_children"][0],
-        now=get_current_utc_datetime(), lock=True)
-    source_fields = ("source_pin_digest", "source_manifest_digest",
-                     "style_digest", "job_request_digest")
-    page_keys = ("slide_index", "row_digest", "raw_sha256", "svg_sha256",
-                 "input_digest", "author_receipt_digest", "source_receipt_digest")
-    if (witness["operation_id"] != str(action_operation.id)
-            or witness["operation_digest"] != digest(action_operation.model_dump(mode="json"))
-            or witness["operation_version"] != action_operation.version
-            or witness["presentation_id"] != str(action_operation.presentation_id)
-            or witness["presentation_revision"] != presentation_revision
-            or witness["presentation_digest"]
-            != digest(action_presentation.model_dump(mode="json"))
-            or any(witness.get(key) != base.manifest.get(key) for key in source_fields)
-            or witness["source_page_witnesses"] != [
-                {key: page.get(key) for key in page_keys}
-                for page in base.manifest["pages"]]):
-        _reject("svg_cached_author_render_prior_child_unproven")
-    manifest = deepcopy(base.manifest)
-    manifest.update({
-        "recovery_revision": REVISION_V3,
-        "action_operation_id": str(action_operation.id),
-        "action_operation_version": action_operation.version,
-        "action_presentation_id": str(action_operation.presentation_id),
-        "action_presentation_revision": presentation_revision,
-        "prior_children": [base.manifest["prior_children"][0], witness],
-    })
-    return CachedAuthorRenderRecovery(base.rows, manifest)
-
-
 async def verify_action(session, operation, request, *, presentation_revision):
+    """Reject a cached-author-render approval request exactly as the stale approval did.
+
+    The request checks and the v2/v3 prior-child lookups (with their row locks)
+    run in the same order as before, so each request fails with the same code;
+    every request that passes them fails on the unapproved converter.
+    """
     revision = request.recovery_revision
     if (request.action != "retry" or revision not in REVISIONS
             or request.expected_operation_version is None or request.expected_revision is None
@@ -1219,16 +645,36 @@ async def verify_action(session, operation, request, *, presentation_revision):
     action_key = action_id_for(operation, presentation_revision, revision=revision)
     if request.action_id != action_key or request.idempotency_key != action_key:
         _reject("svg_cached_author_render_approval_required")
-    if revision == REVISION_V3:
-        recovery = await build_manifest_v3(
-            session, operation, presentation_revision=presentation_revision)
-    elif revision == REVISION_V2:
-        recovery = await build_manifest_v2(
-            session, operation, presentation_revision=presentation_revision)
-    else:
-        recovery = await build_manifest(session, operation,
-                                        presentation_revision=presentation_revision)
-    return recovery
+    if revision in {REVISION_V2, REVISION_V3}:
+        action = operation
+        if revision == REVISION_V3:
+            action = await _locked_retry_parent(session, operation)
+            if action.retry_of_operation_id is None:
+                _reject("svg_cached_author_render_prior_child_unproven")
+            await _locked_presentation(session, action)
+        await _locked_presentation(session, await _locked_retry_parent(session, action))
+    _reject("svg_cached_author_render_converter_unapproved")
+
+
+async def _locked_retry_parent(session, operation):
+    if operation.retry_of_operation_id is None:
+        _reject("svg_cached_author_render_prior_child_unproven")
+    parent = await session.scalar(select(WorkspaceOperation).where(
+        WorkspaceOperation.id == operation.retry_of_operation_id,
+        WorkspaceOperation.owner_scope == operation.owner_scope,
+    ).with_for_update())
+    if parent is None:
+        _reject("svg_cached_author_render_prior_child_unproven")
+    return parent
+
+
+async def _locked_presentation(session, operation):
+    presentation = await session.scalar(select(PresentationModel).where(
+        PresentationModel.id == operation.presentation_id,
+        PresentationModel.owner_id == operation.owner_id,
+    ).with_for_update())
+    if presentation is None:
+        _reject("svg_cached_author_render_prior_child_unproven")
 
 
 def child_checkpoint_payload(row, recovery, *, child_operation_id):

@@ -222,7 +222,7 @@ async def _verify_inherited_source_manifest(session, manifest, pointer, *, conte
     from models.sql.workspace import WorkspaceOperation
     from models.sql.presentation import PresentationModel
     from services.svg_timeout_repurchase import verify_append_only_child_lineage
-    from services.svg_cached_author_render_recovery import (
+    from services.svg_cached_author_render_lineage import (
         REVISIONS as CACHED_AUTHOR_RENDER_REVISIONS, verify_child_lineage,
     )
     from utils.hashing import canonical_json_sha256

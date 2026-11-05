@@ -302,7 +302,7 @@ def _design_context(ctx, pages, *, job, read_png, review_principles_version=None
 def _global_review_context(ctx, context, pages, local_pages, records):
     """Narrow only the global wire scope after the existing full local gates."""
     from xml.etree import ElementTree as ET
-    from services.svg_cached_author_render_recovery import _unknown_provider
+    from services.svg_recovery_witness import unknown_provider as _unknown_provider
     from services.source_content.contracts import SourceContentManifest
 
     representatives = sorted({group["representative"] for group in context["composition"]["groups"]})
