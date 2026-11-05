@@ -220,7 +220,8 @@ def get_svg_template_body_exemplars_env(settings: RuntimeSettings | None = None)
 
 def get_svg_template_outline_sections_env(settings: RuntimeSettings | None = None) -> bool:
     """Whether a template-redesign deck's outline is asked for the template's page structure
-    (``SVG_TEMPLATE_OUTLINE_SECTIONS``: ``on`` / ``off``; unset or unknown: off).
+    (``SVG_TEMPLATE_OUTLINE_SECTIONS``: ``on``, also when unset: the default since the paired
+    measurement in docs/template-a-visuals-progress-20261105.md; ``off`` or an unknown value: off).
 
     On, the outline prompt adds :data:`utils.svg_template_outline.TEMPLATE_SECTIONS_CLAUSE`:
     a key-message line and two to four ``###`` sub-sections per content slide, each holding
@@ -232,7 +233,7 @@ def get_svg_template_outline_sections_env(settings: RuntimeSettings | None = Non
     from utils.get_env import get_setting_env
 
     value = (get_setting_env("SVG_TEMPLATE_OUTLINE_SECTIONS", settings) or "").strip().lower()
-    return value in {"on", "true", "1"}
+    return value in {"", "on", "true", "1"}
 
 
 def get_svg_template_visual_guidance_env(settings: RuntimeSettings | None = None) -> bool:

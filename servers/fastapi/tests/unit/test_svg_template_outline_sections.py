@@ -118,23 +118,24 @@ def test_extra_level_two_headings_are_demoted_so_the_page_keeps_one_title():
     assert demote_extra_titles(none).slides[0].content == "### 1. 부분\n- a"
 
 
-def test_the_knob_reads_on_true_and_1_and_defaults_to_off(monkeypatch):
+def test_the_knob_defaults_to_on_and_reads_off_or_unknown_as_off(monkeypatch):
     monkeypatch.delenv("SVG_TEMPLATE_OUTLINE_SECTIONS", raising=False)
-    assert get_svg_template_outline_sections_env() is False
-    for value in ("on", "TRUE", "1"):
+    assert get_svg_template_outline_sections_env() is True
+    for value in ("on", "TRUE", "1", ""):
         monkeypatch.setenv("SVG_TEMPLATE_OUTLINE_SECTIONS", value)
         assert get_svg_template_outline_sections_env() is True
-    monkeypatch.setenv("SVG_TEMPLATE_OUTLINE_SECTIONS", "grammar")
-    assert get_svg_template_outline_sections_env() is False
+    for value in ("off", "false", "0", "grammar"):
+        monkeypatch.setenv("SVG_TEMPLATE_OUTLINE_SECTIONS", value)
+        assert get_svg_template_outline_sections_env() is False
 
 
 def test_only_a_template_redesign_deck_gets_the_sections_and_only_with_the_knob(monkeypatch):
     redesign = SimpleNamespace(svg_template_pin={"templateId": "t"}, svg_template_mode="template-redesign")
     free = SimpleNamespace(svg_template_pin={"templateId": "t"}, svg_template_mode="free-design")
     plain = SimpleNamespace(svg_template_pin=None, svg_template_mode=None)
-    monkeypatch.delenv("SVG_TEMPLATE_OUTLINE_SECTIONS", raising=False)
+    monkeypatch.setenv("SVG_TEMPLATE_OUTLINE_SECTIONS", "off")
     assert template_outline_sections(redesign) is False
-    monkeypatch.setenv("SVG_TEMPLATE_OUTLINE_SECTIONS", "on")
+    monkeypatch.delenv("SVG_TEMPLATE_OUTLINE_SECTIONS", raising=False)
     assert template_outline_sections(redesign) is True
     assert template_outline_sections(free) is False
     assert template_outline_sections(plain) is False

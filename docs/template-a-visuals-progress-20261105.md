@@ -238,7 +238,8 @@ which about $17 after the key change.
 
 ## Next
 
-1. User decision: `SVG_TEMPLATE_OUTLINE_SECTIONS` default on (and whether to re-run sections alone first).
+1. Done: `SVG_TEMPLATE_OUTLINE_SECTIONS` defaults to on (user decision, without a sections-only re-run; watch first-draft
+   acceptance on template decks, see the caveat above).
 2. Template page renders for the author (registration change, re-registration of templates).
 3. Converter digest (`wip/s2n`): decision above, merge after this branch.
 4. Real-bug candidates in `docs/test-failure-baseline-20261105.md` (owner RLS for the `svg_template*` tables first).
