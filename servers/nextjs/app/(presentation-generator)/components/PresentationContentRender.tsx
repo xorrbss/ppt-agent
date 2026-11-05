@@ -8,6 +8,7 @@ import type { PresentationDriverId } from "@/lib/presentation-profile";
 import { resolveAuthoredCanvas, type AuthoredCanvasContract } from "@/lib/authored-canvas";
 import type { RootState } from "@/store/store";
 import { resolveAuthoredImageUrl } from "@/utils/api";
+import { resolveSvgSlideRevision } from "@/lib/svg-slide-revision";
 
 import { AuthoredSlidePreview } from "./AuthoredSlidePreview";
 import { SvgSlidePreview } from "./SvgSlidePreview";
@@ -53,11 +54,8 @@ function AuthoredContent({
 function SvgContent({ slide, canvas, resolveSvgAssets }: DriverRendererProps) {
   const t = useTranslations("a2cPreview");
   const imageRef = slide?.content?.image || slide?.properties?.image;
-  const manifest = slide?.content?.svgAssetManifest;
   const fixedGlyphPreview = slide?.content?.svgReceipt?.fixedGlyphPreview;
-  const revision = fixedGlyphPreview?.version === "svg-fixed-glyph-preview/v1"
-    ? (manifest?.slideRevision ?? fixedGlyphPreview?.canonicalSvgDigest)
-    : (manifest?.slideRevision ?? slide?.content?.svgReceipt?.source_digest ?? slide?.svg_content);
+  const revision = resolveSvgSlideRevision(slide);
   return <SlideErrorBoundary label={t("slide", { number: slide.index + 1 })}><SvgSlidePreview slideIndex={slide.index} slideId={slide.id} svg={slide.svg_content} resolveAssets={resolveSvgAssets} revision={revision} imageSrc={resolveAuthoredImageUrl(imageRef)} canvas={canvas} fixedGlyphPreview={fixedGlyphPreview} /></SlideErrorBoundary>;
 }
 
