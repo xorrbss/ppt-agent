@@ -19,7 +19,7 @@ from services.generation_core.drivers.svg.canvas_brief import (
 )
 from utils.authored_styles import resolve_authored_style
 from utils.llm_calls.author_canvas_shape import aspect_ratio_label, composition_clause
-from services.generation_core.authoring.author_slide_svg import svg_author_rules
+from services.generation_core.authoring.author_slide_svg import free_composition_canvas_clause, svg_author_rules
 from services.generation_core.drivers.svg.svg_style_adapter import adapt_svg_style
 
 FASTAPI_ROOT = Path(__file__).resolve().parents[2]
@@ -36,11 +36,11 @@ ANCHOR = re.compile(r"1280x720|1280 by 720|16:9")
 EXPECTED_ANCHORS = {
     "academic-edge": (1, 0), "architectural-portfolio": (1, 0), "botanical-journal": (1, 0),
     "broadside": (1, 1), "chroma-fold": (0, 0), "clinical-precision": (1, 0), "cobalt-editorial": (1, 0),
-    "cyber-ai": (1, 0), "default": (1, 0), "devax-si-proposal": (1, 1), "editorial-tritone": (1, 0),
+    "cyber-ai": (1, 0), "default": (1, 0), "devax-si-proposal": (1, 0), "editorial-tritone": (1, 0),
     "exec-report": (1, 0), "flat-infographic": (1, 0), "geometric-mono": (1, 0), "groovy-70s": (1, 0),
     "hyundai-culture-center": (1, 0), "iso-blueprint": (1, 0), "kbs-company-proposal": (0, 0),
     "liquid-executive": (1, 0), "luxury-editorial": (1, 0), "minimal-vellum": (1, 0), "neo-grid-bold": (1, 0),
-    "neon-venture": (1, 0), "osb-smart-banking": (0, 1), "prestige-gold": (1, 0), "prime-noir": (1, 0),
+    "neon-venture": (1, 0), "osb-smart-banking": (0, 0), "prestige-gold": (1, 0), "prime-noir": (1, 0),
     "prismatic-tech": (1, 0), "project-launch": (1, 0), "scholars-journal": (1, 0), "science-sketch": (1, 0),
     "screenshot-blue": (0, 0), "signal": (2, 0), "silicon-refined": (1, 0), "sketch-note": (1, 0),
     "startup-aura": (1, 0), "strategic-navy": (1, 0), "structured-mint": (1, 0), "tech-blueprint": (1, 0),
@@ -85,7 +85,7 @@ def _guidance(snapshot: dict) -> str:
 def test_expected_anchor_table_covers_every_canonical_style():
     canonical = {_style(style_id).id for style_id in ADMITTED_IDS}
     assert set(EXPECTED_ANCHORS) == canonical
-    assert sum(1 for a, b in EXPECTED_ANCHORS.values() if a or b) == 36
+    assert sum(1 for a, b in EXPECTED_ANCHORS.values() if a or b) == 35
 
 
 @pytest.mark.parametrize("size", SIZES)
@@ -134,8 +134,11 @@ def test_overrides_are_byte_identical_across_sizes(style_id, size):
 
 @pytest.mark.parametrize("size", SIZES)
 def test_the_two_override_anchors_survive_by_design(size):
-    blue = json.dumps(_snapshot("screenshot-blue", size)["overrides"], ensure_ascii=False)
-    assert "never output the 1280 by 720 preview size" in blue
+    # svg-style/v4 (free-svg) no longer carries layout_hints overrides: the
+    # screenshot-blue canvas-authority hint is replaced by the free
+    # composition canvas clause, which names the pinned canvas size.
+    blue = _snapshot("screenshot-blue", size)["overrides"]
+    assert "layout_hints" not in blue
     fold = json.dumps(_snapshot("chroma-fold", size)["overrides"], ensure_ascii=False)
     assert "using 1280x720 as the design reference" in fold
 
@@ -208,7 +211,8 @@ def test_digest_moves_off_16x9_only_and_is_stable(style_id):
 def test_svg_rules_end_with_the_clause_and_the_caveat(size):
     w, h = size
     rules = svg_author_rules({"canvas": {"width": w, "height": h}}, 16)
-    assert rules.endswith(composition_clause(w, h) + reference_caveat(w, h))
+    assert rules.endswith(free_composition_canvas_clause(w, h) + reference_caveat(w, h))
+    assert f"Compose natively for the {w}x{h}px" in rules
     assert f"Fill the {w}x{h} canvas" in rules
     assert rules.count("REFERENCE IMAGES") == 1
 

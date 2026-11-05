@@ -249,11 +249,16 @@ class PresentationGenerationRequestV2(PublicWireModel):
                 resolve_generation_strategy,
             )
 
-            if resolve_generation_strategy(self) != "svg":
+            # D4 (2026-11-05): raster reconstruction quality is measured on A4
+            # only, so the canvas must be an explicit A4 document canvas even
+            # though svg now admits other canvases.
+            if self.page_size != "A4" or resolve_generation_strategy(self) != "svg":
                 raise ValueError("raster_a4_svg_required")
             from utils.svg_template_rules import resolve_source_template_style
 
-            self.authored_style = resolve_source_template_style(self.authored_style or "screenshot-blue").id
+            # Validate only: this model is frozen. The internal request built by
+            # the bridge resolves and pins the effective style id itself.
+            resolve_source_template_style(self.authored_style or "screenshot-blue")
             if self.slides_markdown is not None or self.quality_policy == "release-v1":
                 raise ValueError("source_content_generation_option_conflict")
             return self
