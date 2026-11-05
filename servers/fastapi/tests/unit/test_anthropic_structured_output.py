@@ -64,6 +64,15 @@ WIRE_SCHEMA = {
 ANSWER = {"title": "Quarterly plan", "bullets": ["Grow", "Hire"]}
 
 
+@pytest.fixture(autouse=True)
+def _fresh_grammar_rejection_memo():
+    from utils.anthropic_structured_output import reset_grammar_rejection_memo
+
+    reset_grammar_rejection_memo()
+    yield
+    reset_grammar_rejection_memo()
+
+
 def _message_json(text: str, *, model: str = "claude-sonnet-5-5", stop: str = "end_turn") -> dict:
     return {
         "id": "msg_test",
@@ -439,8 +448,74 @@ def test_grammar_rejection_is_retried_once_with_the_schema_in_the_prompt(caplog)
     native, fallback = recorder.bodies[:2]
     assert native["output_config"]["format"]["type"] == "json_schema"
     _assert_prompt_json_request(fallback)
-    assert len(recorder.bodies) == 4  # one native attempt and one retry per call
+    assert len(recorder.bodies) == 3  # the second call skips the rejected native attempt
     assert caplog.text.count("anthropic_structured_output_prompt_json name=grammar_plan reason=grammar_rejected") == 1
+
+
+def _grammar_400s(recorder: _Recorder) -> int:
+    return sum(1 for body in recorder.bodies if "format" in (body.get("output_config") or {}))
+
+
+def test_grammar_rejection_is_paid_once_per_model_and_schema_across_a_deck():
+    recorder = _Recorder(json.dumps(ANSWER), reject_output_format=GRAMMAR_TOO_LARGE)
+    client = _client(recorder)
+    for _ in range(6):
+        result = client.generate(
+            model="claude-sonnet-5-5", messages=_messages(), response_format=_structured("deck_review")
+        )
+        assert result.content == ANSWER
+    assert _grammar_400s(recorder) == 1
+    assert len(recorder.bodies) == 7  # one rejected native attempt, six prompt-JSON calls
+    _assert_prompt_json_request(recorder.bodies[-1])
+
+    # A different schema is still tried natively; a different model is too.
+    other = {**SCHEMA, "required": ["title"]}
+    client.generate(model="claude-sonnet-5-5", messages=_messages(), response_format=_structured("o", other))
+    client.generate(model="claude-opus-5-5", messages=_messages(), response_format=_structured("deck_review"))
+    assert _grammar_400s(recorder) == 3
+
+
+def test_grammar_rejection_is_remembered_across_stream_and_blocking_calls():
+    recorder = _Recorder(json.dumps(ANSWER), reject_output_format=GRAMMAR_TOO_LARGE)
+    client = _client(recorder)
+    list(client.generate(model="claude-sonnet-5-5", messages=_messages(), response_format=_structured(), stream=True))
+    client.generate(model="claude-sonnet-5-5", messages=_messages(), response_format=_structured())
+    list(client.generate(model="claude-sonnet-5-5", messages=_messages(), response_format=_structured(), stream=True))
+    assert _grammar_400s(recorder) == 1
+
+
+def test_grammar_rejection_memo_is_thread_safe():
+    import threading
+
+    recorder = _Recorder(json.dumps(ANSWER), reject_output_format=GRAMMAR_TOO_LARGE)
+    client = _client(recorder)
+    client.generate(model="claude-sonnet-5-5", messages=_messages(), response_format=_structured())
+    errors: list[BaseException] = []
+
+    def call() -> None:
+        try:
+            client.generate(model="claude-sonnet-5-5", messages=_messages(), response_format=_structured())
+        except BaseException as error:  # pragma: no cover - failure path
+            errors.append(error)
+
+    threads = [threading.Thread(target=call) for _ in range(8)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+    assert not errors
+    assert _grammar_400s(recorder) == 1
+
+
+def test_prompt_json_fallback_does_not_repeat_a_schema_the_system_prompt_states():
+    recorder = _Recorder(json.dumps(ANSWER), reject_output_format=GRAMMAR_TOO_LARGE)
+    own = "Review. Return strict JSON matching this schema: " + json.dumps(SCHEMA, separators=(",", ":"))
+    messages = [SystemMessage(content=own), UserMessage(content="Go.")]
+    _client(recorder).generate(model="claude-sonnet-5-5", messages=messages, response_format=_structured())
+    system = recorder.bodies[-1]["system"]
+    assert system.startswith(own)
+    assert system.count('"maxLength"') == 1  # the caller's copy only
+    assert "JSON Schema stated above" in system
 
 
 def test_grammar_rejection_retry_keeps_the_authoring_effort():

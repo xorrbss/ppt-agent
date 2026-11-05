@@ -53,6 +53,7 @@ place of ``thinking: {"type": "disabled"}``, which those models reject.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 import threading
@@ -417,8 +418,22 @@ def is_grammar_rejection(error: BaseException) -> bool:
     return False
 
 
-def json_instruction(schema: Mapping[str, Any] | None) -> str:
-    """The system-prompt addition for the prompt-instructed JSON path."""
+def json_instruction(
+    schema: Mapping[str, Any] | None, *, schema_in_prompt: bool = False
+) -> str:
+    """The system-prompt addition for the prompt-instructed JSON path.
+
+    ``schema_in_prompt`` means the caller's own system prompt already states
+    the schema, so only the conformance instruction is added.
+    """
+
+    if schema and schema_in_prompt:
+        return (
+            "Respond with only a single JSON object that conforms to the JSON Schema "
+            "stated above, including every constraint it states (required properties, "
+            "enums, lengths, ranges and item counts). Do not wrap it in Markdown code "
+            "fences and do not write anything before or after it."
+        )
 
     if not schema:
         return (
@@ -437,15 +452,41 @@ def json_instruction(schema: Mapping[str, Any] | None) -> str:
 def with_json_instruction(messages: list[Any], schema: Mapping[str, Any] | None) -> list[Any]:
     """Append :func:`json_instruction` to the system prompt (llmai reads the first)."""
 
-    instruction = json_instruction(schema)
     updated = list(messages)
     for index, message in enumerate(updated):
         if isinstance(message, SystemMessage):
+            instruction = json_instruction(
+                schema,
+                schema_in_prompt=_prompt_states_schema(message.content, schema),
+            )
             updated[index] = message.model_copy(
                 update={"content": f"{message.content}\n\n{instruction}"}
             )
             return updated
-    return [SystemMessage(content=instruction), *updated]
+    return [SystemMessage(content=json_instruction(schema)), *updated]
+
+
+def _prompt_states_schema(content: object, schema: Mapping[str, Any] | None) -> bool:
+    """Whether a system prompt already embeds ``schema`` verbatim.
+
+    The vision advisory prompts append ``json.dumps(schema)`` (compact
+    separators) themselves; pasting the same schema again only adds input
+    tokens. Only an exact serialization of the full schema counts.
+    """
+
+    if not schema or not isinstance(content, str):
+        return False
+    return any(
+        json.dumps(
+            schema,
+            separators=(",", ":"),
+            ensure_ascii=ensure_ascii,
+            sort_keys=sort_keys,
+        )
+        in content
+        for ensure_ascii in (True, False)
+        for sort_keys in (False, True)
+    )
 
 
 #: Models that reject ``tool_choice`` ``any`` / ``tool`` with HTTP 400.
@@ -496,6 +537,38 @@ def _warn_prompt_json_once(name: str, reason: str, detail: object) -> None:
     )
 
 
+#: ``(model, schema digest)`` pairs for which the API refused to compile the
+#: schema into a grammar (HTTP 400). Per process: a deck makes many calls with
+#: the same schema, and each would otherwise pay the 400 again.
+_GRAMMAR_REJECTED: set[tuple[str, str]] = set()
+_GRAMMAR_REJECTED_LOCK = threading.Lock()
+_GRAMMAR_REJECTED_MAX = 256
+
+
+def _schema_digest(schema: Mapping[str, Any]) -> str:
+    canonical = json.dumps(schema, sort_keys=True, ensure_ascii=False, default=str)
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+
+def _grammar_known_rejected(model: object, digest: str) -> bool:
+    with _GRAMMAR_REJECTED_LOCK:
+        return (_model_key(model), digest) in _GRAMMAR_REJECTED
+
+
+def _remember_grammar_rejection(model: object, digest: str) -> None:
+    with _GRAMMAR_REJECTED_LOCK:
+        if len(_GRAMMAR_REJECTED) >= _GRAMMAR_REJECTED_MAX:
+            _GRAMMAR_REJECTED.clear()
+        _GRAMMAR_REJECTED.add((_model_key(model), digest))
+
+
+def reset_grammar_rejection_memo() -> None:
+    """Forget remembered grammar rejections (tests)."""
+
+    with _GRAMMAR_REJECTED_LOCK:
+        _GRAMMAR_REJECTED.clear()
+
+
 @dataclass(frozen=True)
 class _StructuredPlan:
     """How one structured request is sent.
@@ -509,6 +582,7 @@ class _StructuredPlan:
     name: str = "response"
     schema: Mapping[str, Any] | None = None
     output_format: Mapping[str, Any] | None = None
+    schema_digest: str = ""
 
 
 _CACHE_SYSTEM_PROMPT: ContextVar[bool] = ContextVar("anthropic_cache_system_prompt", default=False)
@@ -648,11 +722,17 @@ class RepositoryAnthropicClient(AnthropicClient):
                 error,
             )
             return _StructuredPlan("llmai")
+        digest = _schema_digest(schema)
+        if _grammar_known_rejected(model, digest):
+            # The compiler already refused this schema for this model: skip the
+            # 400 round trip and go straight to the prompt-instructed path.
+            return _StructuredPlan("prompt", name=name, schema=schema)
         return _StructuredPlan(
             "native",
             name=name,
             schema=schema,
             output_format={"type": "json_schema", "schema": wire_schema},
+            schema_digest=digest,
         )
 
     def _native_extra_body(
@@ -703,6 +783,7 @@ class RepositoryAnthropicClient(AnthropicClient):
             except Exception as error:
                 if not is_grammar_rejection(error):
                     raise
+                _remember_grammar_rejection(model, plan.schema_digest)
                 _warn_prompt_json_once(plan.name, "grammar_rejected", error)
             else:
                 return _with_parsed_content(result)
@@ -779,6 +860,7 @@ class RepositoryAnthropicClient(AnthropicClient):
                 # raised before the first event; never retry after output.
                 if started or not is_grammar_rejection(error):
                     raise
+                _remember_grammar_rejection(model, plan.schema_digest)
                 _warn_prompt_json_once(plan.name, "grammar_rejected", error)
         yield from _structured_stream_events(
             super()._generate_stream(
