@@ -13,6 +13,10 @@ The customer deck, its renders and anything derived from its text stay out of th
   of white and `#0F172A`. Output bytes are unchanged when the primary already passes. The ink rule moved to
   `utils.color_contrast.readable_ink`; the fallback page builder's `_ink_on` uses it. Tests:
   `tests/unit/test_svg_page_number_contrast.py`. Closes the open item at the end of the 2026-11-04 handoff.
+  After the merge with `main`'s verifier revision ledgers it applies only to decks whose frozen style snapshot
+  carries `page_number_ink: svg-page-number-ink/v1` (pinned at admission by `pin_svg_style`), so stored decks
+  replay byte-identically and their evidence keeps validating (`606d702a`; ledger states reviewed under the
+  current revisions with reasons in `services/verifier_revisions.py`).
 * `274f08ba` four stale tests in `test_owner_scope_postgres_principal.py`.
 * Full pytest baseline and failure classification: `docs/test-failure-baseline-20261105.md` (285 pre-existing
   failures, deterministic). Real-bug candidates there, not fixed: alembic drift for
