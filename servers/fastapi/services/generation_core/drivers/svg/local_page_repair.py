@@ -70,8 +70,8 @@ def _tag(node) -> str:
     return node.tag.rsplit("}", 1)[-1]
 
 
-def _affine(transform: str | None):
-    """``(sx, sy, tx, ty)`` of a translate/scale list, or ``None`` for anything else."""
+def translate_scale_affine(transform: str | None):
+    """``(sx, sy, tx, ty)`` of an SVG translate/scale list, or ``None`` for any other transform."""
 
     result = (1.0, 1.0, 0.0, 0.0)
     text = (transform or "").strip()
@@ -87,12 +87,13 @@ def _affine(transform: str | None):
             item = (values[0], values[-1], 0.0, 0.0)
         else:
             return None
-        result = _compose(result, item)
+        result = compose_affine(result, item)
         position = match.end()
     return result
 
 
-def _compose(outer, inner):
+def compose_affine(outer, inner):
+    """``outer`` applied after ``inner``, both ``(sx, sy, tx, ty)``."""
     return (outer[0] * inner[0], outer[1] * inner[1],
             outer[0] * inner[2] + outer[2], outer[1] * inner[3] + outer[3])
 
@@ -182,10 +183,10 @@ def text_clip_repair(svg: str, quality: Mapping, *, width: float, height: float,
             ancestor = parents.get(ancestor)
         affine = (1.0, 1.0, 0.0, 0.0)
         for element in reversed(chain):
-            item = _affine(element.get("transform"))
+            item = translate_scale_affine(element.get("transform"))
             if item is None:
                 return {**refused, "reason": "transformed_text_unsupported"}
-            affine = _compose(affine, item)
+            affine = compose_affine(affine, item)
         subtree = list(node.iter())
         if any(_tag(child) == "tspan" and child.get("transform") for child in subtree):
             return {**refused, "reason": "transformed_text_unsupported"}
@@ -278,5 +279,5 @@ def still_clipped(quality: object) -> bool:
 
 __all__ = [
     "CLIP_REPAIR_EDGE_INSET_PX", "CLIP_REPAIR_OVERLAP_PX", "MEASUREMENT_INCOMPLETE", "TEXT_CLIPPED",
-    "remeasure_incomplete", "still_clipped", "text_clip_repair",
+    "compose_affine", "remeasure_incomplete", "still_clipped", "text_clip_repair", "translate_scale_affine",
 ]

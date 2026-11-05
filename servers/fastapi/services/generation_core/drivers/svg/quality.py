@@ -95,6 +95,17 @@ def with_vision_review_receipt(summary, pages, advisory) -> dict[str, object]:
         pages, advisory, operation_usage=active_provider_operation_usage())}
 
 
+def with_chart_advisories(summary, pages) -> dict[str, object]:
+    """``summary`` with the pages each advisory chart check named (never a flag)."""
+
+    from services.generation_core.drivers.svg.bar_proportion import ADVISORY_KIND
+
+    flagged = [index for index, (payload, _) in enumerate(pages)
+               if any(isinstance(item, Mapping) and item.get("kind") == ADVISORY_KIND
+                      for item in ((payload.get("quality") or {}).get("advisories") or []))]
+    return {**(summary or {}), "chartAdvisories": {ADVISORY_KIND: flagged}}
+
+
 def reclassify_pages(pages, *, summary=None) -> dict[str, object]:
     """``classify_pages`` again, in place, after publication added page flags.
 

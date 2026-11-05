@@ -927,6 +927,9 @@ async def _attempt_render(*, ctx, request, presentation_id, index, content, payl
             }, ensure_ascii=False, separators=(",", ":"))
     from services.generation_core.drivers.svg.embed_assets import apply_vector_icon_quality
     apply_vector_icon_quality(rendered.quality, payload)
+    from services.generation_core.drivers.svg.bar_proportion import apply_bar_proportion_advisory
+    # Advisory only until its precision is labelled: it never fails the page.
+    apply_bar_proportion_advisory(rendered.quality, final, width=ctx.canvas.width_px, height=ctx.canvas.height_px)
     from services.svg_presentation_checkpoint import compact_browser_metrics, with_browser_metrics
     # Persist the measured metrics once; checkpoint and publication carry the
     # bound reference, and the readers below see the exact inline view.
