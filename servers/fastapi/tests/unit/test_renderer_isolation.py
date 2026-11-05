@@ -280,7 +280,11 @@ def test_posix_chrome_spawn_receives_only_scrubbed_renderer_environment(
     assert captured["setsid"] is True
 
 
-def test_chrome_pipe_falls_back_to_popen_without_posix_spawn_setsid(monkeypatch) -> None:
+def test_chrome_pipe_falls_back_to_process_group_spawn_without_posix_spawn_setsid(
+    monkeypatch,
+) -> None:
+    if os.name == "nt":
+        pytest.skip("POSIX pipe mapping only")
     calls: dict[str, object] = {}
 
     class FakeProcess:
@@ -293,40 +297,98 @@ def test_chrome_pipe_falls_back_to_popen_without_posix_spawn_setsid(monkeypatch)
             calls["communicate_timeout"] = timeout
             return None, None
 
-    def fake_popen(chrome, args, child_read, child_write):
-        calls.update(chrome=chrome, args=list(args), fds=(child_read, child_write))
+    def fake_process_group_spawn(chrome, args, file_actions):
+        calls.update(chrome=chrome, args=list(args), file_actions=list(file_actions))
         return FakeProcess()
 
-    def refuse_posix_spawn(*args, **kwargs):
-        raise AssertionError("posix_spawn must not run without POSIX_SPAWN_SETSID")
+    def refuse_session_spawn(*args, **kwargs):
+        raise AssertionError("the setsid spawn must not run without POSIX_SPAWN_SETSID")
 
     monkeypatch.setattr(slide_capture_pipe, "_posix_spawn_setsid_supported", lambda: False)
-    monkeypatch.setattr(slide_capture_pipe, "_spawn_chrome_pipe_popen", fake_popen)
-    monkeypatch.setattr(slide_capture_pipe.os, "posix_spawn", refuse_posix_spawn, raising=False)
+    monkeypatch.setattr(
+        slide_capture_pipe, "_spawn_chrome_pipe_process_group", fake_process_group_spawn
+    )
+    monkeypatch.setattr(slide_capture_pipe, "_spawn_chrome_pipe_posix", refuse_session_spawn)
 
     pipe = slide_capture_pipe._ChromePipe("/runtime/chrome", pathlib.Path("/tmp/profile"))
 
     assert pipe.process.pid == 4343
     assert calls["chrome"] == "/runtime/chrome"
     assert "--remote-debugging-pipe" in calls["args"]
-    read_fd, write_fd = calls["fds"]
-    assert isinstance(read_fd, int) and isinstance(write_fd, int)
+    actions = calls["file_actions"]
+    assert isinstance(actions, list)
+    dup2_targets = [action[2] for action in actions if action[0] == os.POSIX_SPAWN_DUP2]
+    assert dup2_targets == [3, 4]
     pipe.close()
     assert calls.get("communicate_timeout") is not None
 
 
-def test_popen_fallback_maps_cdp_pipes_to_fd_3_and_4_in_a_new_session() -> None:
+def test_process_group_spawn_uses_setpgroup_without_setsid_or_exec_hook(
+    monkeypatch,
+) -> None:
+    if os.name == "nt":
+        pytest.skip("POSIX spawn only")
+    captured: dict[str, object] = {}
+
+    def fake_spawn(path, argv, environment, **kwargs):
+        captured.update(path=path, environment=dict(environment), kwargs=kwargs)
+        return 4444
+
+    monkeypatch.setenv("OPENAI_API_KEY", "must-not-reach-chrome")
+    monkeypatch.setattr(slide_capture_pipe.os, "posix_spawn", fake_spawn)
+    pipe_actions = [(os.POSIX_SPAWN_DUP2, 7, 3), (os.POSIX_SPAWN_DUP2, 8, 4)]
+
+    process = slide_capture_pipe._spawn_chrome_pipe_process_group(
+        "/runtime/chrome", ["/runtime/chrome"], pipe_actions
+    )
+
+    assert process.pid == 4444
+    kwargs = captured["kwargs"]
+    assert isinstance(kwargs, dict)
+    assert set(kwargs) == {"file_actions", "setpgroup"}
+    assert kwargs["setpgroup"] == 0
+    actions = kwargs["file_actions"]
+    # The pipe mapping runs first; stdio is redirected only afterwards.
+    assert actions[:2] == pipe_actions
+    assert {(action[1], action[2]) for action in actions[2:]} == {
+        (0, os.devnull),
+        (1, os.devnull),
+        (2, os.devnull),
+    }
+    assert all(action[0] == os.POSIX_SPAWN_OPEN for action in actions[2:])
+    environment = captured["environment"]
+    assert isinstance(environment, dict)
+    assert "OPENAI_API_KEY" not in environment
+
+
+def test_process_group_fallback_maps_cdp_pipes_to_fd_3_and_4_in_its_own_group() -> None:
     if os.name == "nt":
         pytest.skip("POSIX pipe mapping only")
     child_read, parent_write = os.pipe()
     parent_read, child_write = os.pipe()
+    devnull = os.stat(os.devnull)
+    # Every original pipe-end number other than the 3/4 targets must be closed
+    # in the child, and its stdio must be /dev/null.
+    original_fds = sorted({child_read, child_write, parent_read, parent_write} - {3, 4})
     child_code = (
         "import os\n"
-        "os.write(4, ('sid=%d pgid=%d pid=%d;' % (os.getsid(0), os.getpgid(0), os.getpid())).encode())\n"
+        "def _open(fd):\n"
+        "    try:\n"
+        "        os.fstat(fd)\n"
+        "    except OSError:\n"
+        "        return False\n"
+        "    return True\n"
+        f"leaked = [fd for fd in {original_fds!r} if _open(fd)]\n"
+        f"null = all((os.fstat(fd).st_dev, os.fstat(fd).st_ino) == ({devnull.st_dev}, {devnull.st_ino}) for fd in (0, 1, 2))\n"
+        "os.write(4, ('sid=%d pgid=%d pid=%d leaked=%r null=%r;' % (\n"
+        "    os.getsid(0), os.getpgid(0), os.getpid(), leaked, null)).encode())\n"
         "os.write(4, os.read(3, 4).upper())\n"
     )
-    process = slide_capture_pipe._spawn_chrome_pipe_popen(
-        sys.executable, [sys.executable, "-c", child_code], child_read, child_write
+    actions = slide_capture_pipe._cdp_pipe_file_actions(
+        child_read, child_write, parent_read, parent_write
+    )
+    process = slide_capture_pipe._spawn_chrome_pipe_process_group(
+        sys.executable, [sys.executable, "-c", child_code], actions
     )
     try:
         os.close(child_read)
@@ -338,14 +400,20 @@ def test_popen_fallback_maps_cdp_pipes_to_fd_3_and_4_in_a_new_session() -> None:
             if not chunk:
                 break
             received += chunk
-        assert process.wait(timeout=20) == 0
+        process.communicate(timeout=20)
+        assert process.returncode == 0
         handshake, _, reply = received.partition(b";")
-        assert handshake == f"sid={process.pid} pgid={process.pid} pid={process.pid}".encode()
+        # Own process group (pgid == pid, so killpg reaches the whole tree);
+        # without setsid support it stays in the caller's session.
+        assert handshake == (
+            f"sid={os.getsid(0)} pgid={process.pid} pid={process.pid} "
+            "leaked=[] null=True"
+        ).encode()
         assert reply == b"PING"
     finally:
         if process.poll() is None:
             process.kill()
-            process.wait(timeout=20)
+            process.communicate(timeout=20)
         for fd in (parent_read, parent_write):
             os.close(fd)
 

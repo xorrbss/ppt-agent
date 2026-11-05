@@ -6,8 +6,6 @@ from pathlib import Path
 import subprocess
 import sys
 
-import pytest
-
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[4]
 CONTRACT_ROOT = REPOSITORY_ROOT / "contracts" / "authored-renderer"
@@ -22,18 +20,6 @@ def _load_verifier():
     return module
 
 
-# GENUINE PRODUCT CONFLICT, not a stale test. contracts/authored-renderer forbids
-# ``preexec_fn`` in the capture sources (product-browser-control-pipe), but the
-# Q9 fallback for interpreters without POSIX_SPAWN_SETSID
-# (utils/slide_capture_pipe.py::_spawn_chrome_pipe_popen, commit eb4c31ef8)
-# maps the CDP pipes to fd 3/4 in a ``preexec_fn``. One of the two has to change
-# (for example remap the fds with posix_spawn setpgroup or an exec wrapper); the
-# contract must not be loosened to fit. strict=True turns this into a failure the
-# moment the conflict is resolved, which is the signal to delete the marker.
-@pytest.mark.xfail(
-    strict=True,
-    reason="slide_capture_pipe Popen fallback uses preexec_fn, which the renderer contract forbids (Q9 vs contract)",
-)
 def test_production_renderer_contract_is_statically_hardened() -> None:
     checks = _load_verifier().verify()
     assert checks
