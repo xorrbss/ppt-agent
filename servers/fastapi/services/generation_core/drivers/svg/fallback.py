@@ -19,13 +19,16 @@ estimate, because that subset has no text wrapping or reflow of its own.
 
 The page carries no failure reason or error code -- that lives in receipts,
 not in customer-facing content. It only ever shows the slide's own outline
-text. A title longer than one line is shortened with "…" and repeated in full
-as the first body line, so the shortening loses nothing.
+text. A title longer than one line wraps at word boundaries (two lines at the
+regular size, smaller if it still does not fit); it is drawn once, whole, and
+never cut. When the deck's common header is applied the header owns the
+title and the page does not draw it again.
 """
 
 from __future__ import annotations
 
 import copy
+import math
 import re
 from collections import Counter
 from collections.abc import Mapping, Sequence
@@ -43,9 +46,10 @@ _ACCENT_BAR_HEIGHT = 6
 _EYEBROW_FONT_PX = 14
 _EYEBROW_MAX_CHARS = 24
 _TITLE_FONT_PX = 34
-#: Body sizes tried in order, regular first. The tail is below any readability
-#: floor on purpose: the page is flagged either way, and a smaller complete page
-#: is the rescue's whole point.
+#: Body sizes tried in order, regular first. Without a ``minimum_font_px`` the
+#: tail is below any readability floor on purpose: the page is flagged either
+#: way, and a smaller complete page is the rescue's whole point.
+#: ``minimum_font_px`` (the deck's readability floor) removes the sizes below it.
 _BODY_FONT_STEPS_PX = (20, 18, 16, 14, 12, 11, 10, 9, 8, 7, 6, 5, 4)
 _BODY_COLUMNS = (1, 2, 3)
 _COLUMN_GAP_PX = 32
@@ -95,14 +99,44 @@ def _text_em(text: str) -> float:
     return sum(_char_em(ch) for ch in text)
 
 
-def _title_budget(*, available_width_px: float, font_px: float) -> int:
-    """Characters a title keeps, using the conservative (all-wide-char) width.
+def _sizes_at_or_above(steps: Sequence[int], floor: float | None) -> tuple[int, ...]:
+    """``steps`` without the sizes below ``floor``; the floor itself ends the list.
 
-    This never overestimates how much fits: even an all-Hangul/CJK title is
-    guaranteed to fit the available width at this length.
+    ``None`` keeps every step. A floor above every step leaves just the floor,
+    so a complete page is still drawn (it overflows and is flagged, never cut).
     """
 
-    return max(12, int(available_width_px / (font_px * _WIDE_EM)))
+    if floor is None:
+        return tuple(steps)
+    minimum = max(1, math.ceil(floor))
+    kept = [size for size in steps if size >= minimum]
+    if not kept or kept[-1] > minimum:
+        kept.append(minimum)
+    return tuple(kept)
+
+
+_TITLE_LINE_HEIGHT = 1.25
+_TITLE_PREFERRED_LINES = 2
+_TITLE_SIZE_STEP_PX = 4
+_TITLE_MIN_PX = 16
+
+
+def _title_layout(title: str, *, width_px: float, max_px: int, floor: float | None = None) -> tuple[int, list[str]]:
+    """``(font size, lines)`` for a title: two lines at most while a smaller size can do it.
+
+    The title is wrapped at spaces, never cut. The largest size (down by
+    ``_TITLE_SIZE_STEP_PX``, no lower than the readability floor) that holds it
+    in two lines wins; when none does, the smallest size with every line.
+    """
+
+    smallest = max(_TITLE_MIN_PX if max_px >= _TITLE_MIN_PX else max_px, math.ceil(floor or 0))
+    smallest = min(smallest, max_px)
+    size = max_px
+    while True:
+        lines = _wrap(title, max_em=max(1.0, width_px / size))
+        if len(lines) <= _TITLE_PREFERRED_LINES or size <= smallest:
+            return size, lines
+        size = max(smallest, size - _TITLE_SIZE_STEP_PX)
 
 
 def _wrap(text: str, *, max_em: float) -> list[str]:
@@ -202,11 +236,12 @@ def _same_text(left: str, right: str) -> bool:
     return " ".join(left.split()).casefold() == " ".join(right.split()).casefold()
 
 
-def _complete_split(content: str, *, title_budget: int) -> tuple[str, list[str]]:
+def _complete_split(content: str) -> tuple[str, list[str]]:
     """``(title, body lines)``: every outline line, none shortened or dropped.
 
     The one line that is not repeated is an exact duplicate of the title
-    directly under it: the title already shows those words.
+    directly under it: the title already shows those words. The title is never
+    cut here; the page wraps it.
     """
 
     lines = _lines(content)
@@ -215,14 +250,11 @@ def _complete_split(content: str, *, title_budget: int) -> tuple[str, list[str]]
     head, rest = lines[0], lines[1:]
     if rest and _same_text(head, rest[0]):
         rest = rest[1:]
-    if len(head) <= title_budget:
-        return head, rest
-    # The untruncated line is still the slide's own text; it leads the body.
-    return head[:title_budget].rstrip() + "…", [head, *rest]
+    return head, rest
 
 
-def _body_layout(bullets: Sequence[str], *, available_width: float,
-                 available_height: float) -> tuple[int, int, list[list[tuple[bool, str]]]]:
+def _body_layout(bullets: Sequence[str], *, available_width: float, available_height: float,
+                 minimum_font_px: float | None = None) -> tuple[int, int, list[list[tuple[bool, str]]]]:
     """``(font_px, columns, per-column [(is_first_line, text)])`` holding every line.
 
     The first configuration (largest size, then fewest columns) whose lines fit
@@ -231,7 +263,7 @@ def _body_layout(bullets: Sequence[str], *, available_width: float,
     """
 
     choice = None
-    for font_px in _BODY_FONT_STEPS_PX:
+    for font_px in _sizes_at_or_above(_BODY_FONT_STEPS_PX, minimum_font_px):
         line_height = font_px * _BODY_LINE_HEIGHT
         for columns in _BODY_COLUMNS:
             column_width = (available_width - (columns - 1) * _COLUMN_GAP_PX) / columns
@@ -268,6 +300,13 @@ def _body_top(style_snapshot: dict | None, header_page: dict | None) -> int:
     if isinstance(content_top, (int, float)) and not isinstance(content_top, bool):
         return max(_TOP_MARGIN, int(content_top) + _GAP_TITLE_TO_BODY_PX)
     return _TOP_MARGIN
+
+
+def _header_owns_title(style_snapshot: dict | None, header_page: dict | None) -> bool:
+    """Whether the server-rendered common header already draws this page's title."""
+
+    return (isinstance((style_snapshot or {}).get("common_header"), dict)
+            and isinstance(header_page, dict) and header_page.get("applied") is True)
 
 
 _HEX = re.compile(r"#[0-9A-Fa-f]{6}")
@@ -435,7 +474,8 @@ def _draw_flow(group: ET.Element, ops: Sequence[tuple], *, left: float, top: flo
 
 def _draw_body(group: ET.Element, bullets: Sequence[str], *, left: float, top: float, width: float,
                bottom: float, font_family: str, text_color: str, accent: str, background: str,
-               weight: str | None = None, bold_weight: str = "700") -> None:
+               weight: str | None = None, bold_weight: str = "700",
+               minimum_font_px: float | None = None) -> None:
     """Every body line below ``top`` within ``width``: bullets, or a grid for a markdown table.
 
     Without a table the lines take the largest size and fewest columns that
@@ -444,7 +484,7 @@ def _draw_body(group: ET.Element, bullets: Sequence[str], *, left: float, top: f
     items = _flow_items(bullets)
     if any(not isinstance(item, str) for item in items):
         available = max(1.0, bottom - top)
-        for font_px in _TABLE_FONT_STEPS_PX:
+        for font_px in _sizes_at_or_above(_TABLE_FONT_STEPS_PX, minimum_font_px):
             ops, height = _flow_place(items, width=width, font_px=font_px)
             if height <= available:
                 break
@@ -452,7 +492,8 @@ def _draw_body(group: ET.Element, bullets: Sequence[str], *, left: float, top: f
                    text_color=text_color, accent=accent, background=background, weight=weight,
                    bold_weight=bold_weight)
         return
-    font_px, columns, split = _body_layout(bullets, available_width=width, available_height=max(1.0, bottom - top))
+    font_px, columns, split = _body_layout(bullets, available_width=width, available_height=max(1.0, bottom - top),
+                                           minimum_font_px=minimum_font_px)
     column_width = (width - (columns - 1) * _COLUMN_GAP_PX) / columns
     prefix_width_px = _text_em(_BULLET_PREFIX) * font_px
     for column, lines in enumerate(split):
@@ -465,9 +506,20 @@ def _draw_body(group: ET.Element, bullets: Sequence[str], *, left: float, top: f
             y += font_px * _BODY_LINE_HEIGHT
 
 
+def _draw_title(group: ET.Element, title: str, *, left: float, cursor: float, width: float, max_px: int,
+                font_family: str, fill: str, weight: str, minimum_font_px: float | None) -> float:
+    """The title wrapped at word boundaries, drawn once; returns where the body may start."""
+
+    size, lines = _title_layout(title, width_px=width, max_px=max_px, floor=minimum_font_px)
+    for number, line in enumerate(lines):
+        _text_node(group, x=left, y=cursor + size + number * size * _TITLE_LINE_HEIGHT, text=line,
+                   font_px=size, font_family=font_family, fill=fill, weight=weight)
+    return cursor + size + (len(lines) - 1) * size * _TITLE_LINE_HEIGHT + _GAP_TITLE_TO_BODY_PX
+
+
 def fallback_page_svg(*, content: str, role: str, index: int, count: int,
                        width: int, height: int, style_snapshot: dict | None,
-                       header_page: dict | None = None) -> str:
+                       header_page: dict | None = None, minimum_font_px: float | None = None) -> str:
     """Deterministic contract-valid SVG for one page, finalized (page number added).
 
     Same inputs always produce the same bytes: no randomness, no clock, no
@@ -475,6 +527,7 @@ def fallback_page_svg(*, content: str, role: str, index: int, count: int,
     empty content, very long lines, CJK text, or ``<``/``&``/quote characters
     -- because the whole point of a fallback page is that it always publishes.
     Every outline line appears in full (see the module docstring).
+    ``minimum_font_px`` is the deck's readability floor: no text is set below it.
     """
 
     tokens = (style_snapshot or {}).get("tokens", {})
@@ -484,10 +537,10 @@ def fallback_page_svg(*, content: str, role: str, index: int, count: int,
     title_font = tokens.get("heading_font") or body_font
 
     available_width = max(1, width - 2 * _MARGIN_X)
-    title_budget = _title_budget(available_width_px=available_width, font_px=_TITLE_FONT_PX)
-    title, bullets = _complete_split(content, title_budget=title_budget)
+    title, bullets = _complete_split(content)
     if not title:
         title = _EMPTY_TITLE_PLACEHOLDER
+    header_title = _header_owns_title(style_snapshot, header_page)
 
     root = ET.Element(f"{{{SVG_NS}}}svg", {
         "width": str(width), "height": str(height), "viewBox": f"0 0 {width} {height}",
@@ -500,7 +553,8 @@ def fallback_page_svg(*, content: str, role: str, index: int, count: int,
     if str(role or "").strip().lower() == "cover":
         _cover_body(group, title=title, bullets=bullets, top=top, bottom=height - _BOTTOM_LIMIT_PX, left=_MARGIN_X,
                     available_width=available_width, title_font=title_font, body_font=body_font,
-                    text_color=text_color, accent=accent, background=background)
+                    text_color=text_color, accent=accent, background=background,
+                    draw_title=not header_title, minimum_font_px=minimum_font_px)
         raw = ET.tostring(root, encoding="unicode")
         return finalize_svg(raw, index=index, n=count, width=width, height=height,
                             style_snapshot=style_snapshot, header_page=header_page)
@@ -513,18 +567,22 @@ def fallback_page_svg(*, content: str, role: str, index: int, count: int,
     eyebrow = str(role or "").strip().upper()[:_EYEBROW_MAX_CHARS]
     # "content" names the page type, not anything a reader needs.
     if eyebrow and eyebrow != "CONTENT":
-        _text_node(group, x=_MARGIN_X, y=cursor + _EYEBROW_FONT_PX, text=eyebrow,
-                   font_px=_EYEBROW_FONT_PX, font_family=body_font, fill=accent)
-        cursor += _EYEBROW_FONT_PX + _GAP_EYEBROW_TO_TITLE_PX
+        eyebrow_px = max(_EYEBROW_FONT_PX, math.ceil(minimum_font_px or 0))
+        _text_node(group, x=_MARGIN_X, y=cursor + eyebrow_px, text=eyebrow,
+                   font_px=eyebrow_px, font_family=body_font, fill=accent)
+        cursor += eyebrow_px + _GAP_EYEBROW_TO_TITLE_PX
 
-    _text_node(group, x=_MARGIN_X, y=cursor + _TITLE_FONT_PX, text=title,
-               font_px=_TITLE_FONT_PX, font_family=title_font, fill=text_color, weight="700")
-    cursor += _TITLE_FONT_PX + _GAP_TITLE_TO_BODY_PX
+    if header_title:
+        cursor += _GAP_EYEBROW_TO_TITLE_PX
+    else:
+        cursor = _draw_title(group, title, left=_MARGIN_X, cursor=cursor, width=available_width,
+                             max_px=_TITLE_FONT_PX, font_family=title_font, fill=text_color, weight="700",
+                             minimum_font_px=minimum_font_px)
 
     if bullets:
         _draw_body(group, bullets, left=_MARGIN_X, top=cursor, width=available_width,
                    bottom=height - _BOTTOM_LIMIT_PX, font_family=body_font, text_color=text_color,
-                   accent=accent, background=background)
+                   accent=accent, background=background, minimum_font_px=minimum_font_px)
 
     raw = ET.tostring(root, encoding="unicode")
     return finalize_svg(raw, index=index, n=count, width=width, height=height,
@@ -538,7 +596,8 @@ _TEMPLATE_BODY_INSET_PX = 8
 def template_fallback_body_svg(*, content: str, width: int, height: int, body_region: Mapping,
                                title_in_frame: bool, title_face: Mapping, body_face: Mapping,
                                style_snapshot: dict | None, body_background: Mapping | None = None,
-                               role: str = "", body_photo: bool = False) -> str:
+                               role: str = "", body_photo: bool = False,
+                               minimum_font_px: float | None = None) -> str:
     """Deterministic body for a template-redesign page whose authored body failed.
 
     A full-canvas, transparent SVG whose only paint lies inside ``body_region``
@@ -565,8 +624,7 @@ def template_fallback_body_svg(*, content: str, width: int, height: int, body_re
     available_width = max(1.0, float(body_region["width"]) - 2 * inset)
     bottom = float(body_region["y"]) + float(body_region["height"]) - inset
     title_px = min(_TITLE_FONT_PX, max(16, int(float(body_region["height"]) / 8)))
-    title_budget = _title_budget(available_width_px=available_width, font_px=title_px)
-    title, bullets = _complete_split(content, title_budget=title_budget)
+    title, bullets = _complete_split(content)
     root = ET.Element(f"{{{SVG_NS}}}svg", {
         "width": str(width), "height": str(height), "viewBox": f"0 0 {width} {height}",
     })
@@ -577,7 +635,7 @@ def template_fallback_body_svg(*, content: str, width: int, height: int, body_re
                     available_width=available_width, title_font=str(title_face["family"]),
                     body_font=str(body_face["family"]), text_color=text_color, accent=accent,
                     title_weight=str(title_face["weight"]), body_weight=str(body_face["weight"]),
-                    background=tokens.get("background") or "#FFFFFF")
+                    background=tokens.get("background") or "#FFFFFF", minimum_font_px=minimum_font_px)
     else:
         if not title_in_frame and title:
             ET.SubElement(group, f"{{{SVG_NS}}}rect", {
@@ -585,14 +643,14 @@ def template_fallback_body_svg(*, content: str, width: int, height: int, body_re
                 "width": str(_ACCENT_BAR_WIDTH), "height": str(_ACCENT_BAR_HEIGHT), "fill": accent,
             })
             cursor += _ACCENT_BAR_HEIGHT + _GAP_EYEBROW_TO_TITLE_PX
-            _text_node(group, x=left, y=cursor + title_px, text=title, font_px=title_px,
-                       font_family=str(title_face["family"]), fill=text_color, weight=str(title_face["weight"]))
-            cursor += title_px + _GAP_TITLE_TO_BODY_PX
+            cursor = _draw_title(group, title, left=left, cursor=cursor, width=available_width, max_px=title_px,
+                                 font_family=str(title_face["family"]), fill=text_color,
+                                 weight=str(title_face["weight"]), minimum_font_px=minimum_font_px)
         if bullets:
             _draw_body(group, bullets, left=left, top=cursor, width=available_width, bottom=bottom,
                        font_family=str(body_face["family"]), text_color=text_color, accent=accent,
                        background=tokens.get("background") or "#FFFFFF", weight=str(body_face["weight"]),
-                       bold_weight=str(title_face["weight"]))
+                       bold_weight=str(title_face["weight"]), minimum_font_px=minimum_font_px)
     if body_photo:
         _scrim(group, text_color=text_color, region=body_region, left=left, width=available_width)
     for number, node in enumerate(node for node in group.iter() if node.tag.endswith("}rect") and not node.get("id")):
@@ -634,7 +692,8 @@ def _scrim(group: ET.Element, *, text_color: str, region: Mapping, left: float, 
 
 def _cover_body(group: ET.Element, *, title: str, bullets: Sequence[str], top: float, bottom: float, left: float,
                 available_width: float, title_font: str, body_font: str, text_color: str, accent: str,
-                title_weight: str = "700", body_weight: str | None = None, background: str = "#FFFFFF") -> None:
+                title_weight: str = "700", body_weight: str | None = None, background: str = "#FFFFFF",
+                draw_title: bool = True, minimum_font_px: float | None = None) -> None:
     """A cover-shaped fallback: a large title in the middle band, the first lines as subtitle.
 
     Every outline line still appears: lines past the subtitle allowance are set
@@ -642,15 +701,19 @@ def _cover_body(group: ET.Element, *, title: str, bullets: Sequence[str], top: f
     between ``top`` and ``bottom`` and starts no higher than ``top``.
     """
     title_px = max(16, min(_COVER_TITLE_FONT_PX, int((bottom - top) / 6)))
-    subtitle_px = max(12, min(_COVER_SUBTITLE_FONT_PX, int(title_px / 2)))
-    title_lines = _wrap(title, max_em=max(1.0, available_width / title_px))
+    floor_px = math.ceil(minimum_font_px or 0)
+    subtitle_px = max(12, floor_px, min(_COVER_SUBTITLE_FONT_PX, int(title_px / 2)))
+    if draw_title:
+        title_px, title_lines = _title_layout(title, width_px=available_width, max_px=title_px, floor=minimum_font_px)
+    else:
+        title_lines = []
     subtitle = list(bullets[:_COVER_SUBTITLE_LINES])
     rest = list(bullets[_COVER_SUBTITLE_LINES:])
-    block = (len(title_lines) * title_px * 1.25 + _ACCENT_BAR_HEIGHT + _GAP_BAR_TO_LABEL_PX
+    block = (len(title_lines) * title_px * _TITLE_LINE_HEIGHT + _ACCENT_BAR_HEIGHT + _GAP_BAR_TO_LABEL_PX
              + len(subtitle) * subtitle_px * 1.5)
     cursor = max(top, top + (bottom - top - block) / 2 - title_px)
     for line in title_lines:
-        cursor += title_px * 1.25
+        cursor += title_px * _TITLE_LINE_HEIGHT
         _text_node(group, x=left, y=cursor, text=line, font_px=title_px,
                    font_family=title_font, fill=text_color, weight=title_weight)
     cursor += _GAP_BAR_TO_LABEL_PX
@@ -667,7 +730,7 @@ def _cover_body(group: ET.Element, *, title: str, bullets: Sequence[str], top: f
     if rest:
         _draw_body(group, rest, left=left, top=cursor + _GAP_TITLE_TO_BODY_PX, width=available_width,
                    bottom=bottom, font_family=body_font, text_color=text_color, accent=accent,
-                   background=background, weight=body_weight)
+                   background=background, weight=body_weight, minimum_font_px=minimum_font_px)
 
 
 def _fmt_px(value: float) -> str:
@@ -676,8 +739,9 @@ def _fmt_px(value: float) -> str:
 
 def placeholder_page_svg(*, title: str, width: int, height: int, font_family: str,
                          index: int | None = None, count: int | None = None,
-                         style_snapshot: dict | None = None, header_page: dict | None = None) -> str:
-    """The last-resort page: the slide's title (or "—") on a plain page.
+                         style_snapshot: dict | None = None, header_page: dict | None = None,
+                         minimum_font_px: float | None = None) -> str:
+    """The last-resort page: the slide's title (or "—") on the deck's own page colour.
 
     Published only when no complete-content page could be rendered; the flag
     on the page, not its bytes, tells the reader what is missing. With
@@ -691,19 +755,22 @@ def placeholder_page_svg(*, title: str, width: int, height: int, font_family: st
     available_width = max(1, width - 2 * _MARGIN_X)
     lines = _lines(title)
     text = lines[0] if lines else _EMPTY_TITLE_PLACEHOLDER
-    budget = _title_budget(available_width_px=available_width, font_px=_TITLE_FONT_PX)
-    if len(text) > budget:
-        text = text[:budget].rstrip() + "…"
+    tokens = (style_snapshot or {}).get("tokens", {})
+    background, text_color, _accent = _page_colors(tokens)
+    font_family = tokens.get("heading_font") or tokens.get("body_font") or font_family
     root = ET.Element(f"{{{SVG_NS}}}svg", {
         "width": str(width), "height": str(height), "viewBox": f"0 0 {width} {height}",
     })
     group = ET.SubElement(root, f"{{{SVG_NS}}}g", {"id": FALLBACK_GROUP_ID})
     ET.SubElement(group, f"{{{SVG_NS}}}rect", {
-        "x": "0", "y": "0", "width": str(width), "height": str(height), "fill": "#FFFFFF",
+        "x": "0", "y": "0", "width": str(width), "height": str(height), "fill": background,
     })
     top = _body_top(style_snapshot, header_page)
-    _text_node(group, x=_MARGIN_X, y=top + _TITLE_FONT_PX, text=text, font_px=_TITLE_FONT_PX,
-               font_family=font_family, fill=_BODY_COLOR, weight="700")
+    # The placeholder's only content is this title, so it is drawn even under an
+    # applied header: the page keeps a visible body text (and the author-facing
+    # repair view, which strips the header, still shows what the slide was).
+    _draw_title(group, text, left=_MARGIN_X, cursor=top, width=available_width, max_px=_TITLE_FONT_PX,
+                font_family=font_family, fill=text_color, weight="700", minimum_font_px=minimum_font_px)
     raw = ET.tostring(root, encoding="unicode")
     if index is not None and count is not None:
         return finalize_svg(raw, index=index, n=count, width=width, height=height,

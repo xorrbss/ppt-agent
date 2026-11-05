@@ -82,7 +82,7 @@ def test_many_long_bullets_keep_every_word_and_stay_within_height():
         assert "".join(bullet.split()) in words
 
 
-def test_a_long_title_is_repeated_in_full_in_the_body():
+def test_a_long_title_is_drawn_whole_without_a_cut():
     title = "제목 " * 40 + "끝"
     svg = fallback_page_svg(content=title + "\n- 본문", role="", index=0, count=1,
                             width=WIDTH, height=HEIGHT, style_snapshot=None)
@@ -210,7 +210,7 @@ def test_markers_keep_numbers_and_emphasis_inside_words():
     assert "snake_case_name" in body and "2*3=6" in body
 
 
-def test_long_title_is_still_repeated_once_in_full_when_it_duplicates_the_first_body_line():
+def test_a_long_title_that_duplicates_the_first_body_line_is_drawn_once():
     title = "제목 " * 40 + "끝"
     svg = fallback_page_svg(content=f"## {title}\n{title}\n- 본문", role="", index=0, count=1,
                             width=WIDTH, height=HEIGHT, style_snapshot=None)

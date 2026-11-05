@@ -31,13 +31,16 @@ failure placeholder.
 from __future__ import annotations
 
 from dataclasses import dataclass
+import re
 import xml.etree.ElementTree as ET
 
-from services.generation_core.drivers.svg.fallback import _char_em
+from services.generation_core.drivers.svg.fallback import _char_em, _ink_on, _mix
 from services.svg_contract import SVG_NS
 
 WHOLE_PAGE_CONTRACT = {"version": "svg-source-whole-page/v1"}
-SOURCE_FALLBACK_VERSION = "svg-source-verbatim-fallback/v1"
+#: v2: text ink and table fills follow the page background (v1 drew fixed dark
+#: ink and white cells). The label is only recorded in the attempt receipt.
+SOURCE_FALLBACK_VERSION = "svg-source-verbatim-fallback/v2"
 
 #: Body sizes tried in order. The readable ones (at or above the deck's floor)
 #: come first; the smaller tail keeps every word on a page the flag already
@@ -50,10 +53,12 @@ _SPACE_EM = 0.3
 _CELL_PADDING_PX = 6
 _ITEM_GAP_EM = 0.8
 _IMAGE_MAX_SHARE = 0.45
-_TEXT_FILL = "#172033"
+#: Preferred ink; ``_ink_on`` replaces it when it does not read on the page background.
+_PREFERRED_INK = "#172033"
 _SHAPE_STROKE = "#CBD5E1"
-_TABLE_STROKE = "#94A3B8"
-_TABLE_HEADER_FILL = "#F1F5F9"
+#: Shares of the ink mixed into the page background for the table header and its outline.
+_TABLE_HEADER_MIX = 0.08
+_TABLE_STROKE_MIX = 0.4
 _TITLE_ROLES = frozenset({"title", "ctrTitle"})
 
 
@@ -68,7 +73,17 @@ def _font_family(snapshot) -> str:
 def _background(snapshot) -> str:
     tokens = (snapshot.get("source_template") or {}).get("tokens") or {}
     value = tokens.get("background")
-    return value if isinstance(value, str) and value.startswith("#") else "#FFFFFF"
+    if isinstance(value, str) and re.fullmatch(r"#[0-9A-Fa-f]{3}", value):
+        value = "#" + "".join(ch * 2 for ch in value[1:])
+    if isinstance(value, str) and re.fullmatch(r"#[0-9A-Fa-f]{6}", value):
+        return value.upper()
+    return "#FFFFFF"
+
+
+def _ink(background: str) -> str:
+    """Text colour that reads (4.5:1) on ``background``."""
+
+    return _ink_on(background, _PREFERRED_INK)
 
 
 def line_slices(text: str, max_em: float) -> list[tuple[int, int]]:
@@ -160,12 +175,12 @@ def _number(value):
     return str(value)
 
 
-def _text(parent, element_id, text, *, x, y, width, font_px, family, weight=None):
+def _text(parent, element_id, text, *, x, y, width, font_px, family, fill, weight=None):
     """One source text, wrapped; returns the height it used."""
 
     line_height = font_px * _LINE_HEIGHT
     slices = line_slices(text, max(1.0, width / font_px))
-    attrs = dict(id=element_id, x=x, y=y + font_px, font_family=family, font_size=font_px, fill=_TEXT_FILL)
+    attrs = dict(id=element_id, x=x, y=y + font_px, font_family=family, font_size=font_px, fill=fill)
     if weight:
         attrs["font_weight"] = weight
     node = _node(parent, "text", **attrs)
@@ -211,7 +226,7 @@ def _table_grid(block, width, font_px):
     return widths, heights, cells
 
 
-def _table(parent, fact, block, *, x, y, width, font_px, family):
+def _table(parent, fact, block, *, x, y, width, font_px, family, background):
     widths, heights, cells = _table_grid(block, width, font_px)
     xs = [x]
     for item in widths:
@@ -220,15 +235,18 @@ def _table(parent, fact, block, *, x, y, width, font_px, family):
     for item in heights:
         ys.append(ys[-1] + item)
     group = _node(parent, "g", id=fact["element_id"])
+    ink = _ink(background)
+    header_fill = _mix(background, ink, _TABLE_HEADER_MIX)
+    stroke = _mix(background, ink, _TABLE_STROKE_MIX)
     for row, column, row_span, column_span, _cell in cells:
         _node(group, "rect", x=xs[column], y=ys[row], width=xs[column + column_span] - xs[column],
-              height=ys[row + row_span] - ys[row], fill=_TABLE_HEADER_FILL if row == 0 else "#FFFFFF",
-              stroke=_TABLE_STROKE, stroke_width=1)
+              height=ys[row + row_span] - ys[row], fill=header_fill if row == 0 else background,
+              stroke=stroke, stroke_width=1)
     for (row, column, _row_span, column_span, cell), cell_fact in zip(cells, fact["cells"], strict=True):
         cell_width = xs[column + column_span] - xs[column] - 2 * _CELL_PADDING_PX
         _text(group, cell_fact["element_id"], cell["text"], x=xs[column] + _CELL_PADDING_PX,
               y=ys[row] + _CELL_PADDING_PX, width=max(1.0, cell_width), font_px=font_px, family=family,
-              weight="700" if row == 0 else None)
+              fill=_ink(header_fill if row == 0 else background), weight="700" if row == 0 else None)
     return ys[-1] - y
 
 
@@ -320,7 +338,7 @@ def _choose(items, box, minimum_font_px):
     return configurations[-1]
 
 
-def _place(root, items, box, font_px, columns, family):
+def _place(root, items, box, font_px, columns, family, background):
     gap = _ITEM_GAP_EM * font_px
     column_gap = 2 * font_px
     column_width = (box.width - (columns - 1) * column_gap) / columns
@@ -348,7 +366,7 @@ def _place(root, items, box, font_px, columns, family):
                     left = box.left + column * (column_width + column_gap)
                 if node is None:
                     attrs = dict(id=fact["element_id"], x=left, y=y + size, font_family=family,
-                                 font_size=size, fill=_TEXT_FILL)
+                                 font_size=size, fill=_ink(background))
                     if title:
                         attrs["font_weight"] = "700"
                     node = _node(root, "text", **attrs)
@@ -363,7 +381,8 @@ def _place(root, items, box, font_px, columns, family):
             height = sum(_table_grid(block, column_width, table_font)[1])
             if y > box.top and y + height > box.bottom and advance():
                 left = box.left + column * (column_width + column_gap)
-            y += _table(root, fact, block, x=left, y=y, width=column_width, font_px=table_font, family=family)
+            y += _table(root, fact, block, x=left, y=y, width=column_width, font_px=table_font, family=family,
+                       background=background)
             y += gap
             continue
         image_width, image_height = _image_size(block, column_width, box.height * _IMAGE_MAX_SHARE)
@@ -407,7 +426,8 @@ def source_fallback_page(manifest, page_index, snapshot, *, image_slots, width, 
 
     root = ET.Element(f"{{{SVG_NS}}}svg", {"width": str(width), "height": str(height),
                                            "viewBox": f"0 0 {width} {height}"})
-    _node(root, "rect", x=0, y=0, width=width, height=height, fill=_background(snapshot))
+    background = _background(snapshot)
+    _node(root, "rect", x=0, y=0, width=width, height=height, fill=background)
     blocks = sorted((block for block in page.blocks if block.kind != "source_note"),
                     key=lambda block: block.order)
     shapes = [block for block in blocks if block.kind == "shape"]
@@ -424,7 +444,7 @@ def source_fallback_page(manifest, page_index, snapshot, *, image_slots, width, 
     items = [(block.kind, block, facts[block.source_block_id]) for block in blocks
              if block.kind in {"text", "table", "image"}]
     font_px, columns = _choose(items, box, minimum_font_px)
-    _place(root, items, box, font_px, columns, family)
+    _place(root, items, box, font_px, columns, family, background)
     svg = ET.tostring(root, encoding="unicode")
     return bind_whole_page_source_svg(svg, manifest, page_index, facts=list(facts.values()),
         width=width, height=height, style_snapshot=snapshot, minimum_font_px=minimum_font_px,
