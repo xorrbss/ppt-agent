@@ -351,7 +351,9 @@
     "reattachNamedFile": "Reattach {name}",
     "reattachFile": "Reattach file",
     "preview": "Preview",
-    "download": "Download"
+    "download": "Download",
+    "exportPptxCommand": "Export presentation as PowerPoint",
+    "exportPdfCommand": "Export presentation as PDF"
   },
   "presentationTimelineOperation": {
     "createFailed": "Could not start creating the PPTX. Please try again.",
@@ -773,7 +775,8 @@
     "finalPptxReviewRequiredNotice": "This deck needs a final PPTX review; the export receipt is historical.",
     "finalPptxReviewFailedNotice": "The final PPTX review found an issue; review the result before relying on this deck.",
     "finalPptxReviewDeferredNotice": "PowerPoint is open. The final PPTX review will retry automatically after it closes.",
-    "finalPptxReviewPassedNotice": "The current PPTX artifact passed final review."
+    "finalPptxReviewPassedNotice": "The current PPTX artifact passed final review.",
+    "queuedMessage": "Queued."
   },
   "presentationCapability": {
     "gradient": "Gradient",
@@ -1378,7 +1381,8 @@
     "modelLoadErrorTitle": "Unable to load models",
     "modelLoadErrorDescription": "Check the {provider} provider configuration and try again.",
     "unknownProviderTitle": "Unsupported provider",
-    "unknownProviderDescription": "{provider} is unknown or disabled. Select an enabled provider before continuing."
+    "unknownProviderDescription": "{provider} is unknown or disabled. Select an enabled provider before continuing.",
+    "registryProviderDescription": "{provider} provider managed by the canonical provider registry."
   },
   "exportMenu": {
     "formatGroup": "Export format options",
@@ -2470,7 +2474,8 @@
     "verifyingModel": "Verifying model integrity...",
     "pullingModel": "Pulling model from registry...",
     "downloaded": "Downloaded:",
-    "total": "Total:"
+    "total": "Total:",
+    "openaiApiKeyLabel": "OpenAI API key"
   },
   "a2cOverlay": {
     "working": "Working on your request"
@@ -3044,5 +3049,71 @@
     "applyFailed": "Could not apply the font substitution. The previous analysis is kept.",
     "regular": "Regular",
     "bold": "Bold"
+  },
+  "svgTemplatePicker": {
+    "sectionTitle": "My PPT templates",
+    "refresh": "Refresh",
+    "loading": "Loading templates.",
+    "loadFailed": "Could not load your templates.",
+    "savedTemplateName": "Saved template",
+    "prepareFailed": "Could not accept the frame preparation for this size.",
+    "openDraftFailed": "Could not load the analysis result.",
+    "pptxRequired": "Choose a PPTX file.",
+    "publishFailed": "Could not register the template. Check the analysis result and preparation status.",
+    "registerFailed": "Could not accept the template analysis.",
+    "reviewSaveFailed": "Could not save the preserved-area changes. The source analysis result is kept.",
+    "sessionChanged": "The session has changed. Refresh the page to load your templates again.",
+    "capabilityCheckFailed": "Could not check whether this template can be used.",
+    "operationStatusUnknown": "Could not check the status. The job record is kept.",
+    "stateAnalyzing": "Analyzing",
+    "stateReviewRequired": "Needs review",
+    "stateReady": "Ready",
+    "stateFailed": "Analysis failed",
+    "stateArchived": "Archived",
+    "modeTemplateRedesign": "Redesign from template",
+    "modeFreeDesign": "Free design",
+    "modeTemplateRedesignDescription": "Keeps the source fonts and header/footer and the good body layout, improving the content to fit.",
+    "modeFreeDesignDescription": "Uses the template's design traits as a reference and rebuilds the overall layout.",
+    "cardMeta": "My template · {kind} · {state}",
+    "kindFramed": "With frame",
+    "kindStyle": "Style",
+    "fontState": "Font status: {state}",
+    "choose": "Select",
+    "openAnalysis": "View analysis",
+    "cardPreviewAlt": "{name} source preview",
+    "clearSelection": "Clear selection",
+    "generationMode": "Generation mode",
+    "capabilityChecking": "Checking availability",
+    "capabilityAvailable": "Can be generated at the selected size.",
+    "capabilityPreparationRequired": "This size needs frame preparation.",
+    "capabilityBlocked": "Cannot be generated with the current settings.",
+    "prepareCanvas": "Prepare frame for this size",
+    "preparationStatus": "Frame preparation: {state} {reason}",
+    "addTemplate": "Add my template",
+    "addTemplateHint": "Analyze a PPTX, then check its source frame and fonts before registering it. For PDF and image files, use the temporary design reference below.",
+    "templateName": "Template name",
+    "pptxFile": "PPTX file",
+    "processing": "Processing",
+    "startAnalysis": "Start analysis",
+    "reviewAria": "Review template analysis",
+    "jobInfo": "Job details",
+    "jobId": "Job ID: {id}",
+    "fontPreparation": "Font preparation: {state}",
+    "sourcePage": "Source page {page}",
+    "sourceSlide": "Source slide",
+    "sourceSlideAlt": "Source slide {page}: check the preserved frame and body area",
+    "bodyRegionAria": "Body area in use",
+    "preservedFrame": "Frame to preserve",
+    "preservedFrameAlt": "Actual render of the frame to preserve, such as the header, footer and background",
+    "sourcePreviewMissing": "The actual source preview is not ready.",
+    "framePreviewMissing": "The frame preview is not ready.",
+    "confirmCompared": "I compared the fonts and element positions in both previews and will register with the frame shown.",
+    "confirmReference": "I have checked the analysis result and the scope of the design reference registration.",
+    "reviewDirty": "Save your changes, wait for the re-analysis, then check the review again.",
+    "reviewGuide": "Blue areas are where new body text will go. Compare the source with the frame to preserve and check fonts, text positions and line spacing. Misclassified preserved areas or missing fonts cannot be marked as ready.",
+    "checkStatus": "Check analysis status",
+    "registerSelected": "Register selected frames",
+    "registerReferenceOnly": "Register as design reference only",
+    "close": "Close"
   }
 }

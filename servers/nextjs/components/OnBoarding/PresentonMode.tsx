@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { useTranslations } from 'next-intl';
+import { localizeProviderDescription } from '@/utils/provider-description';
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
 import { Button } from '../ui/button';
 import { ArrowUpRight, Check, CheckCircle, ChevronLeft, ChevronUp, Download, Eye, EyeOff, Info, Loader2 } from 'lucide-react';
@@ -26,6 +27,7 @@ import Image from 'next/image';
 
 const PresentonMode = ({ currentStep, setStep }: { currentStep: number, setStep: (step: number) => void }) => {
     const t = useTranslations("a2cOnboarding");
+    const tProviderSettings = useTranslations("providerSettings");
     const [openProviderSelect, setOpenProviderSelect] = useState(false);
     const [openImageProviderSelect, setOpenImageProviderSelect] = useState(false);
     const userConfigState = useSelector((state: RootState) => state.userConfig);
@@ -87,7 +89,9 @@ const PresentonMode = ({ currentStep, setStep }: { currentStep: number, setStep:
     const currentOllamaUrl = llmConfig.OLLAMA_URL || '';
     const useCustomOllamaUrl = !!llmConfig.USE_CUSTOM_URL;
     const providerApiKeyLabel =
-        llmConfig.LLM === 'custom'
+        llmConfig.LLM === 'openai'
+            ? t('openaiApiKeyLabel')
+        : llmConfig.LLM === 'custom'
             ? 'Custom LLM API 키'
             : llmConfig.LLM === 'vertex'
                 ? 'Vertex API 키'
@@ -405,7 +409,7 @@ const PresentonMode = ({ currentStep, setStep }: { currentStep: number, setStep:
                                                                     </span>
                                                                 </div>
                                                                 <span className="text-xs text-gray-600 leading-relaxed">
-                                                                    {provider.description}
+                                                                    {localizeProviderDescription(provider.description, name => tProviderSettings("registryProviderDescription", { provider: name }))}
                                                                 </span>
                                                             </div>
                                                         </div>

@@ -1,6 +1,7 @@
 import React from "react";
 import { Check, ChevronUp, Eye, EyeOff } from "lucide-react";
 
+import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
 import {
   Command,
@@ -19,6 +20,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
+import { localizeProviderDescription } from "@/utils/provider-description";
 import { LLMConfig } from "@/types/llm_config";
 import {
   IMAGE_PROVIDER_OPTIONS,
@@ -152,6 +154,7 @@ export function ImageProviderPicker({
   variant: ProviderFieldsVariant;
   labels: ImageProviderPickerLabels;
 }) {
+  const tProviderSettings = useTranslations("providerSettings");
   return (
     <Popover open={open} onOpenChange={onOpenChange}>
       <PopoverTrigger asChild>
@@ -209,7 +212,7 @@ export function ImageProviderPicker({
                         </span>
                       </div>
                       <span className="text-xs text-gray-600 leading-relaxed">
-                        {provider.description}
+                        {localizeProviderDescription(provider.description, name => tProviderSettings("registryProviderDescription", { provider: name }))}
                       </span>
                     </div>
                   </div>

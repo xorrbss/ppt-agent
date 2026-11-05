@@ -108,6 +108,12 @@ function safeAssetUrl(value?: string): string | undefined {
   }
 }
 
+/** Export commands the chat submits as English text; keyed here so they render in the UI locale. */
+const EXPORT_COMMAND_MESSAGE_KEYS: Record<string, "exportPptxCommand" | "exportPdfCommand"> = {
+  "Export presentation as PowerPoint": "exportPptxCommand",
+  "Export presentation as PDF": "exportPdfCommand",
+};
+
 interface WorkspaceMessageProps {
   message: WorkspaceMessageAnchor;
   onReattach?: (attachmentId: string) => void;
@@ -142,8 +148,10 @@ export const WorkspaceMessage = memo(function WorkspaceMessage({
   });
   const isUser = message.role === "user";
   // A command the server wrote on the user's behalf carries a backend key.
+  // Export commands are stored as English text (the chat submits them); show them in the UI locale.
+  const knownCommandKey = isUser && !message.contentKey ? EXPORT_COMMAND_MESSAGE_KEYS[message.content] : undefined;
   const userContent = isUser
-    ? (translateBackendMessage(
+    ? (knownCommandKey ? tMessage(knownCommandKey) : translateBackendMessage(
         { key: message.contentKey, params: message.contentParams, text: message.content },
         locale,
       ) ?? message.content)

@@ -1,4 +1,6 @@
+import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
+import { localizeProviderDescription } from "@/utils/provider-description";
 import {
   Command,
   CommandEmpty,
@@ -33,6 +35,7 @@ const ProviderSelectField = ({
   openProviderSelect,
   setOpenProviderSelect,
 }: ProviderSelectFieldProps) => {
+  const tProviderSettings = useTranslations("providerSettings");
   return (
     <div
       className={`relative shrink-0 ${
@@ -101,7 +104,7 @@ const ProviderSelectField = ({
                               </span>
                             </div>
                             <span className="text-xs text-gray-600 leading-relaxed">
-                              {provider.description}
+                              {localizeProviderDescription(provider.description, name => tProviderSettings("registryProviderDescription", { provider: name }))}
                             </span>
                           </div>
                         </div>

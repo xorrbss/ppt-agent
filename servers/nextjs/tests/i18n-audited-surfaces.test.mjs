@@ -29,6 +29,7 @@ const auditedFiles = [
   "app/(presentation-generator)/upload/components/UploadPage.tsx",
   "app/(presentation-generator)/upload/components/CanvasSelect.tsx",
   "app/(presentation-generator)/upload/components/SvgDesignReferenceInput.tsx",
+  "app/(presentation-generator)/upload/components/SvgTemplatePicker.tsx",
   "app/(presentation-generator)/upload/components/upload-page/GenerationStrategySelector.tsx",
   "app/(presentation-generator)/upload/components/upload-page/PreviousAttemptNotice.tsx",
   "app/(presentation-generator)/upload/components/upload-page/RasterSourceReview.tsx",

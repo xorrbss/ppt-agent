@@ -113,15 +113,18 @@ export function WorkspaceOperationCard({
   const latestEvent = [...operation.events]
     .reverse()
     .find((event) => event.message || event.messageKey);
+  // The backend's queued event carries English text and no key; the event type is the stable identity.
   const latestMessage = latestEvent
-    ? translateBackendMessage(
-        {
-          key: latestEvent.messageKey,
-          params: latestEvent.messageParams,
-          text: latestEvent.message,
-        },
-        locale,
-      )
+    ? latestEvent.type === "queued" && !latestEvent.messageKey
+      ? tOperation("queuedMessage")
+      : translateBackendMessage(
+          {
+            key: latestEvent.messageKey,
+            params: latestEvent.messageParams,
+            text: latestEvent.message,
+          },
+          locale,
+        )
     : undefined;
   const title =
     translateBackendMessage(
