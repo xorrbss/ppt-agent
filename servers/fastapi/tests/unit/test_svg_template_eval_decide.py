@@ -1,6 +1,7 @@
 """The paired decision rule and the request builder of scripts/svg_template_eval (synthetic results, no network)."""
 import importlib.util
 import json
+import re
 from pathlib import Path
 
 _DIR = Path(__file__).resolve().parents[2] / "scripts" / "svg_template_eval"
@@ -78,9 +79,15 @@ def test_request_templates_match_their_inputs_and_carry_no_pin():
     assert {"structured_proposal_ko", "unstructured_report_ko", "data_report_ko"} <= set(names)
     for name in names:
         raw = json.loads((_DIR / "inputs" / "requests" / f"{name}.json").read_text(encoding="utf-8"))
-        assert raw["content"] == (_DIR / "inputs" / f"{name}.txt").read_text(encoding="utf-8")
+        assert raw["content"] == builder.input_source_text(name)
         assert "svgTemplatePin" not in raw and "svgCanvas" not in raw
-        assert (raw["n_slides"], raw["strategy"], raw["export_as"]) == (10, "svg", "pptx")
+        assert (raw["strategy"], raw["export_as"]) == ("svg", "pptx")
+        if name.endswith("_sized"):
+            # One body slide per 650 source characters (whitespace excluded) plus the cover.
+            chars = len(re.sub(r"\s", "", raw["content"]))
+            assert raw["n_slides"] == round(chars / 650) + 1
+        else:
+            assert raw["n_slides"] == 10
 
 
 def test_build_cells_is_the_input_by_template_cross_product():
