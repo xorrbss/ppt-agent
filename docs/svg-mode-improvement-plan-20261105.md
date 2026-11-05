@@ -139,8 +139,11 @@ do show a drop, stop and report instead of changing the default.
 
 ### D4. Canvas admission drift
 
-**Context (review §4.14).** `test_canvas_admission_baseline` shows 51 rows
-changed from rejected to admitted.
+**Context (review §4.14).** `test_canvas_admission_baseline` shows 980 rows
+(of 2,646) changed from rejected to admitted; an earlier count of 51 came
+from truncated output. Besides 1:1, registered-style topic/restyle is also
+admitted on 21:9, 9:16, 9:13 and A4, and A4 raster is admitted for styles
+other than `screenshot-blue`; E2 accepted these as the same svg-path change.
 
 | Change | Recommended handling |
 |---|---|

@@ -629,7 +629,7 @@ path) was captured through `pin_svg_style` with the provider stubbed.
 
 | Class | Count | Examples |
 |---|---:|---|
-| Stale golden or byte baseline | 114 | `test_svg_design_16x9_baseline` (88, adapter `svg-style/v2`→v4 never re-captured), `test_svg_canvas_brief` (24), `test_canvas_admission_baseline` (1, 51 drifted rows) |
+| Stale golden or byte baseline | 114 | `test_svg_design_16x9_baseline` (88, adapter `svg-style/v2`→v4 never re-captured), `test_svg_canvas_brief` (24), `test_canvas_admission_baseline` (1, 980 drifted rows) |
 | Code violates a contract test | 2 | Korean literal, default canvas literal |
 | Intentional change, expectation not updated | 22 | svg default strategy, sync svg 422, provider receipt fields |
 | Test stub lags code | 22 | `SimpleNamespace` missing `kind`/`owner_id`/`id` |
@@ -649,8 +649,10 @@ path) was captured through `pin_svg_style` with the provider stubbed.
 
 ### 4.14 Admission baseline drift (re-run for this review)
 
-`tests/unit/test_canvas_admission_baseline.py` reports 51 rows that changed,
-all from rejected to admitted:
+`tests/unit/test_canvas_admission_baseline.py` reports drifted rows, all from
+rejected to admitted. The review first counted 51 from truncated test output;
+the full re-capture (`scripts/canvas_admission_table.py --write`, item E2)
+shows 980 changed rows of 2,646. The main kinds:
 
 | Change | Before | Now |
 |---|---|---|
