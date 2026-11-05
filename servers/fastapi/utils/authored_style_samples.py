@@ -41,6 +41,9 @@ _MAX_CANVAS = 1280
 
 #: Keys the digest ignores because they do not affect rendering (D6).
 DISPLAY_ONLY_STYLE_KEYS = frozenset({"name", "description", "category", "tags", "use_cases", "preview"})
+#: Style keys only svg decks read (the svg asset offer's icon family); an authored sample deck
+#: renders the same without them, so they do not stale its digest.
+SVG_ONLY_STYLE_KEYS = frozenset({"icon_family"})
 
 
 @dataclass(frozen=True)
@@ -233,7 +236,8 @@ def style_render_digest(style_yaml: Path, assets_root: Path) -> str:
         data = yaml.safe_load(handle)
     if not isinstance(data, Mapping):
         raise ValueError(f"{style_yaml.name}: style must be a mapping")
-    filtered = {key: value for key, value in data.items() if key not in DISPLAY_ONLY_STYLE_KEYS}
+    filtered = {key: value for key, value in data.items()
+                if key not in DISPLAY_ONLY_STYLE_KEYS and key not in SVG_ONLY_STYLE_KEYS}
     canonical = json.dumps(filtered, sort_keys=True, separators=(",", ":"), ensure_ascii=False, default=str)
     tail = ""
     for raw_path in sorted(_raw_reference_paths(data)):
