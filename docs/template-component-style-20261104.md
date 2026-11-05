@@ -122,3 +122,66 @@ same-session knob-off control on the same registration:
 2. Name a step sequence's shapes as separate, gapped chevrons (or leave `step` out) so a sequence is
    not drawn as one bar.
 3. The second variant per kind (two label looks, two panel looks) may be noise to the model; try one.
+
+## Follow-up (2026-11-05): ladder roles, separate steps, one look per kind, filled table cells
+
+Code: `component_style_rules` in `services/svg_templates/component_style.py` (stored packages unchanged:
+the extraction still records up to two variants per kind, so no template has to be registered again).
+
+1. **Type ladder by role.** The line names the levels instead of listing sizes: title levels (at most
+   two), a sub-heading (the nearest level above the body that is heavier than it) and the body (the
+   level with the most characters, given at the floor when the source sets it smaller). A level that
+   lands at the body size once raised merges into it, and a caption the source sets below the floor
+   is left out instead of inflated; a caption at or above the floor is kept. The line ends "No text
+   smaller than the body (or caption); a key figure may be larger."
+2. **Steps:** "one chevron (pentagon arrow) per step (each its own polygon, side by side with a small
+   gap; never one long bar with a single arrow end)".
+3. **One look per kind** (the first stored variant: most pages, then count) and one table style.
+4. **Budget:** at most 2,000 characters; lines are dropped least telling first (divider, tile, accent
+   mark, panel, ...); the free-layout sentence and the ladder always stay.
+5. **Filled table cells (bug found by this measurement).** A source table whose body cells have no fill
+   was described as "body cells without fill". The drafts followed it, and on a frame with a
+   full-canvas raster backplate an unfilled cell sits on an image, so the native table was rejected
+   (`native_table_background_not_solid`, reported as `native_requested_table_missing`) on 4 of the 7
+   table pages of a data-heavy deck; the repair kept the same look and failed again. Reproduced offline
+   on a failing draft (rejected over the backplate, accepted once the body cells are filled). The table
+   line now says "every cell its own opaque filled rect" and gives an unfilled source cell as "the body
+   background colour (template_page.body_background.mean_color)". This was in the paragraph from the
+   start; the structured input of the first measurement has few tables, so it did not show there.
+
+Paragraph length for the real template at its floor: 1,972 -> 1,899 characters; for the public dark
+template (ladder and one card look only): 681 -> 673.
+
+### Same-session paired check
+
+One backend, database and registration; `cs-off` (knob unset), then the backend restarted with
+`SVG_TEMPLATE_COMPONENT_STYLE=on` (`cs-on`); 4 cells (`dense_proposal_ko`, `data_report_ko` x the real
+template and the public template), one run each, judge v2. The `cs-on` run used items 1-4 but **not item
+5** (the table bug was found in its result).
+
+| metric | cs-off | cs-on | B-A | cells with sign | verdict |
+|---|---|---|---|---|---|
+| fallback_pages | 0.75 | 2.0 | +1.25 | 2/4 | inconsistent |
+| first_try_ok | 7.25 | 7.25 | 0.00 | 1/4 | no difference |
+| judge_overall | 2.72 | 2.73 | +0.01 | 3/4 | no difference |
+| judge_structure | 2.78 | 3.03 | +0.25 | 2/4 | inconsistent |
+| judge_density | 2.55 | 2.58 | +0.03 | 3/4 | no difference |
+| judge_hierarchy | 2.93 | 2.95 | +0.03 | 3/4 | no difference |
+| judge_tone | 2.98 | 2.93 | -0.05 | 2/4 | no difference |
+| judge_visuals | 2.35 | 2.18 | -0.17 | 2/4 | no difference |
+
+Per cell (B-A): data-heavy x real template fallback +6, first try -5, overall -0.40 (the table bug:
+7 pages fell back to bullet text and a table); data-heavy x public +3 first try, -2 fallback, +0.10;
+dense x real +2 first try, +1 fallback, +0.16 (structure +0.6); dense x public 0, 0, +0.20. Without the
+bug cell the other three cells all moved the right way on first drafts (+1.7) and overall (+0.15), which
+is under the threshold and N = 1 per cell.
+
+Visible changes (renders side by side): on the real template, separate gapped chevrons for a four-step
+sequence, number chips for numbered items and short values, navy table headers with tinted first
+columns, the key-message bar tint and short heading marks; text no longer collapses to one size, but
+one five-step sequence was still drawn as a single header strip with five labels (no chevrons). On the
+dark public template the outlined card look and a larger title level appear; one pie was drawn as
+loose polygons (polygon count 0 -> 3.75 per deck over all cells).
+
+**Decision:** the default stays **off**. Next: measure again with item 5 in place on the table-heavy
+cells (`data_report_ko`, `dense_proposal_ko` x both templates, N >= 2 per cell), same-session control.

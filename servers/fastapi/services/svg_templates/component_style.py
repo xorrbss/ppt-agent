@@ -486,6 +486,10 @@ def _raised(text: dict | None, floor: float) -> tuple[dict | None, float]:
     return {**text, "size_px": raised}, raised / text["size_px"]
 
 
+def _cell_paint(fill: str) -> str:
+    return fill if fill != "none" else "the body background colour (template_page.body_background.mean_color)"
+
+
 def _ladder_roles(levels: list[dict], floor: float) -> list[tuple[str, dict]]:
     """The body text levels by role, largest first: title levels, a sub-heading, the body and a
     caption only when the source's caption size meets the floor.
@@ -548,10 +552,13 @@ def component_style_rules(style: dict | None, *, body_floor: float | None = None
         lines.append((item["kind"], f"- {_LABELS[item['kind']]}: {geometry}, "
                                     f"{_paint(item['fill'], item['stroke'], item['stroke_width_px'])}{_size(item)}{words}."))
     for table in style["tables"][:1]:
-        parts = [f"header row fill {table['header_fill']}" if table["header_fill"] != "none" else "header row without fill"]
+        # A source cell without fill is still drawn filled: a native table needs an opaque fill
+        # under every cell, and "without fill" over a frame's raster backplate was rejected
+        # (native_table_background_not_solid) on most table pages of a data-heavy deck.
+        parts = [f"header row fill {_cell_paint(table['header_fill'])}"]
         if table.get("header_text"):
             parts.append(f"header text {_text(_raised(table['header_text'], floor)[0])}")
-        parts.append(f"body cells fill {table['body_fill']}" if table["body_fill"] != "none" else "body cells without fill")
+        parts.append(f"body cells fill {_cell_paint(table['body_fill'])}")
         if table.get("band_fill"):
             parts.append(f"alternate rows {table['band_fill']}")
         if table.get("row_header_fill"):
@@ -560,7 +567,7 @@ def component_style_rules(style: dict | None, *, body_floor: float | None = None
             parts.append(f"cell rules {table['rule_color']}")
         if table.get("body_text"):
             parts.append(f"cell text {_text(_raised(table['body_text'], floor)[0])}")
-        lines.append(("table", "- Table: " + ", ".join(parts) + "."))
+        lines.append(("table", "- Table (every cell its own opaque filled rect): " + ", ".join(parts) + "."))
     if not lines:
         return ""
     head = ("\nTEMPLATE COMPONENT STYLE (measured from this template's own body pages; style only):"

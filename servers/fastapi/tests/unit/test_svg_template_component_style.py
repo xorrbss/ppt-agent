@@ -143,7 +143,7 @@ def test_rules_describe_looks_raise_small_text_and_keep_layout_free(tmp_path):
     stored = style.model_dump(mode="json")
     rules = component_style_rules(stored, body_floor=18.2)
     assert "the layout stays free" in rules and "never add one to imitate" in rules
-    assert "Number chip" in rules and "fill #005ED0" in rules and "Table: header row fill #1F2A5C" in rules
+    assert "Number chip" in rules and "fill #005ED0" in rules and "Table (every cell its own opaque filled rect): header row fill #1F2A5C" in rules
     sizes = [float(value) for value in re.findall(r"text ([0-9.]+)px", rules)]
     assert sizes and min(sizes) >= 18.2
     assert not re.search(r"\b(x|y)=", rules)
@@ -244,3 +244,14 @@ def test_rules_stay_within_the_budget_and_keep_the_layout_free(monkeypatch):
     assert "Tinted panel" not in cut and "Step shape" in cut
     assert "the layout stays free" in cut and "use a component only when the content calls for it" in cut
     assert "- Body text levels" in cut
+
+
+def test_a_source_table_cell_without_fill_is_asked_for_filled():
+    table = {"header_fill": "#102030", "body_fill": "none", "row_header_fill": "#E0ECF8", "rule_color": "#C0C8D0",
+             "body_text": {"size_px": 11, "weight": 400, "colors": ["#202020"]}, "count": 4, "pages": 3}
+    line = next(item for item in component_style_rules(_stored(tables=[table]), body_floor=14.2).splitlines()
+                if item.startswith("- Table"))
+    # A native table needs an opaque fill under every cell; "without fill" over a raster frame was rejected.
+    assert "without fill" not in line and "every cell its own opaque filled rect" in line
+    assert "body cells fill the body background colour (template_page.body_background.mean_color)" in line
+    assert "first column fill #E0ECF8" in line and "cell text 14.5px" in line
