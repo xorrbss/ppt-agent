@@ -44,6 +44,12 @@ LOGGER = logging.getLogger(__name__)
 INFOGRAPHIC_PLAN_PROMPT_VERSION = "authored-infographic-plan-v1"
 #: The variant used when scenes are drawn as vector SVG (no image provider spend).
 VECTOR_INFOGRAPHIC_PLAN_PROMPT_VERSION = "authored-infographic-plan-v1-vector"
+#: Wall bound for the one deck-wide plan call. The plan carries a figure for every
+#: slide (labels, phrases, values), several thousand output tokens for a 10-20
+#: slide deck: about 100 s at a pessimistic 50 tok/s before reasoning. 180 s
+#: matches the header design call, a deck-level call of similar size. On timeout
+#: the call fails open and the deck is planned as it was before the plan existed.
+INFOGRAPHIC_PLAN_CALL_TIMEOUT_SECONDS = 180.0
 
 _SYSTEM = (
     "You are an information designer planning the figures of ONE slide deck. "
@@ -250,6 +256,7 @@ async def generate_infographic_plan(
             strict=False,
             validate_schema=True,
             validate_schema_max_loop_count=2,
+            call_timeout_seconds=INFOGRAPHIC_PLAN_CALL_TIMEOUT_SECONDS,
         )
         plan = coerce_infographic_plan(
             content, slide_contents=slide_contents, roles=roles,
