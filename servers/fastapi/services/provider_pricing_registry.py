@@ -42,6 +42,11 @@ def _entry(value: object, *, revision: str) -> ProviderModelPricing:
                 if value.get("cachedInputMicrounitsPerMillionTokens") is not None
                 else None
             ),
+            cache_write_input_microunits_per_million_tokens=(
+                int(value["cacheWriteInputMicrounitsPerMillionTokens"])
+                if value.get("cacheWriteInputMicrounitsPerMillionTokens") is not None
+                else None
+            ),
             currency=str(value.get("currency") or "USD"),
         )
     except (KeyError, TypeError, ValueError) as error:

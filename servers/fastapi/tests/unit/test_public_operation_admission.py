@@ -580,3 +580,162 @@ def test_outline_retry_has_its_own_allowance_beside_slide_retries() -> None:
         assert plan.retry_request_limit - OUTLINE_RETRY_REQUESTS >= (
             slides + CONTENT_BRIEF_RETRY_REQUESTS
         )
+
+
+def test_anthropic_cache_counters_are_stored_and_priced_on_the_logical_call(
+    monkeypatch, tmp_path: Path
+) -> None:
+    """A fake Anthropic usage with cache fields lands as tokens and cost."""
+
+    from types import SimpleNamespace
+
+    from services.provider_pricing import ProviderModelPricing, calculate_actual_usage_cost
+    from services.provider_usage_cached_tokens import (
+        cache_write_tokens_from_usage,
+        cached_tokens_from_usage,
+    )
+
+    monkeypatch.setenv("AUTHORED_CLUSTER_JOB_CONCURRENCY", "4")
+    # llmai folds Anthropic's three input counters into input_tokens and keeps
+    # the raw cache counters in details.
+    usage = SimpleNamespace(
+        input_tokens=10_000 + 6_000 + 2_000,
+        output_tokens=500,
+        details={"cache_read_input_tokens": 6_000, "cache_creation_input_tokens": 2_000},
+    )
+    pricing = ProviderModelPricing(
+        revision="anthropic-test",
+        provider_id="anthropic",
+        model_id="claude-sonnet-5-5",
+        input_microunits_per_million_tokens=2_000_000,
+        output_microunits_per_million_tokens=10_000_000,
+        cached_input_microunits_per_million_tokens=200_000,
+    )
+    cost = calculate_actual_usage_cost(
+        pricing,
+        input_tokens=usage.input_tokens,
+        output_tokens=usage.output_tokens,
+        cached_input_tokens=cached_tokens_from_usage(usage),
+        cache_write_input_tokens=cache_write_tokens_from_usage(usage),
+    )
+    # 10k plain at 2.0, 6k cached at 0.2, 2k written at 2.5 (default 1.25x), 500 out at 10.
+    assert cost.total_cost_microunits == 20_000 + 1_200 + 5_000 + 5_000
+
+    async def scenario() -> None:
+        engine, maker = await _database(tmp_path / "cache-tokens.db")
+        owner = uuid.uuid4()
+        try:
+            async with maker() as session, session.begin():
+                session.add_all(
+                    [
+                        User(id=owner, username="cache-owner", hashed_password="test"),
+                        PublicPolicyProfile(
+                            version="public-default/v6",
+                            max_slides=PUBLIC_DEFAULT_MAX_SLIDES,
+                            global_active_generation=4,
+                            global_queued_generation=8,
+                            owner_active_generation=1,
+                            owner_queued_generation=1,
+                            tenant_active_generation=2,
+                            tenant_queued_generation=3,
+                            global_active_export=4,
+                            global_queued_export=8,
+                            owner_active_export=1,
+                            owner_queued_export=1,
+                            tenant_active_export=2,
+                            tenant_queued_export=3,
+                            global_active_resource_units=100,
+                            global_queued_resource_units=100,
+                            tenant_active_resource_units=50,
+                            tenant_queued_resource_units=50,
+                            owner_active_resource_units=25,
+                            owner_queued_resource_units=25,
+                            retry_request_limit=1,
+                            estimated_cost_limit_microunits=100_000,
+                            actual_cost_limit_microunits=100_000,
+                            generation_deadline_seconds=900,
+                            export_deadline_seconds=600,
+                        ),
+                    ]
+                )
+                presentation = PresentationModel(
+                    owner_id=owner,
+                    content="bounded public generation",
+                    n_slides=2,
+                    language="ko",
+                    mode="authored",
+                    theme={"mode": "authored"},
+                )
+                session.add(presentation)
+                await session.flush()
+                conversation = WorkspaceConversation(
+                    owner_id=owner,
+                    owner_scope=str(owner),
+                    presentation_id=presentation.id,
+                )
+                session.add(conversation)
+                await session.flush()
+                operation = WorkspaceOperation(
+                    owner_id=owner,
+                    owner_scope=str(owner),
+                    conversation_id=conversation.id,
+                    presentation_id=presentation.id,
+                    anchor_position=1,
+                    kind="presentation.generate",
+                    idempotency_key_hash=f"{1:064x}",
+                    request_hash=f"{11:064x}",
+                    request_payload={},
+                )
+                session.add(operation)
+                await session.flush()
+                operation_id = operation.id
+
+            plan = plan_provider_requests(
+                slide_count=2, image_budget=1, repair_budget=1, vqa_budget=1
+            )
+            async with maker() as session, session.begin():
+                admission = await admit_public_operation(
+                    session,
+                    principal=PrincipalContext(owner, "tenant-a", "trace-a"),
+                    operation_id=operation_id,
+                    operation_kind="generation",
+                    request_plan=plan,
+                )
+                admission = await activate_public_operation(session, admission.id)
+                call = await reserve_public_provider_call(
+                    session,
+                    admission_id=admission.id,
+                    stage="author",
+                    slide_index=0,
+                    logical_call_ordinal=1,
+                    retry_class="initial",
+                    estimated_cost_microunits=40_000,
+                )
+                await reconcile_public_provider_call(
+                    session,
+                    logical_call_id=call.id,
+                    outcome="succeeded",
+                    latency_ms=100,
+                    actual_cost_microunits=None,
+                )
+                enriched = await enrich_public_provider_call(
+                    session,
+                    logical_call_id=call.id,
+                    latency_ms=120,
+                    actual_cost_microunits=cost.total_cost_microunits,
+                    input_tokens=cost.input_tokens,
+                    output_tokens=cost.output_tokens,
+                    cached_input_tokens=cached_tokens_from_usage(usage),
+                    cache_write_input_tokens=cache_write_tokens_from_usage(usage),
+                    provider_id="anthropic",
+                    model_id="claude-sonnet-5-5",
+                    pricing_revision="anthropic-test",
+                )
+                assert enriched.state == "reported"
+                assert enriched.cached_input_tokens == 6_000
+                assert enriched.cache_write_input_tokens == 2_000
+                assert enriched.actual_cost_microunits == 31_200
+        finally:
+            await engine.dispose()
+
+    asyncio.run(scenario())
