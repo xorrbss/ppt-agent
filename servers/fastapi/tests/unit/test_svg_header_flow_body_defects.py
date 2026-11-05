@@ -65,7 +65,7 @@ def _run(tmp_path, monkeypatch, *, header_passed):
             from services.svg_canvas import svg_canvas_for_aspect_ratio
             ctx = SimpleNamespace(snapshot=snapshot, canvas=svg_canvas_for_aspect_ratio("16:9"),
                                   header_pages=None, count=1,
-                                  source_reflow=False, raster_reconstruction=False, manifests=[{}])
+                                  source_reflow=False, raster_reconstruction=False, manifests=[{}], planned=[{}])
             monkeypatch.setattr(generation, "preflight_header_selector", lambda: {"model": "fixture"})
             monkeypatch.setattr(generation, "_design_input", lambda *args: {"context": "bound"})
             monkeypatch.setattr(generation, "_design_reference_images", lambda *args: [])

@@ -339,7 +339,7 @@ def test_real_header_flow_never_repurchases_unknown_and_reduces_known_failure(tm
                 session.add(row)
                 await session.commit()
             ctx = SimpleNamespace(snapshot=snapshot, canvas=canvas, header_pages=None, count=1,
-                source_reflow=False, raster_reconstruction=False, manifests=[{}])
+                source_reflow=False, raster_reconstruction=False, manifests=[{}], planned=[{}])
             monkeypatch.setattr(generation, "preflight_header_selector", lambda: {"model": "fixture"})
             monkeypatch.setattr(generation, "_design_input", lambda *args: {"context": "bound"})
             monkeypatch.setattr(generation, "_design_reference_images", lambda *args: [])
