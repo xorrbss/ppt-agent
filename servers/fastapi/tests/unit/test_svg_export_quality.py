@@ -313,7 +313,7 @@ def _assert_cached_native_coverage_promotion_guards():
     canonical_ref = ref(uuid.uuid4(), producer, "presentation-pptx", artifact_digest[7:], "published")
     consumer_ref = ref(uuid.uuid4(), consumer, "presentation-pptx", artifact_digest[7:], "published")
     source_ref = ref(uuid.uuid4(), producer, "slide-svg", source[7:], "ephemeral")
-    native = {"fellBack": 0, "reasons": []}
+    native = {"offered": 0, "native": 0, "fellBack": 0, "reasons": []}
     page = dict(pageIndex=0, sourcePageId="slide-1", svgDigest=source,
         shapeCount=1, nativePrimitiveCount=1, promotedBackgroundCount=0,
         shapeInventoryDigest="sha256:" + "c" * 64, traceDigest="sha256:" + "d" * 64)

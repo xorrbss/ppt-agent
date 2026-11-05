@@ -105,6 +105,22 @@ class SvgPptxInputs:
                 raise ValueError(_READBACK_MISMATCH)
 
 
+def native_fallbacks_recorded(receipt) -> bool:
+    """Whether a native-objects receipt accounts for every object that stayed drawn.
+
+    An object that cannot be projected keeps its drawn shapes and the export
+    goes on; what it must not do is vanish: each fell-back offer needs its
+    own recorded reason.
+    """
+    if not isinstance(receipt, dict):
+        return False
+    offered, native, fell_back, reasons = (receipt.get(key) for key in ("offered", "native", "fellBack", "reasons"))
+    return (all(type(value) is int and value >= 0 for value in (offered, native, fell_back))
+            and offered == native + fell_back and isinstance(reasons, list) and len(reasons) == fell_back
+            and all(isinstance(item, dict) and isinstance(item.get("reason"), str) and item["reason"]
+                    for item in reasons))
+
+
 def _iter_shapes(shapes):
     for shape in shapes:
         yield shape
@@ -359,4 +375,4 @@ def prepare_svg_pptx_inputs(paths: list[Path], pages: list[PageNativeObjects] | 
     return inputs
 
 
-__all__ = ["NativeOffer", "SvgPptxInputs", "prepare_svg_pptx_inputs"]
+__all__ = ["NativeOffer", "SvgPptxInputs", "native_fallbacks_recorded", "prepare_svg_pptx_inputs"]

@@ -507,3 +507,46 @@ def test_raster_grid_projects_to_the_converter_payload_the_grid_draws(monkeypatc
     assert runtime.converter_digest() == original_digest
     assert (runtime.VENDOR_ROOT / "MANIFEST.json").read_bytes() == unchanged_manifest
     assert hashlib.sha256(unchanged_manifest).hexdigest() != original_digest
+
+
+def test_unprojectable_native_chart_stays_drawn_and_v2_coverage_export_continues(tmp_path):
+    from services.generation_core.drivers.svg.export_scene import native_fallbacks_recorded
+
+    svgs = [_svg(_chart_group("native-chart-revenue", "분기별 매출")),
+            _svg(_chart_group("native-chart-hidden", None))]
+    pages = [_sidecar(_chart_object("native-chart-revenue", "분기별 매출")),
+             _sidecar(_chart_object("native-chart-hidden", "그려지지 않은 제목"))]
+    paths = []
+    for index, svg in enumerate(svgs, 1):
+        validate_svg(svg, width=1188, height=840)
+        path = tmp_path / f"slide-{index:03d}.svg"
+        path.write_text(svg, encoding="utf-8")
+        paths.append(path)
+    target = tmp_path / "deck.pptx"
+    readback = convert_pptx(paths, target, ["", ""], CANVAS, native_objects=pages, native_coverage_sources=svgs)
+
+    receipt = readback["nativeObjects"]
+    assert (receipt["offered"], receipt["native"], receipt["fellBack"]) == (2, 1, 1)
+    assert [(item["page"], item["id"], item["kind"]) for item in receipt["reasons"]] == [
+        (1, "native-chart-hidden", "chart")]
+    assert native_fallbacks_recorded(receipt)
+    coverage = readback["genericNativeCoverageOoxml"]
+    assert coverage["passed"] is True
+    assert coverage["nativeObjectsDigest"].startswith("sha256:")
+    deck = Presentation(str(target))
+    assert [sum(shape.has_chart for shape in _shapes(slide.shapes)) for slide in deck.slides] == [1, 0]
+    # The unprojectable chart keeps its drawn bars and labels.
+    assert _texts(deck.slides[1]).count("Q1") == 1
+
+
+def test_native_fallback_receipt_must_account_for_every_fell_back_object():
+    from services.generation_core.drivers.svg.export_scene import native_fallbacks_recorded
+
+    reason = {"page": 0, "id": "c", "kind": "chart", "reason": "converter_rejected: x"}
+    assert native_fallbacks_recorded({"offered": 0, "native": 0, "fellBack": 0, "reasons": []})
+    assert native_fallbacks_recorded({"offered": 2, "native": 1, "fellBack": 1, "reasons": [reason]})
+    assert not native_fallbacks_recorded({"offered": 2, "native": 1, "fellBack": 1, "reasons": []})
+    assert not native_fallbacks_recorded(
+        {"offered": 2, "native": 1, "fellBack": 1, "reasons": [{**reason, "reason": None}]})
+    assert not native_fallbacks_recorded({"offered": 3, "native": 1, "fellBack": 1, "reasons": [reason]})
+    assert not native_fallbacks_recorded(None)
