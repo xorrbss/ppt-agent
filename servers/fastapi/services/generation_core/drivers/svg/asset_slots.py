@@ -27,6 +27,7 @@ import re
 import uuid
 from dataclasses import dataclass, field, replace
 from pathlib import Path
+from typing import Optional
 
 from services.generation_core.assets.offer import AssetOffer, AssetSlot
 from services.source_images.models import SourceImageCandidate
@@ -52,7 +53,10 @@ class SvgAssetOffer:
     receipt: dict = field(default_factory=dict)
 
 
-def _ink(svg_text: str) -> str:
+def _ink(svg_text: str, slot: Optional[AssetSlot] = None) -> str:
+    """The slot's carried ink; offers stored before it was carried re-read the stroke."""
+    if slot is not None and slot.ink:
+        return slot.ink
     match = re.search(r'\bstroke="(#[0-9A-Fa-f]{6}|#[0-9A-Fa-f]{3})"', svg_text)
     return match[1] if match else "#1E5EFF"
 
@@ -132,9 +136,9 @@ async def project_offer(session, offer: AssetOffer, *, presentation_id, count: i
         if slot.is_vector:
             text = payload.decode("utf-8")
             try:
-                icon = flatten_icon_svg(text, color=_ink(text))
+                icon = flatten_icon_svg(text, color=_ink(text, slot))
             except IconFlattenBudgetExceeded:
-                png = rasterize_icon(flatten_icon_svg(text, color=_ink(text), point_budget=None))
+                png = rasterize_icon(flatten_icon_svg(text, color=_ink(text, slot), point_budget=None))
                 slot_id, candidate = await _register(session, presentation_id, slot, png, "image/png",
                                                      256, 256)
                 result.raster[slot.page_index][slot_id] = candidate

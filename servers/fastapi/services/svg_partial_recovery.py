@@ -2114,7 +2114,7 @@ def _frozen_vector_offer(seed_row, job, operation, owner, tenant):
         text = payload.decode("utf-8")
         files.append({"page_index": slot.page_index, "sha256": slot.sha256})
         try:
-            icon = flatten_icon_svg(text, color=_ink(text))
+            icon = flatten_icon_svg(text, color=_ink(text, slot))
         except IconFlattenBudgetExceeded:
             # Original projection represents this as an owned raster slot.
             # Its raster authority stays in the source asset manifest.
