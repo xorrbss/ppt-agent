@@ -231,3 +231,45 @@ test("the profile ships with an operator runbook and is wired into the shared CI
   const rootPackage = JSON.parse(read("package.json"));
   assert.match(rootPackage.scripts["test:next-ci"], /scripts\/multi-process-compose-contract\.test\.mjs/u);
 });
+
+test("public-worker-runtime carries exactly the trusted font faces the worker loads", () => {
+  const stages = read("Dockerfile").split(/^(?=FROM )/mu);
+  const stageOf = (name) => {
+    const stage = stages.find((text) => new RegExp(`^FROM .* AS ${name}$`, "mu").test(text));
+    assert.ok(stage, `Dockerfile stage ${name} is missing`);
+    return stage;
+  };
+  const builder = stageOf("fastapi-builder");
+  const worker = stageOf("public-worker-runtime");
+
+  // The prebuilt Noto instances are built in the shared builder and inherited whole.
+  assert.match(builder, /^RUN \/opt\/venv\/bin\/python scripts\/build_svg_pptx_font_instances\.py$/mu);
+  assert.match(worker, /^COPY --from=fastapi-builder \/app\/servers\/fastapi \/app\/servers\/fastapi$/mu);
+
+  // The worker reads these paths from code; each must be copied to the same absolute location.
+  const fontsIn = "servers/nextjs/public/fonts";
+  const svgTemplateFonts = read("servers/fastapi/utils/svg_template_fonts.py");
+  const svgTrustedFonts = read("servers/fastapi/services/svg_trusted_fonts.py");
+  assert.ok(svgTemplateFonts.includes(`nextjs/public/fonts/noto-sans-kr/NotoSansKR-Variable.ttf`));
+  assert.ok(svgTrustedFonts.includes(`"servers" / "nextjs" / "public" / "fonts" / "pretendard"`));
+  // Each COPY line is: sources... destination/. Map every copied source to its destination.
+  const copyTargets = new Map();
+  for (const line of worker.split("\n").filter((text) => text.startsWith("COPY ") && !text.includes("--from="))) {
+    const tokens = line.slice("COPY ".length).split(" ");
+    const destination = tokens.pop();
+    for (const source of tokens) copyTargets.set(source, destination);
+  }
+  const required = [
+    `${fontsIn}/noto-sans-kr/NotoSansKR-Variable.ttf`,
+    `${fontsIn}/pretendard/Pretendard-Regular.ttf`,
+    `${fontsIn}/pretendard/Pretendard-Bold.ttf`,
+  ];
+  for (const source of required) {
+    const destination = copyTargets.get(source);
+    assert.equal(destination, `/app/${source.slice(0, source.lastIndexOf("/") + 1)}`,
+      `public-worker-runtime must copy ${source} to the directory the worker resolves`);
+  }
+  // Only named font files are copied from the public tree, never the whole tree.
+  assert.ok(![...copyTargets.keys()].some((source) => source === fontsIn || source.endsWith("/")),
+    "no whole-directory copy from the public tree");
+});
