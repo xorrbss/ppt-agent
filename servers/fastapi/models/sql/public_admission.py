@@ -455,6 +455,14 @@ class PublicProviderLogicalCall(SQLModel, table=True):
     )
     input_tokens: int | None = Field(default=None, sa_column=Column(BigInteger, nullable=True))
     output_tokens: int | None = Field(default=None, sa_column=Column(BigInteger, nullable=True))
+    #: Provider-reported prompt-cache reads / writes (subsets of input_tokens);
+    #: NULL when the provider reported no cache counter for the call.
+    cached_input_tokens: int | None = Field(
+        default=None, sa_column=Column(BigInteger, nullable=True)
+    )
+    cache_write_input_tokens: int | None = Field(
+        default=None, sa_column=Column(BigInteger, nullable=True)
+    )
     latency_ms: int = Field(default=0, sa_column=Column(BigInteger, nullable=False))
     outcome: str | None = Field(default=None, sa_column=Column(String(24), nullable=True))
     created_at: datetime = Field(

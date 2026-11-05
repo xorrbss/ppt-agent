@@ -35,6 +35,7 @@ from models.sql.workspace import WorkspaceOperation
 from services.provider_pricing import (
     ProviderModelPricing,
     ProviderUsageCost,
+    billable_cache_tokens,
     calculate_actual_usage_cost,
 )
 from services.public_operation_deadline import (
@@ -2078,6 +2079,8 @@ async def enrich_public_provider_call(
     actual_cost_microunits: int | None,
     input_tokens: int | None = None,
     output_tokens: int | None = None,
+    cached_input_tokens: int | None = None,
+    cache_write_input_tokens: int | None = None,
     provider_id: str | None = None,
     model_id: str | None = None,
     pricing_revision: str | None = None,
@@ -2100,6 +2103,16 @@ async def enrich_public_provider_call(
     )
     output_count = (
         None if output_tokens is None else _nonnegative(output_tokens, "output_tokens")
+    )
+    cached_count = (
+        None
+        if cached_input_tokens is None
+        else _nonnegative(cached_input_tokens, "cached_input_tokens")
+    )
+    cache_write_count = (
+        None
+        if cache_write_input_tokens is None
+        else _nonnegative(cache_write_input_tokens, "cache_write_input_tokens")
     )
     metadata = {
         "provider_id": provider_id,
@@ -2162,6 +2175,8 @@ async def enrich_public_provider_call(
                 latency_ms=latency,
                 input_tokens=input_count,
                 output_tokens=output_count,
+                cached_input_tokens=cached_count,
+                cache_write_input_tokens=cache_write_count,
                 provider_id=(
                     provider_id
                     if provider_id is not None
@@ -2246,6 +2261,8 @@ async def enrich_public_provider_call(
             actual_cost_microunits=actual,
             input_tokens=input_count,
             output_tokens=output_count,
+            cached_input_tokens=cached_count,
+            cache_write_input_tokens=cache_write_count,
             provider_id=(
                 provider_id
                 if provider_id is not None
@@ -2456,6 +2473,8 @@ async def enrich_public_provider_call_detached(
     actual_cost_microunits: int | None,
     input_tokens: int | None = None,
     output_tokens: int | None = None,
+    cached_input_tokens: int | None = None,
+    cache_write_input_tokens: int | None = None,
     provider_id: str | None = None,
     model_id: str | None = None,
     pricing_revision: str | None = None,
@@ -2474,6 +2493,8 @@ async def enrich_public_provider_call_detached(
             actual_cost_microunits=actual_cost_microunits,
             input_tokens=input_tokens,
             output_tokens=output_tokens,
+            cached_input_tokens=cached_input_tokens,
+            cache_write_input_tokens=cache_write_input_tokens,
             provider_id=provider_id,
             model_id=model_id,
             pricing_revision=pricing_revision,
@@ -2488,15 +2509,24 @@ async def enrich_public_provider_usage_detached(
     latency_ms: int,
     input_tokens: int,
     output_tokens: int,
-    cached_input_tokens: int = 0,
+    cached_input_tokens: int | None = None,
+    cache_write_input_tokens: int | None = None,
 ) -> ProviderUsageCost:
-    """Price reported usage under one exact revision and atomically enrich it."""
+    """Price reported usage under one exact revision and atomically enrich it.
 
+    The row keeps the provider-reported cache counters; cost uses the subset
+    that :func:`billable_cache_tokens` can price.
+    """
+
+    billable_cached, billable_written = billable_cache_tokens(
+        pricing, input_tokens, cached_input_tokens, cache_write_input_tokens
+    )
     usage_cost = calculate_actual_usage_cost(
         pricing,
         input_tokens=input_tokens,
         output_tokens=output_tokens,
-        cached_input_tokens=cached_input_tokens,
+        cached_input_tokens=billable_cached,
+        cache_write_input_tokens=billable_written,
     )
     await enrich_public_provider_call_detached(
         lease,
@@ -2504,6 +2534,8 @@ async def enrich_public_provider_usage_detached(
         actual_cost_microunits=usage_cost.total_cost_microunits,
         input_tokens=input_tokens,
         output_tokens=output_tokens,
+        cached_input_tokens=cached_input_tokens,
+        cache_write_input_tokens=cache_write_input_tokens,
         provider_id=pricing.provider_id,
         model_id=pricing.model_id,
         pricing_revision=pricing.revision,

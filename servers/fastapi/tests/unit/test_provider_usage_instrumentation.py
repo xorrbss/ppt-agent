@@ -93,6 +93,84 @@ def test_response_usage_cached_tokens_is_none_when_absent() -> None:
     assert response_usage(response) == ("reported", 100, 20, None)
 
 
+def test_response_usage_extracts_anthropic_cache_read_and_write_tokens() -> None:
+    from services.provider_usage_instrumentation import response_cache_write_tokens
+
+    response = SimpleNamespace(
+        usage=SimpleNamespace(
+            input_tokens=18_000,
+            output_tokens=20,
+            details={"cache_read_input_tokens": 6_000, "cache_creation_input_tokens": 2_000},
+        )
+    )
+
+    assert response_usage(response) == ("reported", 18_000, 20, 6_000)
+    assert response_cache_write_tokens(response) == 2_000
+    # An explicit zero is a measurement, not an absence.
+    zero = {"usage": {"input_tokens": 5, "output_tokens": 1,
+                      "details": {"cache_read_input_tokens": 0}}}
+    assert response_usage(zero)[3] == 0
+    assert response_cache_write_tokens(zero) is None
+
+
+def test_anthropic_cache_usage_is_priced_and_passed_to_the_logical_call(monkeypatch) -> None:
+    async def scenario() -> None:
+        captured = {}
+
+        async def enrich(lease, **kwargs):
+            captured.update(kwargs)
+
+        async def receipt(value):
+            captured["receipt"] = value
+
+        pricing = ProviderModelPricing(
+            revision="test-pricing-v1",
+            provider_id="anthropic",
+            model_id="claude-sonnet-5-5",
+            input_microunits_per_million_tokens=2_000_000,
+            output_microunits_per_million_tokens=10_000_000,
+            cached_input_microunits_per_million_tokens=200_000,
+        )
+        public_lease = SimpleNamespace(
+            id="logical-call", state="reserved", is_terminal_reuse=False,
+            provider_idempotency_key="k",
+        )
+        monkeypatch.setattr(
+            "services.public_operation_admission.enrich_public_provider_call_detached", enrich
+        )
+        monkeypatch.setattr(
+            "services.provider_usage_receipt_service.record_provider_usage_receipt_detached",
+            receipt,
+        )
+        scope_job = uuid.uuid4()
+        with provider_usage_scope(
+            job_id=scope_job, operation="generate", stage="author", attempt_number=1,
+            slide_index=0,
+        ):
+            from services.provider_usage_instrumentation import _ACTIVE_SCOPE
+
+            _ACTIVE_SCOPE.get()._public_leases.append(
+                SimpleNamespace(lease=public_lease, pricing=pricing)
+            )
+            await record_provider_call(
+                provider="anthropic",
+                model="claude-sonnet-5-5",
+                response=SimpleNamespace(usage=SimpleNamespace(
+                    input_tokens=18_000, output_tokens=500,
+                    details={"cache_read_input_tokens": 6_000,
+                             "cache_creation_input_tokens": 2_000},
+                )),
+                latency_ms=10,
+            )
+        assert captured["cached_input_tokens"] == 6_000
+        assert captured["cache_write_input_tokens"] == 2_000
+        # 10k plain + 6k cached at 0.2 + 2k written at the default 1.25x + 500 out.
+        assert captured["actual_cost_microunits"] == 20_000 + 1_200 + 5_000 + 5_000
+        assert captured["receipt"].cached_tokens == 6_000
+
+    asyncio.run(scenario())
+
+
 def test_receipt_sink_observability_is_scalar_only() -> None:
     snapshot = provider_receipt_observability_snapshot()
     assert set(snapshot) == {"attempted", "persisted", "failed"}
