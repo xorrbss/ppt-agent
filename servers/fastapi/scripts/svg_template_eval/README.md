@@ -41,6 +41,15 @@ database and directory has no older siblings, so register once and run the whole
 
 Do not run a large pytest at the same time: it has killed the local PostgreSQL and backend processes.
 
+**Template body renders** (`SVG_TEMPLATE_BODY_RENDERS`, docs/template-body-renders-design-20261105.md): every framed
+registration stores masked renders of the template's body exemplar pages, so one registration serves both arms; only the
+generation knob differs between them. Start the backend that registers with `SVG_TEMPLATE_BODY_RENDER_EXCLUDED_PAGES` set
+to the judge's score-5 anchor slides (1-based, e.g. `9,66`) so they are never shown to the author; the backend log line
+`[svg-template] body renders: {...}` gives the rendered, excluded and rejected counts and the OCR path. A run's page
+receipts carry `template_body_renders` (`authored_slide_checkpoints.svg_checkpoint -> attempts -> receipt`). Give the
+template manifest `"template_text": "<the template .pptx>"` (a local file) to record `template_text_leak_ngrams` and
+`template_text_leak_figures` per run.
+
 ## What one run records
 
 - **Stability:** quality gate (passed / flagged), fallback pages (pages excluded from review), pages right on the
