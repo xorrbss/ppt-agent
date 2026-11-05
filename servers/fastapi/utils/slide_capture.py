@@ -7,6 +7,8 @@ import asyncio
 import atexit
 import base64
 import binascii
+import contextvars
+import functools
 import hashlib
 import html as html_lib
 import io
@@ -24,7 +26,7 @@ import time
 import urllib.parse
 import urllib.request
 from collections import OrderedDict
-from contextlib import nullcontext
+from contextlib import contextmanager, nullcontext
 from dataclasses import dataclass
 from typing import Any, Dict, List, Mapping, Optional, Sequence
 
@@ -130,7 +132,57 @@ def _scene_digest(html: str, source_digest: str) -> str:
     return match.group(1) if match else source_digest
 
 
+#: Identities already computed inside the current render (see
+#: ``_render_identity_scope``); ``None`` outside a render.
+_render_identity_memo: "contextvars.ContextVar[dict | None]" = contextvars.ContextVar(
+    "render_identity_memo", default=None
+)
+
+
+@contextmanager
+def _render_identity_scope():
+    """Compute each document's cache identity once per render.
+
+    One render asks for the identity of the same document for its render,
+    metrics and capture cache keys and for its probe key. The inputs (Chrome
+    binary, local assets, measurement versions) are read once at the first
+    request and reused until the render returns, so drift between two renders
+    is still observed. Tasks the render spawns inherit the scope.
+    """
+    if _render_identity_memo.get() is not None:
+        yield
+        return
+    token = _render_identity_memo.set({})
+    try:
+        yield
+    finally:
+        _render_identity_memo.reset(token)
+
+
+def _with_render_identity_scope(function):
+    @functools.wraps(function)
+    async def scoped(*args, **kwargs):
+        with _render_identity_scope():
+            return await function(*args, **kwargs)
+    return scoped
+
+
 def _render_cache_identity(
+    html: str, *, width_px: int = SLIDE_W, height_px: int = SLIDE_H
+) -> _RenderCacheIdentity:
+    memo = _render_identity_memo.get()
+    memo_key = (html, int(width_px), int(height_px))
+    if memo is not None:
+        cached = memo.get(memo_key)
+        if cached is not None:
+            return cached
+    identity = _compute_render_cache_identity(html, width_px=width_px, height_px=height_px)
+    if memo is not None:
+        memo[memo_key] = identity
+    return identity
+
+
+def _compute_render_cache_identity(
     html: str, *, width_px: int = SLIDE_W, height_px: int = SLIDE_H
 ) -> _RenderCacheIdentity:
     source_digest = sha256_prefixed(html.encode("utf-8"))
@@ -224,16 +276,23 @@ def _take_probe_capability(source: str) -> str | None:
         return _internal_capabilities.pop(digest, None)
 
 
-def _admit_render_source(source: str) -> AdmittedHtml:
+def _admit_render_source(source: str, *, materialize_fonts: bool = True) -> AdmittedHtml:
     """Select a fail-closed admission profile for the exact in-memory source.
 
     The selection lives in ``utils.renderer_profile``, so the checkpoint gate
     judges these bytes under the policy the renderer accepted them under.
+
+    ``materialize_fonts=False`` is for a parent that hands the source to an
+    isolated worker and only binds the worker's response to
+    ``source_digest``: the trusted-font request is still validated, but the
+    default profile's faces are not built (the worker embeds them).
     """
     admitted = select_render_profile(
         source, internal_capability=lambda: _take_probe_capability(source)
     ).require()
-    from services.svg_renderer import materialize_trusted_svg_fonts
+    from services.svg_renderer import materialize_trusted_svg_fonts, validate_trusted_svg_fonts
+    if not materialize_fonts:
+        return validate_trusted_svg_fonts(source, admitted)
     return materialize_trusted_svg_fonts(source, admitted)
 
 
@@ -311,8 +370,15 @@ def _instrument_authored_html(
     issue_capability: bool = True,
     width_px: int = SLIDE_W,
     height_px: int = SLIDE_H,
+    identity_html: str | None = None,
 ) -> tuple[str, str]:
-    """Add stable edit ids and an invisible, same-render browser probe."""
+    """Add stable edit ids and an invisible, same-render browser probe.
+
+    ``identity_html`` is the pre-admission source of an admitted ``html``. Its
+    cache identity (already computed for this render's cache keys) names the
+    trusted faces by digest, so the probe key does not re-hash the embedded
+    font bytes; the admitted bytes stay bound through ``render_digest``.
+    """
     enriched = ensure_authored_qids(html)
     source_digest = sha256_prefixed(html.encode("utf-8"))
     render_digest = sha256_prefixed(enriched.encode("utf-8"))
@@ -320,7 +386,8 @@ def _instrument_authored_html(
         source_digest,
         render_digest,
         cache_identity=_render_cache_identity(
-            html, width_px=width_px, height_px=height_px
+            html if identity_html is None else identity_html,
+            width_px=width_px, height_px=height_px,
         ).digest,
     )
     if _METRICS_ELEMENT_ID in enriched:
@@ -1088,6 +1155,9 @@ def _cache_browser_metrics(
         metric_bytes = len(json.dumps(metrics, sort_keys=True, separators=(",", ":"), ensure_ascii=False, default=str).encode("utf-8"))
     except Exception:
         metric_bytes = 0
+    else:
+        # The same footprint the budget measures; record it once.
+        _metrics_cache_sizes[key] = (id(metrics), metric_bytes)
     _count_runtime("metrics_cache_bytes", metric_bytes)
     max_entries, max_bytes = _dom_metrics_cache_limits()
     while (
@@ -1102,6 +1172,7 @@ def _cache_browser_metrics(
 _await_shared_render_task = await_shared_render_task
 
 
+@_with_render_identity_scope
 async def ensure_browser_metrics(
     html: str, timeout: int = 60, *, deck_scope: str | None = None,
     width_px: int = SLIDE_W, height_px: int = SLIDE_H,
@@ -1140,7 +1211,7 @@ async def ensure_browser_metrics(
                 # gathered slide.  The one-shot headless-shell path has its own
                 # profile, process-tree timeout, virtual-time budget, and the
                 # same instrumented DOM payload used by the primary renderer.
-                admitted = _admit_render_source(html)
+                admitted = await asyncio.to_thread(_admit_render_source, html)
                 await _render_html_to_png_subprocess(
                     admitted.html,
                     timeout=timeout,
@@ -1174,6 +1245,7 @@ async def ensure_browser_metrics(
     finally:
         if _browser_metrics_inflight.get(key) is task and task.done():
             _browser_metrics_inflight.pop(key, None)
+@_with_render_identity_scope
 async def render_html_to_png_with_metrics(
     html: str, timeout: int = 60, *, deck_scope: str | None = None,
     fit: bool = False, fit_policy: Mapping[str, Any] | None = None,
@@ -1707,6 +1779,7 @@ async def _render_html_to_png_subprocess(
                 issue_capability=False,
                 width_px=width_px,
                 height_px=height_px,
+                identity_html=cache_html,
             )
             with open(html_path, "w", encoding="utf-8") as f:
                 f.write(instrumented_html)
@@ -1872,7 +1945,16 @@ async def _render_html_to_png_uncached(
     _bind_worker_client()
     ensure_renderer_enabled()
     mode = renderer_mode()
-    admitted = _admit_render_source(html)
+    isolated_worker = renderer_requires_external_worker() or env_enabled(
+        "AUTHORED_RENDERER_LEGACY_ENABLED"
+    )
+    # Only an in-process render needs the embedded faces; a worker builds its
+    # own. Admission can build a per-page font subset (CPU-bound), so it runs
+    # off the event loop.
+    admitted = await asyncio.to_thread(
+        _admit_render_source, html,
+        materialize_fonts=mode != "legacy" and not isolated_worker,
+    )
     if mode == "legacy":
         # Kept only for legacy read/export migrations.  New authored requests use
         # isolated mode and never auto-downgrade here after a worker failure.
@@ -1883,9 +1965,7 @@ async def _render_html_to_png_uncached(
     # A production renderer never enters the in-process Chrome branch. It must
     # cross the external non-root/read-only/network-none worker boundary, and a
     # worker failure is returned without a local downgrade.
-    if renderer_requires_external_worker() or env_enabled(
-        "AUTHORED_RENDERER_LEGACY_ENABLED"
-    ):
+    if isolated_worker:
         # The lease groups one deck's renders onto one worker process when the
         # framed protocol is on; an unset scope resolves to a single-use key.
         scope = resolve_render_deck_scope()
@@ -1936,6 +2016,7 @@ async def _render_html_to_png_uncached(
     )
 
 
+@_with_render_identity_scope
 async def render_html_to_png(
     html: str, timeout: int = 60, *, deck_scope: str | None = None,
     width_px: int = SLIDE_W, height_px: int = SLIDE_H,
@@ -2084,6 +2165,9 @@ def _dom_metrics_cache_limits() -> "tuple[int, int]":
 
 _browser_metrics_cache: "OrderedDict[tuple[str, str, str], Mapping[str, Any]]" = OrderedDict()
 _browser_metrics_inflight: Dict[tuple[str, str, str], "asyncio.Task[Mapping[str, Any] | None]"] = {}
+#: Footprint memos of the two payload caches (see utils.render_cache_budget).
+_metrics_cache_sizes: Dict[tuple[str, str, str], tuple[int, int]] = {}
+_capture_cache_sizes: Dict[tuple[str, str, str], tuple[int, int]] = {}
 _observed_cache_identities: "OrderedDict[str, _RenderCacheIdentity]" = OrderedDict()
 _CACHE_IDENTITY_OBSERVATION_LIMIT = 256
 # The authored override remains authoritative.  Managed stacks already expose
@@ -2103,13 +2187,15 @@ def _render_cache_resident_bytes() -> int:
 
 def _metrics_cache_resident_bytes() -> int:
     return metrics_cache_resident_bytes(
-        _browser_metrics_cache, overflow_bytes=_dom_metrics_cache_limits()[1]
+        _browser_metrics_cache, overflow_bytes=_dom_metrics_cache_limits()[1],
+        sizes=_metrics_cache_sizes,
     )
 
 
 def _capture_cache_resident_bytes() -> int:
     return capture_cache_resident_bytes(
-        _capture_cache, overflow_bytes=_dom_metrics_cache_limits()[1]
+        _capture_cache, overflow_bytes=_dom_metrics_cache_limits()[1],
+        sizes=_capture_cache_sizes,
     )
 
 
@@ -2185,6 +2271,8 @@ def reset_render_runtime(
         _render_cache.clear()
         _browser_metrics_cache.clear()
         _capture_cache.clear()
+        _metrics_cache_sizes.clear()
+        _capture_cache_sizes.clear()
         _observed_cache_identities.clear()
         _count_runtime("cache_resets")
         _count_runtime("cache_invalidated_entries", invalidated_entries)

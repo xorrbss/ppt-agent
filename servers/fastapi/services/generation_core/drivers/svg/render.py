@@ -864,7 +864,9 @@ async def _attempt_render(*, ctx, request, presentation_id, index, content, payl
     from services.svg_presentation_checkpoint import compact_browser_metrics, with_browser_metrics
     # Persist the measured metrics once; checkpoint and publication carry the
     # bound reference, and the readers below see the exact inline view.
-    measured_metrics = compact_browser_metrics(rendered.quality)
+    # Its encode/compare/fsync is blocking; the quality dict is this render's
+    # own until the thread returns.
+    measured_metrics = await asyncio.to_thread(compact_browser_metrics, rendered.quality)
 
     def measured():
         return with_browser_metrics(rendered.quality, measured_metrics)
@@ -1001,8 +1003,10 @@ async def _attempt_render(*, ctx, request, presentation_id, index, content, payl
             rendered.quality.setdefault("failures", []).append({
                 "kind": "source_image_omitted", "slotIds": required_omitted,
             })
+    # The PNG write is an atomic fsync; keep the blocking I/O off the loop.
+    png_fields = await asyncio.to_thread(write_png, rendered.png)
     payload.update(svg_content=final, source_digest=sha256_hex(final.encode()),
-                   quality=rendered.quality, **write_png(rendered.png))
+                   quality=rendered.quality, **png_fields)
     glyph_quality = rendered.quality.get("fixed_glyph_preview")
     if glyph_quality is not None:
         envelope = payload.get("svgAssetManifest") or {}

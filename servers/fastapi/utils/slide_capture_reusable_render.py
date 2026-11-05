@@ -45,6 +45,37 @@ async def _close_owned_target_with_verification(session, close_url: str, target_
     return all(item["id"] != target_id for item in targets)
 
 
+# Decoding the probe payload and the PNG work below are CPU-bound (a large
+# page's metrics are close to 1 MB), so the async renderer runs them in a
+# worker thread instead of stalling the event loop.
+def _decode_metrics(encoded: Any) -> Mapping[str, Any] | None:
+    if not isinstance(encoded, str) or not encoded:
+        return None
+    try:
+        parsed = json.loads(urllib.parse.unquote(html_lib.unescape(encoded)))
+    except (TypeError, ValueError):
+        return None
+    return parsed if isinstance(parsed, Mapping) else None
+
+
+def _decode_screenshot(image_bytes: bytes, width_px: int, height_px: int):
+    from PIL import Image
+
+    return Image.open(io.BytesIO(image_bytes)).convert("RGB").crop((0, 0, width_px, height_px))
+
+
+def _decode_probe(probe_bytes: bytes):
+    from PIL import Image
+
+    return Image.open(io.BytesIO(probe_bytes)).convert("RGB")
+
+
+def _encode_png(image) -> bytes:
+    output = io.BytesIO()
+    image.save(output, format="PNG")
+    return output.getvalue()
+
+
 async def render_html_in_reusable_chrome(  # noqa: ASYNC109
     html: str, timeout: int, *, script_nonce: str | None = None,
     cache_html: str | None = None, blocked_urls: Sequence[str],
@@ -57,8 +88,6 @@ async def render_html_in_reusable_chrome(  # noqa: ASYNC109
     width_px: int = SLIDE_W, height_px: int = SLIDE_H,
 ) -> tuple[bytes, Mapping[str, Any] | None]:
     """Render through a disposable CDP page in the shared isolated process."""
-
-    from PIL import Image
 
     runtime = None
     acquisition = asyncio.create_task(asyncio.to_thread(get_runtime))
@@ -123,6 +152,7 @@ async def render_html_in_reusable_chrome(  # noqa: ASYNC109
                     issue_capability=False,
                     width_px=width_px,
                     height_px=height_px,
+                    identity_html=cache_html,
                 )
                 await command(
                     "Page.setDocumentContent", {"frameId": frame_id, "html": instrumented}
@@ -143,15 +173,7 @@ async def render_html_in_reusable_chrome(  # noqa: ASYNC109
                         "returnByValue": True,
                     },
                 )
-                encoded_metrics = runtime_value(metrics_result)
-                metrics: Mapping[str, Any] | None = None
-                if isinstance(encoded_metrics, str) and encoded_metrics:
-                    try:
-                        decoded = urllib.parse.unquote(html_lib.unescape(encoded_metrics))
-                        parsed = json.loads(decoded)
-                        metrics = parsed if isinstance(parsed, Mapping) else None
-                    except (TypeError, ValueError):
-                        metrics = None
+                metrics = await asyncio.to_thread(_decode_metrics, runtime_value(metrics_result))
                 screenshot = await command(
                     "Page.captureScreenshot",
                     {
@@ -163,9 +185,7 @@ async def render_html_in_reusable_chrome(  # noqa: ASYNC109
                 image_bytes = base64.b64decode(str(screenshot.get("data") or ""))
                 if not image_bytes:
                     raise RuntimeError("Chrome DevTools screenshot is empty")
-                image = Image.open(io.BytesIO(image_bytes)).convert("RGB").crop(
-                    (0, 0, width_px, height_px)
-                )
+                image = await asyncio.to_thread(_decode_screenshot, image_bytes, width_px, height_px)
 
                 if metrics is not None and any(
                     isinstance(item, Mapping)
@@ -221,18 +241,17 @@ async def render_html_in_reusable_chrome(  # noqa: ASYNC109
                     probe_bytes = base64.b64decode(
                         str(probe_shot.get("data") or "")
                     )
-                    probe_image = Image.open(io.BytesIO(probe_bytes)).convert("RGB")
+                    probe_image = await asyncio.to_thread(_decode_probe, probe_bytes)
                     if probe_image.size[0] < width_px or probe_image.size[1] < height_px * 2:
                         raise RuntimeError(
                             f"Chrome pixel probe has unexpected size {probe_image.size}"
                         )
-                    metrics = enrich_contrast(metrics, image, probe_image)
-                output = io.BytesIO()
-                image.save(output, format="PNG")
+                    metrics = await asyncio.to_thread(enrich_contrast, metrics, image, probe_image)
+                png = await asyncio.to_thread(_encode_png, image)
                 if metrics is not None:
                     from utils.slide_capture_local_fit import measured_html
                     metrics = await probe_glyph_clipping_async(
-                        measured_html(html, metrics), metrics, output.getvalue(), command=command, frame_id=frame_id,
+                        measured_html(html, metrics), metrics, png, command=command, frame_id=frame_id,
                         width_px=width_px, height_px=height_px,
                     )
                     cache_metrics(
@@ -240,7 +259,7 @@ async def render_html_in_reusable_chrome(  # noqa: ASYNC109
                         width_px=width_px, height_px=height_px,
                     )
 
-            return output.getvalue(), metrics
+            return png, metrics
     except BaseException:
         failed = True
         raise
