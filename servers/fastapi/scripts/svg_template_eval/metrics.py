@@ -66,6 +66,39 @@ def retention(source: str, generated: str) -> dict:
             "numbers": len(numbers & found_numbers) / len(numbers) if numbers else None}
 
 
+_LEAK_WORD = re.compile(r"[가-힣]{2,}|[A-Za-z]{3,}")
+_LEAK_FIGURE = re.compile(r"\d[\d,.]*\s?(?:%|[가-힣]|[A-Za-z]{1,3})?")
+#: One-syllable particles a Korean word carries ("인력과", "인력은" are the same word for this metric).
+_PARTICLES = frozenset("은는이가을를의에와과도로")
+
+
+def _stem(word: str) -> str:
+    return word[:-1] if len(word) >= 3 and word[-1] in _PARTICLES else word.casefold()
+
+
+def _leak_bigrams(text: str) -> set[tuple[str, str]]:
+    words = [_stem(word) for word in _LEAK_WORD.findall(text or "")]
+    return set(zip(words, words[1:], strict=False))
+
+
+def _leak_figures(text: str) -> set[str]:
+    # A figure is a number of two or more digits with its unit, spaces removed ("194명", "33%", "2.5h").
+    return {figure.replace(" ", "") for figure in _LEAK_FIGURE.findall(text or "")
+            if sum(char.isdigit() for char in figure) >= 2}
+
+
+def template_text_leaks(template_text: str, generated: str, source: str) -> dict:
+    """Template wording that reached a generated deck: counts only, never the words.
+
+    ``ngrams`` counts word bigrams and ``figures`` numbers with their units that the template's own text
+    and the generated deck share but the deck's source does not (so the source cannot explain them).
+    Common phrases a deck may write on its own also count, so compare arms, not against zero.
+    """
+    source_bigrams, source_figures = _leak_bigrams(source), _leak_figures(source)
+    return {"ngrams": len((_leak_bigrams(template_text) & _leak_bigrams(generated)) - source_bigrams),
+            "figures": len((_leak_figures(template_text) & _leak_figures(generated)) - source_figures)}
+
+
 _CHART_FRAME = re.compile(r"""graphicData\s+uri=["']http://schemas\.openxmlformats\.org/drawingml/2006/chart["']""")
 
 

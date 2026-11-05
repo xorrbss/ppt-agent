@@ -382,6 +382,7 @@ class SvgTemplateOperationHandler:
             before, source_path = await gateway.resolve_for_processing(session,
                 asset_id=binding.asset_id, kind=binding.kind)
             package = None
+            render_artifact_ids, render_receipt, libreoffice_pdf = [], None, None
             if payload["registration_mode"] == "framed":
                 from services.svg_templates.frame import extract_template_package
                 from services.svg_templates.raster_preservation import libreoffice_raster_renderer
@@ -405,6 +406,14 @@ class SvgTemplateOperationHandler:
                         owner_id=owner_id, tenant_id=tenant_id)
                     package_model = await asyncio.to_thread(build_preview_package,
                         package_model, source_path, captured_pdf, capture_receipt)
+                # Masked renders of the body exemplar pages, only with SVG_TEMPLATE_BODY_RENDERS on at
+                # registration (docs/template-body-renders-design-20261105.md: measured no effect, and the
+                # masking OCR costs minutes); a page that cannot be verified gets none and the
+                # registration goes on. Off, the package and the registration stay as before.
+                from services.svg_templates.body_renders import registration_body_renders
+                (package_model, render_artifact_ids, render_receipt,
+                 libreoffice_pdf) = await registration_body_renders(
+                    session, package_model, source_path, captured_pdf=captured_pdf, operation_id=claim.operation_id)
                 package = package_model.model_dump(mode="json", by_alias=True)
                 if len(canonical_json_bytes(package)) > MAX_DRAFT_PACKAGE_BYTES:
                     raise ValueError("svg_template_package_size_limit")
@@ -418,7 +427,8 @@ class SvgTemplateOperationHandler:
             if package:
                 from services.svg_templates.source_review import prepare_source_review
                 evidence, previews = await prepare_source_review(session, package_model, source_path,
-                    operation_id=claim.operation_id, captured_pdf=captured_pdf, capture_receipt=capture_receipt)
+                    operation_id=claim.operation_id, captured_pdf=captured_pdf, capture_receipt=capture_receipt,
+                    libreoffice_pdf=libreoffice_pdf)
             after = await gateway.bind(session, asset_id=binding.asset_id, kind=binding.kind)
             if before != after:
                 raise ValueError("svg_template_source_changed")
@@ -435,11 +445,13 @@ class SvgTemplateOperationHandler:
                 for role in ("source_image_ref", "frame_image_ref"):
                     if isinstance(entry.get(role), dict) and entry[role].get("artifact_id"):
                         artifact_ids.append(entry[role]["artifact_id"])
+            artifact_ids.extend(render_artifact_ids)
             await retain_artifacts(session, template_id=template.id, artifact_ids=artifact_ids)
             result = {"package": package, "style_projection": profile,
                 "source_snapshot_id": str(snapshot_id), "review_evidence": evidence, "source_previews": previews,
                 "representative_frame_id": payload.get("representative_frame_id"),
-                "registration_mode": payload["registration_mode"]}
+                "registration_mode": payload["registration_mode"],
+                **({"body_renders": render_receipt} if render_receipt is not None else {})}
             if len(canonical_json_bytes(result)) > MAX_DRAFT_CHECKPOINT_BYTES:
                 raise ValueError("svg_template_checkpoint_size_limit")
             operation.result = result

@@ -884,7 +884,7 @@ def svg_prompt_design(style_snapshot: dict) -> dict:
         return public({key: value for key, value in legacy.items() if key not in {"references", "diagnostics"}})
     # The pinned author output view is server-side transport, not design identity:
     # the model learns the compact form from its rules, never from this key.
-    excluded = {"references", "diagnostics", "source_output_view", "svg_template"}
+    excluded = {"references", "diagnostics", "source_output_view", "svg_template", "template_body_renders"}
     if style_snapshot.get("svg_template") is not None:
         excluded.add("design_pack_template")
     if read_quality_recovery_policy(style_snapshot) is not None:
@@ -1076,6 +1076,12 @@ async def author_slide_svg(content: str, style_snapshot: dict, role: str, index:
         from services.svg_templates.generation import template_exemplar_facts
         template_facts.update(template_exemplar_facts(style_snapshot, template_page, content, body_floor=body_floor,
                                                       source_preserved=source_preserved))
+    # Masked renders of the template's body pages: only for a deck admitted with
+    # SVG_TEMPLATE_BODY_RENDERS on (empty otherwise, so every other prompt keeps its bytes).
+    body_renders: list = []
+    if template_page is not None:
+        from services.svg_templates.body_renders import page_body_renders
+        body_renders = page_body_renders(style_snapshot, template_page, content, source_preserved=source_preserved)
     # ``kind`` is present only for planned AssetOffer slots, so a deck of
     # source images alone sends the same prompt as before offers existed.
     offered = {k: {"description": v.get("description", ""), "required": v.get("required", False),
@@ -1185,6 +1191,13 @@ async def author_slide_svg(content: str, style_snapshot: dict, role: str, index:
         reference_receipt = {"reference_selection": selection,
                              "reference_image_digests": [sha256_prefixed(part.data) for part in images],
                              **({"design_example_inputs": example_inputs} if quality_policy is not None else {})}
+    if body_renders:
+        from services.svg_templates.body_renders import render_prompt_block, render_receipt
+        if any(entry.get("png") for entry in body_renders):
+            prompt += render_prompt_block(body_renders, len(images))
+            images.extend(ImageContentPart(data=entry["png"], mime_type="image/png")
+                          for entry in body_renders if entry.get("png"))
+        reference_receipt = {**reference_receipt, "template_body_renders": render_receipt(body_renders)}
     if previous_render_part is not None:
         previous_image_index = len(images)
         images.append(previous_render_part)

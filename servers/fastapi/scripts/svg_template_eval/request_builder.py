@@ -44,7 +44,8 @@ def _file_or_inline(value):
 
 def load_template_spec(path: str) -> dict:
     """A template manifest: ``{"id", "pin": <pin or path>, "canvas_emu": [w, h], "frame_map": <map or path>,
-    "judge": {"references": dir, "anchor_high": [paths], "anchor_low": path}}`` (``judge`` optional).
+    "judge": {"references": dir, "anchor_high": [paths], "anchor_low": path}, "template_text": path}``
+    (``judge`` and ``template_text`` optional).
     Relative paths inside it resolve against the manifest's directory."""
     manifest_path = Path(path)
     spec = json.loads(manifest_path.read_text(encoding="utf-8"))
@@ -53,6 +54,9 @@ def load_template_spec(path: str) -> dict:
         if isinstance(spec.get(key), str):
             spec[key] = json.loads((base / spec[key]).read_text(encoding="utf-8"))
     spec.setdefault("id", manifest_path.stem)
+    if isinstance(spec.get("template_text"), str):
+        # The template's own deck (.pptx) or its text (.txt), for the template-text leak metric; a local file.
+        spec["template_text"] = str(_resolve(base, spec["template_text"]))
     judge = spec.get("judge")
     if judge:
         resolved = dict(judge)

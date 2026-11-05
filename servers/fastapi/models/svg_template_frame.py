@@ -243,6 +243,41 @@ class SvgTemplateExemplarItem(FrameModel):
         return {key: value for key, value in handler(self).items() if value is not None}
 
 
+_UUID = r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+
+
+class SvgTemplateBodyRenderMask(FrameModel):
+    """How a body render was masked and verified (counts and literals only, no text)."""
+    version: Literal["svg-template-body-render/v1"] = "svg-template-body-render/v1"
+    #: Text objects of the page replaced by bars, and the text characters left afterwards (always 0).
+    text_objects: int = Field(ge=0)
+    residual_chars: int = Field(ge=0, le=0)
+    #: Pictures inside the body that were checked, and how many of them were covered.
+    pictures: int = Field(ge=0)
+    pictures_covered: int = Field(ge=0)
+    #: Pictures removed as a drop shadow or a text effect (bitmaps that may hold a blurred copy of a text).
+    text_effects: int = Field(ge=0)
+    #: The OCR runtime that checked those pictures; ``unavailable`` covers every one with sharp edges.
+    ocr: Literal["tesseract", "liteparse", "unavailable"]
+    #: OCR of the whole masked crop (text drawn as paths): ``passed``, or ``unavailable`` without OCR.
+    final_check: Literal["passed", "unavailable"]
+
+
+class SvgTemplateBodyRender(FrameModel):
+    """A masked render of one exemplar page's body, stored as an owner-bound artifact.
+
+    Ids, a digest, sizes and the mask receipt only; the picture itself carries no text
+    (``services/svg_templates/body_renders.py``).
+    """
+    artifact_id: str = Field(pattern=_UUID)
+    owner_id: str = Field(pattern=_UUID)
+    tenant_id: str = Field(min_length=1, max_length=128, pattern=r"^[A-Za-z0-9_.:-]+$")
+    sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    width: int = Field(gt=0, le=4096)
+    height: int = Field(gt=0, le=4096)
+    mask: SvgTemplateBodyRenderMask
+
+
 class SvgTemplateBodyExemplar(FrameModel):
     """A source body page as a structural outline: what it contains and how it fills the body."""
     source_page: int = Field(ge=0)
@@ -252,6 +287,20 @@ class SvgTemplateBodyExemplar(FrameModel):
     sections: int = Field(ge=0, le=20)
     text_items: int = Field(ge=0)
     items: tuple[SvgTemplateExemplarItem, ...] = Field(min_length=1, max_length=160)
+    #: The body region's top-left on the source canvas (whole px), where a render is cropped.
+    region_x: int | None = None
+    region_y: int | None = None
+    #: The masked render of this page's body, when registration could make and verify one.
+    render: SvgTemplateBodyRender | None = None
+
+    @model_serializer(mode="wrap")
+    def serialize_without_absent_render(self, handler):
+        # Exemplars stored before renders existed keep their bytes, so their package digests hold.
+        value = handler(self)
+        for key in ("region_x", "region_y", "render"):
+            if value.get(key) is None:
+                value.pop(key, None)
+        return value
 
 
 class SvgTemplateCompositionGrammar(FrameModel):

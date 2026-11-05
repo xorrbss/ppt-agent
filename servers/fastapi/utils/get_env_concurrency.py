@@ -290,6 +290,39 @@ def get_svg_common_header_default_env(settings: RuntimeSettings | None = None) -
     return "reduced" if value == "reduced" else "designed"
 
 
+def get_svg_template_body_renders_env(settings: RuntimeSettings | None = None) -> bool:
+    """Whether template registrations store masked renders of the template's own body pages and newly
+    admitted template-redesign decks send them to the author (``SVG_TEMPLATE_BODY_RENDERS``: ``on`` /
+    ``off``; unset or unknown: off). Measured 2026-11-05: no effect on the judge; stays off.
+
+    Read at registration (off: no masking, OCR or render artifact; a template registered then has no
+    renders, so turning the knob on later needs the template registered again) and once at
+    admission, frozen into the style snapshot (``template_body_renders``), so a resumed, retried or
+    remade page of the same deck follows the deck's admission (``services/svg_templates/body_renders.py``;
+    docs/template-body-renders-design-20261105.md).
+    Internal knob, listed in ``tests/support/internal_env_names.py``.
+    """
+    from utils.get_env import get_setting_env
+
+    value = (get_setting_env("SVG_TEMPLATE_BODY_RENDERS", settings) or "").strip().lower()
+    return value in {"on", "true", "1"}
+
+
+def get_svg_template_body_render_excluded_pages_env(settings: RuntimeSettings | None = None) -> frozenset[int]:
+    """Source pages (1-based slide numbers) a template registration renders no body page for
+    (``SVG_TEMPLATE_BODY_RENDER_EXCLUDED_PAGES``, a comma list such as ``9,66``; unset: none).
+
+    Measurement only: the vision judge's score-5 anchors are original template pages, and an author
+    shown a render of an anchor would be shown the judge's answer. Unknown or non-positive entries
+    are ignored. Read at registration; the exemplar outlines themselves are unchanged. Internal knob,
+    listed in ``tests/support/internal_env_names.py``.
+    """
+    from utils.get_env import get_setting_env
+
+    raw = get_setting_env("SVG_TEMPLATE_BODY_RENDER_EXCLUDED_PAGES", settings) or ""
+    return frozenset(int(item) for item in (part.strip() for part in raw.split(",")) if item.isdigit() and int(item) > 0)
+
+
 def get_svg_template_component_style_env(settings: RuntimeSettings | None = None) -> bool:
     """Whether a template-redesign deck's author rules carry the template's body component styles
     (``SVG_TEMPLATE_COMPONENT_STYLE``: ``on`` / ``off``; unset or unknown: off).
