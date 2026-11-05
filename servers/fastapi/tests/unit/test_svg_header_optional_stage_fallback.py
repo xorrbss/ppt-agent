@@ -48,7 +48,7 @@ def _run(tmp_path, monkeypatch, *, failure, fallback_policy=None, resumes=1):
                 await session.commit()
             ctx = SimpleNamespace(snapshot=snapshot, canvas=svg_canvas_for_aspect_ratio("16:9"),
                                   header_pages=None, count=1, source_reflow=False,
-                                  raster_reconstruction=False, manifests=[{}])
+                                  raster_reconstruction=False, manifests=[{}], planned=[{}])
             monkeypatch.setattr(generation, "preflight_header_selector", lambda: {"model": "fixture"})
             monkeypatch.setattr(generation, "_design_input", lambda *args: {"context": "bound"})
             monkeypatch.setattr(generation, "_design_reference_images", lambda *args: [])
@@ -147,10 +147,15 @@ def test_a_v1_policy_plan_still_fails_on_a_provider_timeout(tmp_path, monkeypatc
     assert document["steps"]["design-1"]["status"] == "unknown"
 
 
-def test_both_policies_validate_and_new_plans_seal_v2():
+def test_all_policies_validate_and_new_plans_seal_v3():
     request, plan, _snapshot, _outline, _canvas = _inputs()
-    assert plan["policy"]["version"] == "svg-header-capacity-fallback/v2"
+    assert plan["policy"]["version"] == "svg-header-capacity-fallback/v3"
     assert policy.reduces_optional_stage_failures(plan)
+    assert policy.design_input_without_asset_manifest(plan)
+    _, v2, _, _, _ = _inputs(fallback_policy=policy._POLICY)
+    assert policy.validate_header_design_plan(v2) == v2
+    assert policy.reduces_optional_stage_failures(v2)
+    assert not policy.design_input_without_asset_manifest(v2)
     _, legacy, _, _, _ = _inputs(fallback_policy=policy._POLICY_V1)
     assert policy.validate_header_design_plan(legacy) == legacy
     assert not policy.reduces_optional_stage_failures(legacy)
