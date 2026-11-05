@@ -58,8 +58,17 @@ in §5.
 
 ## 2. Owner decisions
 
-Status for all five: **recommended, pending owner confirmation.** Record the
-confirmed choice here (date and option) before starting a gated item.
+Status: **all five confirmed by the owner on 2026-11-05.** Each decision
+takes the recommended option. Gated items may start; their remaining
+conditions (paired measurement, advisory-first rollout) still apply.
+
+| Decision | Status | Confirmed option | Unblocks |
+|---|---|---|---|
+| D1 | confirmed 2026-11-05 | C: deterministic reduced header by default, `uniform` opt-in, cover exception on | P8 |
+| D2 | confirmed 2026-11-05 | C: per-canvas floor (16:9 hard 10.5 pt, target 18–20 px body, A4 9 pt) with an outline density cap, advisory first | S6 |
+| D3 | confirmed 2026-11-05 | C: `connectors` on for svg; server-side `chart:` literal; plan archetype to the author; `tables` off until fixed | S1, S2 |
+| D4 | confirmed 2026-11-05 | Accept 1:1 and registered-style restyle rows; restore A4-only raster reconstruction | E2 (admission baseline) |
+| D5 | confirmed 2026-11-05 | C: patch files plus a byte-identity-tested digest alias table | E3 |
 
 ### D1. Default common header mode
 
@@ -81,12 +90,14 @@ confirmed choice here (date and option) before starting a gated item.
 | C. **Deterministic reduced header by default, `uniform` opt-in** | Consistent header with no LLM cost; needs a less plain reduced header |
 | D. Keep `uniform`, optimise it (1 candidate, cache, parallel start) | Keeps design; about half the saving; large change |
 
-**Recommended: C**, together with:
+**Confirmed 2026-11-05: C** (the recommended option), together with:
 - `common_header_cover_exception` defaulting to true (server and UI);
 - a reduced header that shows a divider and an eyebrow by default;
 - the reduced header font fixed by Q3.
 
-Confirm with paired runs (§5) against A before changing the default.
+Implementation condition: P8 changes the default only after paired runs (§5)
+against A show no drop in pass rate, fallback pages or judge score. If they
+do show a drop, stop and report instead of changing the default.
 
 ### D2. Body font floor
 
@@ -105,7 +116,7 @@ Confirm with paired runs (§5) against A before changing the default.
 | B. Hard 12 pt on 16:9 | Readable; fallback pages expected to rise sharply |
 | C. **Per canvas:** 16:9 hard floor 10.5 pt (14 px), prompt target body 18–20 px, A4 stays 9 pt, plus an outline density cap | Readability up, failures controlled |
 
-**Recommended: C.**
+**Confirmed 2026-11-05: C** (the recommended option).
 1. Ship the floor as an advisory measurement first and count how many pages
    would fail.
 2. Then raise the hard floor.
@@ -124,7 +135,7 @@ Confirm with paired runs (§5) against A before changing the default.
 | B. All on | Table pages fall back (measured 10/10) |
 | C. **`connectors` on for svg decks; charts from a deterministic server-side `chart:` literal (S2); plan archetype passed to the author (S1); `tables` stay off until the table fallback cause is fixed** | Diagrams and native charts without the measured regression |
 
-**Recommended: C.**
+**Confirmed 2026-11-05: C** (the recommended option).
 
 ### D4. Canvas admission drift
 
@@ -137,8 +148,9 @@ changed from rejected to admitted.
 | Registered style + svg restyle | Accept: re-capture |
 | **Raster reconstruction on 16:9 and 1:1** | **Restore A4-only** until a non-A4 raster pilot is measured: quality has only been measured on A4 |
 
-**Recommended:** as in the table. **Owner check:** if any user already relies
-on non-A4 raster reconstruction, keep it admitted and measure instead.
+**Confirmed 2026-11-05:** as in the table (the recommended handling). If a
+user turns out to rely on non-A4 raster reconstruction, report it to the
+owner before restoring the A4-only rule. Do not keep it admitted silently.
 
 ### D5. Converter reproducibility versus stored export proofs
 
@@ -156,7 +168,7 @@ on non-A4 raster reconstruction, keep it admitted and measure instead.
 | B. Rebuild and accept one-time invalidation | Users must re-export old decks |
 | C. **Add the patches and a reviewed digest alias table ("old digest → new digest, executed bytes identical"), enforced by a test that proves byte identity** | Proofs stay valid; reproducibility restored |
 
-**Recommended: C.** Longer term, split the digest into "executed code
+**Confirmed 2026-11-05: C** (the recommended option). Longer term, split the digest into "executed code
 identity" and "provenance metadata" so metadata changes cannot invalidate
 proofs.
 
@@ -575,7 +587,7 @@ Acceptance, Check.
 1. **M1, M2, M3** — measurement.
 2. **Q1, Q2, Q3, Q6, Q8, P2** — independent; small to medium.
 3. **P1, P4, Q4, Q9, E4** — then E1.
-4. **Owner decisions D1–D5 confirmed** → **P8, S1, S2, S6, E2, E3**.
+4. **Owner decisions D1–D5 (confirmed 2026-11-05)** → **P8, S1, S2, S6, E2, E3**.
 5. **Q5, Q7, P5, P6, S3, S4, S5, S8.**
 6. **P3, P7, P9, P10, S7, E5–E8.**
 
