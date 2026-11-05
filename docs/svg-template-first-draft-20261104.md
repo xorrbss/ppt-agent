@@ -152,3 +152,63 @@ read them as a check that nothing broke, not as a measurement of the effect.
    failure in two decks).
 4. A whitespace text with `fill="none"` still fails the contract (`svg_contract_invisible_text`); one
    draft in 250.
+
+## Second round: 24 decks of the policy measurement (2026-11-05)
+
+Data: the 24 decks of the paired default-decision measurement (databases s5a/s5b/s5c: policy off,
+connectors only, tables only; 4 fictional inputs x 2 templates, 240 pages). 51 first drafts failed
+(189/240 first-try). Every failed draft was read in its raw response and its stored browser metrics.
+
+| Cause | Pages (A / B) | Role | What the drafts show |
+|---|---|---|---|
+| `native_requested_table_missing` | 13 (7 / 6) | body | Not in scope here (projection: header band outside the group, grid undetermined) |
+| `text_overlap` | 9 (2 / 7) | body | 15 pairs, all on glyph ink: 6 a native table's header labels drawn twice (outside the group and again inside on the same baseline, 0-6 px apart); 4 a text wider than allowed (60 px `약 46%` 3.3 px into the next text, 38 px figures 12-17 px, a 16 px header 24 px past its column); 3 a note panel drawn over a chart's labels; 1 two combo-chart value labels; 1 two stacked lines (14 px over 38 px) 1.7 px too close |
+| `native_requested_chart_missing` | 6 (4 / 2) | body 5, cover 1 | Tables-only arm |
+| `required_text_missing` | 4 (2 / 2) | body | Tables-only arm only: chart values written as `342` under a `(억 원)` caption while the page is checked for `342억`; one degenerate draft |
+| `svg_template_body_outside_allowed_region` | 3 (+1 with an overlap) | body | All horizontal this time: labels centred 1-2 px left of the right edge, a closing text 7 px past right, a 38 px figure 59 px past right, a rule starting at x 60 (left edge 64) |
+| `svg_source_image_unknown_slot` | 3 | body | An offered icon written as `<image ... width="0" height="0">` |
+| visual review (structure / density / hierarchy) | 5 | | Design review |
+| `svg_contract_invisible_text` | 2 | body | A `.` spacer text with `fill="none"` |
+| `text_hidden`, `small_body_text` | 1, 1 | body | A `.` spacer with `opacity="0"`; a `.` spacer at `font-size="1"` |
+| `svg_contract_linear_path_only` | 1 | body | `<path d="M940 312 A0 0 0 0 1 940 312" fill="none"/>` (no stroke) in a donut; the donut itself uses `stroke-dasharray` |
+| `svg_contract_unsupported_element` | 1 | body | An empty `<style></style>` |
+| `text_off_canvas` | 1 | body | A native chart group with `opacity="0"` and its title at (0, 0) |
+| `source_text_paint_unproven` | 1 | cover | |
+
+The overlap detector had no false positive: every pair is on measured ink, and three of the closest
+(3.3, 1.7 and 16 px) were checked in a fresh render; the glyphs touch.
+
+Fixes (commits `e7e01eefb`, `6741be92d`):
+
+1. Deterministic, in the producer and `parse_author_response` (receipts
+   `unrendered_marks_dropped`, `duplicate_table_headers_dropped`), no-ops on every accepted page:
+   zero-size `<image>` joins the zero-size shapes; a `<path>` with neither fill nor stroke, an empty
+   `<style>`/`<defs>`, and a text without any letter or digit that draws nothing (no fill and stroke,
+   or with a non-space character `opacity`/`fill-opacity` 0 or a size of at most 2 px) are dropped;
+   a header label written outside its `data-native-table` group whose text equals a header cell
+   drawn inside the group on the same baseline (1 px, `translate` included) is dropped.
+2. Prompt facts: `template_text_metrics`, per face of the page's frame, read from the font bytes:
+   widest Hangul syllable and digit, average Latin letters, space, common figure symbols, and glyph
+   ink above and below the baseline (Pretendard 700: Hangul 0.864 em, digit 0.66 em, ink 0.80 / 0.21
+   em). The rules say to work a text's width out before placing it and keep 8 px clear of its
+   container, the next text and the right edge (with the anchor), and how far apart stacked
+   baselines must be. The `required_literals` rule now names a unit left to an axis or column caption.
+3. Repair messages: `text_overlap` hints carry witnesses (the two texts, sizes, measured ink boxes,
+   overlap in px, `same_text`) in whatever branch wrote the hint, staying one JSON object when the
+   hint is one; body-outside failures name the text and `past_edge_px` per edge.
+
+Offline replay (no model calls): each stored failed first draft through `parse_author_response`,
+declaration extraction, icons as plain rectangles, `compose_template_page` with the stored page
+context, the browser render with the template fonts, the template body check and the paint
+occlusion check (native requirements, vector icons and the visual review are not replayed).
+The geometric failures that were not addressed are all reproduced, which validates the harness.
+Now passing every replayed check: 9 drafts (3 zero-size icons, 2 invisible and 1 hidden `.`, 1 tiny
+`.`, 1 empty `<style>`, 1 duplicated-header overlap page); one more overlap page loses its two
+duplicate pairs and keeps its width pair; the other duplicated-header page also failed its native
+table, which is unchanged. The `linear_path_only` draft now fails on `stroke-dasharray` instead.
+The prompt facts cannot be replayed.
+
+Live check (policy off, N=1 per cell, not a measurement): template B x unstructured report 10/10
+first try (baseline 10/10); template A x data report 6/10 (baseline 8/10): a 16 px sentence 70 px
+past right (the width rule did not prevent it), a degenerate draft with an empty table group, a
+native table and a visual review failure. Measure N >= 3 per cell before reading an effect.
