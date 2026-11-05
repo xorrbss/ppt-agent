@@ -162,10 +162,23 @@ Decided by the user (2026-11-05), and how the implementation follows:
 1. Text masking is on (it protects source fidelity: template wording and figures must not flow into new decks).
    Pictures that may carry words are read by the product's existing OCR, tesseract (`utils/authored_ocr_quality.py`)
    when installed, else LiteParse's tesseract.js with the bundled `tessdata/` kor+eng
-   (`services/liteparse_service.py`); a picture with recognised text is covered; where no OCR runtime is available every
-   picture larger than an icon is covered. The render's mask receipt records the path (`tesseract`, `liteparse`,
-   `unavailable`). A picture with almost no sharp edge (soft shadows, gradients) cannot carry text and is neither read
-   nor covered; an icon (at most 120 canvas px on both edges) is kept.
+   (`services/liteparse_service.py`); a picture with recognised text is covered in place (one colour, same drawing
+   order). Every picture is read, icons included (a 105 x 38 px logo with a word is icon-sized); only a one-colour
+   picture is skipped. Where no OCR runtime is available every picture with strong edges is covered (fail safe) and
+   only flat ones (soft shadows, gradients) are kept. The render's mask receipt records the path (`tesseract`,
+   `liteparse`, `unavailable`).
+   Review fixes (2026-11-05): annotations and form fields are never drawn; a translucent grey drop shadow and a picture
+   lying within a text line are removed with the text, because the PDF export draws shadows and glows as bitmaps that
+   hold a blurred, readable copy of the text (seen on the real template: 2 to 93 such bitmaps per page); and when an
+   OCR runtime is available the whole crop is read once more before any bar is drawn (text drawn as paths, metafiles
+   or clip text is no text object) and the page gets no render when OCR finds three Hangul syllables or five Latin
+   letters in a row (receipt `final_check`: `passed` or `unavailable`). On the real template's ten exemplar pages that
+   bar-free reading found no word once the shadows were gone; read with the bars it produced noise words, which is why
+   the bars are drawn afterwards. Hidden slides are exported (`ExportHiddenSlides`), so page indices match, and one
+   LibreOffice conversion serves the renders and the source review. The registration operation's result carries the
+   render receipt (rendered, excluded, rejected and unstored counts, OCR path).
+   Cost: with LiteParse every picture is one OCR call (about 1 to 2 s; repeated pictures are read once); the real
+   template's ten pages took about 220 s at registration. Accepted.
 2. Every framed registration stores renders, whatever the generation knob says.
 3. Exemplar pages only (at most 10).
 4. Allowed for decks of the same owner only: a render is read only when its recorded owner and tenant are the
@@ -179,4 +192,6 @@ Also built: the template-text leak count in the evaluation tool (`template_text_
 `scripts/svg_template_eval/metrics.py`; a template manifest's `template_text` or `run --template-text` names the
 template's own deck, read locally). It counts word bigrams and figures that the template and a generated deck share and
 the deck's source does not; common phrases count too, so arms are compared with each other rather than against zero
-(section 6's "must be 0" becomes "no higher than the control").
+(section 6's "must be 0" becomes "no higher than the control"). The metric reads deck text only, so it cannot see a
+leak through a render (a render carries no text by construction); the safeguards there are the stored renders' OCR
+checks above and a look at the stored renders before a measurement.
