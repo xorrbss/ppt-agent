@@ -122,6 +122,10 @@ _ALLOWED_LITERAL_FILES = {
     "services/authored_decoration_panel_sheen.py": "panel height upper bound",
     # An upper bound on native-object margins in points.
     "services/generation_core/native_objects/payload.py": "margin upper bound",
+    # Pixel bounds of the vision-QA contact sheet (an image budget, not a deck canvas).
+    "services/generation_core/quality/vision_contact_sheet.py": "contact sheet pixel bound",
+    # 720 is a character budget for repair witnesses, not a canvas edge.
+    "services/ppt_writing_visible.py": "text character budget",
 }
 
 
