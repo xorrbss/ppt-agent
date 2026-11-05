@@ -1,0 +1,220 @@
+{
+  "schema": "svg-timeout-repurchase-incident-registry/v1",
+  "incident_id": "tplays-twelve-page-sample",
+  "description": "Frozen ledger of the one consent-bound twelve-page svg timeout repurchase sample. Read-only verifier data: every value reproduces a stored approval manifest or ledger row and must never change. The pinned canonical digest lives in services/svg_timeout_repurchase_incident.py.",
+  "presentation_id": "9274cc32-445e-53c4-9a8b-0def0f82f04c",
+  "job_id": "fa76be39-9ce6-41b9-92a8-7a9c4ee23821",
+  "total_slides": 12,
+  "author_provider": "codex",
+  "author_model": "gpt-6.1-sol",
+  "authoring_profile": {"id": "art-direction-v1", "version": 7},
+  "frozen_request_digest": "d79acb261574419497e0d697f320a42488f6c5fd28442d0cdb6ba27267aab1bf",
+  "frozen_style_digest": "06883f280b1eca0cbf30ae123c595c3b1cc25d85fae70024da1fbd6b8b60aa52",
+  "dispatch": [
+    {"operation_id": "d96f4086-3b43-4c53-9ab6-329cc577a492", "stage": "bounded_quality_continuation"},
+    {"operation_id": "b4536446-ceeb-42de-b98c-87c43cc560a1", "stage": "bounded_continuation"},
+    {"operation_id": "9f04879a-d9ee-4e1b-a2b3-c01c2a4f6166", "stage": "bounded_completion"},
+    {"error_code": "svg_repair_budget_exhausted", "stage": "bounded_overload"},
+    {"request_recovery_revision": "svg-provider-timeout-repurchase/v3", "stage": "zero_dispatch_batch_replay"},
+    {"stage": "interrupted_batch"}
+  ],
+  "stages": {
+    "classification_mixed_recovery": {
+      "repair_hint_prefix": "Keep every original classification heading and member list exactly, including '외부 연계·저장소'. Preserve all original entities, directed relationships, labels, responsibilities and qualifiers. Restore the missing classification literal without shortening it. Previous candidate: "
+    },
+    "interrupted_batch": {
+      "layout": {"completed": 1, "returned": 1, "unknown": 2, "unstarted": 8},
+      "logical_calls": 4,
+      "initial_request_count": 4,
+      "retry_request_count": 0,
+      "terms": {
+        "max_additional_author_calls": 2,
+        "max_normal_author_calls": 16,
+        "previous_consumed_author_calls": 4,
+        "total_author_call_limit": 24,
+        "remaining_author_call_limit": 20,
+        "max_returned_repair_calls": 2,
+        "author_attempt_budget_per_page": 1,
+        "additional_purchase_budget_per_target": 1
+      }
+    },
+    "zero_dispatch_batch_replay": {
+      "usage_receipts": 4
+    },
+    "bounded_overload": {
+      "operation_id": "25fed2cc-0c24-41e5-8387-d26f339ef1b9",
+      "completed_slides": 2,
+      "initial_request_count": 1,
+      "retry_request_count": 2,
+      "logical_calls": [
+        {"slide_index": 2, "stage": "repair"},
+        {"slide_index": 3, "stage": "repair"},
+        {"slide_index": 4, "stage": "author"}
+      ],
+      "usage_outcomes": ["cancelled", "cancelled", "failed", "failed", "failed", "succeeded", "succeeded"],
+      "completed_slide_indexes": [0, 1],
+      "targets": [
+        {"slide_index": 2, "consumed_attempt_count": 2, "user_exception": true},
+        {"slide_index": 3, "consumed_attempt_count": 2, "user_exception": true},
+        {"slide_index": 4, "consumed_attempt_count": 1, "user_exception": false}
+      ],
+      "unstarted_slide_indexes": [5, 6, 7, 8, 9, 10, 11],
+      "terms": {
+        "max_additional_author_calls": 3,
+        "max_normal_author_calls": 14,
+        "previous_consumed_author_calls": 7,
+        "remaining_author_call_limit": 17,
+        "max_returned_repair_calls": 0
+      },
+      "inherited_terms": {
+        "total_author_call_limit": 24
+      }
+    },
+    "bounded_completion": {
+      "operation_id": "9f04879a-d9ee-4e1b-a2b3-c01c2a4f6166",
+      "completed_slides": 2,
+      "admission_request_count": 3,
+      "historical_operation_ids": [
+        "167736b7-c871-4896-85f7-4118834ce236",
+        "6739a423-d5ad-4c76-b9ac-c903482bb3f3",
+        "9608ec0a-01ba-4b8b-bb5e-8bdbea1e51cc",
+        "25fed2cc-0c24-41e5-8387-d26f339ef1b9"
+      ],
+      "admissions": 5,
+      "historical_request_count": 10,
+      "logical_calls": 10,
+      "current_calls": [
+        {"slide_index": 2, "stage": "repair", "outcome": "cancelled", "state": "unavailable"},
+        {"slide_index": 3, "stage": "repair", "outcome": "cancelled", "state": "unavailable"},
+        {"slide_index": 4, "stage": "repair", "outcome": "succeeded", "state": "reported"}
+      ],
+      "usage_requests": 8,
+      "completed_slide_indexes": [0, 1],
+      "target_slide_indexes": [2, 3],
+      "target_inflight_ordinal": 3,
+      "target_retained_attempt_count": 2,
+      "target_consumed_attempt_count": 3,
+      "returned_slide_index": 4,
+      "returned_attempt_ordinal": 2,
+      "returned_consumed_attempt_count": 2,
+      "cache_only_fence_attempt_count": 1,
+      "cache_only_attempt_limit": 2,
+      "unstarted_slide_indexes": [5, 6, 7, 8, 9, 10, 11],
+      "historical_logical_calls": 10,
+      "terms": {
+        "previous_consumed_author_calls": 10,
+        "remaining_author_call_limit": 13,
+        "remaining_all_provider_call_limit": 14,
+        "total_all_provider_call_limit": 24,
+        "max_normal_second_purchases": 4,
+        "max_normal_author_calls": 11,
+        "max_additional_author_calls": 2,
+        "max_returned_repair_calls": 0,
+        "retry_max_attempts": 1,
+        "execution_profile": {"author_concurrency": 1, "render_concurrency": 1, "cached_first_page_indexes": [0, 1, 4]},
+        "returned_cache_proof": {
+          "source_page": 20,
+          "provider_calls": 0,
+          "published": false,
+          "input_digest": "7beaabc9855ffc1eaab3c25be73ab1a1787f94309fe14aa7840889d289a9188a",
+          "candidate_digest": "bf2b22197317a4647e146c3697b5c55aca03cd8146018e767a114337a95a8f95",
+          "saved_crlf_candidate_digest": "0e7dae07b553781227cbd807be44ccb2c39a71b9569b2be3ee1839f6727e809d",
+          "canonical_digest": "bf2b22197317a4647e146c3697b5c55aca03cd8146018e767a114337a95a8f95",
+          "png_digest": "74c07c6c82ae1ca0d184a7a566a88f34ed3783cbf5f825b7d834b72428703564",
+          "local_review_digest": "aeefe8ab68230c24ba8e9355160b4348ef521bc4357b36972d089dfa58dbfb17",
+          "content_review_digest": "c20282dbccf5da0d2cf96aa81ae416f7f0d0c87bb56265b5ddb0bd22450b2621",
+          "visual_review_digest": "12e4145b5c7f9533cfb2e6acfb4879c5daff3112b1505d3bca7775d7f18438e8",
+          "source_atoms_preserved": 17,
+          "measured_body_minimum_pt": 12.0,
+          "runtime_remeasurement_required": true
+        },
+        "serial_execution_plan": {
+          "provider_purchases": 14,
+          "sdk_request_seconds": 360,
+          "render_passes": 15,
+          "render_guard_seconds": 150,
+          "cooldown_slots": 5,
+          "cooldown_seconds": 60,
+          "setup_reserve_seconds": 600,
+          "required_duration_seconds": 8190
+        }
+      },
+      "inherited_terms": {
+        "max_additional_vqa_calls": 1,
+        "additional_purchase_budget_per_target": 1
+      }
+    },
+    "bounded_continuation": {
+      "operation_id": "b4536446-ceeb-42de-b98c-87c43cc560a1",
+      "approval_source_hash": "ae7cab41c0f1cb1138660d96586646bf35e00ef52c8a569fef71f57f90b4fb80",
+      "source_error_code": "public_provider_result_unknown",
+      "completed_slides": 9,
+      "admission_request_count": 8,
+      "admissions": 6,
+      "logical_calls": 18,
+      "per_slide_calls": [1, 1, 4, 4, 2, 1, 1, 1, 2, 1, 0, 0],
+      "target_slide_index": 9,
+      "target_call": {"stage": "author", "state": "unavailable", "outcome": "failed"},
+      "target_consumed_attempt_count": 1,
+      "usage_requests": 16,
+      "cached_page_count": 9,
+      "unstarted_slide_indexes": [10, 11],
+      "historical_logical_calls": 18,
+      "historical_normal_second_purchases": 1,
+      "terms": {
+        "previous_consumed_author_calls": 18,
+        "remaining_author_call_limit": 5,
+        "remaining_all_provider_call_limit": 6,
+        "max_normal_second_purchases": 3,
+        "previous_normal_second_purchases": 1,
+        "second_purchase_page_indexes": [9, 10, 11],
+        "max_normal_author_calls": 4,
+        "max_additional_author_calls": 1,
+        "execution_profile": {"author_concurrency": 1, "render_concurrency": 1, "cached_first_page_indexes": [0, 1, 2, 3, 4, 5, 6, 7, 8]}
+      },
+      "inherited_terms": {
+        "total_all_provider_call_limit": 24,
+        "max_additional_vqa_calls": 1,
+        "max_returned_repair_calls": 0,
+        "additional_purchase_budget_per_target": 1,
+        "retry_max_attempts": 1
+      }
+    },
+    "bounded_quality_continuation": {
+      "operation_id": "d96f4086-3b43-4c53-9ab6-329cc577a492",
+      "approval_source_hash": "803dafdfe7707d492baa71cf3f4e8fb37711c9f5a5fb03598fdeeb96f4863453",
+      "source_error_code": "svg_validation_failed",
+      "completed_slides": 10,
+      "admission_request_count": 1,
+      "admissions": 7,
+      "logical_calls": 19,
+      "per_slide_calls": [1, 1, 4, 4, 2, 1, 1, 1, 2, 2, 0, 0],
+      "target_slide_index": 9,
+      "target_call": {"stage": "repair", "state": "reported", "outcome": "succeeded"},
+      "target_provider_attempt_count": 2,
+      "usage_requests": 17,
+      "cached_page_count": 10,
+      "unstarted_slide_indexes": [10, 11],
+      "historical_logical_calls": 19,
+      "historical_second_purchase_slide_indexes": [5, 6, 7, 8, 9, 10, 11],
+      "historical_normal_second_purchases": 2,
+      "terms": {
+        "previous_consumed_author_calls": 19,
+        "remaining_author_call_limit": 4,
+        "remaining_all_provider_call_limit": 5,
+        "max_normal_second_purchases": 2,
+        "previous_normal_second_purchases": 2,
+        "second_purchase_page_indexes": [10, 11],
+        "max_normal_author_calls": 4,
+        "max_additional_author_calls": 0,
+        "execution_profile": {"author_concurrency": 1, "render_concurrency": 1, "cached_first_page_indexes": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]}
+      },
+      "inherited_terms": {
+        "total_all_provider_call_limit": 24,
+        "max_additional_vqa_calls": 1,
+        "max_returned_repair_calls": 0,
+        "retry_max_attempts": 1
+      }
+    }
+  }
+}
