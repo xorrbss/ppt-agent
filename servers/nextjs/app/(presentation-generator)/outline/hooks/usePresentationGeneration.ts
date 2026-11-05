@@ -12,6 +12,7 @@ import { clearPresentationData } from "@/store/slices/presentationGeneration";
 import { PresentationGenerationApi } from "../../services/api/presentation-generation";
 import { LoadingState } from "../types/index";
 import { LanguageType } from "../../upload/type";
+import { requestVerbosity } from "../../upload/utils/requestVerbosity";
 import {
   ApiError,
   getApiErrorDisplayMessage,
@@ -252,7 +253,7 @@ export const usePresentationGeneration = (
       ...(generationConfig
         ? {
             tone: generationConfig.tone,
-            verbosity: generationConfig.verbosity,
+            verbosity: requestVerbosity(generationConfig),
             instructions: generationConfig.instructions || null,
             include_table_of_contents:
               generationConfig.includeTableOfContents,

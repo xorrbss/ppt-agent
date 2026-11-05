@@ -7,6 +7,7 @@ import type { Dispatch as ReduxDispatch, UnknownAction } from "redux";
 import { clearOutlines, setPresentationId } from "@/store/slices/presentationGeneration";
 import { setPptGenUploadState, type CompanyStandardSelection } from "@/store/slices/presentationGenUpload";
 import type { RootState } from "@/store/store";
+import { requestVerbosity } from "../../utils/requestVerbosity";
 import { documentCanvasRequestForConfig, LanguageType, type PresentationConfig } from "../../type";
 import { documentCanvasForOrientation } from "@/lib/document-canvas";
 import { notify } from "@/components/ui/sonner";
@@ -296,7 +297,7 @@ export function createUploadGenerationHandlers({
         : [],
       language: sourceContentMode ? null : selectedLanguage,
       tone: sourceContentMode ? undefined : config?.tone,
-      verbosity: sourceContentMode ? undefined : config?.verbosity,
+      verbosity: sourceContentMode ? undefined : requestVerbosity(config),
       instructions: sourceContentMode
         ? (sourceContentInstructions || null)
         : (config?.instructions || null),
@@ -376,7 +377,7 @@ export function createUploadGenerationHandlers({
       n_slides: config?.slides ? parseInt(config.slides, 10) : null,
       language: selectedLanguage,
       tone: config?.tone,
-      verbosity: config?.verbosity,
+      verbosity: requestVerbosity(config),
       instructions: config?.instructions || null,
       include_table_of_contents: !!config?.includeTableOfContents,
       include_title_slide: !!config?.includeTitleSlide,

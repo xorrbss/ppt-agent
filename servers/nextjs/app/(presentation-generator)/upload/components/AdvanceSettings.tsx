@@ -75,7 +75,10 @@ const AdvanceSettings = ({
 
     const handleSaveAdvanced = () => {
         onConfigChange('tone', advancedDraft.tone);
-        onConfigChange('verbosity', advancedDraft.verbosity);
+        if (advancedDraft.verbosity !== config.verbosity) {
+            onConfigChange('verbosity', advancedDraft.verbosity);
+            onConfigChange('verbosityTouched', true);
+        }
         onConfigChange('instructions', advancedDraft.instructions);
         onConfigChange('includeTableOfContents', advancedDraft.includeTableOfContents);
         onConfigChange('includeTitleSlide', advancedDraft.includeTitleSlide);

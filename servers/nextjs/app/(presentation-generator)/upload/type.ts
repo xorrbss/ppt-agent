@@ -125,6 +125,8 @@ export interface PresentationConfig {
   prompt: string;
   tone: ToneType;
   verbosity: VerbosityType;
+  /** True once the user picked a verbosity in the advanced settings. */
+  verbosityTouched?: boolean;
   instructions: string;
   includeTableOfContents: boolean;
   includeTitleSlide: boolean;
