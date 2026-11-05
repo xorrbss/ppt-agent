@@ -23,7 +23,9 @@ _LIMITS = {
     "selection_image_max_bytes": 8388608, "selection_image_max_count": 2,
     "max_svg_bytes": 262144, "max_svg_nodes": 2048, "max_render_seconds": 60,
 }
-_POLICY = {
+# Sealed into every v3 plan. v1 plans keep their exact fallback rules: a
+# provider failure or representative-page exception fails the deck.
+_POLICY_V1 = {
     "version": "svg-header-capacity-fallback/v1",
     "estimator": "unicode-lexical-conservative/v1",
     "context_token_limit": 57344,
@@ -35,6 +37,12 @@ _POLICY = {
     "fallbacks": ["reduced", "free"],
     "fit_preflight": "bound-titles-before-header-and-representative-spend",
 }
+# v2 also reduces the header when the optional header stage itself fails (a
+# provider error or timeout, or a representative page exception). The failed
+# provider step keeps its unknown state, so it is never bought again.
+_POLICY = {**_POLICY_V1, "version": "svg-header-capacity-fallback/v2",
+           "optional_stage_failures": ["provider_step", "representative_page"]}
+_POLICIES = (_POLICY_V1, _POLICY)
 _BOUNDED_FAILURES = frozenset({
     "svg_common_header_input_capacity_exceeded",
     "svg_common_header_candidates_ineligible",
@@ -44,6 +52,11 @@ _BOUNDED_FAILURES = frozenset({
     # no body to promote): the designed header is unproven, the deck is not.
     "svg_common_header_representative_pages_ineligible",
 })
+# Failures of the optional header stage itself; only a v2 policy reduces them.
+PROVIDER_STEP_FAILED = "svg_common_header_provider_step_failed"
+REPRESENTATIVE_PAGE_FAILED = "svg_common_header_representative_page_failed"
+OPTIONAL_STAGE_FAILURES = frozenset({PROVIDER_STEP_FAILED, REPRESENTATIVE_PAGE_FAILED})
+_UNSETTLED_STEP = frozenset({"started", "unknown"})
 
 
 def uses_header_design(plan):
@@ -108,8 +121,15 @@ def evaluate_header_capacity(plan, *, text, schema, images=(), envelope):
             "tokenEstimator": policy["estimator"], "providerCapacityVerified": False}
 
 
+def reduces_optional_stage_failures(plan):
+    """Whether a provider or representative failure of the header stage reduces the header."""
+    return (isinstance(plan, Mapping) and plan.get("schema") == HEADER_DESIGN_PLAN_VERSION
+            and isinstance(plan.get("policy"), Mapping) and plan["policy"].get("version") == _POLICY["version"])
+
+
 def permits_header_fallback(plan, reason, document):
-    if plan.get("schema") != HEADER_DESIGN_PLAN_VERSION or reason not in _BOUNDED_FAILURES:
+    optional = reason in OPTIONAL_STAGE_FAILURES and reduces_optional_stage_failures(plan)
+    if plan.get("schema") != HEADER_DESIGN_PLAN_VERSION or (reason not in _BOUNDED_FAILURES and not optional):
         return False
     validate_header_design_plan(plan)
     if (document.get("plan_digest", plan["plan_digest"]) != plan["plan_digest"]
@@ -118,8 +138,14 @@ def permits_header_fallback(plan, reason, document):
     if (document.get("state") in {"unknown", "started", "inflight"}
             or document.get("inflight") is not None):
         return False
+    statuses = [step.get("status") for step in document.get("steps", {}).values()]
+    if reason == PROVIDER_STEP_FAILED:
+        # The failed step stays recorded as unsettled: the fallback replaces
+        # the designed header, it never discards or re-buys that attempt.
+        return (any(status in _UNSETTLED_STEP for status in statuses)
+                and all(status in _UNSETTLED_STEP | {"succeeded"} for status in statuses))
     # An observed provider attempt is never discarded or bought a second time.
-    return all(step.get("status") == "succeeded" for step in document.get("steps", {}).values())
+    return all(status == "succeeded" for status in statuses)
 
 
 def known_header_design_rejection(plan, error):
@@ -163,7 +189,9 @@ def validate_header_fallback(plan, selection, document, candidate_pages):
             or document.get("input_digest") != plan.get("input_digest")
             or document.get("status") not in {"reduced", "published"}):
         raise ValueError("svg_header_design_fallback_conflict")
-    if _unsettled_header_outcome(candidate_pages):
+    # A failed optional stage publishes no candidate output, so an unsettled
+    # candidate page is kept as evidence, not a reason to fail the deck.
+    if selection.get("reason") not in OPTIONAL_STAGE_FAILURES and _unsettled_header_outcome(candidate_pages):
         raise ValueError("svg_common_header_provider_result_unknown")
     outcome = selection.get("outcome")
     if (not isinstance(outcome, dict) or set(outcome) != {"mode", "contract", "bindings"}
@@ -302,7 +330,7 @@ def validate_header_design_plan(value):
         expected.update({"policy", "free_compatible"})
     if (not isinstance(value, Mapping) or set(value) != expected
             or not uses_header_design(value) or value.get("stage") != "header"
-            or (value.get("schema") == HEADER_DESIGN_PLAN_VERSION and value.get("policy") != _POLICY)
+            or (value.get("schema") == HEADER_DESIGN_PLAN_VERSION and value.get("policy") not in _POLICIES)
             or (value.get("schema") == HEADER_DESIGN_PLAN_VERSION and type(value.get("free_compatible")) is not bool)
             or value.get("capability_version") != "svg-static/v2"
             or value.get("required_capabilities") != ["structuredOutput", "vision"]

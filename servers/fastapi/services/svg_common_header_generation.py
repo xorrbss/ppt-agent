@@ -4,6 +4,7 @@ from __future__ import annotations
 import asyncio
 import base64
 from copy import copy, deepcopy
+import re
 import struct
 import xml.etree.ElementTree as ET
 
@@ -300,6 +301,38 @@ async def _paid_step(document, *, key, stage, ordinal, payload, images, plan, jo
     return response
 
 
+async def _stage_paid_step(document, *, key, plan, **kwargs):
+    """``_paid_step`` whose provider failure ends the optional stage, when the plan says so.
+
+    The step keeps the unsettled state ``_paid_step`` recorded (it is never
+    bought again); the caller then takes the reduced or free header. An
+    integrity conflict is not a provider failure and still fails the deck.
+    """
+    from services.svg_common_header_design_plan import PROVIDER_STEP_FAILED, reduces_optional_stage_failures
+    try:
+        return await _paid_step(document, key=key, plan=plan, **kwargs)
+    except Exception as error:
+        step = document.get("steps", {}).get(key)
+        if (reduces_optional_stage_failures(plan) and isinstance(step, dict)
+                and step.get("status") in {"started", "unknown"}
+                and str(error) != "svg_common_header_checkpoint_input_conflict"):
+            raise ValueError(PROVIDER_STEP_FAILED) from error
+        raise
+
+
+def _failure_cause(error):
+    """Closed-vocabulary evidence of why the optional stage failed."""
+    from utils.provider_overload import safe_provider_diagnostics
+    cause = error.__cause__
+    if cause is None:
+        return None
+    evidence = safe_provider_diagnostics(cause)
+    code = str(cause) if isinstance(cause, ValueError) else ""
+    if len(code) <= 128 and re.fullmatch(r"[a-z][a-z0-9]*(?:_[a-z0-9]+)+", code):
+        evidence["code"] = code
+    return evidence
+
+
 def _checked_candidates(response, plan, revision):
     result = response.get("result")
     if not isinstance(result, dict) or set(result) != {"candidates"}:
@@ -457,7 +490,8 @@ def _validated_selection(response, selection_input, mapping, pages, candidates):
 
 async def prepare_document_header(ctx, request, presentation_id, outline, language, job, **hooks):
     from services.svg_common_header_design_plan import (
-        HEADER_DESIGN_PLAN_VERSION, permits_header_fallback, reduced_header_outcome, require_header_design_plan,
+        HEADER_DESIGN_PLAN_VERSION, OPTIONAL_STAGE_FAILURES, permits_header_fallback, reduced_header_outcome,
+        require_header_design_plan,
     )
     plan = ctx.snapshot["common_header_design_plan"]
     if plan.get("schema") != HEADER_DESIGN_PLAN_VERSION:
@@ -485,6 +519,10 @@ async def prepare_document_header(ctx, request, presentation_id, outline, langua
             "notice": "svg_common_header_reduced" if outcome["mode"] == "reduced" else "svg_common_header_free",
             "outcome": outcome}
         selection["digest"] = _digest(selection)
+        if str(error) in OPTIONAL_STAGE_FAILURES:
+            cause = _failure_cause(error)
+            if cause is not None:
+                document["fallback_cause"] = cause
         document.update(fallback=selection, status="reduced", plan_digest=plan["plan_digest"],
                         input_digest=plan["input_digest"], version=VERSION)
         await read_update_header_design(job, payload=document, **storage)
@@ -587,7 +625,7 @@ async def _prepare_designed_document_header(ctx, request, presentation_id, outli
         reference_images = _design_reference_images(ctx, index)
         design_input["reference_images"] = [{"image_index": i, "digest": sha256_hex(png)} for i, png in enumerate(reference_images)]
         with observe_setup(request, "header_design"):
-            response = await _paid_step(document, key=f"design-{revision}", stage="design", ordinal=revision,
+            response = await _stage_paid_step(document, key=f"design-{revision}", stage="design", ordinal=revision,
                 payload=design_input, images=reference_images, plan=plan, job=job, save=save)
         try:
             candidates = _checked_candidates(response, plan, revision)
@@ -639,7 +677,13 @@ async def _prepare_designed_document_header(ctx, request, presentation_id, outli
                 "header_eligible": header_scoped_eligible(result),
                 "payload": result, "header_digest": candidate_ctx.snapshot["common_header"]["digest"]}
         except Exception as error:
-            from services.svg_common_header_design_plan import HEADER_DESIGN_PLAN_VERSION
+            from services.svg_common_header_design_plan import (
+                HEADER_DESIGN_PLAN_VERSION, REPRESENTATIVE_PAGE_FAILED, reduces_optional_stage_failures,
+            )
+            if reduces_optional_stage_failures(plan):
+                # The page's own checkpoint keeps whatever it recorded; the
+                # reduced header never publishes or reruns this candidate.
+                raise ValueError(REPRESENTATIVE_PAGE_FAILED) from error
             if plan.get("schema") == HEADER_DESIGN_PLAN_VERSION:
                 raise
             saved = await candidate_checkpoint(job, index) or {}
@@ -665,7 +709,7 @@ async def _prepare_designed_document_header(ctx, request, presentation_id, outli
     await save()
     for ordinal in (1, 2):
         with observe_setup(request, "header_selection"):
-            selection_response = await _paid_step(
+            selection_response = await _stage_paid_step(
                 document, key=f"selection-{ordinal}", stage="selection", ordinal=ordinal,
                 payload=selection_input, images=images, plan=plan, job=job, save=save)
         try:
