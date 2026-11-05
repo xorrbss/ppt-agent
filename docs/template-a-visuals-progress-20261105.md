@@ -15,9 +15,10 @@ The customer deck, its renders and anything derived from its text stay out of th
   `tests/unit/test_svg_page_number_contrast.py`. Closes the open item at the end of the 2026-11-04 handoff.
 * `274f08ba` four stale tests in `test_owner_scope_postgres_principal.py`.
 * Full pytest baseline and failure classification: `docs/test-failure-baseline-20261105.md` (285 pre-existing
-  failures, deterministic). Real-bug candidates there, not fixed: no owner RLS policy for the four `svg_template*`
-  tables (row 14), alembic drift for `workspace_generation_lineage_state` (row 13), 21 unregistered workspace error
-  codes (row 16), source-policy gate breaks (row 21), `svg_partial_recovery_lineage_conflict` (row 3).
+  failures, deterministic). Real-bug candidates there, not fixed: alembic drift for
+  `workspace_generation_lineage_state` (row 13), 21 unregistered workspace error
+  codes (row 16), source-policy gate breaks (row 21), `svg_partial_recovery_lineage_conflict` (row 3). Row 14 (the
+  `svg_template*` RLS) was a stale test, see Next.
 
 ## Converter digest decision material (handoff open issue 9, branch `wip/s2n` `30ed896b`)
 
@@ -244,7 +245,10 @@ which about $17 after the key change.
 2. Template page renders for the author (registration change, re-registration of templates).
 3. Converter digest: resolved on `main` by #109 (`3d7302e4`: the two patches, the rebuilt manifest and a digest alias
    that accepts the superseded manifest digest while the executed converter bytes are identical); `wip/s2n` is obsolete.
-4. Real-bug candidates in `docs/test-failure-baseline-20261105.md` (owner RLS for the `svg_template*` tables first).
+4. Real-bug candidates in `docs/test-failure-baseline-20261105.md`. The `svg_template*` RLS item was a stale test (the
+   tables have strict owner+tenant RLS since `d8f0a2b4c6e9`), fixed in `36fedb17`. Noted while checking it: the in-process
+   retention sweep runs without an owner principal, so on PostgreSQL it cannot see binding rows and may treat bound
+   assets as unbound (deletes are still blocked by the deferrable FK); it should run as the controller role.
 5. The `.venv` Python (uv python-build-standalone) cannot `posix_spawn(setsid=True)`, so template registration fails at
    the frame preview render on this Linux VM; the measurement backends used a venv built from the system Python 3.11
    (`docs/svg-user-templates-linux-20261103.md` describes the same). The 2026-11-04 handoff's note that this was not
