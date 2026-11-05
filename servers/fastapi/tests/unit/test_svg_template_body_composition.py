@@ -232,11 +232,12 @@ def test_the_knob_decides_what_the_author_sees(package, monkeypatch, knob):
     else:
         monkeypatch.setenv("SVG_TEMPLATE_BODY_EXEMPLARS", knob)
     rules = generation.body_author_rules("BASE", {"composition_guidance": []}, body_floor=14.0)
-    assert ("TEMPLATE PAGE COMPOSITION" in rules) is (knob in {"grammar", "on"})
-    assert ("template_exemplars, when given" in rules) is (knob == "on")
+    shown = "on" if knob is None else knob  # unset means on (the measured default)
+    assert ("TEMPLATE PAGE COMPOSITION" in rules) is (shown in {"grammar", "on"})
+    assert ("template_exemplars, when given" in rules) is (shown == "on")
     context = {"page_index": 1, "page_count": 3}
     facts = generation.template_exemplar_facts({}, context, "## T\n1. a\n2. b\n3. c", body_floor=14.0)
-    assert bool(facts.get("template_exemplars")) is (knob == "on")
+    assert bool(facts.get("template_exemplars")) is (shown == "on")
 
 
 def test_no_exemplars_for_a_cover_a_source_preserving_page_or_an_old_template(package, monkeypatch):

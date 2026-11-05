@@ -157,6 +157,7 @@ def test_rules_describe_looks_raise_small_text_and_keep_layout_free(tmp_path):
 
 @pytest.mark.parametrize("knob", [None, "off", "on"])
 def test_author_rules_carry_the_styles_only_when_the_knob_is_on(tmp_path, monkeypatch, knob):
+    monkeypatch.setenv("SVG_TEMPLATE_BODY_EXEMPLARS", "off")  # this test is about component style only
     package, style = _style(tmp_path)
     selection = {"mode": "template-redesign"}
     monkeypatch.setattr(generation, "template_selection", lambda snapshot: selection)

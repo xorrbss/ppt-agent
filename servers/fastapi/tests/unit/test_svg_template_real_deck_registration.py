@@ -376,7 +376,8 @@ def test_a_template_body_region_failure_gets_a_move_only_repair_hint():
     assert "stroke-width" in hint["instruction"] and "never delete" in hint["instruction"]
 
 
-def test_template_body_rules_name_the_stroke_extent():
+def test_template_body_rules_name_the_stroke_extent(monkeypatch):
+    monkeypatch.setenv("SVG_TEMPLATE_BODY_EXEMPLARS", "off")  # composition guidance is tested elsewhere
     from services.svg_templates.generation import body_author_rules
     from utils.hashing import canonical_json_digest
     selection = {"schema_version": "svg-template-selection/v1", "mode": "template-redesign",

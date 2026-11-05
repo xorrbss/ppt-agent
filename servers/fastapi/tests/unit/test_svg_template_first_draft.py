@@ -172,7 +172,8 @@ def test_prompt_facts_carry_edges_and_the_checked_figures():
     assert template_prompt_facts(None, content) == {}
 
 
-def test_template_rules_explain_weights_edges_and_literals():
+def test_template_rules_explain_weights_edges_and_literals(monkeypatch):
+    monkeypatch.setenv("SVG_TEMPLATE_BODY_EXEMPLARS", "off")  # composition guidance is tested elsewhere
     from services.svg_templates.generation import BODY_LIMIT_RULES, body_author_rules
     from utils.hashing import canonical_json_digest
 

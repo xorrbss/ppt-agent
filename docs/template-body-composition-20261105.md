@@ -69,3 +69,27 @@ table, a doughnut and two KPI figures). But the dense baseline was already multi
 drawn bar or line charts were replaced by tables or tile rows on two pages, so visuals did not rise. One
 run per cell is noise-level; the paired measurement (N >= 3 over the four inputs and both templates)
 decides the default.
+
+## 짝지은 측정과 기본값 (2026-11-05)
+
+같은 코드, 같은 세션, 템플릿 A·B 모두 본문 구성을 담아 다시 등록, 입력 3종(`dense_proposal_ko`, `data_report_ko`,
+`unstructured_report_ko`) x 템플릿 2개 = 6칸, 칸마다 1회, 심사 버전 2. 조건: a 꺼짐, b `SVG_TEMPLATE_BODY_EXEMPLARS=on`,
+c b에 `SVG_TEMPLATE_COMPONENT_STYLE=on`을 더함.
+
+| 지표 (6칸 평균) | a 꺼짐 | b 예시 | c 예시+부품 스타일 |
+|---|---|---|---|
+| 첫 시도 성공 (10장 중) | 7.0 | 8.33 (좋아짐, 4/6칸) | 7.17 |
+| 덱당 폴백 | 0.50 | 0.33 | 1.00 |
+| 심사 종합 | 2.70 | 2.88 (6칸 중 5칸 상승) | 2.84 |
+| 심사 구성 | 2.82 | 3.03 (좋아짐, 5/6칸) | 3.05 (좋아짐) |
+| 심사 밀도 | 2.53 | 2.75 (좋아짐, 4/6칸) | 2.63 |
+| 심사 위계 | 3.03 | 3.18 | 3.23 (좋아짐) |
+| 심사 시각 요소 | 2.18 | 2.35 | 2.28 |
+
+렌더에서 b는 본문마다 핵심 메시지 띠, 수치 카드 줄, 서로 다른 부품의 구역 두세 개로 구성되고, a에서 아래 절반이 비던
+데이터 페이지가 지표 카드와 표와 설명 상자로 채워졌다. c는 번호 칩과 소제목 막대가 더 템플릿답지만 b보다 첫 시도가
+나빠졌다(4/6칸).
+
+결정: `SVG_TEMPLATE_BODY_EXEMPLARS`의 기본값을 `on`으로 바꾼다(값이 비면 `on`, `off`/`grammar`는 그대로 쓸 수 있음).
+부품 스타일은 꺼짐 유지. 본문 구성 없이 등록된 템플릿에는 아무 변화가 없으므로, 효과를 보려면 템플릿을 다시 등록해야 한다.
+원본 페이지는 같은 심사에서 약 4.4이므로 격차(약 1.5점)는 여전히 크다.

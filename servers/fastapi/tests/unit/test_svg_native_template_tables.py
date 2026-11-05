@@ -178,7 +178,8 @@ def test_only_the_bound_drawing_can_hand_its_declarations_on():
 
 # --- prompt text -----------------------------------------------------------------------
 
-def test_template_rules_name_native_groups_in_the_body_namespace():
+def test_template_rules_name_native_groups_in_the_body_namespace(monkeypatch):
+    monkeypatch.setenv("SVG_TEMPLATE_BODY_EXEMPLARS", "off")  # composition guidance is tested elsewhere
     from services.svg_templates.generation import body_author_rules
     from utils.hashing import canonical_json_digest
 
