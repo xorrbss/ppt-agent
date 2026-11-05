@@ -14,6 +14,8 @@ import { Button } from "@/components/ui/button";
 import { Slide } from "../../types/slide";
 import SlideScale from "../../components/PresentationRender";
 import type { Theme } from "../../services/api/types";
+import { prefetchSvgSlidePreview } from "../../components/SvgSlidePreview";
+import { svgPreviewPrefetchTarget } from "@/lib/svg-slide-revision";
 import { applyPresentationThemeToElement } from "../utils/applyPresentationThemeDom";
 
 interface PresentationModeProps {
@@ -43,6 +45,13 @@ const PresentationMode: React.FC<PresentationModeProps> = ({
   const [chromeVisible, setChromeVisible] = useState(true);
 
   const activeSlide = slides[currentSlide];
+
+  // Warm the next slide's materialized svg so advancing does not wait on it.
+  const nextSlide = slides[currentSlide + 1];
+  useEffect(() => {
+    const target = svgPreviewPrefetchTarget(nextSlide);
+    if (target) prefetchSvgSlidePreview(target.slideId, target.revision).catch(() => undefined);
+  }, [nextSlide]);
 
   const bumpChromeVisibility = useCallback(() => {
     setChromeVisible(true);

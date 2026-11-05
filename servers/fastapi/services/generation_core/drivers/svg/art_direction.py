@@ -88,12 +88,28 @@ native table/chart and export constraints take priority over every reference and
 """
 
 
+#: Revision ten's ``design_priorities``: the same order as its layered author rules. It
+#: replaces the earlier text, which asked the model to retain layout-system and archetype
+#: advice while the rules called that advice optional (review section 4.3, item 1).
+LAYERED_DESIGN_PRIORITIES = (
+    "The selected identity (palette, fonts, signature treatments, tone and imagery) is binding. "
+    "Layout-system and archetype advice is the style's preferred treatment where it fits the page's "
+    "information type; the information type -> visual form menu in the rules decides otherwise. "
+    "Reference box counts, copy limits and page-splitting advice never override the output contract, "
+    "readable type or exact content."
+)
+
+
 def project_art_direction(design: dict) -> dict:
     """Use one identity/evidence boundary for new work; never reinterpret old profiles."""
     from services.svg_authoring_profile import validate_quality_recovery_policy
 
+    layered = design.get("authoring_profile") == {"id": "art-direction-v1", "version": 10}
     if validate_quality_recovery_policy(design.get("quality_recovery_policy")) is not None:
         result = _project_generic_art_direction(design)
+        if layered:
+            result["art_direction"]["design_priorities"] = LAYERED_DESIGN_PRIORITIES
+            return result
         result["art_direction"]["design_priorities"] = (
             "Retain the selected identity's full design intent, including layout-system and "
             "archetype advice. Translate reference implementation techniques into supported "
@@ -104,7 +120,9 @@ def project_art_direction(design: dict) -> dict:
             "Geometry remains model-authored; examples are inspiration, never prescribed templates."
         )
         return result
-    if design.get("authoring_profile") == {"id": "art-direction-v1", "version": 8}:
+    if design.get("authoring_profile") in ({"id": "art-direction-v1", "version": 8},
+                                           {"id": "art-direction-v1", "version": 9},
+                                           {"id": "art-direction-v1", "version": 10}):
         return _project_generic_art_direction(design)
     return _project_frozen_art_direction(design)
 

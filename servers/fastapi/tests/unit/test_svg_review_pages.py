@@ -143,9 +143,12 @@ def _review_execution(monkeypatch, *, is_svg=True):
     from services import svg_quality_review_service as module
 
     slide = _review_slide()
-    presentation = SimpleNamespace(owner_id=None, lifecycle_status="published", revision=7,
+    presentation = SimpleNamespace(id=uuid.uuid4(), owner_id=None, lifecycle_status="published", revision=7,
                                    is_svg=lambda: is_svg, theme={"svg": {"reviewPages": []}})
+    # The header-revision authority lookup (design operations) finds nothing.
+    no_rows = SimpleNamespace(all=lambda: [])
     session = SimpleNamespace(get=AsyncMock(return_value=presentation), scalar=AsyncMock(return_value=presentation),
+                              scalars=AsyncMock(return_value=no_rows),
                               add=Mock(), commit=AsyncMock(), rollback=AsyncMock())
     # Compatibility task lookup is separate from the presentation lookup.
     async def get(model, key):
@@ -154,7 +157,7 @@ def _review_execution(monkeypatch, *, is_svg=True):
     @asynccontextmanager
     async def factory():
         yield session
-    claim = SimpleNamespace(operation_id=uuid.uuid4(), presentation_id=uuid.uuid4(), owner_id=None, owner_scope=None,
+    claim = SimpleNamespace(operation_id=uuid.uuid4(), presentation_id=presentation.id, owner_id=None, owner_scope=None,
         expected_revision=7, attempt_token="current-attempt", fencing_token=3, attempt_number=1,
         request_payload={"context": {"scope": "all", "slide_indices": [], "mode": "analyze_only"}})
     context = SimpleNamespace(claim=claim, progress=AsyncMock(return_value=True), raise_if_cancelled=AsyncMock())
@@ -330,7 +333,7 @@ def test_svg_review_admission_owns_one_call_and_zero_retry_without_source_change
     slide = _review_slide()
     before = slide.svg_content, slide.content.copy()
     presentation = SimpleNamespace(id=uuid.uuid4(), owner_id=owner, theme={})
-    operation = SimpleNamespace(id=uuid.uuid4(), owner_id=owner, max_attempts=3,
+    operation = SimpleNamespace(id=uuid.uuid4(), owner_id=owner, owner_scope=str(owner), max_attempts=3,
         request_payload={"context": {"mode": "analyze_only", "scope": "all"}})
     row = SimpleNamespace(retry_request_limit=9)
     admitted = AsyncMock(return_value=row)

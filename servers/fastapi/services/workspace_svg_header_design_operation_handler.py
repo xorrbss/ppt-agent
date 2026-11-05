@@ -210,7 +210,10 @@ async def _design_revision(context, owner, request, outline, snapshot, rows, inp
     from services.svg_presentation_checkpoint import _read_png
     from services.workspace_svg_header_revision_inputs import raw_body, reusable_body, merge_header_revision_values
     from services.workspace_svg_header_retry import require_retry_page_context
+    from services.svg_common_header_space_advance import ensure_space_advance_measurement
 
+    # Candidates are measured synchronously below; this loop cannot block on a probe render.
+    await ensure_space_advance_measurement()
     plan, ctx = admitted["plan"], inputs["ctx"]
     ctx.header_page_values = prepare_header_page_values(request, outline,
         presentation=inputs["trusted_presentation"], source_manifest=ctx.source_document,
@@ -269,7 +272,7 @@ async def _design_revision(context, owner, request, outline, snapshot, rows, inp
                 session_factory=session_factory)
         return await run_header_candidate_page(active, request, context.claim.presentation_id,
             page_outline, request.language, owner, page_index, identity, async_session_maker=session_factory)
-    index = document.setdefault("representative_index", _representative_index(ctx, outline, request.common_header_cover_exception))
+    index = document.setdefault("representative_index", _representative_index(ctx, outline, request.common_header_cover_exception, None, plan))
     base = header_snapshot_base(ctx.snapshot)
     base = {**base, "common_header_design_plan": plan}
     candidate_contexts, defects = {}, []

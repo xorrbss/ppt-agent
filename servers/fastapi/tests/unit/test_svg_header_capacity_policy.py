@@ -25,12 +25,18 @@ def _request(**kwargs):
         common_header_mode="uniform", **kwargs)
 
 
-def _inputs(title="Required exact title", *, constrained=False):
+def _inputs(title="Required exact title", *, constrained=False, fallback_policy=None):
     request = _request(slides_markdown=["# " + title])
     if constrained:
         from models.common_header_design import CommonHeaderDesignInput
         request.common_header_design = CommonHeaderDesignInput(instructions="Keep a shared header")
     plan = policy.seal_new_header_design_plan(request)
+    if fallback_policy is not None:
+        # A plan sealed before the current fallback policy, replayed as stored.
+        plan = {key: value for key, value in plan.items() if key != "plan_digest"}
+        plan["policy"] = deepcopy(fallback_policy)
+        plan["plan_digest"] = canonical_json_digest(plan)
+        request._svg_header_design_plan = plan
     snapshot = {"tokens": {"heading_font": "Noto Sans KR", "foreground": "#123456", "background": "#FFFFFF"},
                 "common_header_design_plan": plan}
     snapshot["digest"] = canonical_json_digest(snapshot)
@@ -315,7 +321,7 @@ def test_real_cas_rejects_unsettled_tampered_and_legacy_fallback(tmp_path, monke
     asyncio.run(scenario())
 
 
-@pytest.mark.parametrize("failure", ["capacity", "bounded", "unknown"])
+@pytest.mark.parametrize("failure", ["capacity", "bounded", "unknown", "unknown_v1_policy"])
 def test_real_header_flow_never_repurchases_unknown_and_reduces_known_failure(tmp_path, monkeypatch, failure):
     from test_authored_checkpoint_service import _checkpoint_database, _running_authored_job
     from models.sql.presentation_generation_job import PresentationGenerationJob
@@ -324,7 +330,8 @@ def test_real_header_flow_never_repurchases_unknown_and_reduces_known_failure(tm
         engine, maker = await _checkpoint_database(tmp_path, monkeypatch)
         try:
             _, job = await _running_authored_job(maker, total_slides=1)
-            request, _, snapshot, outline, canvas = _inputs()
+            request, _, snapshot, outline, canvas = _inputs(
+                fallback_policy=policy._POLICY_V1 if failure == "unknown_v1_policy" else None)
             async with maker() as session:
                 row = await session.get(PresentationGenerationJob, job.id)
                 row.svg_style_snapshot = deepcopy(snapshot)
@@ -332,7 +339,7 @@ def test_real_header_flow_never_repurchases_unknown_and_reduces_known_failure(tm
                 session.add(row)
                 await session.commit()
             ctx = SimpleNamespace(snapshot=snapshot, canvas=canvas, header_pages=None, count=1,
-                source_reflow=False, raster_reconstruction=False, manifests=[{}])
+                source_reflow=False, raster_reconstruction=False, manifests=[{}], planned=[{}])
             monkeypatch.setattr(generation, "preflight_header_selector", lambda: {"model": "fixture"})
             monkeypatch.setattr(generation, "_design_input", lambda *args: {"context": "bound"})
             monkeypatch.setattr(generation, "_design_reference_images", lambda *args: [])
@@ -345,7 +352,7 @@ def test_real_header_flow_never_repurchases_unknown_and_reduces_known_failure(tm
 
                 async def execute():
                     calls.append("provider")
-                    if failure == "unknown":
+                    if failure.startswith("unknown"):
                         raise ValueError("svg_common_header_provider_result_unknown")
                     return {"result": {"candidates": []}}
                 return execute
@@ -353,13 +360,23 @@ def test_real_header_flow_never_repurchases_unknown_and_reduces_known_failure(tm
             monkeypatch.setattr(generation, "build_header_call", build)
             arguments = dict(checkpoint=AsyncMock(), async_session_maker=maker, read_png=None,
                              write_png=None, page_runner=AsyncMock(), page_hooks_factory=None, state_factory=None)
-            if failure == "unknown":
+            if failure == "unknown_v1_policy":
+                # A v1 plan keeps its rule: the unknown step fails the deck and is never re-bought.
                 for _ in range(2):
                     with pytest.raises(ValueError, match="provider_result_unknown"):
                         await generation.prepare_document_header(ctx, request, job.presentation_id, outline,
                                                                   "en", job, **arguments)
                 assert calls == ["provider"]
                 assert "fallback" not in await read_update_header_design(job, session_maker=maker)
+            elif failure == "unknown":
+                for _ in range(2):
+                    result = await generation.prepare_document_header(ctx, request, job.presentation_id,
+                                                                      outline, "en", job, **arguments)
+                    assert result.snapshot["common_header_selection"]["mode"] == "reduced"
+                assert calls == ["provider"]
+                document = await read_update_header_design(job, session_maker=maker)
+                assert document["fallback"]["reason"] == policy.PROVIDER_STEP_FAILED
+                assert document["steps"]["design-1"]["status"] == "unknown"
             else:
                 result = await generation.prepare_document_header(ctx, request, job.presentation_id, outline,
                                                                   "en", job, **arguments)

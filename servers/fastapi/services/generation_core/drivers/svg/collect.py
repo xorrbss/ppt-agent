@@ -464,13 +464,33 @@ def _svg_prompt_cache_key(presentation_id, job):
     return f"svg-{digest[:CACHE_KEY_CHARS]}"
 
 
+def _svg_render_deck_scope(presentation_id):
+    """The renderer lease scope of one svg deck attempt, or ``None`` (per render).
+
+    Bound only when the framed worker protocol is on: only then does a lease
+    keep a worker process and its Chromium across the deck's renders, with
+    the lease pool size as the deck's render concurrency. Without it a lease
+    reuses nothing and serializes every render of its scope behind one lock,
+    so the deck keeps single-use scopes and its render concurrency. The scope
+    names this deck only, so no other deck or owner joins its workers.
+    """
+    from utils.get_env_programme import is_authored_renderer_framed_protocol_enabled
+
+    if not presentation_id or not is_authored_renderer_framed_protocol_enabled():
+        return None
+    return f"svg:{presentation_id}"
+
+
 async def _generate(request, presentation_id, outline, language, session, job, *, stage_plan=None, review_stage=None):
     from utils.llm_calls.author_prompt_cache_key import set_prompt_cache_key
+    from utils.slide_capture_deck_scope import set_render_deck_scope
 
     # Page tasks copy this context when created, so every author call of this
     # deck attempt (pages, header representatives, recovery repairs) carries
-    # the lane and nothing outside the attempt does.
-    with set_prompt_cache_key(_svg_prompt_cache_key(presentation_id, job)):
+    # the lane and nothing outside the attempt does. The renderer lease scope
+    # is bound the same way (see _svg_render_deck_scope).
+    with (set_prompt_cache_key(_svg_prompt_cache_key(presentation_id, job)),
+          set_render_deck_scope(_svg_render_deck_scope(presentation_id))):
         return await _generate_deck(request, presentation_id, outline, language, session, job,
                                     stage_plan=stage_plan, review_stage=review_stage)
 
@@ -524,10 +544,18 @@ async def _generate_prepared_deck(
 
     if uses_header_design(ctx.snapshot.get("common_header_design_plan")):
         from services.svg_common_header_generation import prepare_document_header
-        ctx = await prepare_document_header(ctx, request, presentation_id, outline, language, job,
-            checkpoint=checkpoint, async_session_maker=async_session_maker,
-            read_png=read_png, write_png=write_png, page_runner=_page,
-            page_hooks_factory=_PageHooks, state_factory=_RunState)
+        try:
+            ctx = await prepare_document_header(ctx, request, presentation_id, outline, language, job,
+                checkpoint=checkpoint, async_session_maker=async_session_maker,
+                read_png=read_png, write_png=write_png, page_runner=_page,
+                page_hooks_factory=_PageHooks, state_factory=_RunState)
+        except BaseException:
+            # A header failure never discards the paid asset offer running beside it.
+            if ctx.pending_assets is not None:
+                await asyncio.gather(ctx.pending_assets, return_exceptions=True)
+            raise
+    # Whatever the header did, authoring starts only with the settled offer.
+    await ctx.settle_assets()
     from services.svg_authoring_profile import read_quality_recovery_policy
     recovery_policy = read_quality_recovery_policy(ctx.snapshot)
     if recovery_policy:
@@ -549,7 +577,7 @@ async def _generate_prepared_deck(
     if job is not None and job.workspace_operation_id is not None:
         from sqlalchemy import select
         from models.sql.workspace import WorkspaceOperation
-        from services.svg_cached_author_render_recovery import REVISIONS
+        from services.svg_cached_author_render_lineage import REVISIONS
 
         # Metadata only: project the two payload keys read below instead of
         # decoding the operation's whole (possibly archival) request payload.
@@ -738,6 +766,8 @@ async def _generate_prepared_deck(
         if not recovery_policy:
             advisory = stage_advisory if stage_plan is not None else await deck_quality.deck_advisory(
                 ctx, pages, job=job, read_png=read_png, run_advisory=observed_advisory)
+        summary = deck_quality.with_chart_advisories(
+            deck_quality.with_vision_review_receipt(summary, pages, advisory), pages)
     return ctx, pages, summary, advisory
 
 
@@ -808,134 +838,15 @@ def _verify_protected_cache(saved, png, witness, input_digest, index, *, metrics
         )
 
 
-async def _cached_author_render_page(ctx, request, presentation_id, index, content,
-                                     saved, input_digest, job, state, hooks):
-    """Render a locked author witness once; never enter the provider loop."""
-    from services.svg_cached_author_render_recovery import (
-        APPROVED_CONVERTER_CODE_DIGEST, REVISIONS, marker_schema,
-        author_witness, converter_code_digest, derived_child_request_valid,
-        digest, source_receipt_witness,
-    )
-    from services.svg_source_layout import verify_source_receipt
-    from services.svg_presentation_checkpoint import _provider_attempt_count
-    from utils.hashing import sha256_hex
+def _cached_author_render_page(index):
+    """A retired cached-author-render page: rejected, never rendered or sent to a provider.
 
-    def invalid():
-        raise AuthoredStageError(slide_index=index, stage="render",
-                                 code="svg_cached_author_render_invalid", retryable=False)
-
-    marker = saved.get("cached_author_render") or {}
-    archive = saved.get("cached_author_render_archive") or {}
-    manifest = archive.get("approval_manifest") or {}
-    original_row = archive.get("checkpoint_row") or {}
-    original = original_row.get("svg_checkpoint") or {}
-    pages = manifest.get("pages") or []
-    witness = next((page for page in pages if page.get("slide_index") == index), None)
-    revision = manifest.get("recovery_revision")
-    if (revision not in REVISIONS or witness is None
-            or marker.get("schema") != marker_schema(revision)
-            or marker.get("revision") != revision
-            or marker.get("operation_id") != str(job.workspace_operation_id)
-            or marker.get("source_operation_id") != manifest.get("operation_id")
-            or marker.get("slide_index") != index
-            or marker.get("status") not in {"pending", "completed"}
-            or marker.get("approval_manifest_hash") != archive.get("approval_manifest_hash")
-            or archive.get("approval_manifest_hash") != digest(manifest)
-            or state.cached_author_render_manifest_hash != digest(manifest)
-            or not APPROVED_CONVERTER_CODE_DIGEST
-            or converter_code_digest() != manifest.get("converter_code_digest")
-            or converter_code_digest() != APPROVED_CONVERTER_CODE_DIGEST
-            or manifest.get("max_additional_provider_calls") != 0
-            or manifest.get("expected_page_count") != ctx.count
-            or ctx.count != job.total_slides
-            or [page.get("slide_index") for page in pages] != list(range(ctx.count))
-            or not derived_child_request_valid(
-                job, manifest, operation_id=job.workspace_operation_id,
-                presentation_id=presentation_id)
-            or digest(ctx.snapshot) != manifest.get("style_digest")
-            or getattr(ctx.source_document, "manifest_digest", None)
-            != manifest.get("source_manifest_digest")
-            or digest(original_row) != witness.get("row_digest")
-            or not (saved.get("input_digest") == marker.get("input_digest") == input_digest)
-            or saved.get("inflight") is not None
-            or _provider_attempt_count(saved) != 1
-            or author_witness(saved) != marker.get("author_receipt_digest")
-            or author_witness(original) != witness.get("author_receipt_digest")
-            or any(marker.get(key) != witness.get(key) for key in (
-                "raw_sha256", "svg_sha256", "input_digest", "author_receipt_digest",
-                "source_receipt_digest"))):
-        invalid()
-    svg = original.get("svg_content") or original.get("last_valid_svg")
-    if (not isinstance(svg, str) or not svg
-            or (marker["status"] == "pending"
-                and not (saved.get("svg_content") or saved.get("last_valid_svg")))
-            or any(value not in (None, "", svg)
-                   for value in (saved.get("svg_content"), saved.get("last_valid_svg")))
-            or sha256_hex(svg.encode()) != witness["svg_sha256"]
-            or source_receipt_witness(saved) != witness["source_receipt_digest"]
-            or source_receipt_witness(saved) != source_receipt_witness(original)
-            or saved.get("nativeDeclarations") != original.get("nativeDeclarations")
-            or saved.get("source_manifest_ref") != original.get("source_manifest_ref")
-            or saved.get("source_manifest_digest") != original.get("source_manifest_digest")
-            or marker.get("verified_fixed_axis_migrations")
-            != witness.get("verified_fixed_axis_migrations")):
-        invalid()
-    try:
-        verify_source_receipt(svg, saved.get("source_preservation"), ctx.source_document, index)
-    except Exception as error:
-        raise AuthoredStageError(slide_index=index, stage="render",
-                                 code="svg_cached_author_render_source_mismatch",
-                                 retryable=False) from error
-    if marker["status"] == "completed":
-        png = hooks.read_png(saved)
-        if (png is None or saved.get("svg_content") != svg
-                or saved.get("quality", {}).get("passed") is not True
-                or saved.get("quality", {}).get("verified") is not True
-                or sha256_hex(png) != saved.get("png_sha256")):
-            invalid()
-        return saved, png
-    payload = deepcopy(saved)
-    payload["svg_content"] = svg
-    payload["cached_author_render"]["verified_fixed_axis_migrations"] = deepcopy(
-        witness["verified_fixed_axis_migrations"])
-    from services.authored_canvas import request_canvas_metadata
-    from services.document_canvas_generation import svg_readability_policy
-    recovery_policy = svg_readability_policy(
-        request_canvas_metadata(request), source_restyle=ctx.source_reflow,
-        instructions=request.instructions)
-    if (recovery_policy.get("quality_target_font_pt", 0) < 9.5
-            or recovery_policy != manifest.get("recovery_readability_policy")):
-        invalid()
-
-    async def guarded_checkpoint(active_job, page_index, *, payload=None):
-        if active_job.id != job.id or page_index != index:
-            invalid()
-        if payload is not None and (
-                payload.get("svg_content") != svg
-                or payload.get("input_digest") != input_digest
-                or author_witness(payload) != witness["author_receipt_digest"]
-                or payload.get("cached_author_render_archive") != archive
-                or source_receipt_witness(payload) != witness["source_receipt_digest"]
-                or payload.get("nativeDeclarations") != original.get("nativeDeclarations")
-                or payload.get("cached_author_render", {}).get("verified_fixed_axis_migrations")
-                != witness["verified_fixed_axis_migrations"]
-                or payload.get("cached_author_render", {}).get("status") not in {"pending", "completed"}):
-            invalid()
-        return await hooks.checkpoint(active_job, page_index, payload=payload)
-
-    with timing.observe_stage(request, "render"):
-        result = await render.attempt_render(
-            ctx=ctx, request=request, presentation_id=presentation_id,
-            index=index, content=content, payload=payload, svg=svg, ordinal=0,
-            job=job, checkpoint=guarded_checkpoint,
-            async_session_maker=hooks.async_session_maker, write_png=hooks.write_png,
-            recovery_readability_policy=recovery_policy,
-        )
-    if result is render.RETRY or payload.get("quality", {}).get("passed") is not True:
-        invalid()
-    payload["cached_author_render"]["status"] = "completed"
-    await guarded_checkpoint(job, index, payload=payload)
-    return result
+    Its marker could only be verified against the stale approved converter digest
+    (``services/svg_cached_author_render_lineage``), so every such page failed that
+    check with this code, which it still does.
+    """
+    raise AuthoredStageError(slide_index=index, stage="render",
+                             code="svg_cached_author_render_invalid", retryable=False)
 
 
 def _page_render_environment(ctx, request, index):
@@ -1209,8 +1120,7 @@ async def _page(ctx, request, presentation_id, outline, language, job, index, st
             if state.cached_author_render_manifest_hash is None:
                 raise AuthoredStageError(slide_index=index, stage="render",
                                          code="svg_cached_author_render_operation_missing", retryable=False)
-            return await _cached_author_render_page(ctx, request, presentation_id, index,
-                                                    content, saved, input_digest, job, state, hooks)
+            _cached_author_render_page(index)
         if state.cached_author_render_manifest_hash is not None:
             raise AuthoredStageError(slide_index=index, stage="author",
                                      code="svg_cached_author_render_marker_missing", retryable=False)
@@ -1403,6 +1313,17 @@ async def _page(ctx, request, presentation_id, outline, language, job, index, st
             return rescued
 
 
+async def _sleep_overload_cooldown(ctx, cooldown_seconds):
+    """Wait out the deck's shared overload deadline (own cooldown if none shared)."""
+    from services.generation_core.runtime.deck_cooldown import retry_jitter
+
+    deck_cooldown = getattr(ctx, "overload_cooldown", None)
+    if deck_cooldown is None:
+        await asyncio.sleep(cooldown_seconds)
+        return
+    await deck_cooldown.wait(jitter=retry_jitter(cooldown_seconds))
+
+
 async def _attempt_loop(ctx, request, presentation_id, index, content, payload, job, state, hooks):
     """Author -> render; a source structural correction may precede one visual correction."""
     role = ctx.roles[index]
@@ -1465,6 +1386,11 @@ async def _attempt_loop(ctx, request, presentation_id, index, content, payload, 
                         state=state, checkpoint=hooks.checkpoint, async_session_maker=hooks.async_session_maker,
                         receipt_attempt_ordinal=receipt_attempt_ordinal)
             if author_result.retry:
+                if author_result.cooldown_seconds > 0.0:
+                    # Slept after the provider permit is released, so other pages
+                    # keep authoring; re-acquired by the next loop iteration.
+                    with timing.observe_stage(request, "repair" if ordinal > 0 else "author"):
+                        await _sleep_overload_cooldown(ctx, author_result.cooldown_seconds)
                 continue
             svg = author_result.svg
         render_environment = _page_render_environment(ctx, request, index)

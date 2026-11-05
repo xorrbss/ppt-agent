@@ -18,6 +18,7 @@ import pytest
 
 from services.generation_core.drivers.svg import author
 from services.generation_core.drivers.svg.collect import _RunState
+from enums.llm_provider import LLMProvider
 from utils.llm_calls.author_slide_effort import (
     AUTHOR_MAX_TOKENS, svg_author_call_timeout_seconds,
 )
@@ -89,11 +90,11 @@ def test_one_timeout_retries_and_records_failure_second_timeout_raises(harness):
 
     async def run():
         first = await _attempt(state, payload, provider_ordinal=1)
-        assert first == author.AuthorAttempt(svg=None, retry=True)
+        assert first == author.AuthorAttempt(svg=None, retry=True, cooldown_seconds=30.0)
         assert payload["provider_failures"] == [
             {"ordinal": 1, "code": "public_provider_call_timeout", "run_timeout_retry": 1}]
         assert payload["inflight"] is None
-        assert harness.sleeps == [30.0]
+        assert harness.sleeps == []  # the caller sleeps outside its permit
         with pytest.raises(ProviderOutcomeError) as second:
             await _attempt(state, payload, provider_ordinal=2)
         assert second.value.code == "public_provider_call_timeout"
@@ -104,7 +105,7 @@ def test_one_timeout_retries_and_records_failure_second_timeout_raises(harness):
     # second cooldown, and it does not spend a run-wide slot.
     assert [entry["ordinal"] for entry in payload["provider_failures"]] == [1, 2]
     assert "run_timeout_retry" not in payload["provider_failures"][1]
-    assert harness.sleeps == [30.0]
+    assert harness.sleeps == []
     assert state.timeout_retries == 1
 
 
@@ -197,7 +198,7 @@ def test_run_cap_allows_three_timeout_retries_then_the_fourth_raises(harness):
     asyncio.run(run())
     assert [p["provider_failures"][0]["run_timeout_retry"] for p in payloads[:3]] == [1, 2, 3]
     assert "provider_failures" not in payloads[3]
-    assert state.timeout_retries == 3 and harness.sleeps == [30.0] * 3
+    assert state.timeout_retries == 3 and harness.sleeps == []
 
 
 def test_concurrent_pages_cannot_exceed_the_run_cap(harness):
@@ -259,9 +260,34 @@ def test_retry_of_a_page_approved_before_a_freeze_passes_before_dispatch(harness
 
 
 def test_svg_author_call_timeout_seconds():
-    assert svg_author_call_timeout_seconds(16000) == pytest.approx(16000 / 30.0 + 360.0)
+    # A provider without a measured profile keeps the default 30 tok/s + 360 s cap.
+    assert svg_author_call_timeout_seconds(16000, provider=LLMProvider.OPENAI) == pytest.approx(
+        16000 / 30.0 + 360.0)
+    assert round(svg_author_call_timeout_seconds(16000, provider=LLMProvider.OPENAI)) == 893
+    assert (svg_author_call_timeout_seconds(provider=LLMProvider.OPENAI)
+            == svg_author_call_timeout_seconds(AUTHOR_MAX_TOKENS, provider=LLMProvider.OPENAI))
+
+
+def test_svg_author_call_timeout_uses_the_anthropic_profile():
+    # Measured ~170 tok/s; the profile assumes 50 tok/s with no margin: 16k / 50 = 320 s.
+    assert svg_author_call_timeout_seconds(16000, provider=LLMProvider.ANTHROPIC) == pytest.approx(320.0)
+    assert svg_author_call_timeout_seconds(16000, provider=LLMProvider.ANTHROPIC) < (
+        svg_author_call_timeout_seconds(16000, provider=LLMProvider.OPENAI))
+
+
+def test_svg_author_call_timeout_defaults_to_the_configured_provider(monkeypatch):
+    import utils.llm_provider as llm_provider
+
+    monkeypatch.setattr(llm_provider, "get_llm_provider", lambda: LLMProvider.ANTHROPIC)
+    assert svg_author_call_timeout_seconds(16000) == pytest.approx(320.0)
+    monkeypatch.setattr(llm_provider, "get_llm_provider", lambda: LLMProvider.OPENAI)
     assert round(svg_author_call_timeout_seconds(16000)) == 893
-    assert svg_author_call_timeout_seconds() == svg_author_call_timeout_seconds(AUTHOR_MAX_TOKENS)
+
+    def unresolvable():
+        raise RuntimeError("no provider configured")
+
+    monkeypatch.setattr(llm_provider, "get_llm_provider", unresolvable)
+    assert round(svg_author_call_timeout_seconds(16000)) == 893
 
 
 _AUTHORING = Path(author.__file__).resolve().parents[2] / "authoring"

@@ -19,6 +19,7 @@ from models.svg_template_glyph import SvgTemplateFixedGlyphPreview, glyph_author
 from services.source_content.security import secure_xml
 from services.svg_templates.frame_fonts import artifact_digest, bytes_digest, verify_font_asset
 from services.svg_templates.frame_native_text import validated_parts
+from utils.code_file_digest import code_file_sha256
 
 _NS = {"p": "http://schemas.openxmlformats.org/presentationml/2006/main",
        "a": "http://schemas.openxmlformats.org/drawingml/2006/main"}
@@ -80,8 +81,9 @@ def source_frame_projection_digest(frame):
 
 
 def materializer_code_digest():
-    return bytes_digest((Path(__file__).resolve().parents[2] / "utils" /
-                         "svg_template_glyph_materialization.py").read_bytes())
+    # Same value as bytes_digest() over the file; the bytes are read once per process.
+    return "sha256:" + code_file_sha256(Path(__file__).resolve().parents[2] / "utils" /
+                                        "svg_template_glyph_materialization.py")
 
 
 def validate_frame_glyph_authority(frame):

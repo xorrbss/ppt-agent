@@ -192,6 +192,10 @@ async def test_source_structural_visual_repair_uses_existing_attempt_evidence(
             return read_code_bytes(path) + code_changes.get(path, b"")
 
         monkeypatch.setattr(recovery.Path, "read_bytes", code_bytes)
+        # Production hashes each code file once per process; simulated changes
+        # need the uncached recipe so every digest observes the changed bytes.
+        from utils.code_file_digest import CodeFileDigest
+        monkeypatch.setattr(recovery, "code_file_digest", lambda path: CodeFileDigest.of(path.read_bytes()))
         worker = {"checkpointReuseEligible": True, "imageDigest": "a" * 64}
         monkeypatch.setattr("services.public_render_runtime_identity.public_render_runtime_binding",
                             lambda: deepcopy(worker))

@@ -31,9 +31,13 @@ from services.provider_durable_admission import (
 )
 from services.provider_pricing import (
     ProviderModelPricing,
+    billable_cache_tokens,
     calculate_actual_usage_cost,
 )
-from services.provider_usage_cached_tokens import cached_tokens_from_usage
+from services.provider_usage_cached_tokens import (
+    cache_write_tokens_from_usage,
+    cached_tokens_from_usage,
+)
 from services.provider_usage_idempotency import (
     _normalize_semantic_slot as _normalize_semantic_slot,
     _provider_idempotency_key as _provider_idempotency_key,
@@ -242,6 +246,12 @@ def provider_operation_usage_scope() -> Iterator[ProviderOperationUsage]:
         yield usage
     finally:
         _ACTIVE_OPERATION_USAGE.reset(token)
+
+
+def active_provider_operation_usage() -> ProviderOperationUsage | None:
+    """The operation attempt's usage counters, or ``None`` outside a scope (read only)."""
+
+    return _ACTIVE_OPERATION_USAGE.get()
 
 
 @contextmanager
@@ -733,17 +743,33 @@ def response_usage(response: object) -> tuple[str, int | None, int | None, int |
     return "reported", input_tokens, output_tokens, cached_tokens_from_usage(usage)
 
 
+def response_cache_write_tokens(response: object) -> int | None:
+    """Anthropic prompt-cache write tokens of a response, if it reported any."""
+
+    usage = getattr(response, "usage", None)
+    if usage is None and isinstance(response, dict):
+        usage = response.get("usage")
+    return None if usage is None else cache_write_tokens_from_usage(usage)
+
+
 def _reported_cost(
     pricing: ProviderModelPricing | None,
     input_tokens: int | None,
     output_tokens: int | None,
+    cached_tokens: int | None = None,
+    cache_write_tokens: int | None = None,
 ) -> int | None:
     if pricing is None or (input_tokens is None and output_tokens is None):
         return None
+    cached, written = billable_cache_tokens(
+        pricing, input_tokens, cached_tokens, cache_write_tokens
+    )
     usage_cost = calculate_actual_usage_cost(
         pricing,
         input_tokens=input_tokens or 0,
         output_tokens=output_tokens or 0,
+        cached_input_tokens=cached,
+        cache_write_input_tokens=written,
     )
     return usage_cost.total_cost_microunits
 
@@ -776,6 +802,7 @@ async def record_provider_call(
         )
 
         usage_state, input_tokens, output_tokens, cached_tokens = response_usage(response)
+        cache_write_tokens = response_cache_write_tokens(response)
         public_accounting = (
             scope._public_leases.pop(0) if scope._public_leases else None
         )
@@ -791,6 +818,8 @@ async def record_provider_call(
             effective_pricing,
             input_tokens,
             output_tokens,
+            cached_tokens,
+            cache_write_tokens,
         )
         operation_usage = _ACTIVE_OPERATION_USAGE.get()
         if operation_usage is not None:
@@ -815,6 +844,8 @@ async def record_provider_call(
                     latency_ms=max(0, round(float(latency_ms))),
                     input_tokens=input_tokens or 0,
                     output_tokens=output_tokens or 0,
+                    cached_input_tokens=cached_tokens,
+                    cache_write_input_tokens=cache_write_tokens,
                 )
                 reported_cost = usage_cost.total_cost_microunits
             elif usage_state == "reported" or reported_cost is not None:
@@ -828,6 +859,8 @@ async def record_provider_call(
                     actual_cost_microunits=reported_cost,
                     input_tokens=input_tokens,
                     output_tokens=output_tokens,
+                    cached_input_tokens=cached_tokens,
+                    cache_write_input_tokens=cache_write_tokens,
                     provider_id=provider,
                     model_id=model,
                     pricing_revision=(

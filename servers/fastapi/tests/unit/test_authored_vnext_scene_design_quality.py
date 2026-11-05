@@ -47,6 +47,7 @@ from services.authored_vnext.semantic.editable_scene import (
 from services.authored_vnext.semantic import editable_scene as editable_scene_mod
 from services.authored_vnext.master.digests import canonical_digest, seal_master_contract
 from tests.support.authored_vnext_master_fixture import master_contract_payload
+from tests.support.environment_requirements import requires_malgun_gothic_font
 
 
 SOURCE_DIGEST = "sha256:" + "7" * 64
@@ -399,6 +400,7 @@ def _compile(
         ("infographic", "품질 운영 구조", "정책 계층\n검증 계층\n증거 계층", "infographicConcept"),
     ],
 )
+@requires_malgun_gothic_font
 def test_explicit_archetypes_preserve_copy_and_use_measured_readable_type(
     hint: str,
     title: str,
@@ -414,6 +416,7 @@ def test_explicit_archetypes_preserve_copy_and_use_measured_readable_type(
     assert any(item.semantic_role == expected_role for item in scene.elements)
 
 
+@requires_malgun_gothic_font
 def test_existing_authored_body_grammar_drives_the_canonical_scene() -> None:
     scene = _compile(
         hint=None,
@@ -425,6 +428,7 @@ def test_existing_authored_body_grammar_drives_the_canonical_scene() -> None:
     assert any(item.semantic_role == "timelineAxis" for item in scene.elements)
 
 
+@requires_malgun_gothic_font
 def test_inline_process_and_timeline_markers_do_not_collapse_to_two_boxes() -> None:
     process = _compile(
         hint="process",
@@ -465,6 +469,7 @@ def test_inline_process_and_timeline_markers_do_not_collapse_to_two_boxes() -> N
         ),
     ],
 )
+@requires_malgun_gothic_font
 def test_structural_delimiters_are_not_exposed_as_leading_body_copy(
     hint: str,
     body: str,
@@ -485,6 +490,7 @@ def test_structural_delimiters_are_not_exposed_as_leading_body_copy(
     assert _semantic_copy(" ".join(visible)) == _semantic_copy(body)
 
 
+@requires_malgun_gothic_font
 def test_leading_year_is_bound_to_q1_and_timeline_is_exactly_four_nodes() -> None:
     body = "2026 Q1 基线 → Q2 场景编译 → Q3 PowerPoint 验证 → Q4 发布"
     first = _compile(
@@ -511,6 +517,7 @@ def test_leading_year_is_bound_to_q1_and_timeline_is_exactly_four_nodes() -> Non
     assert first.slide_digest == second.slide_digest
 
 
+@requires_malgun_gothic_font
 def test_process_timeline_and_infographic_use_the_body_envelope() -> None:
     cases = (
         (
@@ -547,6 +554,7 @@ def test_process_timeline_and_infographic_use_the_body_envelope() -> None:
         assert occupied >= minimum_area
 
 
+@requires_malgun_gothic_font
 def test_comparison_metric_and_infographic_have_distinct_visual_hierarchy() -> None:
     comparison = _compile(
         hint="comparison",
@@ -583,6 +591,7 @@ def test_comparison_metric_and_infographic_have_distinct_visual_hierarchy() -> N
     assert len([item for item in infographic.elements if item.semantic_role == "infographicConcept"]) == 4
 
 
+@requires_malgun_gothic_font
 def test_five_cjk_points_use_measured_stacked_density_without_tail_folding() -> None:
     scene = _compile(
         hint="card",
@@ -599,6 +608,7 @@ def test_five_cjk_points_use_measured_stacked_density_without_tail_folding() -> 
     assert len([item for item in scene.elements if item.semantic_role == "cardSurface"]) == 5
 
 
+@requires_malgun_gothic_font
 def test_cover_is_one_editorial_field_and_preserves_planned_title_lines() -> None:
     contract = _contract()
     slide, plan, title_bounds = _slide_and_plan(
@@ -636,6 +646,7 @@ def test_cover_is_one_editorial_field_and_preserves_planned_title_lines() -> Non
     assert first.slide_digest == second.slide_digest
 
 
+@requires_malgun_gothic_font
 def test_dense_cover_preserves_all_copy_in_one_field_at_the_16pt_floor() -> None:
     contract = _contract()
     body = "\n".join(
@@ -694,6 +705,7 @@ def test_dense_cover_preserves_all_copy_in_one_field_at_the_16pt_floor() -> None
     assert first.slide_digest == second.slide_digest
 
 
+@requires_malgun_gothic_font
 def test_four_long_cover_fragments_use_full_safe_envelope_without_lowering_font_floor() -> None:
     contract = _contract()
     body = "\n".join(
@@ -727,6 +739,7 @@ def test_four_long_cover_fragments_use_full_safe_envelope_without_lowering_font_
     assert editorial.bounds.height >= 218.0
 
 
+@requires_malgun_gothic_font
 def test_dense_stacked_cards_repartition_without_dropping_semantic_copy() -> None:
     body = "\n".join(
         (
@@ -1169,6 +1182,7 @@ def test_semantic_import_retry_reuses_only_identical_scene_and_retained_telemetr
     asyncio.run(scenario())
 
 
+@requires_malgun_gothic_font
 def test_three_step_process_uses_an_ascending_non_card_silhouette() -> None:
     scene = _compile(
         hint="process",
@@ -1191,6 +1205,7 @@ def test_three_step_process_uses_an_ascending_non_card_silhouette() -> None:
     assert all(item.shape == "rect" and item.stroke is None for item in steps)
 
 
+@requires_malgun_gothic_font
 def test_long_cjk_slide_uses_explicit_title_breaks_and_editorial_columns() -> None:
     scene = _compile(
         hint=None,
@@ -1218,6 +1233,7 @@ def test_long_cjk_slide_uses_explicit_title_breaks_and_editorial_columns() -> No
     assert all(item.style is not None and item.style.font_size >= 16 for item in body_text)
 
 
+@requires_malgun_gothic_font
 def test_company_standard_swap_keeps_raw_scene_elements_byte_identical() -> None:
     first_contract = _contract()
     second_contract = _company_variant_contract()
@@ -1298,6 +1314,7 @@ def test_company_standard_swap_keeps_raw_scene_elements_byte_identical() -> None
 
 
 @pytest.mark.parametrize("hint", ["image", "table", "chart"])
+@requires_malgun_gothic_font
 def test_structured_objects_receive_role_specific_dominant_geometry(hint: str) -> None:
     digest = "sha256:" + "8" * 64
     structured: dict[str, object]
@@ -1359,6 +1376,7 @@ def test_structured_objects_receive_role_specific_dominant_geometry(hint: str) -
         assert native.bounds.width > copy_panel.bounds.width
 
 
+@requires_malgun_gothic_font
 def test_structured_image_is_digest_pinned_and_missing_manifest_fails_closed() -> None:
     digest = "sha256:" + "9" * 64
     slide_scene = _compile(
@@ -1405,6 +1423,7 @@ def test_structured_image_is_digest_pinned_and_missing_manifest_fails_closed() -
 
 
 @pytest.mark.parametrize("hint", ["image", "table", "chart"])
+@requires_malgun_gothic_font
 def test_structured_native_roles_require_their_pinned_source(hint: str) -> None:
     with pytest.raises(ValueError, match=f"authored_vnext_{hint}_source_required"):
         _compile(

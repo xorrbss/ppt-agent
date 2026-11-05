@@ -52,6 +52,8 @@ class AssetSlot:
     bbox_hint: Optional[tuple[float, float, float, float]] = None
     concept: Optional[str] = None
     origin: str = ""  # cutout | illustration | library | cached | generated | <icon family> | model-vector
+    #: Ink the vector icon was painted with; ``None`` for offers stored before it was carried.
+    ink: Optional[str] = None
 
     @property
     def is_vector(self) -> bool:
@@ -92,6 +94,16 @@ class AssetOffer:
             hint = item.get("bbox_hint")
             slots.append(AssetSlot(**{**item, "path": str(path), "bbox_hint": tuple(hint) if hint else None}))
         return cls(slots=tuple(slots), receipt=dict(value.get("receipt") or {}))
+
+
+_FALLBACK_ICON_INK = "#1E5EFF"
+
+
+def icon_ink(brand, style) -> str:
+    """The deck accent icons are painted with: the author's own (an explicit brand colour wins)."""
+    from services.generation_core.authoring.author_slide_design_system import resolve_style_primary
+
+    return resolve_style_primary(brand, style) or _FALLBACK_ICON_INK
 
 
 def _file_slot(path: str | Path, **fields: Any) -> AssetSlot:
@@ -249,7 +261,7 @@ async def _icon_slots(pages, *, pack_key, context, color, receipt, preselected=N
                 slots.append(_file_slot(preselected[label], page_index=index, role="figure-icon", kind="icon",
                                         alt=f"icon: {label}", concept=label,
                                         bbox_hint=(0.0, 0.0, ICON_EDGE_HINT, ICON_EDGE_HINT),
-                                        origin=family_origin))
+                                        origin=family_origin, ink=color))
                 continue
             icon = resolution.icons.get(concept_key(label))
             if icon is None:
@@ -257,7 +269,7 @@ async def _icon_slots(pages, *, pack_key, context, color, receipt, preselected=N
             slots.append(_file_slot(icon.path, page_index=index, role="figure-icon", kind="icon",
                                     alt=f"icon: {label}", concept=label,
                                     bbox_hint=(0.0, 0.0, ICON_EDGE_HINT, ICON_EDGE_HINT),
-                                    origin=icon.source))
+                                    origin=icon.source, ink=color))
     return slots
 
 
@@ -356,10 +368,11 @@ async def build_asset_offer(*, outline, brand, style, roles: Sequence[str], inst
             return None
 
     family_receipt: dict = {}
+    ink = icon_ink(brand, style)
     family_id = getattr(style, "icon_family", None)
     figure_labels = [label for _index, nodes in figures for label in nodes]
     family_task = asyncio.ensure_future(_family_icons(
-        figure_labels, color=getattr(brand, "primary", None) or "#1E5EFF", receipt=family_receipt,
+        figure_labels, color=ink, receipt=family_receipt,
         family_id=family_id if isinstance(family_id, str) and family_id else None))
     vector_slots: list[AssetSlot] = []
     vector_receipt: dict = {}
@@ -391,7 +404,7 @@ async def build_asset_offer(*, outline, brand, style, roles: Sequence[str], inst
                 family_receipt.update(status="error", reason=type(error).__name__)
             icon_slots = await _icon_slots(figures, pack_key=getattr(context, "pack_key", style_id),
                                            context=context, receipt=icon_receipt,
-                                           color=getattr(brand, "primary", None) or "#1E5EFF",
+                                           color=ink,
                                            preselected=preselected,
                                            family_origin=family_receipt.get("family", "family"))
     except Exception as error:  # noqa: BLE001 - icons are optional

@@ -69,7 +69,7 @@ def verify_review_control(value: Any, page_count: int, physical_offset: int) -> 
 
 
 def selected_source_vector(payloads: Sequence[Mapping[str, Any]]) -> list[dict]:
-    from services.svg_cached_author_render_recovery import author_witness
+    from services.svg_recovery_witness import author_witness
     result = []
     for index, payload in enumerate(payloads):
         quality = payload.get("quality")
@@ -189,7 +189,7 @@ def render_evidence_marker(proof: Mapping[str, Any], index: int, *, consumer_ope
 
 
 def verify_cached_render(payload: Mapping[str, Any], manifest: Mapping[str, Any], index: int) -> bytes:
-    from services.svg_cached_author_render_recovery import author_witness, digest
+    from services.svg_recovery_witness import author_witness, digest
     from services.svg_presentation_checkpoint import _read_png
     proof = manifest.get("final_selected_continuation")
     marker = payload.get("partial_recovery")
@@ -221,7 +221,7 @@ def verify_cached_render(payload: Mapping[str, Any], manifest: Mapping[str, Any]
 
 
 def archived_producer_payloads(archive: Mapping[str, Any], proof: Mapping[str, Any]) -> tuple[dict, list[dict]]:
-    from services.svg_cached_author_render_recovery import digest
+    from services.svg_recovery_witness import digest
     _require(digest(archive) == proof["archive_digest"])
     job = archive.get("job")
     rows = archive.get("checkpoints")

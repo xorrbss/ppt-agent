@@ -148,7 +148,7 @@ class RendererWorkerSession:
             raise RendererIsolationError("authored renderer worker session is closed")
         from utils.slide_capture import _admit_render_source, _cache_browser_metrics
 
-        admitted = _admit_render_source(html)
+        admitted = _admit_render_source(html, materialize_fonts=False)
         width_px = self._width_px if width_px is None else int(width_px)
         height_px = self._height_px if height_px is None else int(height_px)
         first = self._process is None

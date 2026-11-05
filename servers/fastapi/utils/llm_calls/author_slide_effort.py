@@ -16,6 +16,8 @@ from __future__ import annotations
 import logging
 from typing import Optional
 
+from enums.llm_provider import LLMProvider
+
 logger = logging.getLogger(__name__)
 
 # A bespoke full-bleed HTML slide with inline CSS is large; give the model room
@@ -24,11 +26,25 @@ AUTHOR_MAX_TOKENS = 16000
 
 # Wall cap for one SVG author call. The per-phase read timeout only bounds the
 # gap between stream events, so a stalled-but-trickling stream could otherwise
-# run for tens of minutes. The cap assumes a pessimistic output rate (measured
-# gpt-6.1-sol pages run at ~50-60 tok/s) plus a fixed margin for reasoning and
-# time to first token: a full 16k budget gets ~893 s.
+# run for tens of minutes. The cap is ``max_tokens / rate + margin``. The
+# default profile assumes a pessimistic output rate (measured gpt-6.1-sol pages
+# run at ~50-60 tok/s) plus a fixed margin for reasoning and time to first
+# token: a full 16k budget gets ~893 s.
 SVG_AUTHOR_MIN_OUTPUT_TOKENS_PER_SECOND = 30.0
 SVG_AUTHOR_CALL_DEADLINE_MARGIN_SECONDS = 360.0
+
+# Provider-specific (rate, margin) overrides of the default profile above. A
+# provider is listed only when its throughput was measured on this product.
+# Anthropic (claude-sonnet-5-5) measured ~170 tok/s on svg author pages. The
+# rate here is 50 tok/s: the low-end rate the default was calibrated to, still
+# ~3.4x below the measurement. Reasoning tokens count against the same output
+# budget, so they are already inside ``max_tokens / rate``; time to first token
+# is seconds, and a stalled stream is bounded by the read timeout. That gives
+# 16k / 50 + 0 = 320 s. The margin is part of the profile because the default
+# 360 s margin alone would exceed this target.
+SVG_AUTHOR_PROVIDER_TIMEOUT_PROFILES: dict[LLMProvider, tuple[float, float]] = {
+    LLMProvider.ANTHROPIC: (50.0, 0.0),
+}
 
 # Kept here, next to the profile that reads it, so this module never imports
 # ``author_slide`` back.
@@ -79,10 +95,32 @@ FAST_ROLE_OUTPUT_BUDGETS = {
 }
 
 
-def svg_author_call_timeout_seconds(max_tokens: int = AUTHOR_MAX_TOKENS) -> float:
-    """Wall deadline in seconds for one SVG author call with ``max_tokens`` output budget."""
+def _selected_llm_provider() -> Optional[LLMProvider]:
+    """The configured provider, or ``None`` when none can be resolved (default profile)."""
 
-    return max_tokens / SVG_AUTHOR_MIN_OUTPUT_TOKENS_PER_SECOND + SVG_AUTHOR_CALL_DEADLINE_MARGIN_SECONDS
+    try:
+        from utils.llm_provider import get_llm_provider
+
+        return get_llm_provider()
+    except Exception:
+        return None
+
+
+def svg_author_call_timeout_seconds(
+    max_tokens: int = AUTHOR_MAX_TOKENS, *, provider: Optional[LLMProvider] = None
+) -> float:
+    """Wall deadline in seconds for one SVG author call with ``max_tokens`` output budget.
+
+    ``provider`` defaults to the configured provider, read at call time. Providers
+    without a measured profile keep the default (rate, margin) pair.
+    """
+
+    selected = provider if provider is not None else _selected_llm_provider()
+    rate, margin = SVG_AUTHOR_PROVIDER_TIMEOUT_PROFILES.get(
+        selected,
+        (SVG_AUTHOR_MIN_OUTPUT_TOKENS_PER_SECOND, SVG_AUTHOR_CALL_DEADLINE_MARGIN_SECONDS),
+    )
+    return max_tokens / rate + margin
 
 
 def normalized_authoring_reasoning_effort(model: object, effort: str) -> str:
@@ -218,6 +256,7 @@ __all__ = [
     "REASONING_EFFORTS",
     "SVG_AUTHOR_CALL_DEADLINE_MARGIN_SECONDS",
     "SVG_AUTHOR_MIN_OUTPUT_TOKENS_PER_SECOND",
+    "SVG_AUTHOR_PROVIDER_TIMEOUT_PROFILES",
     "authoring_output_profile",
     "normalized_authoring_reasoning_effort",
     "resolve_authoring_reasoning_level",

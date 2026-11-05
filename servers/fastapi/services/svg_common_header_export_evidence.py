@@ -18,15 +18,38 @@ def digest(value):
     return "sha256:" + canonical_json_sha256(value)
 
 
+COMMON_HEADER_VERIFIER_FILES = (
+    "services/svg_common_header_export_evidence.py", "services/svg_common_header_v2.py",
+    "services/svg_common_header_v2_geometry.py", "services/svg_common_header.py", "services/svg_renderer.py",
+    "services/svg_text_overlap.py",
+    "workers/svg_common_header_export_v2.py", "workers/svg_common_header_export.py",
+    "services/svg_export_page_evidence.py", "services/svg_export_quality.py",
+    "services/generation_core/drivers/svg/render.py", "services/svg_master_furniture.py")
+
+
 def common_header_verifier_digest():
+    """The header verifier identity that slide evidence, readbacks and export identities carry.
+
+    It is the reviewed revision's identity (``services/verifier_revisions``) while
+    the running source is a reviewed state of that revision, and the raw
+    ``common_header_verifier_source_digest()`` otherwise.
+    """
+    from services.verifier_revisions import COMMON_HEADER_VERIFIER_LEDGER
+
+    return COMMON_HEADER_VERIFIER_LEDGER.resolve(common_header_verifier_source_state())
+
+
+def common_header_verifier_source_digest():
+    """The pre-migration identity: the verifier files' bytes as they are on disk."""
+    return common_header_verifier_source_state().raw
+
+
+def common_header_verifier_source_state():
+    from services.verifier_revisions import COMMON_HEADER_VERIFIER_LEDGER
+
     root = Path(__file__).resolve().parents[1]
-    names = ("services/svg_common_header_export_evidence.py", "services/svg_common_header_v2.py",
-             "services/svg_common_header_v2_geometry.py", "services/svg_common_header.py", "services/svg_renderer.py",
-             "services/svg_text_overlap.py",
-             "workers/svg_common_header_export_v2.py", "workers/svg_common_header_export.py",
-             "services/svg_export_page_evidence.py", "services/svg_export_quality.py",
-             "services/generation_core/drivers/svg/render.py", "services/svg_master_furniture.py")
-    return digest({name: hashlib.sha256((root / name).read_bytes()).hexdigest() for name in names})
+    return COMMON_HEADER_VERIFIER_LEDGER.source_state(
+        {name: root / name for name in COMMON_HEADER_VERIFIER_FILES}, digest)
 
 
 def header_scene(svg):

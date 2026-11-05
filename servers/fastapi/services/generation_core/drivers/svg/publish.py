@@ -39,7 +39,7 @@ def svg_slide_content(payload: dict, *, role, source, pt_per_px: float,
     The page's raw native declarations never reach the receipt; only the
     publication summary (``native_publish.page_native_objects``) does.
     """
-    from services.svg_cached_author_render_recovery import approved_sidecars
+    from services.svg_cached_author_render_lineage import approved_sidecars
     sidecars = approved_sidecars(payload)
     native_objects, native_summary = ((source_native_objects, source_native_summary)
         if source_native_summary is not None else page_native_objects(

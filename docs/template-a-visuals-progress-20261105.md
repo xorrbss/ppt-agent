@@ -32,7 +32,8 @@ The customer deck, its renders and anything derived from its text stay out of th
   ...); 19 commits on `main` since 2026-10-01 changed them, each with the same effect.
 * Options: (A) merge `wip/s2n` as is; (B) A plus an identity that hashes only the manifest's `files` and `version`, so
   later metadata-only edits keep the digest (one digest change, in the same commit); (C) keep holding. Recommended: A,
-  after the current measurement batch so the digest does not change mid-batch. Decision is the user's.
+  after the current measurement batch so the digest does not change mid-batch. (Superseded: `main` resolved it
+  with #109, see Next.)
 
 ## Measurement setup (this session)
 
@@ -241,7 +242,8 @@ which about $17 after the key change.
 1. Done: `SVG_TEMPLATE_OUTLINE_SECTIONS` defaults to on (user decision, without a sections-only re-run; watch first-draft
    acceptance on template decks, see the caveat above).
 2. Template page renders for the author (registration change, re-registration of templates).
-3. Converter digest (`wip/s2n`): decision above, merge after this branch.
+3. Converter digest: resolved on `main` by #109 (`3d7302e4`: the two patches, the rebuilt manifest and a digest alias
+   that accepts the superseded manifest digest while the executed converter bytes are identical); `wip/s2n` is obsolete.
 4. Real-bug candidates in `docs/test-failure-baseline-20261105.md` (owner RLS for the `svg_template*` tables first).
 5. The `.venv` Python (uv python-build-standalone) cannot `posix_spawn(setsid=True)`, so template registration fails at
    the frame preview render on this Linux VM; the measurement backends used a venv built from the system Python 3.11

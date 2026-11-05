@@ -22,6 +22,14 @@ c. **failure placeholder**: the slide's title on a plain page
    (``author:placeholder``, ``svg_failure_placeholder``) -- the deck fails only
    when even this cannot render.
 
+A template-redesign deck takes its own complete-content fallback instead of
+b/c: a deterministic body composed into the page's frame
+(``svg_template_fallback_page``). A frame with a fixed glyph preview
+(``svg-template-frame/v3``) binds its published PNG to a glyph capture, so its
+fallback runs through the page render step itself (``render.attempt_render``):
+the same frame composition, screen placement, glyph materializer and marker
+as an authored page, and the same publication check.
+
 A deck under a quality-recovery policy reserves its validated adaptation first
 (``collect._page`` returns ``ScreenRecoveryPending``); a page that reaches this
 module under that policy records why adaptation did not rescue it and then
@@ -55,6 +63,9 @@ LOGGER = logging.getLogger(__name__)
 FALLBACK_REASON = "author:attempts_exhausted"
 FALLBACK_OUTCOME = "svg_fallback_page"
 TEMPLATE_FALLBACK_OUTCOME = "svg_template_fallback_page"
+#: The local attempt a fixed-glyph (v3) frame fallback records; its body bytes
+#: are deterministic, so the receipt names the builder and the body digest.
+TEMPLATE_GLYPH_FALLBACK_VERSION = "svg-template-frame-fallback/v1"
 FLAG_ONLY_OUTCOME = "verbatim_flag_only"
 SOURCE_FALLBACK_REASON = "author:source_verbatim_fallback"
 SOURCE_FALLBACK_OUTCOME = "svg_source_fallback_page"
@@ -113,7 +124,8 @@ async def rescue_terminal_page(*, ctx, request, index, content, payload, error, 
         if not intact:
             return await _template_fallback(ctx=ctx, request=request, index=index, content=content,
                                             payload=payload, error=error, job=job, checkpoint=checkpoint,
-                                            write_png=write_png)
+                                            write_png=write_png, presentation_id=presentation_id,
+                                            async_session_maker=async_session_maker)
     from services.svg_authoring_profile import read_quality_recovery_policy
     if read_quality_recovery_policy(getattr(ctx, "snapshot", {}) or {}):
         # Evidence only: the validated adaptation (reserved by collect in page
@@ -136,7 +148,8 @@ async def rescue_terminal_page(*, ctx, request, index, content, payload, error, 
         # the template fallback earns one through the same template checks.
         return await _template_fallback(ctx=ctx, request=request, index=index, content=content,
                                         payload=payload, error=error, job=job, checkpoint=checkpoint,
-                                        write_png=write_png)
+                                        write_png=write_png, presentation_id=presentation_id,
+                                        async_session_maker=async_session_maker)
     if ctx.source_reflow:
         rescued = await _source_fallback(ctx=ctx, request=request, presentation_id=presentation_id,
             index=index, content=content, payload=payload, error=error, job=job, checkpoint=checkpoint,
@@ -222,13 +235,14 @@ async def _fallback(*, ctx, request, index, content, payload, error, job, checkp
         svg = fallback_page_svg(content=content, role=ctx.roles[index], index=index, count=ctx.count,
                                 width=ctx.canvas.width_px, height=ctx.canvas.height_px,
                                 style_snapshot=ctx.snapshot,
-                                header_page=header_pages[index] if header_pages else None)
+                                header_page=header_pages[index] if header_pages else None,
+                                minimum_font_px=_page_font_floor(ctx, request))
         async with ctx.render_semaphore:
             rendered = await render_svg_with_metrics(
                 svg, width=ctx.canvas.width_px, height=ctx.canvas.height_px,
                 instructions=request.instructions, required_text=_required_numeric_claims(content),
                 **ctx.physical_kwargs)
-    except ValueError:
+    except (ValueError, TypeError, KeyError, IndexError):
         LOGGER.warning("[svg] fallback page render failed slide=%d", index + 1, exc_info=True)
         return None
     return await _publish_substitute(ctx=ctx, svg=svg, rendered=rendered, index=index, payload=payload, error=error,
@@ -276,7 +290,8 @@ def _picture_under_body(frame) -> bool:
     return False
 
 
-async def _template_fallback(*, ctx, request, index, content, payload, error, job, checkpoint, write_png):
+async def _template_fallback(*, ctx, request, index, content, payload, error, job, checkpoint, write_png,
+                             presentation_id=None, async_session_maker=None):
     """Rescue a template-redesign page with a deterministic body inside the frame.
 
     The body keeps every outline line (``fallback.template_fallback_body_svg``)
@@ -284,7 +299,9 @@ async def _template_fallback(*, ctx, request, index, content, payload, error, jo
     composed, measured and proven with exactly the checks an authored template
     page passes (``compose_template_page``, ``master_furniture_receipt``,
     ``apply_template_body_quality``), so publication accepts it like any other
-    page. ``None`` -- the deck keeps failing -- when that proof does not hold.
+    page. A fixed-glyph (v3) frame's body goes through the page render step
+    (:func:`_glyph_frame_fallback`). ``None`` -- the deck keeps failing -- when
+    that proof does not hold.
     """
 
     from services.generation_core.drivers.svg.fallback import template_fallback_body_svg
@@ -299,10 +316,6 @@ async def _template_fallback(*, ctx, request, index, content, payload, error, jo
         from services.svg_templates.chapters import page_chapter
         context = template_page_context(ctx.snapshot, index, ctx.count, content, chapter=page_chapter(ctx, index))
         frame = page_frame(ctx.snapshot, index, ctx.count, chapter=page_chapter(ctx, index))
-        if frame.schema_version == "svg-template-frame/v3":
-            # A fixed glyph preview binds the published PNG to a capture this
-            # substitute cannot reproduce.
-            return None
         faces = sorted(context["font_faces"], key=lambda face: face["weight"])
         body_face = min(faces, key=lambda face: abs(face["weight"] - 400))
         title_face = min(faces, key=lambda face: abs(face["weight"] - 700))
@@ -310,7 +323,15 @@ async def _template_fallback(*, ctx, request, index, content, payload, error, jo
             body_region=context["body_region"], title_in_frame="title" in context["dynamic_fields"],
             title_face=title_face, body_face=body_face, style_snapshot=ctx.snapshot,
             body_background=context.get("body_background"), role=ctx.roles[index],
-            body_photo=_picture_under_body(frame))
+            body_photo=_picture_under_body(frame), minimum_font_px=_page_font_floor(ctx, request))
+    except (ValueError, TypeError, KeyError, IndexError):
+        LOGGER.warning("[svg] template fallback page failed slide=%d", index + 1, exc_info=True)
+        return None
+    if frame.schema_version == "svg-template-frame/v3":
+        return await _glyph_frame_fallback(ctx=ctx, request=request, index=index, content=content, body=body,
+            payload=payload, error=error, job=job, checkpoint=checkpoint, write_png=write_png,
+            presentation_id=presentation_id, async_session_maker=async_session_maker)
+    try:
         svg = compose_template_page(ctx.snapshot, body, context)
         furniture = master_furniture_receipt(svg, ctx.snapshot, index=index, n=ctx.count,
             width=ctx.canvas.width_px, height=ctx.canvas.height_px, template_page_context=context)
@@ -332,6 +353,69 @@ async def _template_fallback(*, ctx, request, index, content, payload, error, jo
         error=error, job=job, checkpoint=checkpoint, write_png=write_png, reason=FALLBACK_REASON,
         outcome=TEMPLATE_FALLBACK_OUTCOME, png_returned=True,
         extra={"svg_template_page": context, **({"system_furniture": furniture} if furniture is not None else {})})
+
+
+async def _glyph_frame_fallback(*, ctx, request, index, content, body, payload, error, job, checkpoint,
+                                write_png, presentation_id, async_session_maker):
+    """Rescue a page of a fixed-glyph (``svg-template-frame/v3``) frame.
+
+    A v3 page publishes only with a ``fixedGlyphPreview`` marker: the frame's
+    source-PDF glyph authority, the materializer that projected the frame's
+    fixed text into the capture, the screen placement and the PNG, all bound to
+    the composed SVG. The render step that measures an authored page is the
+    only producer of that binding, so the fallback ``body`` is handed to it
+    (``render.attempt_render``) as one local attempt: the same frame
+    composition, screen placement, glyph capture and marker. The result must
+    then pass the deck's own publication check for this page
+    (``validate_template_publication_page`` and the PNG digest). Otherwise the
+    page's checkpoint is put back as it was and ``None`` keeps the deck failing.
+
+    Only a page-quality refusal declines the rescue; an integrity error (a lost
+    fence, a store failure) raised by the render step propagates as itself.
+    """
+    from services.generation_core.drivers.svg import render
+    from services.svg_templates.chapters import page_chapter
+    from services.svg_templates.frame_fonts import bytes_digest
+    from services.svg_templates.generation import validate_template_publication_page
+
+    rescued = _rescued_identity(payload)
+    rescued.setdefault("attempts", []).append({"kind": "local", "receipt": {
+        "template_fallback": TEMPLATE_GLYPH_FALLBACK_VERSION, "body_digest": sha256_hex(body.encode()),
+        "validation_error": None}})
+    # Every checkpoint the render step writes already names the substitute, so
+    # a resume never takes this page for an authored one.
+    rescued.update(terminal=flagged_entry(index=index, reason=FALLBACK_REASON, attempted=False,
+                                          outcome=TEMPLATE_FALLBACK_OUTCOME), terminal_error=error.code)
+    if payload.get("author_body_svg") and payload.get("header_author_attempt_identity"):
+        # As in _publish_substitute: the header choice promotes the author's body.
+        rescued.update(author_body_svg=payload["author_body_svg"],
+                       header_author_attempt_identity=deepcopy(payload["header_author_attempt_identity"]))
+    try:
+        result = await render.attempt_render(ctx=ctx, request=request, presentation_id=presentation_id,
+            index=index, content=content, payload=rescued, svg=body, ordinal=1, job=job, checkpoint=checkpoint,
+            async_session_maker=async_session_maker, write_png=write_png)
+        if result is render.RETRY:
+            raise ValueError("svg_template_glyph_fallback_unrendered")
+        _measured, png = result
+        validate_template_publication_page(ctx.snapshot, rescued, index=index, count=ctx.count, content=content,
+                                           chapter=page_chapter(ctx, index))
+        if not isinstance(png, bytes) or bytes_digest(png) != rescued["fixedGlyphPreview"]["pngDigest"]:
+            raise ValueError("svg_template_glyph_publication_png_mismatch")
+    except AuthoredStageError as declined:
+        if page_error_class(declined.code) != PAGE_QUALITY:
+            raise
+        LOGGER.warning("[svg] glyph frame fallback page refused slide=%d code=%s", index + 1, declined.code)
+        await checkpoint(job, index, payload=payload)
+        return None
+    except (ValueError, TypeError, KeyError, IndexError):
+        LOGGER.warning("[svg] glyph frame fallback page unproven slide=%d", index + 1, exc_info=True)
+        await checkpoint(job, index, payload=payload)
+        return None
+    _bind_recovery_evidence(ctx, rescued)
+    await checkpoint(job, index, payload=rescued)
+    LOGGER.warning("[svg] terminal page replaced slide=%d outcome=%s code=%s", index + 1,
+                   TEMPLATE_FALLBACK_OUTCOME, error.code)
+    return rescued, png
 
 
 async def _publish_substitute(*, ctx, svg, rendered, index, payload, error, job, checkpoint, write_png,
@@ -364,6 +448,18 @@ async def _publish_substitute(*, ctx, svg, rendered, index, payload, error, job,
     await checkpoint(job, index, payload=rescued)
     LOGGER.warning("[svg] terminal page replaced slide=%d outcome=%s code=%s", index + 1, outcome, error.code)
     return rescued, (rendered.png if png_returned else None)
+
+
+def _page_font_floor(ctx, request):
+    """The readability floor an authored page of this deck is held to (CSS px)."""
+    from services.document_canvas_generation import generation_font_floor
+
+    floor = generation_font_floor(request.instructions, getattr(request, "_document_canvas", None))
+    if ctx.snapshot.get("readability_policy") is not None:
+        from services.document_canvas_generation import svg_quality_font_floor
+
+        floor = max(floor, svg_quality_font_floor(ctx.snapshot["readability_policy"]))
+    return floor
 
 
 def _source_fallback_floor(ctx, request):
@@ -460,12 +556,13 @@ async def _placeholder(*, ctx, request, index, content, payload, error, job, che
             header_pages = getattr(ctx, "header_pages", None)
             svg = placeholder_page_svg(title=str(content or ""), width=width, height=height,
                 font_family=DEFAULT_FONT_FAMILY, index=index, count=ctx.count, style_snapshot=ctx.snapshot,
-                header_page=header_pages[index] if header_pages else None)
+                header_page=header_pages[index] if header_pages else None,
+                minimum_font_px=_page_font_floor(ctx, request))
             render_kwargs = {"instructions": request.instructions}
         async with ctx.render_semaphore:
             rendered = await render_svg_with_metrics(svg, width=width, height=height, **render_kwargs,
                                                      **ctx.physical_kwargs)
-    except ValueError:
+    except (ValueError, TypeError, KeyError, IndexError):
         LOGGER.error("[svg] failure placeholder render failed slide=%d", index + 1, exc_info=True)
         return None
     return await _publish_substitute(ctx=ctx, svg=svg, rendered=rendered, index=index, payload=payload, error=error,
@@ -475,6 +572,7 @@ async def _placeholder(*, ctx, request, index, content, payload, error, job, che
 
 __all__ = [
     "FALLBACK_OUTCOME", "FALLBACK_REASON", "FLAG_ONLY_OUTCOME", "TEMPLATE_FALLBACK_OUTCOME",
+    "TEMPLATE_GLYPH_FALLBACK_VERSION",
     "PLACEHOLDER_OUTCOME", "PLACEHOLDER_REASON", "SOURCE_FALLBACK_OUTCOME", "SOURCE_FALLBACK_REASON",
     "is_exhausted_page", "rescue_terminal_page", "terminal_policy_of",
 ]

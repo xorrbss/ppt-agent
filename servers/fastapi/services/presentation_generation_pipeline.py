@@ -811,6 +811,12 @@ async def _record_chat_first_generation_admission_failure(
         "retryable": retryable,
         "stage": "admission",
     }
+    if (getattr(request, "strategy", None) != "authored"
+            and getattr(request, "common_header_mode", None) not in {"free", "page_free"}):
+        from services.svg_common_header_space_advance import ensure_space_advance_measurement
+
+        # An svg payload's header preflight measures titles synchronously.
+        await ensure_space_advance_measurement()
     payload = _durable_request_payload(request, admission_retry=True)
     status = AsyncPresentationGenerationTaskModel(
         status="error",
@@ -1237,6 +1243,17 @@ async def generate_presentation_handler(
 
                 presentation_outlines = demote_extra_titles(presentation_outlines)
 
+            native_revision = None
+            if resolve_generation_strategy(request) == "svg":
+                # A numeric series the slide's prose states becomes the ``chart:`` line the
+                # native requirement parser reads (only for a deck pinned to that revision);
+                # it is part of the outline pinned below, so a resume keeps these exact lines.
+                from services.generation_core.drivers.svg.native_requirements import requirements_revision
+                from services.outline_chart_grounding import derive_outline_chart_literals
+
+                native_revision = requirements_revision(getattr(request, "_svg_style_snapshot", None))
+                presentation_outlines, _derived_charts = derive_outline_chart_literals(
+                    presentation_outlines, revision=native_revision)
             if not request.web_search:
                 # A chart line may carry only values the source writes (web search brings its own
                 # sources, which this text does not hold). The reason is logged by the guard.
@@ -1245,6 +1262,7 @@ async def generate_presentation_handler(
                 presentation_outlines, _dropped_charts = ground_outline_charts(
                     presentation_outlines,
                     "\n".join(part for part in (request.content, additional_context, request.instructions) if part),
+                    revision=native_revision,
                 )
 
             total_outlines = len(presentation_outlines.slides)
@@ -2134,7 +2152,6 @@ async def _admit_generation_operation_v2_compatible(
     presentation: PresentationModel,
     operation: WorkspaceOperation,
     retry_source_operation: WorkspaceOperation | None = None,
-    zero_provider_cached_author_recovery: bool = False,
     partial_svg_recovery: bool = False,
     partial_svg_verification: object | None = None,
 ) -> uuid.UUID:
@@ -2154,17 +2171,6 @@ async def _admit_generation_operation_v2_compatible(
         partial_manifest = await verify_episode(sql_session, operation, partial_job,
             verification=partial_svg_verification,
             finish_verification=partial_svg_verification is not None)
-    if zero_provider_cached_author_recovery:
-        from services.svg_cached_author_render_recovery import REVISIONS
-
-        if (
-            operation.retry_of_operation_id is None
-            or operation.request_payload.get("recovery_revision") not in REVISIONS
-            or request.strategy != "svg"
-            or request.vision_qa
-            or request.web_search
-        ):
-            raise HTTPException(status_code=409, detail="svg_cached_author_render_admission_invalid")
     if retry_source_operation is not None:
         from models.sql.public_admission import PublicOperationAdmission
 
@@ -2247,22 +2253,6 @@ async def _admit_generation_operation_v2_compatible(
                 "Retry-After": str(error.retry_after_seconds or 15),
             },
         ) from error
-    if zero_provider_cached_author_recovery:
-        if (
-            admission.operation_id != operation.id
-            or admission.state != "queued"
-            or admission.initial_request_count != 0
-            or admission.retry_request_count != 0
-            or admission.estimated_reserved_microunits != 0
-            or admission.actual_reserved_microunits != 0
-        ):
-            raise HTTPException(status_code=409, detail="svg_cached_author_render_admission_conflict")
-        admission.planned_request_limit = 0
-        admission.retry_request_limit = 0
-        admission.estimated_cost_limit_microunits = 0
-        admission.actual_cost_limit_microunits = 0
-        sql_session.add(admission)
-        await sql_session.flush()
     if retry_bounds is not None:
         if (
             admission.operation_id != operation.id
@@ -2382,7 +2372,8 @@ async def queue_presentation_generation(
     } if INTERNAL_HEADER_TITLE_PLAN_KEY in submitted_payload else set()
     header_legacy_payloads = []
     if (getattr(request, "_common_header_defaulted", False)
-            and not getattr(request, "common_header_cover_exception", False)):
+            and (not getattr(request, "common_header_cover_exception", False)
+                 or getattr(request, "_common_header_cover_defaulted", False))):
         for candidate in (submitted_payload, legacy_payload):
             candidate = dict(candidate)
             candidate.pop("common_header_mode", None)

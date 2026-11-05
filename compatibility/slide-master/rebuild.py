@@ -22,6 +22,10 @@ PATCHES = (
      "document-canvas.2: invocation-local physical units and bounded source-canvas rounding"),
     (HERE / "patches/text-advance-1.patch", "text-advance.1",
      "text-advance.1: single-line text frames never narrower than the caller's exact font advance"),
+    (HERE / "patches/chart-furniture-16.patch", "chart-furniture.16",
+     "chart-furniture.16: native chart manual layouts, per-series data labels, gap/overlap/vary-colors options, title bold/alignment; table paragraph spacing, soft breaks and cell padding"),
+    (HERE / "patches/native-fixed-text-1.patch", "native-fixed-text.1",
+     "native-fixed-text.1: trusted invocation-local fixed-text adapter on the conversion context"),
     (HERE / "patches/xfrm-bounds-1.patch", "xfrm-bounds.1",
      "xfrm-bounds.1: axis-aligned xfrm shapes trace the exact off+ext frame their xfrm declares"),
 )

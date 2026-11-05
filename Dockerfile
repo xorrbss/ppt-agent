@@ -23,6 +23,12 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv pip install --python /opt/venv/bin/python \
     "https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0-py3-none-any.whl"
+# Static Noto Sans KR 400/700 instances for SVG PPTX font embedding. The
+# isolated export worker loads them read-only (digest-pinned in
+# services/svg_pptx_font_subset.py) instead of instancing the variable face on
+# every export; the script fails the build if the bytes differ from the pins.
+COPY servers/nextjs/public/fonts/noto-sans-kr/NotoSansKR-Variable.ttf /app/servers/nextjs/public/fonts/noto-sans-kr/NotoSansKR-Variable.ttf
+RUN /opt/venv/bin/python scripts/build_svg_pptx_font_instances.py
 ENV HF_HOME=/root/.cache/huggingface \
     PRESENTON_FASTEMBED_ICON_CACHE_DIR=/root/.cache/presenton/fastembed-icons
 # Warm FastEmbed caches into the image (not a BuildKit cache mount, or HF weights would be missing).
@@ -46,6 +52,14 @@ RUN apt-get update \
 
 COPY --from=fastapi-builder /opt/venv /opt/venv
 COPY --from=fastapi-builder /app/servers/fastapi /app/servers/fastapi
+# The worker loads its trusted font bytes from the Next.js public tree
+# (utils/svg_template_fonts.py: Noto Sans KR variable; services/svg_trusted_fonts.py:
+# Pretendard 400/700), and every load checks the digest pins. Copy exactly those
+# faces and their licences, nothing else. The prebuilt Noto instances
+# (servers/fastapi/assets/font_instances) already arrive with the fastapi-builder
+# copy above, because the builder stage runs scripts/build_svg_pptx_font_instances.py.
+COPY servers/nextjs/public/fonts/noto-sans-kr/NotoSansKR-Variable.ttf servers/nextjs/public/fonts/noto-sans-kr/OFL.txt /app/servers/nextjs/public/fonts/noto-sans-kr/
+COPY servers/nextjs/public/fonts/pretendard/Pretendard-Regular.ttf servers/nextjs/public/fonts/pretendard/Pretendard-Bold.ttf servers/nextjs/public/fonts/pretendard/LICENSE.txt /app/servers/nextjs/public/fonts/pretendard/
 
 ENV HOME=/tmp \
     TMPDIR=/tmp \

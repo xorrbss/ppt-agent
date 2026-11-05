@@ -17,9 +17,15 @@ from tests.unit.test_svg_page_quality_publication import PNG, _deck, _measured
 from tests.unit.test_svg_review_read_retries import _harness, _provider, _run, _seal_snapshot
 
 
-def _fresh(monkeypatch, count=7):
+def _fresh(monkeypatch, count=7, plan=profiles._axis_review_plan):
+    """A quality-first deck under ``plan``; the default pins the admitted v4 shape.
+
+    v4 reviews a deck of more than five pages as local groups plus one global
+    call, which these local/global tests exercise; stored v4 operations keep it.
+    A fresh admission seals v5 (``profiles._full_review_plan``).
+    """
     harness = _harness(monkeypatch, count)
-    harness.snapshot["quality_recovery_plan"] = profiles.seal_new_quality_recovery_plan(SimpleNamespace(), count)
+    harness.snapshot["quality_recovery_plan"] = plan(count)
     _seal_snapshot(harness.snapshot)
     harness.plan = profiles.read_quality_recovery_execution_plan(harness.snapshot)
     original = quality._design_context
@@ -86,6 +92,55 @@ def test_invalid_full_review_does_not_manufacture_local_evidence(monkeypatch):
     assert all(not set(prompt.DESIGN_LOCAL_AXES) & set(page["axes"]) for page in gate["pages"])
 
 
+@pytest.mark.parametrize("count,expected", [
+    (6, [("full", list(range(6)))]),
+    (8, [("full", list(range(8)))]),
+    (9, [("local", [0, 1, 2, 3, 4]), ("local", [5, 6, 7, 8]), ("global", list(range(9)))]),
+])
+def test_fresh_plan_reviews_up_to_eight_pages_in_one_full_call(monkeypatch, count, expected):
+    harness = _fresh(monkeypatch, count, lambda n: profiles.seal_new_quality_recovery_plan(SimpleNamespace(), n))
+    assert harness.plan["schema"] == "svg-quality-recovery-plan/v5"
+    reviewed = _provider(harness)
+    calls = []
+
+    async def provider(renders, **kwargs):
+        context = kwargs["design_context"]
+        indices = context.get("globalPageIndices", list(range(count)))  # a global call reviews the deck
+        calls.append((context["reviewScope"], list(indices)))
+        assert kwargs["slide_count"] == len(renders) == len(indices)
+        return await reviewed(renders, **kwargs)
+
+    advisory = _run(harness, provider)
+    gate = advisory["vision"]["designGate"]
+    # Local groups are dispatched concurrently; the global call comes after them.
+    assert calls[-1] == expected[-1] and sorted(calls, key=lambda call: (call[0] == "global", call[1])) == expected
+    assert gate["status"] == "passed" and gate["pageCoverageComplete"] is True
+    assert gate["flowUnreviewedPages"] == [] and gate["unreviewedPages"] == []
+    assert len(gate["reviewGroups"]) == len(expected)
+    # A completed round is replayed from its sealed groups without a new call.
+    assert _run(harness, AsyncMock(side_effect=AssertionError("sealed review dispatched again"))) == advisory
+
+
+def test_v4_plans_keep_validating_with_their_local_and_global_shape():
+    for count in (1, 5, 6, 7, 8, 12):
+        plan = profiles._axis_review_plan(count)
+        snapshot = dict(authoring_profile=profiles.ART_DIRECTION_PROFILE_V8,
+                        quality_recovery_policy=profiles.QUALITY_RECOVERY_POLICY_V2, quality_recovery_plan=plan)
+        _seal_snapshot(snapshot)
+        assert profiles.read_quality_recovery_plan(snapshot) == plan
+        groups = (count + 4) // 5 + (count > 5)
+        assert profiles.read_quality_recovery_execution_plan(snapshot)["phase_group_limit"] == groups * 2
+        assert "full_review_page_limit" not in plan
+    # A v5 marker on v4 bytes (or a changed limit) is not an admitted plan.
+    for forged in ({**profiles._axis_review_plan(7), "full_review_page_limit": 8},
+                   {**profiles._full_review_plan(7), "full_review_page_limit": 12}):
+        snapshot = dict(authoring_profile=profiles.ART_DIRECTION_PROFILE_V8,
+                        quality_recovery_policy=profiles.QUALITY_RECOVERY_POLICY_V2, quality_recovery_plan=forged)
+        _seal_snapshot(snapshot)
+        with pytest.raises(ValueError, match="svg_quality_recovery_plan_invalid"):
+            profiles.read_quality_recovery_plan(snapshot)
+
+
 def test_one_unreviewed_flow_axis_does_not_invalidate_other_pages(monkeypatch):
     harness = _fresh(monkeypatch)
     reviewed = _provider(harness)
@@ -108,10 +163,11 @@ def test_one_unreviewed_flow_axis_does_not_invalidate_other_pages(monkeypatch):
     assert flags == {**dict.fromkeys(range(6)), 6: "design:deck_flow_unreviewed"}
 
 
+@pytest.mark.parametrize("plan", [profiles._axis_review_plan, profiles._full_review_plan])
 @pytest.mark.parametrize("count,invalid", [(2, [0]), (5, [3]), (6, [5]), (7, [3]), (12, list(range(5)))])
 @pytest.mark.parametrize("evidence", ["page", "png", "prior"])
-def test_invalid_mandatory_evidence_only_excludes_its_pages(monkeypatch, count, invalid, evidence):
-    harness = _fresh(monkeypatch, count)
+def test_invalid_mandatory_evidence_only_excludes_its_pages(monkeypatch, count, invalid, evidence, plan):
+    harness = _fresh(monkeypatch, count, plan)
     original = quality._design_context
     for index in invalid:
         harness.pages[index][0]["quality"]["passed"] = False
@@ -171,8 +227,10 @@ def test_invalid_mandatory_evidence_only_excludes_its_pages(monkeypatch, count, 
     assert gate["deckFlow"]["reason"] == "mandatory_evidence_invalid"
     assert gate["deckFlow"]["repetitionGroups"][0]["pages"] == valid
     assert {index for scope, indices in calls if scope != "global" for index in indices} == set(valid)
-    if count > 5:
+    if count > harness.plan.get("full_review_page_limit", 5):
         assert calls[-1] == ("global", valid)
+    else:
+        assert calls == [("full", valid)]
     for page in gate["pages"]:
         if page["index"] in invalid:
             assert page["reason"] == "mandatory_evidence_invalid"
@@ -311,7 +369,9 @@ def test_v3_plan_and_completed_gate_replay_unchanged(monkeypatch):
 
 @pytest.mark.parametrize("fresh", [False, True])
 def test_continuation_uses_admitted_retry_physical_ordinal(fresh):
-    plan = (profiles.seal_new_quality_recovery_plan(SimpleNamespace(), 7) if fresh
+    # A source-local continuation reuses local groups, so a fresh (v5) plan
+    # needs a deck past its full-review page limit to have a second group.
+    plan = (profiles.seal_new_quality_recovery_plan(SimpleNamespace(), 12) if fresh
             else profiles._read_only_review_plan(7))
     snapshot = dict(authoring_profile=profiles.ART_DIRECTION_PROFILE_V8,
         quality_recovery_policy=profiles.QUALITY_RECOVERY_POLICY_V2, quality_recovery_plan=plan)

@@ -97,11 +97,15 @@
     "config.py: disable host profile and dotenv discovery in isolated conversion",
     "document-canvas.2: invocation-local physical units and bounded source-canvas rounding",
     "text-advance.1: single-line text frames never narrower than the caller's exact font advance",
+    "chart-furniture.16: native chart manual layouts, per-series data labels, gap/overlap/vary-colors options, title bold/alignment; table paragraph spacing, soft breaks and cell padding",
+    "native-fixed-text.1: trusted invocation-local fixed-text adapter on the conversion context",
     "xfrm-bounds.1: axis-aligned xfrm shapes trace the exact off+ext frame their xfrm declares"
   ],
   "patches": {
     "document-canvas-1.patch": "70aa54650ee16995534d5ff7eaff6de7c24782e23970bf5c48b6a7ffcf60ab61",
     "text-advance-1.patch": "c8e7fe0fd5de7693876e4f9c9da40b16f533db88d69d93eba7e18ab5ea18ff3a",
+    "chart-furniture-16.patch": "dcafca281905b59bcc601acbf847c01e6a77d91e24ee3741e3657c0838a8987a",
+    "native-fixed-text-1.patch": "76dd2c860fdb42aec461c650f94a2ae6e41b955cdcc49cfcc761d684ea6b1b0d",
     "xfrm-bounds-1.patch": "71022608ad679891b827bf09036bc7616507b7de1e7b52f425f2e42e67e25eb4"
   }
 }

@@ -25,7 +25,7 @@ export type RasterReviewRecovery = {
   analysisMode?: RasterAnalysisMode;
   svgDesignReferenceSnapshotId?: string;
   commonHeaderDesign?: import("@/lib/common-header-design").CommonHeaderDesign;
-  commonHeaderMode?: "uniform" | "free";
+  commonHeaderMode?: import("@/lib/common-header-design").CommonHeaderMode;
   commonHeaderCoverException?: boolean;
   aspectRatio?: import("../../type").PresentationConfig["aspectRatio"];
   svgCanvas?: import("../../utils/svgCanvasSelection").SvgCanvasSelection;

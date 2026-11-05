@@ -12,6 +12,10 @@ from functools import lru_cache
 
 from models.authored_header_contract import HeaderTitleSpec
 from models.authored_header_metrics import LABEL_LINE_RATIO, round_px
+from services.svg_common_header_space_advance import (
+    face_measured, header_space_measurement, space_deltas_em, space_deviation_em,
+    validate_space_advance_evidence, validate_space_advance_fallback,
+)
 from services.svg_master_furniture import master_furniture
 from services.svg_text_advance import text_advance
 from services.svg_trusted_fonts import bundled_svg_font_family
@@ -20,8 +24,19 @@ from utils.svg_template_fonts import FONT_FAMILY, font_material, measure_font
 
 VERSION = "svg-common-header/v1"
 PAGE_VERSION = "svg-common-header-page/v1"
-MEASUREMENT_VERSION = "svg-common-header-glyph/v2"
-_V1_MEASUREMENT_VERSIONS = (MEASUREMENT_VERSION, "svg-common-header-glyph/v1")
+MEASUREMENT_VERSION = "svg-common-header-glyph/v3"
+_V1_MEASUREMENT_VERSIONS = (MEASUREMENT_VERSION, "svg-common-header-glyph/v2", "svg-common-header-glyph/v1")
+#: Measurements whose space advance was measured on the rendering browser and
+#: sealed in the contract (services.svg_common_header_space_advance).
+MEASURED_SPACE_VERSIONS = (MEASUREMENT_VERSION, "svg-common-header-glyph-paint/v4")
+#: The previous, sealed-constant measurement a new contract takes when this
+#: renderer has no space measurement for its faces. The contract then seals
+#: why under SPACE_FALLBACK_KEY; contracts frozen before carry no such key.
+SPACE_FALLBACK_VERSIONS = {MEASUREMENT_VERSION: "svg-common-header-glyph/v2",
+                           "svg-common-header-glyph-paint/v4": "svg-common-header-glyph-paint/v3"}
+SPACE_FALLBACK_KEY = "space_advance_fallback"
+# Sealed for the frozen svg-common-header-glyph/v2 and -glyph-paint/v3
+# contracts only; it is one renderer's number, never a new contract's.
 CHROMIUM_SPACE_ADVANCE_EM = 9.515625 / 34
 _CHROMIUM_SPACE_ADVANCE_EM_BY_FONT_DIGEST = {
     "sha256:194018e6b2b293a7964f037b25c0249ce1418bc9ab3c971060a03aa57861e252":
@@ -31,6 +46,21 @@ GROUP_ID = "svg-system-common-header"
 TITLE_ID = GROUP_ID + "-title"
 SVG_NS = "http://www.w3.org/2000/svg"
 _MISSING = object()
+#: Sealed into the style snapshot of a request that takes the deterministic
+#: reduced header by choice (``common_header_mode="reduced"`` or the
+#: SVG_COMMON_HEADER_DEFAULT=reduced default, decision D1). It gives the
+#: reduced header a divider and a page-position eyebrow ("02 / 06"), and takes
+#: the first title size of ``title_px`` at which every page title fits in two
+#: lines, one size for the whole deck (such a request has no designed header to
+#: fall back from). The contract stays svg-common-header/v1, whose eyebrow and
+#: divider fields already exist; snapshots without this key keep the plain
+#: reduced header they were frozen with, and frozen contracts are never remeasured.
+REDUCED_HEADER_STYLE_KEY = "reduced_header_style"
+REDUCED_HEADER_STYLE = {"version": "svg-reduced-header-style/v1", "eyebrow": "page-position", "divider": True,
+                        "title_px": [34, 30, 26]}
+#: Small bold text needs body-text contrast, not the 3:1 of the title.
+_EYEBROW_CONTRAST = 4.5
+_DIVIDER_MIX = 0.18
 
 
 def _digest(value: object) -> str:
@@ -143,6 +173,44 @@ def _contrast(first, second):
     return (high + .05) / (low + .05)
 
 
+def _hex_token(value):
+    return value.upper() if isinstance(value, str) and re.fullmatch(r"#[0-9A-Fa-f]{6}", value) else None
+
+
+def _mix(first, second, ratio):
+    channels = [round(int(first[i:i + 2], 16) * (1 - ratio) + int(second[i:i + 2], 16) * ratio)
+                for i in (1, 3, 5)]
+    return "#" + "".join(f"{value:02X}" for value in channels)
+
+
+def _reduced_style_options(snapshot, tokens):
+    """Eyebrow and divider options a sealed reduced header style adds, or ``{}``."""
+    style = snapshot.get(REDUCED_HEADER_STYLE_KEY)
+    if style is None:
+        return {}
+    if style != REDUCED_HEADER_STYLE:
+        raise ValueError("svg_common_header_contract_invalid")
+    background = _hex_token(tokens.get("background")) or "#FFFFFF"
+    foreground = _hex_token(tokens.get("foreground")) or "#0F172A"
+    # The title colour prepare_common_header resolves for a style without options.
+    if _contrast(foreground, background) < 3:
+        foreground = max(("#0F172A", "#FFFFFF"), key=lambda candidate: _contrast(candidate, background))
+    accent = _hex_token(tokens.get("primary"))
+    if accent is None or _contrast(accent, background) < _EYEBROW_CONTRAST:
+        accent = foreground if _contrast(foreground, background) >= _EYEBROW_CONTRAST else max(
+            ("#0F172A", "#FFFFFF"), key=lambda candidate: _contrast(candidate, background))
+    options = {"divider": {"enabled": True, "color": _mix(background, foreground, _DIVIDER_MIX)}}
+    # A company master that draws its own page number keeps the only one.
+    if not any(item.get("kind") == "pageNumber" and item.get("visibility") != "hidden"
+               for item in master_furniture(snapshot).get("elements", [])):
+        options["eyebrow"] = {"enabled": True, "font_size_px": 14, "gap_px": 8, "color": accent}
+    return options
+
+
+def _page_position(index, count):
+    return f"{index + 1:02d} / {count:02d}"
+
+
 def _font(family, weight, size):
     if family == "Pretendard":
         from services.svg_renderer import _trusted_font_materials
@@ -158,7 +226,7 @@ def _font(family, weight, size):
 def _chromium_space_advance(font, measurement_version):
     if measurement_version in ("svg-common-header-glyph/v1", "svg-common-header-glyph-paint/v2"):
         return None
-    if measurement_version not in (MEASUREMENT_VERSION, "svg-common-header-glyph-paint/v3"):
+    if measurement_version not in ("svg-common-header-glyph/v2", "svg-common-header-glyph-paint/v3"):
         raise ValueError("svg_common_header_digest_mismatch")
     try:
         return _CHROMIUM_SPACE_ADVANCE_EM_BY_FONT_DIGEST[font["digest"]]
@@ -166,7 +234,73 @@ def _chromium_space_advance(font, measurement_version):
         raise ValueError("svg_common_header_font_material_invalid") from None
 
 
-def _advance(text, font, measurement_version="svg-common-header-glyph/v1"):
+def _space_measurement(measured_version, fonts):
+    """``(measurement_version, provenance, space_advance)`` for a new contract drawing ``fonts``.
+
+    A renderer that measured every face seals that measurement under
+    ``measured_version``. Otherwise the contract takes the previous
+    sealed-constant version and seals the fallback reason instead, never an
+    unverified measurement.
+    """
+    evidence, fallback = header_space_measurement(fonts)
+    if evidence is not None:
+        return measured_version, {"space_advance": evidence}, evidence
+    return SPACE_FALLBACK_VERSIONS[measured_version], {SPACE_FALLBACK_KEY: fallback}, None
+
+
+def validated_space_advance(contract, fonts):
+    """The sealed space measurement of ``contract``, or None for a constant-measured one."""
+    version = contract["measurement_version"]
+    if version in MEASURED_SPACE_VERSIONS:
+        if SPACE_FALLBACK_KEY in contract:
+            raise ValueError("svg_common_header_digest_mismatch")
+        validate_space_advance_evidence(contract.get("space_advance"), fonts)
+        return contract["space_advance"]
+    if "space_advance" in contract:
+        raise ValueError("svg_common_header_digest_mismatch")
+    if SPACE_FALLBACK_KEY in contract:
+        if version not in SPACE_FALLBACK_VERSIONS.values():
+            raise ValueError("svg_common_header_digest_mismatch")
+        validate_space_advance_fallback(contract[SPACE_FALLBACK_KEY])
+    return None
+
+
+def _reduced_header_family(heading_font):
+    """The style's heading family when this renderer measured its header faces.
+
+    The space advance is measured on the rendering browser
+    (services.svg_common_header_space_advance), which does not follow the
+    font's own advance on every platform. A heading face the renderer has no
+    measurement for takes Noto Sans KR, as the v2 design fields do
+    (svg_common_header_design_calls.candidate_schema). Without any measurement
+    this is the sealed-constant path's choice too: only Noto Sans KR has a
+    sealed constant (_CHROMIUM_SPACE_ADVANCE_EM_BY_FONT_DIGEST).
+    """
+    family = bundled_svg_font_family(heading_font)
+    if family == FONT_FAMILY:
+        return family
+    # Title and eyebrow are drawn at 700, the subline at 400.
+    if all(face_measured(family, weight) for weight in (400, 700)):
+        return family
+    return FONT_FAMILY
+
+
+def _rendered_text(text):
+    """The characters SVG text draws by default: outer spaces dropped, runs collapsed."""
+    return re.sub(" +", " ", text.strip(" "))
+
+
+def _measured_advance(text, font, deltas):
+    rendered = _rendered_text(text)
+    width = text_advance(rendered, font["size_px"], str(font["weight"]), font["family"])
+    if width is None:
+        raise ValueError("svg_common_header_font_glyph_unavailable")
+    return width + space_deviation_em(rendered, deltas) * font["size_px"]
+
+
+def _advance(text, font, measurement_version="svg-common-header-glyph/v1", space_advance=None):
+    if measurement_version in MEASURED_SPACE_VERSIONS:
+        return _measured_advance(text, font, space_deltas_em(font, space_advance))
     space_advance = _chromium_space_advance(font, measurement_version)
     measured_text = text.replace(" ", "") if space_advance is not None else text
     width = text_advance(measured_text, font["size_px"], str(font["weight"]), font["family"])
@@ -177,7 +311,7 @@ def _advance(text, font, measurement_version="svg-common-header-glyph/v1"):
     return width
 
 
-def _wrap(title, font, width, max_lines=2, measurement_version="svg-common-header-glyph/v1"):
+def _wrap(title, font, width, max_lines=2, measurement_version="svg-common-header-glyph/v1", space_advance=None):
     """Prefer whitespace boundaries; retain every character and explicit break."""
     if not isinstance(title, str) or not title.strip():
         raise ValueError("svg_common_header_title_missing")
@@ -187,12 +321,12 @@ def _wrap(title, font, width, max_lines=2, measurement_version="svg-common-heade
             raise ValueError("svg_common_header_title_invalid")
         remaining = paragraph
         while remaining:
-            if _advance(remaining, font, measurement_version) <= width:
+            if _advance(remaining, font, measurement_version, space_advance) <= width:
                 lines.append(remaining)
                 break
             fit = 0
             for end in range(1, len(remaining) + 1):
-                if _advance(remaining[:end], font, measurement_version) > width:
+                if _advance(remaining[:end], font, measurement_version, space_advance) > width:
                     break
                 fit = end
             if not fit:
@@ -212,11 +346,13 @@ def _wrap(title, font, width, max_lines=2, measurement_version="svg-common-heade
 
 @lru_cache(maxsize=4096)
 def _measured_lines(lines, family, weight, size, box_values, baseline, line_height, alignment,
-                    measurement_version="svg-common-header-glyph/v1"):
+                    measurement_version="svg-common-header-glyph/v1", space_deltas=None):
     font = _font(family, weight, size)
     box = dict(zip(("x", "y", "width", "height"), box_values, strict=False))
     face = measure_font(family, weight, 1000)
     scale = size / 1000
+    if measurement_version in MEASURED_SPACE_VERSIONS:
+        return _measured_space_lines(lines, font, face, scale, box, baseline, line_height, alignment, space_deltas)
     space_advance = _chromium_space_advance(font, measurement_version)
     widths, boxes = [], []
     for index, text in enumerate(lines):
@@ -247,15 +383,38 @@ def _measured_lines(lines, family, weight, size, box_values, baseline, line_heig
     return tuple(widths), tuple(boxes)
 
 
+def _measured_space_lines(lines, font, face, scale, box, baseline, line_height, alignment, deltas):
+    """Line widths and ink boxes as the browser draws them, with its measured space."""
+    widths, boxes = [], []
+    for index, text in enumerate(lines):
+        rendered = _rendered_text(text)
+        width = _measured_advance(rendered, font, deltas)
+        x = box["x"] + {"left": 0, "center": (box["width"] - width) / 2, "right": box["width"] - width}[alignment]
+        y = box["y"] + baseline + index * line_height
+        left, top, right, bottom = face.getbbox(rendered, anchor="ls")
+        glyph = {"x": x + left * scale, "y": y + top * scale,
+                 "width": (right - left) * scale + space_deviation_em(rendered, deltas) * font["size_px"],
+                 "height": (bottom - top) * scale}
+        if (glyph["x"] < box["x"] - .5 or glyph["y"] < box["y"] - .5
+                or glyph["x"] + glyph["width"] > box["x"] + box["width"] + .5
+                or glyph["y"] + glyph["height"] > box["y"] + box["height"] + .5):
+            raise ValueError("svg_common_header_title_overflow")
+        widths.append(width)
+        boxes.append(tuple(glyph[key] for key in ("x", "y", "width", "height")))
+    return tuple(widths), tuple(boxes)
+
+
 def _line_evidence(lines, font, box, baseline, line_height, alignment,
-                   measurement_version="svg-common-header-glyph/v1"):
+                   measurement_version="svg-common-header-glyph/v1", space_advance=None):
+    deltas = space_deltas_em(font, space_advance) if measurement_version in MEASURED_SPACE_VERSIONS else None
     widths, boxes = _measured_lines(tuple(lines), font["family"], font["weight"], font["size_px"],
         tuple(box[key] for key in ("x", "y", "width", "height")), baseline, line_height, alignment,
-        measurement_version)
+        measurement_version, deltas)
     return list(widths), [dict(zip(("x", "y", "width", "height"), values, strict=False)) for values in boxes]
 
 
-def prepare_common_header(snapshot: dict, outline, canvas, *, mode="uniform", cover_exception=False):
+def prepare_common_header(snapshot: dict, outline, canvas, *, mode="uniform", cover_exception=False,
+                          _reduced_title_px=None):
     """Return style and title bindings without mutating snapshot or outline.
 
     Callers atomically store the first value in snapshot.common_header and each
@@ -283,9 +442,23 @@ def prepare_common_header(snapshot: dict, outline, canvas, *, mode="uniform", co
     if not isinstance(options, dict):
         raise ValueError("svg_common_header_contract_invalid")
     tokens = snapshot.get("tokens", {})
+    styled = _reduced_style_options(snapshot, tokens) if not options else {}
+    if styled and _reduced_title_px is None:
+        *larger, smallest = REDUCED_HEADER_STYLE["title_px"]
+        for size in larger:
+            try:
+                return prepare_common_header(snapshot, outline, canvas, mode=mode,
+                                             cover_exception=cover_exception, _reduced_title_px=size)
+            except ValueError as error:
+                if str(error) != "svg_common_header_title_overflow":
+                    raise
+        _reduced_title_px = smallest
+    if styled:
+        styled = {**styled, "font_size_px": _reduced_title_px}
+    options = options or styled
     width, height = geometry["width"], geometry["height"]
     spec = HeaderTitleSpec()
-    family = options.get("font_family", bundled_svg_font_family(tokens.get("heading_font")))
+    family = options.get("font_family", _reduced_header_family(tokens.get("heading_font")))
     size = _number(options, "font_size_px", spec.font_size_px, minimum=20)
     font = _font(family, options.get("font_weight", spec.weight if family == FONT_FAMILY else 700), size)
     line_height = _number(options, "line_height_px", round_px(size * spec.line_height), minimum=size)
@@ -318,7 +491,14 @@ def prepare_common_header(snapshot: dict, outline, canvas, *, mode="uniform", co
         raise ValueError("svg_common_header_alignment_invalid")
     titles = [_value(slide, "title") for slide in slides]
     applied = [not (cover_exception and index == 0) for index in range(len(slides))]
-    page_lines = [_wrap(title, font, title_width, measurement_version=MEASUREMENT_VERSION) if applies else []
+    # Every face this header draws: the title, and the eyebrow (700) and
+    # subline (400) of the same family when enabled. The measurement digest
+    # does not depend on the size.
+    faces = [font] + [_font(family, weight, 1) for name, weight in (("eyebrow", 700), ("subline", 400))
+                      if isinstance(options.get(name, {}), dict) and options.get(name, {}).get("enabled", False)]
+    measurement_version, space_provenance, space_advance = _space_measurement(MEASUREMENT_VERSION, faces)
+    page_lines = [_wrap(title, font, title_width, measurement_version=measurement_version,
+                        space_advance=space_advance) if applies else []
                   for title, applies in zip(titles, applied, strict=False)]
     slots = max((len(lines) for lines in page_lines), default=1) or 1
     optional = {}
@@ -375,7 +555,7 @@ def prepare_common_header(snapshot: dict, outline, canvas, *, mode="uniform", co
             raise ValueError("svg_common_header_contrast_invalid")
         color = max(("#0F172A", "#FFFFFF"), key=lambda candidate: _contrast(candidate, background))
     contract = {"version": VERSION, "origin": "generated-common-header", "canvas": geometry,
-                "measurement_version": MEASUREMENT_VERSION, "font": font,
+                "measurement_version": measurement_version, **space_provenance, "font": font,
                 "color": color, "background": background,
                 "alignment": alignment, "title_box": title_box, "line_height_px": line_height,
                 "baseline_offset_px": baseline, "title_slot_lines": slots,
@@ -389,7 +569,7 @@ def prepare_common_header(snapshot: dict, outline, canvas, *, mode="uniform", co
         if not isinstance(title, str) or not title.strip():
             raise ValueError("svg_common_header_title_missing")
         widths, boxes = _line_evidence(lines, font, title_box, baseline, line_height, alignment,
-                                       MEASUREMENT_VERSION)
+                                       measurement_version, space_advance)
         binding = {"version": PAGE_VERSION, "header_digest": contract["digest"],
                    "page_index": index, "applied": applies, "title": title, "lines": lines,
                    "title_digest": _digest(title), "content_digest": common_header_source_digest(_value(slide, "content", "")),
@@ -399,10 +579,11 @@ def prepare_common_header(snapshot: dict, outline, canvas, *, mode="uniform", co
             binding["title_source_digest"] = _value(slide, "title_source_digest")
         for name in ("eyebrow", "subline"):
             if contract[name]["enabled"]:
-                text = _value(slide, name, "") or ""
+                text = (_page_position(index, len(slides)) if name in styled
+                        else _value(slide, name, "") or "")
                 part = contract[name]
                 if (not isinstance(text, str) or "\n" in text
-                        or _advance(text, part["font"], MEASUREMENT_VERSION) > part["box"]["width"]):
+                        or _advance(text, part["font"], measurement_version, space_advance) > part["box"]["width"]):
                     raise ValueError("svg_common_header_label_overflow")
                 binding[name] = text
         binding["digest"] = _digest(binding)
@@ -453,9 +634,12 @@ def validate_common_header_binding(contract: dict | None, page_binding: dict | N
     font = contract["font"]
     if _font(font["family"], font["weight"], font["size_px"]) != font:
         raise ValueError("svg_common_header_font_identity_invalid")
+    space_advance = validated_space_advance(contract, [font] + [
+        contract[name]["font"] for name in ("eyebrow", "subline")
+        if isinstance(contract[name], dict) and contract[name].get("enabled")])
     widths, boxes = _line_evidence(lines, font, contract["title_box"], contract["baseline_offset_px"],
                                    contract["line_height_px"], contract["alignment"],
-                                   contract["measurement_version"])
+                                   contract["measurement_version"], space_advance)
     if page_binding.get("line_widths") != widths or page_binding.get("glyph_boxes") != boxes:
         raise ValueError("svg_common_header_measurement_mismatch")
 

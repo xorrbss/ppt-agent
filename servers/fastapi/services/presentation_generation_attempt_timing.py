@@ -196,6 +196,9 @@ def _public_executed_stages(
         "render": "chromiumReview",
         "quality": "chromiumReview",
         "publication": "publication",
+        "header_design": "headerDesign",
+        "header_representative": "headerRepresentative",
+        "header_selection": "headerSelection",
     }
     executed = {
         mapping[name]

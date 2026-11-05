@@ -23,7 +23,7 @@ from sqlalchemy import select
 from models.sql.authored_slide_checkpoint import AuthoredSlideCheckpoint
 from services.authored_checkpoint_errors import AuthoredStageError
 from services.svg_presentation_legacy_assets import _legacy_source_image_manifest
-from services.svg_common_header_design_plan import uses_header_design
+from services.svg_common_header_design_plan import design_input_without_asset_manifest, uses_header_design
 
 
 def _restore_pinned_source_image_plan(manifest, candidates, planned):
@@ -87,6 +87,27 @@ class GenerationContext:
     partial_recovery_manifest: dict | None = None
     header_pages: list | None = None
     provider_permits: object = None
+    overload_cooldown: object = None
+    # The asset offer and the source manifest built from it, when they run
+    # beside the header design call (see ``settle_assets``).
+    pending_assets: object = None
+    # Source images planned per page before the offer added its own slots.
+    source_asset_counts: list | None = None
+
+    async def settle_assets(self):
+        """Wait for the deferred asset offer and take its result into this context.
+
+        Call before anything reads ``manifests``, ``planned``, ``asset_offer`` or
+        the source manifest fields. A context without a deferred offer returns
+        at once, and the offer's own failure surfaces here exactly as it did
+        when it ran before the context was returned.
+        """
+        pending = self.pending_assets
+        if pending is None:
+            return
+        for name, value in (await pending).items():
+            setattr(self, name, value)
+        self.pending_assets = None
 
 
 def _preflight_svg_input_values(*, canvas, physical_kwargs, snapshot, source_document, source_units,
@@ -599,6 +620,12 @@ async def _prepare_generation(request, presentation_id, outline, session, job) -
     canvas = request_canvas_contract(request)
     physical_kwargs = ({"physical_canvas": request._document_canvas}
                        if getattr(request, "_document_canvas", None) is not None else {})
+    if getattr(request, "common_header_mode", None) not in {"free", "page_free"}:
+        from services.svg_common_header_space_advance import ensure_space_advance_measurement
+
+        # Header preparation below, and prepare_document_header after it, measure
+        # titles synchronously against this renderer's measured space advance.
+        await ensure_space_advance_measurement()
     snapshot = await _pin_owned_svg_style(
         request, job, pin_style=pin_svg_style, session_maker=async_session_maker, owned_job=owned_job,
         outline=outline, canvas=canvas,
@@ -737,78 +764,106 @@ async def _prepare_generation(request, presentation_id, outline, session, job) -
             trusted_plan=getattr(request, "_svg_stage_plan", None),
         quality_policy=read_quality_recovery_policy(snapshot),
     )
-    asset_offer = None
-    if not source_reflow and not raster_reconstruction:
-        asset_offer = await _offer_assets(request, presentation_id, outline, roles, job, planned,
-            manifests, canonical_assets=canonical_assets, style_snapshot=snapshot,
-            **({"source_assets_present": bool(candidates)} if use_content_group_assignment else {}))
-    source_manifest = source_pointer = asset_context = asset_revision = None
-    service = None
-    if canonical_assets:
-        from services.artifact_store import configured_public_artifact_service
-        from services.svg_generation_assets import publication_context, prepare_source_manifest
-        service = configured_public_artifact_service()
-        seed = await _checkpoint(job, 0) or {}
-        if partial_recovery_manifest:
-            original_pointer = partial_recovery_manifest["source_asset_binding"]["pointer"]
-            if seed.get("source_manifest_ref") not in (None, original_pointer):
-                raise ValueError("svg_partial_recovery_asset_binding_changed")
-            seed["source_manifest_ref"] = original_pointer
-        if use_content_group_assignment:
-            seed["source_image_assignment"] = {
-                "version": "source-image-assignment/v1", "groups": source_image_assignment,
-                "registration": [
-                    {
-                        **{key: item[key] for key in (
-                            "code", "status", "coverage", "digest", "asset_count", "occurrence_count",
-                            "block_index",
-                        ) if key in item},
-                        **({"diagnostics": [{"code": value["code"]}
-                            for value in item["diagnostics"]
-                            if isinstance(value, dict) and isinstance(value.get("code"), str)]}
-                           if isinstance(item.get("diagnostics"), list) else {}),
-                    }
-                    for item in source_image_registration if isinstance(item, dict)
-                ],
-            }
-        if source_reflow:
-            if seed.get("source_font_profile", source_font_profile) != source_font_profile:
-                raise ValueError("svg_source_font_binding_mismatch")
-            seed["source_font_profile"] = source_font_profile
-        async with async_session_maker() as asset_session:
-            asset_context, asset_revision = await publication_context(asset_session, job)
-            if seed.get("source_manifest_ref") is not None:
-                from services.svg_asset_persistence import load_source_manifest_pointer
+    source_asset_counts = [len(offered) for offered in planned]
 
-                pinned_manifest = await load_source_manifest_pointer(
-                    asset_session, service, pointer=seed["source_manifest_ref"],
-                    owner_id=asset_context.owner_id, tenant_id=asset_context.tenant_id)
-                planned = _restore_pinned_source_image_plan(pinned_manifest, candidates, planned)
-            source_manifest, source_pointer = await prepare_source_manifest(asset_session, service,
-                context=asset_context, revision=asset_revision, presentation_id=presentation_id,
-                planned=planned, saved_pointer=seed.get("source_manifest_ref"),
-                source_preservation_required=source_preservation_required,
-                inherited_operation_id=(job.workspace_operation_id if job is not None
-                        and ((getattr(job, "request_payload", None) or {}).get("_svg_recovery_lineage")
-                             or partial_recovery_manifest) else None),
-                )
-            if not partial_recovery_manifest:
-                await _preflight_required_source_assets(asset_session, service, source_manifest, asset_context)
-            await asset_session.commit()
-        seed["source_manifest_ref"] = source_pointer
-        await _checkpoint(job, 0, payload=seed)
-        manifests = [{slot.slot_id: slot.model_dump(mode="json", by_alias=True)
-                      for slot in source_manifest.slots if slot.slot_id in offered} for offered in planned]
+    async def finish_assets():
+        """The asset offer and the durable source manifest built from it.
+
+        Returns the context fields it settles. The offer is the only provider
+        work here, so a design that does not read the manifests runs beside it.
+        """
+        nonlocal planned, manifests
+        asset_offer = None
+        if not source_reflow and not raster_reconstruction:
+            asset_offer = await _offer_assets(request, presentation_id, outline, roles, job, planned,
+                manifests, canonical_assets=canonical_assets, style_snapshot=snapshot,
+                **({"source_assets_present": bool(candidates)} if use_content_group_assignment else {}))
+        source_manifest = source_pointer = asset_context = asset_revision = None
+        service = None
+        if canonical_assets:
+            from services.artifact_store import configured_public_artifact_service
+            from services.svg_generation_assets import publication_context, prepare_source_manifest
+            service = configured_public_artifact_service()
+            seed = await _checkpoint(job, 0) or {}
+            if partial_recovery_manifest:
+                original_pointer = partial_recovery_manifest["source_asset_binding"]["pointer"]
+                if seed.get("source_manifest_ref") not in (None, original_pointer):
+                    raise ValueError("svg_partial_recovery_asset_binding_changed")
+                seed["source_manifest_ref"] = original_pointer
+            if use_content_group_assignment:
+                seed["source_image_assignment"] = {
+                    "version": "source-image-assignment/v1", "groups": source_image_assignment,
+                    "registration": [
+                        {
+                            **{key: item[key] for key in (
+                                "code", "status", "coverage", "digest", "asset_count", "occurrence_count",
+                                "block_index",
+                            ) if key in item},
+                            **({"diagnostics": [{"code": value["code"]}
+                                for value in item["diagnostics"]
+                                if isinstance(value, dict) and isinstance(value.get("code"), str)]}
+                               if isinstance(item.get("diagnostics"), list) else {}),
+                        }
+                        for item in source_image_registration if isinstance(item, dict)
+                    ],
+                }
+            if source_reflow:
+                if seed.get("source_font_profile", source_font_profile) != source_font_profile:
+                    raise ValueError("svg_source_font_binding_mismatch")
+                seed["source_font_profile"] = source_font_profile
+            async with async_session_maker() as asset_session:
+                asset_context, asset_revision = await publication_context(asset_session, job)
+                if seed.get("source_manifest_ref") is not None:
+                    from services.svg_asset_persistence import load_source_manifest_pointer
+
+                    pinned_manifest = await load_source_manifest_pointer(
+                        asset_session, service, pointer=seed["source_manifest_ref"],
+                        owner_id=asset_context.owner_id, tenant_id=asset_context.tenant_id)
+                    planned = _restore_pinned_source_image_plan(pinned_manifest, candidates, planned)
+                source_manifest, source_pointer = await prepare_source_manifest(asset_session, service,
+                    context=asset_context, revision=asset_revision, presentation_id=presentation_id,
+                    planned=planned, saved_pointer=seed.get("source_manifest_ref"),
+                    source_preservation_required=source_preservation_required,
+                    inherited_operation_id=(job.workspace_operation_id if job is not None
+                            and ((getattr(job, "request_payload", None) or {}).get("_svg_recovery_lineage")
+                                 or partial_recovery_manifest) else None),
+                    )
+                if not partial_recovery_manifest:
+                    await _preflight_required_source_assets(asset_session, service, source_manifest, asset_context)
+                await asset_session.commit()
+            seed["source_manifest_ref"] = source_pointer
+            await _checkpoint(job, 0, payload=seed)
+            manifests = [{slot.slot_id: slot.model_dump(mode="json", by_alias=True)
+                          for slot in source_manifest.slots if slot.slot_id in offered} for offered in planned]
+        return dict(asset_offer=asset_offer, source_manifest=source_manifest, source_pointer=source_pointer,
+                    asset_context=asset_context, asset_revision=asset_revision, service=service,
+                    manifests=manifests, planned=planned)
+
+    pending_assets = None
+    plan = snapshot.get("common_header_design_plan")
+    if uses_header_design(plan) and design_input_without_asset_manifest(plan):
+        pending_assets = asyncio.ensure_future(finish_assets())
+        settled = dict(asset_offer=None, source_manifest=None, source_pointer=None, asset_context=None,
+                       asset_revision=None, service=None, manifests=manifests, planned=planned)
+    else:
+        settled = await finish_assets()
     # Provider/render workers share the job-level gate with HTML; each page owns
     # separate transactions so concurrent calls never share an AsyncSession.
-    runtime_profile, runtime_profile_provenance, recovery_cached_first = await _pin_runtime_profile(
-        session, job, source_reflow=source_reflow, raster_reconstruction=raster_reconstruction,
-    )
+    try:
+        runtime_profile, runtime_profile_provenance, recovery_cached_first = await _pin_runtime_profile(
+            session, job, source_reflow=source_reflow, raster_reconstruction=raster_reconstruction,
+        )
+    except BaseException:
+        if pending_assets is not None:
+            # The offer is paid and checkpointed: let it finish so a retry resumes it.
+            await asyncio.gather(pending_assets, return_exceptions=True)
+        raise
     # A fresh attempt pipelines its pages: up to author + render pages are in
     # flight, author attempts take a provider permit (capacity = the configured
     # author concurrency) and renders keep their own gate, so a page renders
     # while another authors. A timeout repurchase pins a cached-first serial
     # profile and keeps the single page gate exactly as before.
+    from services.generation_core.runtime.deck_cooldown import DeckCooldown
     from services.generation_core.runtime.profile import ProviderPermits
     pipelined = recovery_cached_first is None
     semaphore = asyncio.Semaphore(runtime_profile.author_concurrency
@@ -820,13 +875,16 @@ async def _prepare_generation(request, presentation_id, outline, session, job) -
         raster_analysis=raster_analysis, raster_pin=raster_pin, source_document=source_document,
         source_units=source_units, canonical_assets=canonical_assets, canvas=canvas,
         physical_kwargs=physical_kwargs, snapshot=snapshot, source_font_profile=source_font_profile,
-        count=count, roles=roles, manifests=manifests, planned=planned, source_manifest=source_manifest,
-        source_pointer=source_pointer, asset_context=asset_context, asset_revision=asset_revision,
-        service=service, semaphore=semaphore, render_semaphore=render_semaphore,
+        count=count, roles=roles, manifests=settled["manifests"], planned=settled["planned"],
+        source_manifest=settled["source_manifest"], source_pointer=settled["source_pointer"],
+        asset_context=settled["asset_context"], asset_revision=settled["asset_revision"],
+        service=settled["service"], semaphore=semaphore, render_semaphore=render_semaphore,
         runtime_profile=runtime_profile, provider_permits=provider_permits,
+        overload_cooldown=DeckCooldown(),
         runtime_profile_provenance=runtime_profile_provenance,
         recovery_cached_first=recovery_cached_first,
-        asset_offer=asset_offer,
+        asset_offer=settled["asset_offer"],
+        pending_assets=pending_assets, source_asset_counts=source_asset_counts,
         visual_intents=visual_intents,
         quality_recovery_source_evidence=getattr(request, "_svg_recovery_source_evidence", None),
         partial_recovery_manifest=partial_recovery_manifest,

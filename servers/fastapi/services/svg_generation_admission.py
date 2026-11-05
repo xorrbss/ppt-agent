@@ -27,16 +27,28 @@ def source_svg_capability(*, strategy: str | None, source_content: bool | None,
 
 
 def pin_fresh_common_header_mode(request: object) -> None:
-    """Pin fresh DTOs only; carriers and frozen worker restores keep absence."""
+    """Pin fresh DTOs only; carriers and frozen worker restores keep absence.
+
+    Under ``SVG_COMMON_HEADER_DEFAULT=reduced`` a fresh prompt-only request
+    that names no mode takes the deterministic reduced header ("uniform"
+    without a design plan), and a fresh "uniform" request whose caller did not
+    set the cover exception leaves the cover without the header.
+    """
     if ("common_header_mode" not in getattr(type(request), "model_fields", {})
-            or getattr(request, "common_header_mode", None) is not None
             or getattr(request, "_svg_style_snapshot", None) is not None
             or getattr(request, "_svg_authoring_profile_selected", False)):
         return
-    from services.svg_common_header_design_plan import fresh_header_mode
-    request.common_header_mode = ("free" if getattr(request, "svg_template_mode", None) == "template-redesign"
-                                  else fresh_header_mode(request))
-    request._common_header_defaulted = True
+    from services.svg_common_header_design_plan import fresh_header_mode, reduced_header_by_default
+    if getattr(request, "common_header_mode", None) is None:
+        request.common_header_mode = ("free" if getattr(request, "svg_template_mode", None) == "template-redesign"
+                                      else fresh_header_mode(request))
+        request._common_header_defaulted = True
+        if request.common_header_mode == "uniform" and reduced_header_by_default(request):
+            request._common_header_reduced = True
+    if (request.common_header_mode == "uniform" and reduced_header_by_default(request, explicit_mode=True)
+            and "common_header_cover_exception" not in request.model_fields_set):
+        request.common_header_cover_exception = True
+        request._common_header_cover_defaulted = True
 
 
 def _common_header_preservation_conflict(request: object) -> bool:
@@ -186,6 +198,12 @@ async def prepare_private_svg_recovery_authority(request: object, session) -> li
     from services.svg_authoring_profile import request_quality_recovery_policy, read_quality_recovery_policy
     from services.svg_recovery_source_evidence import verified_recovery_source_evidence
 
+    if getattr(request, "common_header_mode", None) not in {"free", "page_free"}:
+        # Every svg admission awaits this step before pin_svg_style, whose
+        # header preflight measures titles synchronously.
+        from services.svg_common_header_space_advance import ensure_space_advance_measurement
+
+        await ensure_space_advance_measurement()
     request._svg_recovery_source_evidence = []
     frozen = getattr(request, "_svg_style_snapshot", None)
     policy = read_quality_recovery_policy(frozen) if frozen is not None else request_quality_recovery_policy(request)
@@ -291,6 +309,14 @@ def pin_svg_style(request: object) -> dict:
                 )
                 from services.svg_common_header_design_plan import preflight_admitted_header
                 preflight_admitted_header(frozen, request, canvas)
+            elif (getattr(request, "_common_header_reduced", False)
+                    and getattr(request, "common_header_mode", None) == "uniform"):
+                from copy import deepcopy
+                from services.svg_common_header import REDUCED_HEADER_STYLE, REDUCED_HEADER_STYLE_KEY
+                frozen[REDUCED_HEADER_STYLE_KEY] = deepcopy(REDUCED_HEADER_STYLE)
+                frozen["digest"] = canonical_json_digest(
+                    {key: value for key, value in frozen.items() if key != "digest"}, allow_nan=True,
+                )
             if fresh_readability:
                 from services.authored_canvas import request_canvas_metadata
                 from services.document_canvas_generation import svg_readability_policy
@@ -299,6 +325,11 @@ def pin_svg_style(request: object) -> dict:
                     request_canvas_metadata(request), source_restyle=source_restyle,
                     instructions=getattr(request, "instructions", None),
                 )
+                # Native chart/table requirement revision, pinned once so a resumed deck keeps the
+                # literal grammar (and outline-time prose chart lines) it was authored with.
+                from services.generation_core.drivers.svg.native_requirements import (
+                    ADMITTED_REQUIREMENTS_REVISION, SNAPSHOT_REVISION_KEY)
+                frozen[SNAPSHOT_REVISION_KEY] = ADMITTED_REQUIREMENTS_REVISION
                 if getattr(request, "source_mode", None) == "source_content_restyle":
                     frozen["source_authoring_contract"] = {"version": "svg-source-whole-page/v1"}
                     from services.svg_source_charts import admitted_source_chart_contract

@@ -33,6 +33,7 @@ from services.authored_composition_policy import (
     SlideCapacity,
     aggregate_owner_capacity_violations,
 )
+from tests.support.environment_requirements import skip_unless_one_shot_headless_render
 from utils import slide_capture
 from utils.authored_style_exemplars import exemplar_block
 from utils.slide_capture_result import RenderCapture
@@ -2765,6 +2766,7 @@ def test_vision_qa_exact_same_role_slides_keep_distinct_per_slide_sources(
 def test_authored_service_resolves_passes_and_persists_canonical_style(
     monkeypatch, tmp_path
 ):
+    skip_unless_one_shot_headless_render()
     selected_style = SimpleNamespace(id="editorial", brief="- Editorial")
     captured = {}
 
@@ -2879,6 +2881,7 @@ def test_a_design_replay_is_authored_rather_than_dumped_verbatim(
     The previous deterministic replay echoed the source markdown into a generic
     frame, so a retemplated deck lost its design and showed raw '##' headings.
     """
+    skip_unless_one_shot_headless_render()
     selected_style = SimpleNamespace(id="editorial", brief="- Editorial")
     captured = {}
 
@@ -3235,7 +3238,11 @@ def test_find_chrome_prefers_playwright_headless_shell(monkeypatch, tmp_path):
         ExecutionIdentity, ResourceLimits, SandboxLaunchSpec, SandboxPolicy,
     )
 
-    for name in ("CHROME_PATH", "PUPPETEER_EXECUTABLE_PATH", "CHROMIUM_PATH"):
+    # A host-level PLAYWRIGHT_BROWSERS_PATH (CI images, cloud VMs) would rank its
+    # own, newer headless shell above the one this test provisions.
+    for name in (
+        "CHROME_PATH", "PUPPETEER_EXECUTABLE_PATH", "CHROMIUM_PATH", "PLAYWRIGHT_BROWSERS_PATH",
+    ):
         monkeypatch.delenv(name, raising=False)
     monkeypatch.setenv("LOCALAPPDATA", str(tmp_path))
     shell = (

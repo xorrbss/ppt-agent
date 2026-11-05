@@ -32,18 +32,47 @@ _PROJECTION_ADAPTER_FILES = tuple(
 )
 
 
+_VENDOR_MANIFEST_KEY = "vendor/slide_master/MANIFEST.json"
+
+
 def converter_digest():
+    """The converter identity that export bundles, proofs and identities carry.
+
+    It is the reviewed execution revision's identity (``services/verifier_revisions``)
+    while the running source is a reviewed state of that revision, and the raw
+    ``converter_source_digest()`` otherwise. The vendored bytes are verified first
+    in both cases.
+    """
+    from services.verifier_revisions import CONVERTER_LEDGER
+
+    return CONVERTER_LEDGER.resolve(converter_source_state())
+
+
+def converter_source_digest():
+    """The pre-migration identity: vendor manifest and adapter bytes as they are on disk."""
+    return converter_source_state().raw
+
+
+def converter_source_state():
+    """Verify the vendored files, then digest the vendor manifest and adapter sources."""
+    from services.verifier_revisions import CONVERTER_LEDGER
+
     manifest = json.loads((VENDOR_ROOT / "MANIFEST.json").read_text())
     for name, expected in manifest["files"].items():
         if hashlib.sha256((VENDOR_ROOT / name).read_bytes()).hexdigest() != expected:
             raise ValueError("svg_converter_integrity_failed")
+    root = Path(__file__).resolve().parents[1]
+    sources = {_VENDOR_MANIFEST_KEY: VENDOR_ROOT / "MANIFEST.json",
+               **{path.relative_to(root).as_posix(): path for path in _PROJECTION_ADAPTER_FILES}}
+    return CONVERTER_LEDGER.source_state(sources, converter_identity)
+
+
+def converter_identity(hashes):
+    """Identity formula ``svg-export-adapter-projection/v1`` over ``{source key: SHA-256}``."""
     identity = {
         "schema": "svg-export-adapter-projection/v1",
-        "vendorManifestSha256": hashlib.sha256((VENDOR_ROOT / "MANIFEST.json").read_bytes()).hexdigest(),
-        "adapterSha256": {
-            path.relative_to(Path(__file__).resolve().parents[1]).as_posix(): hashlib.sha256(path.read_bytes()).hexdigest()
-            for path in _PROJECTION_ADAPTER_FILES
-        },
+        "vendorManifestSha256": hashes[_VENDOR_MANIFEST_KEY],
+        "adapterSha256": {key: value for key, value in hashes.items() if key != _VENDOR_MANIFEST_KEY},
     }
     return hashlib.sha256(json.dumps(identity, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
 
@@ -179,8 +208,8 @@ def convert_pptx(paths, target, notes, canvas, *, source_preservation=None,
     if capture is not None:
         from services.svg_contract import source_digest
         from utils.hashing import canonical_json_sha256
-        if readback["nativeObjects"]["fellBack"] != 0:
-            raise ValueError("svg_generic_native_coverage_fallback")
+        # An object that could not be projected stays a drawn shape; its reason is in
+        # the receipt, which nativeObjectsDigest binds into the proof below.
         receipts = [{"source_page_id": f"slide-{index + 1}", "svg_digest": source_digest(source)}
                     for index, source in enumerate(native_coverage_sources)]
         coverage = capture.verify(target, trace_path, native_coverage_sources, receipts)
@@ -199,4 +228,5 @@ def convert_pptx(paths, target, notes, canvas, *, source_preservation=None,
     return readback
 
 
-__all__ = ["CONVERTER_VERSION", "VENDOR_ROOT", "convert_pptx", "converter_digest"]
+__all__ = ["CONVERTER_VERSION", "VENDOR_ROOT", "convert_pptx", "converter_digest", "converter_identity",
+           "converter_source_digest", "converter_source_state"]

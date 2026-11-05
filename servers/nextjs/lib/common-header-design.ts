@@ -5,8 +5,19 @@ export interface CommonHeaderDesign {
   page_values?: Array<{ page_index: number; values: Record<string, string> }>;
 }
 
+/**
+ * "uniform": one model-designed header; "reduced": the deterministic reduced
+ * header (no header model calls); "free": each page designs its own top.
+ */
+export type CommonHeaderMode = "uniform" | "free" | "reduced";
+
+/** Whether this mode draws a common header, and so allows a cover exception. */
+export function hasCommonHeader(mode: CommonHeaderMode | undefined): boolean {
+  return (mode ?? "uniform") !== "free";
+}
+
 export function commonHeaderDesignForConfig(config: {
-  commonHeaderMode?: "uniform" | "free";
+  commonHeaderMode?: CommonHeaderMode;
   commonHeaderDesign?: CommonHeaderDesign;
   svgDesignReferenceSnapshotId?: string;
 }): CommonHeaderDesign | undefined {

@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import asyncio
 from contextlib import asynccontextmanager
+from dataclasses import dataclass
 from datetime import timedelta
 from types import SimpleNamespace
 import uuid
@@ -24,6 +25,15 @@ from utils.datetime_utils import get_current_utc_datetime
 
 DEADLINE_CODE = "public_export_admission_deadline_exhausted"
 OWNER = uuid.uuid4()
+
+
+@dataclass(frozen=True)
+class _StubArtifactRef:
+    """A hashable artifact reference: the export de-duplicates refs with dict keys."""
+
+    kind: str
+    sha256: str
+    sequence: int
 
 
 def _expired_grant() -> PublicExportDeadlineGrant:
@@ -61,6 +71,13 @@ def _session_factory(slides):
         async def execute(self, _statement):
             return _Rows()
 
+        async def scalars(self, _statement):
+            # Authority lookups (design operations, lineage) find nothing.
+            return SimpleNamespace(all=lambda: [])
+
+        async def scalar(self, _statement):
+            return None
+
         async def get(self, _model, _key):
             return SimpleNamespace(request_hash="r" * 64, idempotency_key_hash="i" * 64)
 
@@ -79,10 +96,11 @@ def test_expired_admission_fails_before_asset_preparation(monkeypatch) -> None:
     import services.svg_export_assets as svg_assets
 
     slide = SimpleNamespace(
-        index=0, source_format="svg", svg_content="<svg/>", speaker_note="",
+        owner_id=OWNER, index=0, source_format="svg", svg_content="<svg/>", speaker_note="",
         content={"svgAssetManifest": {"sourceManifest": {}}},
     )
-    presentation = SimpleNamespace(owner_id=OWNER, revision=3, n_slides=1, theme={}, mode="svg")
+    presentation = SimpleNamespace(
+        id=uuid.uuid4(), owner_id=OWNER, revision=3, n_slides=1, theme={}, mode="svg")
     admission = SimpleNamespace(state="active", owner_id=OWNER, tenant_id="tenant")
     claim = _claim()
     terminalized: list[str] = []
@@ -149,7 +167,7 @@ def test_deadline_passing_between_staged_objects_stops_staging(monkeypatch) -> N
     class _Service:
         async def persist_bytes(self, _session, *, kind, **_kwargs):
             persisted.append(kind)
-            return SimpleNamespace(kind=kind, sha256="a" * 64)
+            return _StubArtifactRef(kind=kind, sha256="a" * 64, sequence=len(persisted))
 
         async def stream_ref_to_object_store(self, reference, _cache):
             staged.append(reference.kind)

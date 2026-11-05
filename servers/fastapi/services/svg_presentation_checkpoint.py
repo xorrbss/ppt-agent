@@ -248,32 +248,14 @@ def _provider_attempt_limit(payload: dict, *, index=None, job=None) -> int:
         raise ValueError("svg_timeout_repurchase_attempt_fence_invalid")
     allowed_consumed_counts = {1, 2}
     if manifest.get("bounded_completion_recovery") is True:
-        from services.svg_timeout_repurchase import _bounded_completion_shape
+        # The registered incident's verifier owns its slide-specific allowances.
+        from services.svg_timeout_repurchase_incident import bounded_completion_attempt_limit
 
-        if not _bounded_completion_shape(manifest):
-            raise ValueError("svg_timeout_repurchase_attempt_fence_invalid")
-        if index == 4 and payload.get("completion_cache_only") is True:
-            returned = manifest.get("returned_checkpoints", [])
-            svg = payload.get("svg_content")
-            if (len(returned) != 1 or returned[0].get("slide_index") != 4
-                    or manifest.get("recovery_revision") != payload.get("recovery_revision")
-                    or _digest(manifest) != fence.get("approval_manifest_hash")
-                    or job is None or str(job.id) != manifest.get("job_id")
-                    or str(job.workspace_operation_id) != payload.get("recovery_operation_id")
-                    or fence.get("slide_index") != 4
-                    or returned[0].get("input_digest") != payload.get("input_digest")
-                    or not isinstance(svg, str) or not svg
-                    or sha256_hex(svg.encode("utf-8")) != returned[0].get("source_digest")
-                    or _digest(payload.get("attempts", [])) != returned[0].get("author_digest")
-                    or fence.get("consumed_attempt_count") != 1
-                    or fence.get("previous_ordinal") != 1
-                    or payload.get("inflight") is not None
-                    or returned[0].get("max_additional_author_calls") != 0
-                    or _provider_attempt_count(payload) != 2):
-                raise ValueError("svg_timeout_repurchase_attempt_fence_invalid")
-            return 2
-        if index in {2, 3}:
-            allowed_consumed_counts.add(3)
+        limit, extra_consumed_counts = bounded_completion_attempt_limit(
+            payload, manifest, fence, index=index, job=job)
+        if limit is not None:
+            return limit
+        allowed_consumed_counts |= extra_consumed_counts
     targets = [p for p in manifest.get("unknown_checkpoints", []) if p.get("slide_index") == index]
     if (len(targets) != 1 or manifest.get("recovery_revision") != payload.get("recovery_revision")
             or _digest(manifest) != fence.get("approval_manifest_hash")

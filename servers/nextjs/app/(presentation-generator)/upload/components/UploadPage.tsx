@@ -1,5 +1,6 @@
 "use client";
 import CommonHeaderDesignInput from "./CommonHeaderDesignInput";
+import { hasCommonHeader } from "@/lib/common-header-design";
 
 import { useTranslations as useA2bTranslations } from "next-intl";
 /**
@@ -223,12 +224,13 @@ const UploadPage = ({
           <label htmlFor="raster-common-header-mode">{tA2b("commonHeaderModeLabel")}</label>
           <select id="raster-common-header-mode" value={config.commonHeaderMode ?? "uniform"} onChange={(event) => handleConfigChange("commonHeaderMode", event.target.value)} className="rounded border border-slate-200 bg-white px-2 py-1.5">
             <option value="uniform">{tA2b("commonHeaderModeUniform")}</option>
+            <option value="reduced">{tA2b("commonHeaderModeReduced")}</option>
             <option value="free">{tA2b("commonHeaderModeFree")}</option>
           </select>
-          {(config.commonHeaderMode ?? "uniform") === "uniform" ? <label className="flex items-center gap-1.5"><input type="checkbox" checked={config.commonHeaderCoverException ?? false} onChange={(event) => handleConfigChange("commonHeaderCoverException", event.target.checked)} />{tA2b("commonHeaderCoverException")}</label> : null}
+          {hasCommonHeader(config.commonHeaderMode) ? <label className="flex items-center gap-1.5"><input type="checkbox" checked={config.commonHeaderCoverException ?? false} onChange={(event) => handleConfigChange("commonHeaderCoverException", event.target.checked)} />{tA2b("commonHeaderCoverException")}</label> : null}
           <span className="text-slate-500">{tA2b("commonHeaderRasterPreservationNote")}</span>
           {(config.commonHeaderMode ?? "uniform") === "uniform" ? <CommonHeaderDesignInput config={config} onConfigChange={handleConfigChange} /> : null}
-          {(config.commonHeaderMode ?? "uniform") === "uniform" && rasterReview.pages.some((page) => page.renderMode === "full_page_preserve") ? <p className="basis-full text-amber-700" role="alert">{tA2b("commonHeaderRasterUniformUnavailable")}</p> : null}
+          {hasCommonHeader(config.commonHeaderMode) && rasterReview.pages.some((page) => page.renderMode === "full_page_preserve") ? <p className="basis-full text-amber-700" role="alert">{tA2b("commonHeaderRasterUniformUnavailable")}</p> : null}
         </div>
         <RasterSourceReview
           analysis={rasterReview}

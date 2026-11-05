@@ -23,7 +23,9 @@ _LIMITS = {
     "selection_image_max_bytes": 8388608, "selection_image_max_count": 2,
     "max_svg_bytes": 262144, "max_svg_nodes": 2048, "max_render_seconds": 60,
 }
-_POLICY = {
+# Sealed into every v3 plan. v1 plans keep their exact fallback rules: a
+# provider failure or representative-page exception fails the deck.
+_POLICY_V1 = {
     "version": "svg-header-capacity-fallback/v1",
     "estimator": "unicode-lexical-conservative/v1",
     "context_token_limit": 57344,
@@ -35,6 +37,19 @@ _POLICY = {
     "fallbacks": ["reduced", "free"],
     "fit_preflight": "bound-titles-before-header-and-representative-spend",
 }
+# v2 also reduces the header when the optional header stage itself fails (a
+# provider error or timeout, or a representative page exception). The failed
+# provider step keeps its unknown state, so it is never bought again.
+_POLICY = {**_POLICY_V1, "version": "svg-header-capacity-fallback/v2",
+           "optional_stage_failures": ["provider_step", "representative_page"]}
+# v3 keeps the v2 fallback rules and drops the asset-offer manifest from the
+# design call input (see ``design_input_without_asset_manifest``), so the design
+# call no longer waits for the infographic plan and icon selection. A plan
+# sealed with v1 or v2 replays with its original design input bytes.
+_POLICY_V3 = {**_POLICY, "version": "svg-header-capacity-fallback/v3",
+              "design_input": "without-asset-manifest/v1"}
+_POLICIES = (_POLICY_V1, _POLICY, _POLICY_V3)
+_OPTIONAL_FAILURE_POLICY_VERSIONS = frozenset({_POLICY["version"], _POLICY_V3["version"]})
 _BOUNDED_FAILURES = frozenset({
     "svg_common_header_input_capacity_exceeded",
     "svg_common_header_candidates_ineligible",
@@ -44,6 +59,11 @@ _BOUNDED_FAILURES = frozenset({
     # no body to promote): the designed header is unproven, the deck is not.
     "svg_common_header_representative_pages_ineligible",
 })
+# Failures of the optional header stage itself; only a v2 policy reduces them.
+PROVIDER_STEP_FAILED = "svg_common_header_provider_step_failed"
+REPRESENTATIVE_PAGE_FAILED = "svg_common_header_representative_page_failed"
+OPTIONAL_STAGE_FAILURES = frozenset({PROVIDER_STEP_FAILED, REPRESENTATIVE_PAGE_FAILED})
+_UNSETTLED_STEP = frozenset({"started", "unknown"})
 
 
 def uses_header_design(plan):
@@ -56,6 +76,20 @@ def fresh_header_mode(request):
     return ("free" if getattr(request, "source_mode", None) in {
         "source_content_restyle", "raster_reconstruction",
     } else "uniform")
+
+
+def reduced_header_by_default(request, *, explicit_mode=False):
+    """Whether this fresh request takes decision D1's reduced-header defaults.
+
+    ``explicit_mode`` asks about the cover-exception default, which also
+    applies to an explicit "uniform" request under the reduced setting.
+    """
+    if getattr(request, "_common_header_reduced", False):
+        return True
+    from utils.get_env_concurrency import get_svg_common_header_default_env
+    if get_svg_common_header_default_env() != "reduced":
+        return False
+    return explicit_mode or getattr(request, "common_header_design", None) is None
 
 
 def fresh_header_mode_conflict(request):
@@ -108,8 +142,27 @@ def evaluate_header_capacity(plan, *, text, schema, images=(), envelope):
             "tokenEstimator": policy["estimator"], "providerCapacityVerified": False}
 
 
+def reduces_optional_stage_failures(plan):
+    """Whether a provider or representative failure of the header stage reduces the header."""
+    return (isinstance(plan, Mapping) and plan.get("schema") == HEADER_DESIGN_PLAN_VERSION
+            and isinstance(plan.get("policy"), Mapping)
+            and plan["policy"].get("version") in _OPTIONAL_FAILURE_POLICY_VERSIONS)
+
+
+def design_input_without_asset_manifest(plan):
+    """Whether this plan's design call input omits the page asset manifests.
+
+    Only a plan sealed with the v3 policy does; earlier plans replay the design
+    input they were sealed with, which carries the representative's manifest.
+    """
+    return (isinstance(plan, Mapping) and plan.get("schema") == HEADER_DESIGN_PLAN_VERSION
+            and isinstance(plan.get("policy"), Mapping)
+            and plan["policy"].get("design_input") == _POLICY_V3["design_input"])
+
+
 def permits_header_fallback(plan, reason, document):
-    if plan.get("schema") != HEADER_DESIGN_PLAN_VERSION or reason not in _BOUNDED_FAILURES:
+    optional = reason in OPTIONAL_STAGE_FAILURES and reduces_optional_stage_failures(plan)
+    if plan.get("schema") != HEADER_DESIGN_PLAN_VERSION or (reason not in _BOUNDED_FAILURES and not optional):
         return False
     validate_header_design_plan(plan)
     if (document.get("plan_digest", plan["plan_digest"]) != plan["plan_digest"]
@@ -118,8 +171,14 @@ def permits_header_fallback(plan, reason, document):
     if (document.get("state") in {"unknown", "started", "inflight"}
             or document.get("inflight") is not None):
         return False
+    statuses = [step.get("status") for step in document.get("steps", {}).values()]
+    if reason == PROVIDER_STEP_FAILED:
+        # The failed step stays recorded as unsettled: the fallback replaces
+        # the designed header, it never discards or re-buys that attempt.
+        return (any(status in _UNSETTLED_STEP for status in statuses)
+                and all(status in _UNSETTLED_STEP | {"succeeded"} for status in statuses))
     # An observed provider attempt is never discarded or bought a second time.
-    return all(step.get("status") == "succeeded" for step in document.get("steps", {}).values())
+    return all(status == "succeeded" for status in statuses)
 
 
 def known_header_design_rejection(plan, error):
@@ -163,7 +222,9 @@ def validate_header_fallback(plan, selection, document, candidate_pages):
             or document.get("input_digest") != plan.get("input_digest")
             or document.get("status") not in {"reduced", "published"}):
         raise ValueError("svg_header_design_fallback_conflict")
-    if _unsettled_header_outcome(candidate_pages):
+    # A failed optional stage publishes no candidate output, so an unsettled
+    # candidate page is kept as evidence, not a reason to fail the deck.
+    if selection.get("reason") not in OPTIONAL_STAGE_FAILURES and _unsettled_header_outcome(candidate_pages):
         raise ValueError("svg_common_header_provider_result_unknown")
     outcome = selection.get("outcome")
     if (not isinstance(outcome, dict) or set(outcome) != {"mode", "contract", "bindings"}
@@ -302,7 +363,7 @@ def validate_header_design_plan(value):
         expected.update({"policy", "free_compatible"})
     if (not isinstance(value, Mapping) or set(value) != expected
             or not uses_header_design(value) or value.get("stage") != "header"
-            or (value.get("schema") == HEADER_DESIGN_PLAN_VERSION and value.get("policy") != _POLICY)
+            or (value.get("schema") == HEADER_DESIGN_PLAN_VERSION and value.get("policy") not in _POLICIES)
             or (value.get("schema") == HEADER_DESIGN_PLAN_VERSION and type(value.get("free_compatible")) is not bool)
             or value.get("capability_version") != "svg-static/v2"
             or value.get("required_capabilities") != ["structuredOutput", "vision"]
@@ -327,6 +388,7 @@ def seal_new_header_design_plan(request, *, explicit_revision=False):
         return require_header_design_plan(request)
     from services.svg_generation_admission import _common_header_preservation_conflict
     if (getattr(request, "common_header_mode", None) != "uniform"
+            or getattr(request, "_common_header_reduced", False)
             or _common_header_preservation_conflict(request)):
         return None
     frozen = getattr(request, "_svg_style_snapshot", None)
@@ -336,7 +398,7 @@ def seal_new_header_design_plan(request, *, explicit_revision=False):
     from services.svg_authoring_profile import new_svg_admission_profile
     new_svg_admission_profile(request)
     plan = {"schema": HEADER_DESIGN_PLAN_VERSION, "stage": "header", **_LIMITS,
-            "policy": deepcopy(_POLICY),
+            "policy": deepcopy(_POLICY_V3),
             "free_compatible": getattr(request, "common_header_design", None) is None,
             "capability_version": "svg-static/v2", "required_capabilities": ["structuredOutput", "vision"],
             "seed": secrets.token_hex(16), "input_digest": canonical_json_digest(_identity(request))}

@@ -17,6 +17,7 @@ from services.authored_vnext.integration.export_service import (
 from services.authored_vnext.master.digests import seal_master_contract
 from tests.support.authored_vnext_master_fixture import master_contract_payload
 from utils.authored_styles import resolve_authored_style
+from tests.support.environment_requirements import requires_osb_retained_reference
 
 
 OFFICIAL_POLICY = "company-furniture-consistency-policy-authored-template/v1"
@@ -28,6 +29,7 @@ def _master() -> DeckMasterContract:
     )
 
 
+@requires_osb_retained_reference
 def test_official_composition_seals_independent_style_and_company_pins():
     master = _master()
     composition, effective = resolve_authored_composition(
@@ -49,6 +51,7 @@ def test_official_composition_seals_independent_style_and_company_pins():
     assert effective.brand_assets == master.brand_assets
 
 
+@requires_osb_retained_reference
 def test_native_export_replays_only_the_persisted_composition_pin():
     master = _master()
     composition, effective = resolve_authored_composition(
@@ -67,6 +70,7 @@ def test_native_export_replays_only_the_persisted_composition_pin():
     assert replayed == effective
 
 
+@requires_osb_retained_reference
 def test_native_export_rejects_a_different_composition_payload():
     master = _master()
     composition, _ = resolve_authored_composition(

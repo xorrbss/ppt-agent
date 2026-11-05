@@ -294,7 +294,7 @@ def test_visual_review_passes_with_a_matching_clean_advisory(policy_version, mon
             from services.svg_quality_recovery_review import seal_saved_review
             saved_context = {**context, "reviewScope": "edited"}
             prepared = dict(context=saved_context, changed=[0], reusable={}, snapshot=snapshot,
-                runtime={"fixture": "current-runtime"}, ownerScope=owner, sourceGenerationRevision=1,
+                runtime={"fixture": "current-runtime", "promptVersion": DESIGN_REVIEW_PROMPT_VERSION}, ownerScope=owner, sourceGenerationRevision=1,
                 publication=dict(parentOperationId=operation, parentJobId=job),
                 pages=[({**slide.content["svgReceipt"], "svg_content": slide.svg_content}, png) for slide in slides],
                 pngs=[png, png])
@@ -566,12 +566,12 @@ def test_visual_review_passes_with_a_matching_clean_advisory(policy_version, mon
             assert parent_identity["sourceRevision"] == parent_identity["sourceGenerationRevision"] == 1
             assert not any(key in parent_identity for key in ("gateDigest", "snapshotDigest", "vision"))
 
-            # A passed saved-source review may retain minor, nonblocking
-            # design targets; it does not run generation's rewrite loop.
+            # A passed saved-source review may retain a design target on a passing
+            # axis (designImprovementStatus "needed"); it does not run generation's
+            # rewrite loop. Targets on advisory/minor axes are already "satisfied"
+            # (see quality._blocking_design_targets).
             needed_vision = deepcopy(vision)
             for page in needed_vision["designReview"]["pages"]:
-                page["axes"]["brand_expression"] = dict(verdict="advisory", severity="minor", repairScope="none",
-                    visibleEvidence="A minor brand-expression opportunity remains.")
                 page["designTargets"] = [dict(axis="brand_expression", evidenceRegion="header",
                     visibleEvidence="Minor brand expression", sourceEvidence="Current source and admitted style",
                     improvementGoal="Optional brand-expression refinement")]
@@ -716,3 +716,269 @@ def test_source_preservation_receipt_is_release_ready_with_a_clean_advisory():
     assert validated.visual_review.status == "passed"
     assert result["releaseReadiness"] == "ready"
     require_release_v1_receipt(result)  # must not raise
+
+
+# --------------------------------------------------------------------------
+# M3: the deck quality receipt's vision review instrumentation
+# --------------------------------------------------------------------------
+
+
+def _review_group(status, scope, *, superseded=()):
+    return {"status": status, "review_scope": scope, "group_id": "g", "indices": [0],
+            "superseded_attempts": [{"status": item} for item in superseded]}
+
+
+def _gate_advisory(status, failed_axes_by_page):
+    pages = [{"index": index, "failedAxes": axes} for index, axes in enumerate(failed_axes_by_page)]
+    blocking = [index for index, axes in enumerate(failed_axes_by_page) if axes]
+    return {"vision": {"designGate": {"status": status, "pages": pages, "blockingPages": blocking,
+                                      "unreviewedPages": []}}}
+
+
+def test_vision_review_receipt_counts_calls_axes_and_redesigns():
+    from services.generation_core.drivers.svg.review_instrumentation import SCHEMA, vision_review_receipt
+    from services.provider_operation_usage import ProviderOperationUsage
+
+    initial = _gate_advisory("failed", [["hierarchy_emphasis"], [], ["hierarchy_emphasis", "brand_expression"]])
+    candidate = _gate_advisory("passed", [[], [], []])
+    execution = {"rounds": [
+        {"status": "completed", "advisory": initial, "groups": {
+            # one read retry after a failed call, a reserved-but-unsent slot, and the global call
+            "0": _review_group("completed", "local", superseded=("review_failed",)),
+            "1": _review_group("review_not_dispatched", "local"),
+            "2": _review_group("completed", "global")}},
+        {"status": "completed", "advisory": candidate, "groups": {"0": _review_group("completed", "full")}},
+    ]}
+    pages = [({"quality_recovery_execution": execution,
+               "quality_recovery": {"status": "selected", "decision": {"target_axes": ["hierarchy_emphasis"]}}},
+              b""),
+             ({}, b""),
+             ({"quality_recovery": {"status": "retained", "reason": "svg_provider_timeout",
+                                    "decision": {"target_axes": ["hierarchy_emphasis", "brand_expression"]}}},
+              b""),
+             ({"quality_recovery": {"status": "unresolved", "reason": "page_attempt_budget_exhausted"}}, b"")]
+    usage = ProviderOperationUsage()
+    usage.record_usage("vqa", usage_state="reported", input_tokens=9000, output_tokens=1200,
+                       actual_cost_microunits=81000, cached_tokens=0)
+    usage.record_usage("author", usage_state="reported", input_tokens=1, output_tokens=1,
+                       actual_cost_microunits=5)
+
+    receipt = vision_review_receipt(pages, candidate, operation_usage=usage)
+
+    assert receipt["schema"] == SCHEMA and receipt["path"] == "quality_first"
+    assert receipt["calls"] == {"logical": 3, "physical": 4, "completed": 3, "failed": 0, "unknown": 0}
+    first = receipt["rounds"][0]
+    assert first["round"] == "initial" and first["callsByScope"] == {"global": 1, "local": 1}
+    assert first["failedAxes"] == {"brand_expression": 1, "hierarchy_emphasis": 2}
+    assert first["blockingPages"] == [0, 2]
+    assert receipt["rounds"][1]["round"] == "candidate" and receipt["rounds"][1]["failedAxes"] == {}
+    assert receipt["finalGateStatus"] == "passed" and receipt["finalFailedAxes"] == {}
+    assert receipt["redesigns"] == {
+        "attempted": 2, "adopted": 1, "retained": 1, "notAttempted": 1, "attemptedPages": [0, 2],
+        "adoptedPages": [0], "retainedPages": [2], "notAttemptedPages": [3],
+        "targetAxes": {"brand_expression": 1, "hierarchy_emphasis": 2}}
+    # Only the review stage's cost, labelled as this worker attempt's.
+    assert receipt["usage"]["scope"] == "attempt" and receipt["usage"]["actualCostMicrounits"] == 81000
+    assert receipt["usage"]["inputTokens"] == 9000
+
+
+def test_vision_review_receipt_without_quality_first_execution_or_usage():
+    from services.generation_core.drivers.svg.review_instrumentation import vision_review_receipt
+
+    skipped = advisory_record({"skipped": "render_missing"}, ["sha256:a"])
+    receipt = vision_review_receipt([({}, b"")], skipped)
+
+    assert receipt["path"] == "advisory" and receipt["rounds"] == []
+    assert receipt["calls"]["logical"] == 0 and receipt["usage"] == {"scope": "unmeasured"}
+    assert receipt["advisory"] == {"ran": False, "skipped": "render_missing"}
+    assert receipt["redesigns"]["attempted"] == 0
+
+
+def test_deck_quality_summary_carries_the_vision_review_receipt():
+    from services.generation_core.drivers.svg.quality import with_vision_review_receipt
+
+    summary = with_vision_review_receipt({"status": "passed", "pageCount": 1}, [({}, b"")], None)
+    assert summary["status"] == "passed" and summary["visionReview"]["usage"] == {"scope": "unmeasured"}
+
+
+# --------------------------------------------------------------------------
+# Q5: one re-measurement and one local clip repair before classification
+# --------------------------------------------------------------------------
+
+_CLIP_SVG = ('<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720" viewBox="0 0 1280 720">'
+             '<rect x="0" y="0" width="1280" height="720" fill="#ffffff"/>'
+             '<text x="80" y="120" font-family="Noto Sans KR" font-size="40" fill="#111111">Title</text>'
+             '<text x="1060" y="400" font-family="Noto Sans KR" font-size="32" fill="#111111">'
+             'Revenue growth 22%</text></svg>')
+
+
+def _clip_quality(svg, boxes, *, floor=12.0, clipped=("svg-3",)):
+    """A measured page whose ``clipped`` qids clip; ``boxes`` maps qid -> (x, y, w, h)."""
+    elements = [{"qid": qid, "has_owned_text": True,
+                 "text_fragments": [{"x": x, "y": y, "width": w, "height": h}]}
+                for qid, (x, y, w, h) in boxes.items()]
+    return {"source_digest": source_digest(svg), "measurement_complete": True, "passed": False,
+            "body_font_floor_px": floor, "browser_metrics": {"elements": elements},
+            "failures": [{"kind": "text_clipped", "qid": qid} for qid in clipped]}
+
+
+def _text_nodes(svg):
+    import xml.etree.ElementTree as ET
+    return [node for node in ET.fromstring(svg).iter() if node.tag.endswith("text")]
+
+
+def test_clipped_text_is_content_so_it_is_never_kept_flag_only():
+    from services.generation_core.quality.page_failure_kind import (
+        CONTENT, CONTENT_FAILURE_KINDS, LAYOUT_FAILURE_KINDS, page_failure_kind, quality_keeps_content)
+
+    assert page_failure_kind("text_clipped") == CONTENT
+    assert not CONTENT_FAILURE_KINDS & LAYOUT_FAILURE_KINDS
+    assert quality_keeps_content({"passed": False, "failures": [{"kind": "text_clipped", "qid": "svg-3"}]}) is False
+
+
+def test_remeasure_incomplete_reads_an_incomplete_page_once_more():
+    import asyncio
+    from services.generation_core.drivers.svg.local_page_repair import remeasure_incomplete
+
+    readings = iter([{"measurement_complete": False, "png_digest": "sha256:first", "metrics_digest": "m1",
+                      "failures": [{"kind": "measurement_incomplete"}]},
+                     {"measurement_complete": True, "png_digest": "sha256:second", "failures": []}])
+    calls = []
+
+    async def render_once():
+        calls.append(1)
+        return SimpleNamespace(quality=next(readings))
+
+    rendered = asyncio.run(remeasure_incomplete(render_once))
+    assert len(calls) == 2 and rendered.quality["failures"] == []
+    assert rendered.quality["remeasurement"] == {"reason": "measurement_incomplete", "provider_calls": 0,
+        "first_png_digest": "sha256:first", "first_metrics_digest": "m1", "measurement_complete": True}
+
+    complete = SimpleNamespace(quality={"measurement_complete": True, "failures": [{"kind": "text_overlap"}]})
+
+    async def render_complete():
+        calls.append(1)
+        return complete
+
+    calls.clear()
+    assert asyncio.run(remeasure_incomplete(render_complete)) is complete and len(calls) == 1
+    assert "remeasurement" not in complete.quality
+
+
+def test_text_clip_repair_moves_a_text_over_the_edge_back_inside():
+    from services.generation_core.drivers.svg.local_page_repair import CLIP_REPAIR_EDGE_INSET_PX, text_clip_repair
+
+    quality = _clip_quality(_CLIP_SVG, {"svg-2": (80, 85, 100, 48), "svg-3": (1060, 372, 316, 40)})
+    local = text_clip_repair(_CLIP_SVG, quality, width=1280, height=720)
+    candidate = local.pop("svg")
+
+    assert local["status"] == "candidate_requires_remeasurement" and local["provider_calls"] == 0
+    moved = _text_nodes(candidate)[1]
+    assert float(moved.get("x")) == pytest.approx(1280 - CLIP_REPAIR_EDGE_INSET_PX - 316)
+    assert moved.get("y") == "400" and moved.get("font-size") == "32"  # no shrink was needed
+    assert local["changes"] == [{"qid": "svg-3", "font_scale": 1.0,
+                                 "translate_x": pytest.approx(-97.0), "translate_y": 0.0}]
+    assert _text_nodes(candidate)[0].get("x") == "80"
+
+
+def test_text_clip_repair_shrinks_only_within_the_font_floor():
+    from services.generation_core.drivers.svg.local_page_repair import text_clip_repair
+
+    wide = _CLIP_SVG.replace('x="1060"', 'x="20"')
+    quality = _clip_quality(wide, {"svg-2": (80, 85, 100, 48), "svg-3": (20, 372, 1400, 40)})
+    local = text_clip_repair(wide, quality, width=1280, height=720)
+    node = _text_nodes(local.pop("svg"))[1]
+    factor = 1278 / 1400
+    assert local["changes"][0]["font_scale"] == pytest.approx(factor)
+    assert float(node.get("font-size")) == pytest.approx(32 * factor)
+    assert float(node.get("x")) == pytest.approx(1.0)
+
+    floored = text_clip_repair(wide, _clip_quality(wide, {"svg-3": (20, 372, 1400, 40)}, floor=30.0),
+                               width=1280, height=720)
+    assert floored == {"status": "not_repairable", "provider_calls": 0, "reason": "readability_floor"}
+
+
+@pytest.mark.parametrize("svg,boxes,reason", [
+    # Moving the label back would put it on another text it did not touch before.
+    (_CLIP_SVG.replace('x="80" y="120"', 'x="900" y="400"'),
+     {"svg-2": (900, 372, 100, 40), "svg-3": (1060, 372, 316, 40)}, "available_region_insufficient"),
+    # Server furniture (the common header) is never moved.
+    (_CLIP_SVG.replace('<text x="1060"', '<g id="svg-common-header"><text x="1060"').replace(
+        "22%</text>", "22%</text></g>").replace('id="svg-common-header"', 'id="svg-system-header"'),
+     {"svg-4": (1060, 372, 316, 40)}, "server_furniture_protected"),
+    # A rotated text cannot be moved by its x/y attributes.
+    (_CLIP_SVG.replace('<text x="1060"', '<text transform="rotate(10)" x="1060"'),
+     {"svg-3": (1060, 372, 316, 40)}, "transformed_text_unsupported"),
+])
+def test_text_clip_repair_refuses_what_it_cannot_move_safely(svg, boxes, reason):
+    from services.generation_core.drivers.svg.local_page_repair import text_clip_repair
+
+    clipped = ("svg-4",) if "svg-4" in boxes else ("svg-3",)
+    assert text_clip_repair(svg, _clip_quality(svg, boxes, clipped=clipped), width=1280, height=720)["reason"] == reason
+
+
+def test_text_clip_repair_follows_a_translated_group():
+    from services.generation_core.drivers.svg.local_page_repair import text_clip_repair
+
+    svg = _CLIP_SVG.replace('<text x="1060"', '<g transform="translate(100 0) scale(2)"><text x="480"').replace(
+        "22%</text>", "22%</text></g>")
+    local = text_clip_repair(svg, _clip_quality(svg, {"svg-2": (80, 85, 100, 48), "svg-4": (1100, 372, 200, 40)},
+                                                clipped=("svg-4",)), width=1280, height=720)
+    node = _text_nodes(local.pop("svg"))[1]
+    # 21 page px to the left is 10.5 local units inside a 2x scale.
+    assert float(node.get("x")) == pytest.approx(480 - 10.5)
+
+
+def test_local_clip_repair_runs_once_per_attempt_and_records_the_remeasurement(monkeypatch):
+    import asyncio
+    from services.generation_core.drivers.svg import render
+
+    quality = _clip_quality(_CLIP_SVG, {"svg-2": (80, 85, 100, 48), "svg-3": (1060, 372, 316, 40)})
+    payload = {"attempts": [{"kind": "author"}], "initial_quality": {"stage": "first_response"}}
+    seen = {}
+
+    async def fake_attempt_render(**kwargs):
+        seen.update(kwargs)
+        kwargs["payload"]["attempts"][-1]["quality"] = {"passed": True, "failures": []}
+        kwargs["payload"]["initial_quality"] = {"stage": "overwritten"}
+        return "remeasured"
+
+    async def checkpoint(*args, **kwargs):
+        return None
+
+    monkeypatch.setattr(render, "_attempt_render", fake_attempt_render)
+    ctx = SimpleNamespace(source_reflow=False, raster_reconstruction=False,
+                          canvas=SimpleNamespace(width_px=1280, height_px=720))
+    arguments = dict(ctx=ctx, request=None, presentation_id=None, index=0, content="", payload=payload,
+                     svg=_CLIP_SVG, ordinal=1, job=None, checkpoint=checkpoint, async_session_maker=None,
+                     write_png=None, observations=None, quality=quality, recovery_readability_policy=None,
+                     template_page=None, template_source_manifest=None, cache_remeasurement=None)
+
+    assert asyncio.run(render._local_text_clip_repair(**arguments)) == "remeasured"
+    assert seen["allow_existing_common_header"] is True and seen["svg"] != _CLIP_SVG
+    record = payload["attempts"][-1]["local_clip_repair"]
+    assert record["status"] == "candidate_requires_remeasurement" and record["remeasured"] is True
+    assert record["still_clipped"] is False and payload["initial_quality"] == {"stage": "first_response"}
+    # The attempt already had its repair: the next clipped measurement is classified as it is.
+    assert asyncio.run(render._local_text_clip_repair(**arguments)) is None
+
+    protected = {"attempts": [{}]}
+    source_ctx = SimpleNamespace(source_reflow=True, raster_reconstruction=False, canvas=ctx.canvas)
+    assert asyncio.run(render._local_text_clip_repair(**{**arguments, "ctx": source_ctx,
+                                                          "payload": protected})) is None
+    assert protected["attempts"][-1]["local_clip_repair"]["reason"] == "verbatim_page_protected"
+
+
+def test_clipped_glyph_fixture_is_repaired_in_the_real_renderer():
+    import asyncio
+    from services.generation_core.drivers.svg.local_page_repair import text_clip_repair
+    from services.svg_renderer import render_svg_with_metrics
+    from utils.slide_capture import find_chrome
+
+    if find_chrome() is None:
+        pytest.skip("headless Chrome is required")
+    first = asyncio.run(render_svg_with_metrics(_CLIP_SVG, width=1280, height=720)).quality
+    assert {"kind": "text_clipped", "qid": "svg-3"} in first["failures"]
+    local = text_clip_repair(_CLIP_SVG, first, width=1280, height=720)
+    again = asyncio.run(render_svg_with_metrics(local["svg"], width=1280, height=720)).quality
+    assert again["passed"] is True and again["failures"] == []

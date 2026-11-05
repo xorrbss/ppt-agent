@@ -10,6 +10,8 @@ from pathlib import Path
 from services.document_canvas import parse_canvas_metadata
 from services.isolated_worker_contracts import ArtifactRef
 from services.svg_export_source_preservation import page_svg_digest
+from services.generation_core.drivers.svg.export_scene import native_fallbacks_recorded as _native_fallbacks_recorded
+from workers.public_svg_converter_aliases import converter_digest_accepted
 from workers.public_svg_pptx_convert import CONVERTER_VERSION, VENDOR_ROOT, convert_pptx, converter_digest
 from workers.public_svg_pptx_readback import source_preservation_readback as _source_preservation_readback
 from workers.public_worker_runtime import PublicWorkerExecutionError, WorkerOutput
@@ -206,7 +208,7 @@ async def execute_svg_export(job, store, *, bundle=None):
     }:
         raise PublicWorkerExecutionError("svg_export_bundle_invalid")
     if (value["contractVersion"] != ("svg-static/v2" if (v2 or v3 or v4) else SVG_CONTRACT_VERSION)
-            or value["converterVersion"] != CONVERTER_VERSION or value["converterDigest"] != converter_digest()):
+            or value["converterVersion"] != CONVERTER_VERSION or not converter_digest_accepted(value["converterDigest"])):
         raise PublicWorkerExecutionError("svg_export_version_mismatch")
     canvas = parse_canvas_metadata(value["canvas"])
     slides = value["slides"]
@@ -439,7 +441,7 @@ async def execute_svg_export(job, store, *, bundle=None):
                         or len(coverage.get("pages", [])) != len(slides)
                         or any(page.get("pageIndex") != index or page.get("svgDigest") != "sha256:" + digests[index]
                                for index, page in enumerate(coverage["pages"]))
-                        or readback.get("nativeObjects", {}).get("fellBack") != 0):
+                        or not _native_fallbacks_recorded(readback.get("nativeObjects"))):
                     raise PublicWorkerExecutionError("svg_generic_native_ooxml_coverage_mismatch")
             mode = "editable-svg"
         else:

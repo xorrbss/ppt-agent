@@ -17,6 +17,9 @@ from utils.authored_styles import AuthoredExactReconstructionUnavailableError
 def _authored_request(*, style: str = "private-exact") -> GeneratePresentationRequest:
     return GeneratePresentationRequest(
         content="Generate an authored deck",
+        # An omitted strategy resolves to svg (CLAUDE.md, "Two generation
+        # pipelines"); exact-preset admission is an authored-path concern.
+        strategy="authored",
         template="authored",
         authored_style=style,
     )

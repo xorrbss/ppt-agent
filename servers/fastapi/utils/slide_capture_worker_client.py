@@ -13,6 +13,7 @@ import signal
 import subprocess
 from typing import Any, Mapping
 
+from models.canvas_defaults import DEFAULT_CANVAS_SIZE_PX
 from utils.get_env_programme import (
     get_authored_renderer_lease_max_renders,
     get_authored_renderer_lease_pool_size,
@@ -51,7 +52,7 @@ async def _render_html_in_isolated_worker(  # noqa: ASYNC109
     if private_diagnostic_profile is not None:
         if (private_diagnostic_profile != "fixed-glyph-dpr2/v1"
                 or fixed_glyph_preview is None or canonical_svg is None
-                or (width_px, height_px) != (1280, 720)):
+                or (width_px, height_px) != DEFAULT_CANVAS_SIZE_PX):
             raise ValueError("svg_template_glyph_diagnostic_profile_invalid")
     if font_manifest is None:
         if fixed_glyph_preview is not None:
@@ -140,7 +141,7 @@ async def _render_html_in_isolated_worker_impl(  # noqa: ASYNC109
             html, preserved_raster_svg, width=width_px, height=height_px,
             **({"system_furniture": system_furniture} if system_furniture is not None else {}))
     else:
-        admitted = _admit_render_source(html)
+        admitted = _admit_render_source(html, materialize_fonts=False)
         measured_html = html
     command = worker_command()
     if request_assets_root is not None:
@@ -252,7 +253,7 @@ async def _render_html_in_isolated_worker_impl(  # noqa: ASYNC109
         if (private_diagnostic_profile != "fixed-glyph-dpr2/v1"
                 or not isinstance(diagnostic, dict)
                 or diagnostic.get("profile") != private_diagnostic_profile
-                or diagnostic.get("logicalCanvasPx") != [1280, 720]
+                or diagnostic.get("logicalCanvasPx") != list(DEFAULT_CANVAS_SIZE_PX)
                 or diagnostic.get("rasterCanvasPx") != [2560, 1440]
                 or diagnostic.get("devicePixelRatio") != 2
                 or diagnostic.get("pipeCodeDigest") != private_diagnostic_pipe_code_digest()
@@ -322,6 +323,10 @@ async def render_with_lease(  # noqa: ASYNC109
         )
     if not (is_authored_renderer_lease_enabled() and renderer_requires_external_worker()):
         return await dimensioned_exchange(html, timeout)
+    # A lease keeps the exchange (and session viewport) of the render that
+    # opened it, so a deck rendering at another canvas size gets its own lease.
+    if not is_default_landscape(width_px, height_px):
+        deck_scope = f"{deck_scope}|{int(width_px)}x{int(height_px)}"
     if is_authored_renderer_framed_protocol_enabled():
         lease = await acquire_lease(
             deck_scope,

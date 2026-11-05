@@ -42,5 +42,9 @@ case "$(uname -s)" in
 esac
 export PUBLIC_TRUSTED_WORKER_LOCAL_POLICY=development
 
+# Static Noto instances PPTX font embedding loads instead of instancing per
+# export (the Docker image builds them; a no-op once built here).
+"$PY" "$FASTAPI/scripts/build_svg_pptx_font_instances.py" >/dev/null
+
 cd "$FASTAPI"
 exec "$PY" "$HERE/fake_llm_backend.py"

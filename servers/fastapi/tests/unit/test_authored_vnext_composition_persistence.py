@@ -25,8 +25,10 @@ from services.authored_vnext.master.digests import canonical_digest
 from services.authored_vnext.master.service import AuthoredVNextMasterService
 from tests.support.authored_vnext_master_fixture import master_contract_payload
 from utils.authored_styles import AuthoredStyle
+from tests.support.environment_requirements import requires_malgun_gothic_font
 
 
+@requires_malgun_gothic_font
 def test_composition_pin_is_persisted_through_request_slides_result_and_export(
     tmp_path,
 ) -> None:

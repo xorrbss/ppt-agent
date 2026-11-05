@@ -27,6 +27,7 @@ import re
 import uuid
 from dataclasses import dataclass, field, replace
 from pathlib import Path
+from typing import Optional
 
 from services.generation_core.assets.offer import AssetOffer, AssetSlot
 from services.source_images.models import SourceImageCandidate
@@ -52,7 +53,10 @@ class SvgAssetOffer:
     receipt: dict = field(default_factory=dict)
 
 
-def _ink(svg_text: str) -> str:
+def _ink(svg_text: str, slot: Optional[AssetSlot] = None) -> str:
+    """The slot's carried ink; offers stored before it was carried re-read the stroke."""
+    if slot is not None and slot.ink:
+        return slot.ink
     match = re.search(r'\bstroke="(#[0-9A-Fa-f]{6}|#[0-9A-Fa-f]{3})"', svg_text)
     return match[1] if match else "#1E5EFF"
 
@@ -132,9 +136,9 @@ async def project_offer(session, offer: AssetOffer, *, presentation_id, count: i
         if slot.is_vector:
             text = payload.decode("utf-8")
             try:
-                icon = flatten_icon_svg(text, color=_ink(text))
+                icon = flatten_icon_svg(text, color=_ink(text, slot))
             except IconFlattenBudgetExceeded:
-                png = rasterize_icon(flatten_icon_svg(text, color=_ink(text), point_budget=None))
+                png = rasterize_icon(flatten_icon_svg(text, color=_ink(text, slot), point_budget=None))
                 slot_id, candidate = await _register(session, presentation_id, slot, png, "image/png",
                                                      256, 256)
                 result.raster[slot.page_index][slot_id] = candidate
@@ -169,7 +173,7 @@ _NATIVE_LITERAL_VISUAL_REQUEST = re.compile(
 
 def _native_literal_pages(request, outline, *, style_snapshot, has_source_assets):
     """Require complete literal coverage, rather than finding a chart inside prose."""
-    from services.generation_core.drivers.svg.native_requirements import requested_native_data
+    from services.generation_core.drivers.svg.native_requirements import requested_native_data, requirements_revision
 
     if (has_source_assets is not False or getattr(request, "strategy", None) != "svg"
             or getattr(request, "generation_mode", None) not in {"auto", "free-design"}
@@ -192,8 +196,9 @@ def _native_literal_pages(request, outline, *, style_snapshot, has_source_assets
     if _NATIVE_LITERAL_VISUAL_REQUEST.search("\n".join([getattr(request, "instructions", None) or "", *contents])):
         return None
     pages = []
+    revision = requirements_revision(style_snapshot)
     for content in contents:
-        wanted = requested_native_data(content)
+        wanted = requested_native_data(content, revision)
         if not wanted:
             return None
         rows, charts = [], []
@@ -209,7 +214,7 @@ def _native_literal_pages(request, outline, *, style_snapshot, has_source_assets
                     continue
                 rows.append(cells)
             elif re.fullmatch(r"(?:chart|차트)\s*[:：]\s*.+", line, re.I):
-                literal = requested_native_data(line).get("charts", [])
+                literal = requested_native_data(line, revision).get("charts", [])
                 if len(literal) != 1:
                     return None
                 parts = re.split(r"[,;]\s*(?!\d{3}(?:\D|$))", re.split(r"[:：]", line, maxsplit=1)[1])

@@ -19,6 +19,7 @@ from services.authored_canvas import canvas_metadata_for_aspect_ratio
 from services.document_canvas import canvas_physical_size
 from services.svg_text_advance import text_advance
 from workers.public_svg_pptx_convert import VENDOR_ROOT, convert_pptx
+from tests.support.windows_symbol_font import requires_windows_symbol_font
 
 NS = {
     "a": "http://schemas.openxmlformats.org/drawingml/2006/main",
@@ -93,6 +94,7 @@ def test_measurer_answers_only_for_bundled_families_weights_and_glyphs():
 
 
 @pytest.mark.parametrize("weight", [400, 700, 800])
+@requires_windows_symbol_font
 def test_trusted_template_fallback_preserves_source_nodes_text_and_requested_weight(weight):
     from utils.svg_template_fonts import (
         FONT_DIGEST, fallback_font_material, materialize_template_fallbacks,
@@ -140,6 +142,7 @@ def test_trusted_template_fallback_preserves_source_nodes_text_and_requested_wei
     assert [segment["family"] for segment in plan["segments"]] == ["Noto Sans KR", family, "Noto Sans KR"]
 
 
+@requires_windows_symbol_font
 def test_trusted_template_fallback_keeps_plain_pages_and_rejects_untrusted_sources():
     from utils.svg_template_fonts import materialize_template_fallbacks, require_font_coverage, template_font_faces
 
@@ -156,6 +159,7 @@ def test_trusted_template_fallback_keeps_plain_pages_and_rejects_untrusted_sourc
         materialize_template_fallbacks(source.replace("원문 125%", '<tspan font-family="Segoe UI Symbol">\u25b8</tspan>'))
 
 
+@requires_windows_symbol_font
 def test_trusted_template_fallback_registry_keeps_license_and_embedding_checks():
     from io import BytesIO
     from fontTools.ttLib import TTFont
@@ -181,6 +185,7 @@ def test_trusted_template_fallback_registry_keeps_license_and_embedding_checks()
             rejected.font_bytes(family, "Normal")
 
 
+@requires_windows_symbol_font
 def test_trusted_template_fallback_advances_use_the_same_bytes_and_do_not_guess_faux_bold():
     from utils.svg_template_fonts import FALLBACK_FONT_FAMILY
 

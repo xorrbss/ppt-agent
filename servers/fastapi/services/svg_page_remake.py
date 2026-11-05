@@ -20,9 +20,9 @@ from utils.hashing import sha256_hex
 
 
 def _v7_source_profile(snapshot):
-    from services.svg_authoring_profile import read_authoring_profile
+    from services.svg_authoring_profile import behaviour_profile, read_authoring_profile
 
-    profile = read_authoring_profile(snapshot)
+    profile = behaviour_profile(read_authoring_profile(snapshot))
     return bool(profile and profile["version"] in {7, 8})
 
 
@@ -94,9 +94,14 @@ def _local_svg_content(svg, baseline):
     return root
 
 
+def _deck_requirements_revision(presentation):
+    from services.generation_core.drivers.svg.native_requirements import requirements_revision
+    return requirements_revision((presentation.theme.get("svg", {}) or {}).get("styleSnapshot"))
+
+
 def _local_native_projection(svg, native, presentation, target):
     objects, summary = _native_projection(svg, native, presentation_canvas_metadata(presentation.theme),
-        (target.content or {}).get("source", ""))
+        (target.content or {}).get("source", ""), revision=_deck_requirements_revision(presentation))
     from services.generation_core.native_objects import SLIDE_CONTENT_KEY
     previous = (target.content or {}).get(SLIDE_CONTENT_KEY) or {}
     previous_ids = {(item.get("id"), item.get("kind")) for item in previous.get("objects", [])}
@@ -146,7 +151,7 @@ def _candidate_digest(svg, image, native=None, *, mode="author", source_binding=
     return _canonical_digest(payload)
 
 
-def _native_projection(svg, native, metadata, source):
+def _native_projection(svg, native, metadata, source, *, revision=None):
     from services.generation_core.drivers.svg.native_declarations import bound_declarations, native_binding_digest
     from services.generation_core.drivers.svg.native_publish import canvas_point_per_px, page_native_objects
     from services.generation_core.drivers.svg.native_requirements import apply_requested_native_quality
@@ -160,7 +165,7 @@ def _native_projection(svg, native, metadata, source):
     scale = canvas_point_per_px(metadata)
     quality = {"passed": True, "failures": []}
     if native is not None:
-        apply_requested_native_quality(quality, payload, svg, source, pt_per_px=scale)
+        apply_requested_native_quality(quality, payload, svg, source, pt_per_px=scale, revision=revision)
         if quality.get("passed") is False:
             raise ValueError("svg_page_remake_requested_native_missing")
     return page_native_objects(payload, pt_per_px=scale)
@@ -315,7 +320,8 @@ async def preview_svg(presentation, slides, index, request, task, session):
             reject(error, "canonical_validation")
         try:
             native = _native_candidate(final, result.svg_content, result.native_declarations)
-            _native_projection(final, native, presentation_canvas_metadata(presentation.theme), source)
+            _native_projection(final, native, presentation_canvas_metadata(presentation.theme), source,
+                               revision=_deck_requirements_revision(presentation))
         except Exception as error:
             reject(error, "native_validation", candidate_svg=final)
     render_source = final
@@ -463,7 +469,8 @@ async def publish_svg_candidate(session, presentation, slides, index, task, *, s
     else:
         native_objects, native_summary = (_local_native_projection(svg, native, presentation, target) if local_edit
             else _native_projection(svg, native,
-                presentation_canvas_metadata(presentation.theme), (target.content or {}).get("source", "")))
+                presentation_canvas_metadata(presentation.theme), (target.content or {}).get("source", ""),
+                revision=_deck_requirements_revision(presentation)))
     if current_candidate and not local_measurement:
         if not isinstance(native, dict) or (target.content or {}).get(NATIVE_OBJECTS_KEY) != native_objects:
             raise AuthoredPageRemakeError("svg_page_remake_candidate_invalid", stage="publish_validation")
