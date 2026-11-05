@@ -1,0 +1,43 @@
+{
+  "baseline": {
+    "description": "Current main defaults, no arm contrast. Two reference prompts, repeated; records the starting wall time, cost and gate numbers.",
+    "requires": "origin/main as is",
+    "prompts": ["p1", "p2"],
+    "repeats": 3,
+    "rule": "none",
+    "caps": {"per_deck_usd": 2.5, "total_usd": 16.0},
+    "arms": {
+      "main": {"env": {}, "unset": [], "body": {}}
+    }
+  },
+  "p8": {
+    "description": "P8 (plan section 5, decision D1 option C): designed/uniform header vs reduced header default. Control A = origin/main behaviour; C = SVG_COMMON_HEADER_DEFAULT=reduced with no header mode in the body.",
+    "requires": "branch feat/svg-p8-reduced-header-default merged (without it SVG_COMMON_HEADER_DEFAULT does nothing and A and C are the same arm)",
+    "prompts": ["p1", "p2"],
+    "repeats": 2,
+    "rule": "performance",
+    "control": "A",
+    "challenger": "C",
+    "caps": {"per_deck_usd": 2.5, "total_usd": 11.0},
+    "arms": {
+      "A": {"env": {}, "unset": ["SVG_COMMON_HEADER_DEFAULT"],
+            "body": {"common_header_mode": "uniform", "common_header_cover_exception": false}},
+      "C": {"env": {"SVG_COMMON_HEADER_DEFAULT": "reduced"}, "unset": [],
+            "body": {"common_header_mode": null, "common_header_cover_exception": null}}
+    }
+  },
+  "s3": {
+    "description": "S3: authoring profile revision 9 vs 10, chosen by the internal knob SVG_AUTHORING_PROFILE_REVISION (fresh admissions freeze that revision).",
+    "requires": "branch feat/svg-s3-prompt-profile-v10 merged (without it revision 10 is unknown)",
+    "prompts": ["p1", "p2"],
+    "repeats": 2,
+    "rule": "quality",
+    "control": "9",
+    "challenger": "10",
+    "caps": {"per_deck_usd": 2.5, "total_usd": 11.0},
+    "arms": {
+      "9": {"env": {"SVG_AUTHORING_PROFILE_REVISION": "9"}, "unset": [], "body": {}},
+      "10": {"env": {"SVG_AUTHORING_PROFILE_REVISION": "10"}, "unset": [], "body": {}}
+    }
+  }
+}
