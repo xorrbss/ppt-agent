@@ -47,10 +47,12 @@ PROVENANCE_KEYS = frozenset({"presentonPatches", "patches"})
 
 
 def converter_identity_digest(vendor_manifest_sha256: str) -> str:
-    """``converter_digest()`` over a vendor manifest with the given SHA-256.
+    """``converter_source_digest()`` over a vendor manifest with the given SHA-256.
 
-    It mirrors the identity built by ``converter_digest()`` (pinned by a test)
-    and reads the adapter files' current bytes.
+    It mirrors the source identity built by ``converter_source_digest()`` (pinned
+    by a test) and reads the adapter files' current bytes. Such a raw digest is
+    not a reviewed revision state (``services/verifier_revisions``), so
+    ``converter_digest()`` itself returns it unchanged for that manifest.
     """
     from workers.public_svg_pptx_convert import _PROJECTION_ADAPTER_FILES
 

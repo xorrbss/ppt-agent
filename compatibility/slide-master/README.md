@@ -54,8 +54,10 @@ bounds are now `(off_x, off_y, off_x + ext_cx, off_y + ext_cy)`; rotated and
 flipped shapes keep their per-corner visual bounds. The vendor manifest carries
 the `xfrm-bounds.1` suffix and the new `utils.py` hash, which changes
 `converter_digest()`, so old export bundles are rejected with
-`svg_export_version_mismatch`. `CONVERTER_VERSION` is not extended: it feeds a
-160-character identity field that the longer string would overflow.
+`svg_export_version_mismatch`. `CONVERTER_VERSION` is not extended: it feeds the
+128-character `exporter_version` identity field (`public_artifact.exporter_version`,
+`ExportIdentityKey`, `CanonicalExportIdentity`) that the longer string would
+overflow; see `docs/explicit-verifier-revisions-design-20261105.md` section 7.
 
 `chart-furniture.16` (native chart manual layouts, per-series data labels,
 gap/overlap/vary-colors options, title bold/alignment; table paragraph spacing,
@@ -93,11 +95,18 @@ The alias checks live in files of the whole-page verifier inventory, so adding
 them re-pinned `whole_page_verifier_digest()` once, as any verifier edit does:
 in-flight v4 bundles and completed-identity reuse are recomputed, while stored
 final PPTX render proofs, which do not bind that digest, keep verifying.
-A later split of `converter_digest()` into executed-code identity and
-provenance metadata needs a new digest schema in
-`workers/public_svg_pptx_convert.py`; that file is itself hashed by the current
-schema, so the split cannot be carried by a byte-identity alias and is
-deferred.
+
+`converter_digest()` now carries an explicit execution revision
+(`CONVERTER_EXECUTION_REVISION` in `servers/fastapi/services/verifier_revisions.py`,
+design in `docs/explicit-verifier-revisions-design-20261105.md`). The old
+byte digest is `converter_source_digest()`: it still verifies every vendored
+file against the manifest on each call, and it is pinned to the revision by
+`tests/unit/test_svg_verifier_revisions.py`. A vendor patch, a manifest
+rebuild or an adapter edit fails that test until the new source digest is
+recorded in the ledger: under the current revision when the executed behaviour
+is unchanged (stored proofs keep verifying; this replaces adding an alias), or
+under a bumped revision when it changed (stored proofs are retired). An
+unrecorded source state keeps its raw source digest as its identity.
 
 Bundle producers import the worker's converter version and current manifest
 digest. Old bundles are rejected with `svg_export_version_mismatch` (a
