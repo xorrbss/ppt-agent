@@ -309,12 +309,19 @@ def outbound_rules(rules: str, plan: OutputViewPlan | None, *, previous_svg_comp
 
         rules = compact_source_table_rules(rules)
     if plan.text_props is not None:
-        from services.svg_text_defaults import TEXT_DEFAULTS_REPAIR_SENTENCE, text_defaults_rules
+        from services.svg_text_defaults import text_defaults_rules
 
         rules = text_defaults_rules(rules, plan.text_props)
-        if previous_svg_compacted:
-            rules += "\n" + TEXT_DEFAULTS_REPAIR_SENTENCE + ".\n"
-    return rules
+    return rules + outbound_repair_rules(plan, previous_svg_compacted=previous_svg_compacted)
+
+
+def outbound_repair_rules(plan: OutputViewPlan | None, *, previous_svg_compacted: bool) -> str:
+    """The rule sentence a correction whose previous SVG went out compacted adds, or ``""``."""
+    if plan is None or plan.text_props is None or not previous_svg_compacted:
+        return ""
+    from services.svg_text_defaults import TEXT_DEFAULTS_REPAIR_SENTENCE
+
+    return "\n" + TEXT_DEFAULTS_REPAIR_SENTENCE + ".\n"
 
 
 def outbound_source_rules(source_rules: str, plan: OutputViewPlan | None) -> str:
