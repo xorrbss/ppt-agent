@@ -213,6 +213,13 @@ const nextConfig = {
         headers: securityHeaders,
       },
       {
+        // The sandboxed SVG slide preview iframe has an opaque origin, so it
+        // fetches the bundled OFL fonts cross-origin and needs CORS. Only the
+        // font files (no user data) are opened up, not the whole site.
+        source: "/fonts/:path*",
+        headers: [{ key: "Access-Control-Allow-Origin", value: "*" }],
+      },
+      {
         source: appPageCspSource,
         headers: [
           {
