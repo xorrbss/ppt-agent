@@ -233,6 +233,7 @@ tests/unit/test_canvas_neutral_paint_order_repair.py
 tests/unit/test_canvas_registry.py
 tests/unit/test_canvas_stage_gate.py
 tests/unit/test_checkpoint_artifact_authority.py
+tests/unit/test_code_file_digest_cache.py
 tests/unit/test_company_standard_authored_template_vertical_slice.py
 tests/unit/test_content_structure_policy.py
 tests/unit/test_database_revision_authority.py
@@ -322,8 +323,10 @@ tests/unit/test_source_id_alias.py
 tests/unit/test_source_image_registry.py
 tests/unit/test_svg_attempt_cause.py
 tests/unit/test_svg_attempt_observability.py
+tests/unit/test_svg_author_prompt_cache.py
 tests/unit/test_svg_author_timeout_recovery.py
 tests/unit/test_svg_axis_review.py
+tests/unit/test_svg_bar_proportion.py
 tests/unit/test_svg_canvas_brief.py
 tests/unit/test_svg_chart_fidelity.py
 tests/unit/test_svg_chart_label_units.py
@@ -357,6 +360,7 @@ tests/unit/test_svg_generation_admission.py
 tests/unit/test_svg_generation_session.py
 tests/unit/test_svg_generation_timing_receipt.py
 tests/unit/test_svg_header_capacity_policy.py
+tests/unit/test_svg_header_design_parallel_offer.py
 tests/unit/test_svg_header_flow_body_defects.py
 tests/unit/test_svg_header_optional_stage_fallback.py
 tests/unit/test_svg_header_scoped_eligibility.py
@@ -383,6 +387,7 @@ tests/unit/test_svg_pptx_font_embedding.py
 tests/unit/test_svg_pptx_font_subset.py
 tests/unit/test_svg_prepare_provenance.py
 tests/unit/test_svg_preview_reader.py
+tests/unit/test_svg_prose_chart_literal.py
 tests/unit/test_svg_raster_redesign_publication.py
 tests/unit/test_svg_raster_renumber.py
 tests/unit/test_svg_render_deck_scope.py
@@ -408,6 +413,7 @@ tests/unit/test_svg_source_native_table_rows.py
 tests/unit/test_svg_source_pages_memo.py
 tests/unit/test_svg_source_preserving_export.py
 tests/unit/test_svg_source_publication.py
+tests/unit/test_svg_stacked_charts.py
 tests/unit/test_svg_stroke_line_contract.py
 tests/unit/test_svg_style_adapter.py
 tests/unit/test_svg_subset_publication.py
@@ -425,6 +431,7 @@ tests/unit/test_svg_template_fallback_body.py
 tests/unit/test_svg_template_first_draft.py
 tests/unit/test_svg_template_first_draft_geometry.py
 tests/unit/test_svg_template_generality.py
+tests/unit/test_svg_template_glyph_frame_fallback.py
 tests/unit/test_svg_template_header_slots.py
 tests/unit/test_svg_template_linux_preview.py
 tests/unit/test_svg_template_native_fixed_text.py
@@ -441,6 +448,7 @@ tests/unit/test_svg_text_advance.py
 tests/unit/test_svg_text_defaults.py
 tests/unit/test_svg_text_overlap.py
 tests/unit/test_svg_text_overlap_browser.py
+tests/unit/test_svg_timeout_repurchase_incident.py
 tests/unit/test_svg_timing_memo_followups.py
 tests/unit/test_svg_trusted_fonts.py
 tests/unit/test_svg_utility_layering.py
