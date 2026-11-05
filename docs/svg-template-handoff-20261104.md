@@ -149,22 +149,38 @@ Details and tables: `docs/content-structure-policy-20261104.md`.
     were measured on two decks only, the arrowhead check
     (`connector_arrowheads_reversed`) and the generality font fix not live.
 
+## Results of the 2026-11-05 plan (stages 0-4)
+
+* Evaluation: four fictional inputs (`structured_proposal_ko`, `unstructured_report_ko`,
+  `data_report_ko`, `dense_proposal_ko`) x two templates (the real deck A, the public executive
+  report B); `run_eval.py matrix`/`decide`/`recover`; judge version 2 calibrated against human
+  scores on template A (mean absolute error 0.25; original pages ~4.4, plain fallback pages ~1.2;
+  generated pages are told apart only beyond ~0.5). Template B's judge is not calibrated.
+* Defaults decided on paired cells: content structure policy tables and connectors stay off
+  (first drafts accepted 9.25 -> 7.5 / 6.9 of 10; the baseline already draws flows on 6.4 of 10
+  pages and 3.4 native tables per deck); template body exemplars ON
+  (`SVG_TEMPLATE_BODY_EXEMPLARS`, `docs/template-body-composition-20261105.md`); component style
+  stays off.
+* Final check with the defaults (dense input, 2 paired cells against exemplars off): first drafts
+  accepted 7.0 -> 9.5 of 10, gate 10/10, fallback 0, judge overall 2.66 -> 3.00 (structure +0.55,
+  density +0.30, hierarchy +0.45, visuals +0.25). The original deck's pages score ~4.4 on the same
+  judge, so the gap (~1.4) is still large; density and visuals are the lowest axes.
+* Also done: chapter-specific frames without a frame map (published pages keep their own frame),
+  chart lines whose values the source does not write are dropped, first-draft geometry fixes
+  (unrendered marks, duplicate table headers, text metrics in the prompt, overlap witnesses),
+  outline page-count retry with its own allowance, text-heavy default for template decks (API and
+  UI), deck title from the outline, template preview from the cover frame render, i18n of the
+  template picker, a full regression run (no new failure left; 281 failures exist on main as well).
+* Not done / open: templates registered before body composition must be registered again; the
+  framed-publish stop seen once in the UI was not reproduced (the review now names the cause);
+  section / table-of-contents frames still need a frame map; authored tests are not run any more
+  (the product uses svg only).
+
 ## Next, in order
 
-1. Have the user judge the latest deck in PowerPoint against the original
-   (comparison material was produced outside the repository).
-2. With credit restored, measure N >= 3: the first-draft fixes (target
-   first try >= 9.5 of 10, fallback 0), then `CONTENT_STRUCTURE_POLICY_SCOPE=template
-   CONTENT_STRUCTURE_POLICY_PARTS=connectors` with the arrowhead check, then
-   one generation on a re-registered public template.
-3. Decide the defaults: connectors part, component style
-   (`SVG_TEMPLATE_COMPONENT_STYLE`), tables part (pages with a table and a
-   chart still fail).
-4. Component style follow-ups: two text levels instead of forcing every
-   small size up, gapped chevrons, one variant per kind, then a
-   same-session knob-off control.
-5. Cards running past the body's bottom edge are the leading remaining
-   first-draft failure.
+1. Have the user judge the final deck in PowerPoint against the original.
+2. Density and visuals: the lowest judge axes; compare page by page with the original.
+3. Calibrate the judge on template B (human scores) before relying on B's numbers.
 
 ## How to run a live test
 
