@@ -333,7 +333,14 @@ def test_the_render_cache_identity_follows_the_fitter_floor(monkeypatch):
     assert raised.fit_font_floor_px == 18.0
     assert raised.digest not in {on.digest, off.digest}
     assert slide_capture._metrics_cache_key(HTML) != (off.source_digest, off.digest, "metrics")
-    assert slide_capture.MEASUREMENT_CACHE_VERSION == "authored-measurement/v15-fit-floor-canvas-identity"
+    # The fit-floor/canvas identity landed in measurement revision 15; later
+    # revisions (e.g. f4038b9df, v19) keep it, so the cache version may only
+    # move forward. The exact current value is pinned in
+    # test_svg_renderer_raster_preview.
+    version = re.fullmatch(
+        r"authored-measurement/v(\d+)-[a-z0-9-]+", slide_capture.MEASUREMENT_CACHE_VERSION
+    )
+    assert version is not None and int(version.group(1)) >= 15
 
 
 # --- the shipped pipeline call site ----------------------------------------

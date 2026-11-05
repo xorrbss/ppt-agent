@@ -268,7 +268,11 @@ def test_a4_writer_stays_closed_until_release_verified(monkeypatch):
 
     monkeypatch.setattr(module, "DOCUMENT_CANVAS_A4_RELEASE_VERIFIED", False)
     monkeypatch.setattr(module, "DOCUMENT_CANVAS_A4_CANDIDATE_ENABLED", False)
-    request = GeneratePresentationRequest(content="fixture", page_size="A4", orientation="portrait")
+    # An omitted strategy resolves to svg (generation_core/admission/strategy.py),
+    # which admits A4; these cases exercise the authored admission path.
+    request = GeneratePresentationRequest(
+        content="fixture", strategy="authored", page_size="A4", orientation="portrait"
+    )
     with pytest.raises(ValueError, match="document_canvas_a4_not_available"):
         validate_authored_canvas_admission(request, style_id="default")
 
@@ -281,8 +285,10 @@ def test_a4_writer_stays_closed_until_release_verified(monkeypatch):
         ({"_authored_master_pin": object()}, "document_canvas_product_readback_pending"),
         ({"_authored_exact_snapshot_id": "fixture"}, "document_canvas_fixed_source_not_supported"),
         (
+            # An explicit svg strategy with a source restyle is refused by svg
+            # admission, which runs before the A4 route policy.
             {"source_mode": "source_content_restyle", "strategy": "svg"},
-            "document_canvas_generation_combination_not_supported",
+            "svg_source_verbatim_required",
         ),
     ],
 )
@@ -291,7 +297,9 @@ def test_a4_admission_rejects_unsupported_paths(monkeypatch, change, expected):
     import services.document_canvas as module
 
     monkeypatch.setattr(module, "DOCUMENT_CANVAS_A4_RELEASE_VERIFIED", True)
-    request = GeneratePresentationRequest(content="fixture", page_size="A4", orientation="portrait")
+    request = GeneratePresentationRequest(
+        content="fixture", strategy="authored", page_size="A4", orientation="portrait"
+    )
     request._authored_style_snapshot = SimpleNamespace(reference_mode="style_reference")
     for key, value in change.items():
         setattr(request, key, value)
@@ -337,7 +345,9 @@ def test_release_switch_does_not_open_unverified_a4_route(monkeypatch):
     import services.document_canvas as module
 
     monkeypatch.setattr(module, "DOCUMENT_CANVAS_A4_RELEASE_VERIFIED", True)
-    request = GeneratePresentationRequest(content="fixture", page_size="A4", orientation="portrait")
+    request = GeneratePresentationRequest(
+        content="fixture", strategy="authored", page_size="A4", orientation="portrait"
+    )
     request._authored_style_snapshot = SimpleNamespace(reference_mode="style_reference")
     with pytest.raises(ValueError, match="document_canvas_product_readback_pending"):
         validate_authored_canvas_admission(request, style_id="default")

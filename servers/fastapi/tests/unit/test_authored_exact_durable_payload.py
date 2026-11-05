@@ -65,7 +65,17 @@ def test_style_reference_durable_payload_adds_only_the_authored_pins():
         "_internal_generation_strategy_reason",
     }
     assert pins["_internal_generation_strategy_reason"] == "explicit"
-    assert {key: durable[key] for key in public} == public
+    # ``writing_policy`` is intentionally omitted from the durable payload while
+    # it is unset, so historical jobs keep their canonical payload and
+    # idempotency fingerprint (``_durable_request_payload``).
+    assert public["writing_policy"] is None
+    public_without_unset_policy = {
+        key: value for key, value in public.items() if key != "writing_policy"
+    }
+    assert {key: durable[key] for key in public_without_unset_policy} == (
+        public_without_unset_policy
+    )
+    assert "writing_policy" not in durable
     assert pins["_internal_authored_rollout_profile"] == RolloutProfile().as_dict()
     assert pins["_internal_authored_canvas"] == {
         "contractVersion": "authored-canvas/v1",
@@ -127,7 +137,7 @@ def test_style_reference_durable_payload_adds_only_the_authored_pins():
     assert _generation_request_hash_payload(portrait)["aspectRatio"] == "9:16"
 
     unsupported_template = GeneratePresentationRequest(
-        content="Deck", template="custom", aspect_ratio="9:16"
+        content="Deck", strategy="authored", template="custom", aspect_ratio="9:16"
     )
     with pytest.raises(ValueError, match="authored_portrait_combination_not_supported"):
         validate_authored_canvas_admission(
@@ -137,6 +147,7 @@ def test_style_reference_durable_payload_adds_only_the_authored_pins():
 
     unsupported_engine = GeneratePresentationRequest(
         content="Deck",
+        strategy="authored",
         template="authored",
         aspect_ratio="9:16",
         generationEngine="deck-ir",

@@ -65,7 +65,7 @@ def _run(stdin_bytes: bytes, monkeypatch) -> tuple[int, bytes]:
     stdout = io.BytesIO()
     monkeypatch.setattr(worker.sys, "stdin", types.SimpleNamespace(buffer=io.BytesIO(stdin_bytes)))
     monkeypatch.setattr(worker.sys, "stdout", types.SimpleNamespace(buffer=stdout))
-    return worker.main(), stdout.getvalue()
+    return worker.main([]), stdout.getvalue()
 
 
 def _read_frames(payload: bytes) -> list[dict]:
