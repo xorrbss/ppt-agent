@@ -82,8 +82,8 @@ speaker notes.
 
 ## 3. Decisions taken in this design
 
-The owner delegated these to the design's recommendation. Each can be overridden; the phase that
-depends on it is named.
+**Confirmed by the owner on 2026-11-05 with the options below.** The phase that depends on each is
+named; D2 and D3 still branch on the P0 measurement as written.
 
 | # | Question | Decision | Phase |
 |---|---|---|---|
