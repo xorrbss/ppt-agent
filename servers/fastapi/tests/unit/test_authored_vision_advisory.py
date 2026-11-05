@@ -692,7 +692,7 @@ def test_the_advisory_request_has_the_same_message_shape_as_the_critique_call(qu
             execution=source_local_execution, source_job=source_local_job)
         from services import svg_partial_recovery as source_partial
         from services.generation_core.drivers.svg import quality_recovery as source_recovery
-        from services.svg_cached_author_render_recovery import digest as archive_digest
+        from services.svg_recovery_witness import digest as archive_digest
         source_archive = {"job": deepcopy(source_local_job)}
         source_working = {"checkpoints": [dict(slide_index=i, svg_checkpoint=deepcopy(page))
                           for i, (page, _) in enumerate(source_local_pages)]}
@@ -1118,7 +1118,7 @@ def test_the_advisory_request_has_the_same_message_shape_as_the_critique_call(qu
                     dict(checkpoints=unknown_rows), unknown_proof, manifest_pages=wrong_manifest_pages)
             # A sealed current author-only result is fresh evidence, not an
             # old PNG baseline. Archive replay keeps its original row intact.
-            from services.svg_cached_author_render_recovery import author_witness
+            from services.svg_recovery_witness import author_witness
             author_args = deepcopy(flat_args)
             author_raw = deepcopy(author_args["payloads"])
             author_raw[3]["quality_recovery"] = dict(status="repair_pending", prior_candidate={"fixture": "prior"})
@@ -2044,7 +2044,7 @@ def test_the_advisory_request_has_the_same_message_shape_as_the_critique_call(qu
             # Exercise the actual raw-target authorization comparison; asset
             # restoration is a separate, unchanged boundary in this fixture.
             from services.generation_core.drivers.svg import partial_quality_recovery as repair_authority
-            from services.svg_cached_author_render_recovery import author_witness
+            from services.svg_recovery_witness import author_witness
             mixed_job = SimpleNamespace(id="job", workspace_operation_id="operation", presentation_id="presentation")
             repair_payload = deepcopy(hash_pages[0][0])
             repair_payload["attempts"] = [dict(kind="provider", raw_response=repair_payload["svg_content"], receipt={})]

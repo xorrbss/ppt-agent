@@ -27,7 +27,7 @@ from models.sql.public_admission import AuthoredDeckPlanCheckpoint, PublicOperat
 from models.sql.provider_runtime_reservation import ProviderRuntimeBudget, ProviderRuntimeReservation
 from models.sql.provider_usage_receipt import ProviderUsageReceipt
 from models.sql.workspace import WorkspaceOperation
-from services.svg_cached_author_render_recovery import _unknown_provider, author_witness, digest
+from services.svg_recovery_witness import author_witness, digest, unknown_provider as _unknown_provider
 from services.svg_timeout_repurchase import _live
 from utils.datetime_utils import get_current_utc_datetime
 from utils.code_file_digest import code_file_digest
@@ -3418,7 +3418,7 @@ async def _retained_quality_source_author(payload: dict[str, Any], row: Any, *, 
 
 
 async def _inherited_terminal_author_verified(payload, row, *, manifest, manifest_archive, receipt, session, owner, tenant, operation, seal_memo=None):
-    from services.svg_cached_author_render_recovery import author_witness
+    from services.svg_recovery_witness import author_witness
     witness = receipt.get("terminal_recovery_witness")
     marker = payload.get("partial_recovery")
     if not isinstance(manifest, dict) or not isinstance(witness, dict) or not isinstance(marker, dict):

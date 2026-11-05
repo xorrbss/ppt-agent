@@ -205,6 +205,9 @@ COMMON_HEADER_VERIFIER_LEDGER = VerifierRevisionLedger(
         # verification of every earlier version is byte-identical, so stored
         # evidence keeps this revision.
         "sha256:c58474633c70f87addab8165499a0b3ecb577badd57b461534796976f5518638": "svg-common-header-verifier/1",
+        # Cached-author-render deletion: drivers/svg/render.py imports approved_sidecars
+        # from svg_cached_author_render_lineage; no header verification changed.
+        "sha256:598ff7b694423b562370cb5c50b52acded95917c9b574408cc0242ca098e33cb": "svg-common-header-verifier/1",
     }),
 )
 
@@ -350,6 +353,12 @@ PARTIAL_RECOVERY_CODE_LEDGER = VerifierRevisionLedger(
         # Migration commit: _code_digest() and _page_render_code_digest() resolve
         # through these ledgers; no recovery behaviour changed.
         "e4232fcc984e8b08e9427b7b106e7c91c496b9c9a2b6008698e9b8f884424abe": "svg-partial-recovery-code/1",
+        # Cached-author-render deletion: the shared witnesses (digest, author_witness,
+        # unknown_provider) moved verbatim to svg_recovery_witness; collect's cached
+        # page check, the workspace admission and the pipeline's zero-provider flag
+        # were reduced to the rejection each one already always reached. No partial
+        # recovery behaviour changed.
+        "651b68aa3866cf5987ce233b5e8ebc5098c9b29b00fdda4cf8700b8ece5f8cdf": "svg-partial-recovery-code/1",
     }),
 )
 
@@ -367,6 +376,9 @@ PAGE_RENDER_CODE_LEDGER = VerifierRevisionLedger(
         # 49e529d6b: the anchor state itself. The migration commit edits only
         # svg_partial_recovery.py, which this identity excludes, so it keeps this key.
         "80cbd150c5d4f35086749c0faefadcd15181f3a74019c5cf43247bbb70b8ce36": "svg-page-render-code/1",
+        # Cached-author-render deletion (same edit as the code ledger entry): no page
+        # rendering or measurement behaviour changed.
+        "8e9cd3ad649183f3635bf02e53d7f2efa86646b5823729d3511b82491ea4e921": "svg-page-render-code/1",
     }),
 )
 
