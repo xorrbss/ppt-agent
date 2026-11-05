@@ -539,7 +539,7 @@ def _choose_exemplars(pages, grammar) -> tuple[SvgTemplateBodyExemplar, ...]:
         exemplar = SvgTemplateBodyExemplar(
             source_page=index, region_width=max(1, round(region.width)), region_height=max(1, round(region.height)),
             kinds=features["kinds"], sections=features["sections"], text_items=features["text_items"],
-            items=tuple(items[:MAX_ITEMS]))
+            items=tuple(items[:MAX_ITEMS]), region_x=round(region.x), region_y=round(region.y))
         fits = len(items) <= MAX_ITEMS and estimate_tokens(render_exemplar(exemplar)) <= EXEMPLAR_TOKEN_BUDGET
         candidates.append((exemplar, fits, _signature(features, items)))
 

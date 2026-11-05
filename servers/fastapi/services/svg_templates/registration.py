@@ -382,6 +382,7 @@ class SvgTemplateOperationHandler:
             before, source_path = await gateway.resolve_for_processing(session,
                 asset_id=binding.asset_id, kind=binding.kind)
             package = None
+            render_artifact_ids = []
             if payload["registration_mode"] == "framed":
                 from services.svg_templates.frame import extract_template_package
                 from services.svg_templates.raster_preservation import libreoffice_raster_renderer
@@ -405,6 +406,12 @@ class SvgTemplateOperationHandler:
                         owner_id=owner_id, tenant_id=tenant_id)
                     package_model = await asyncio.to_thread(build_preview_package,
                         package_model, source_path, captured_pdf, capture_receipt)
+                # Masked renders of the body exemplar pages, stored whatever SVG_TEMPLATE_BODY_RENDERS
+                # says (docs/template-body-renders-design-20261105.md); a page that cannot be verified
+                # gets none and the registration goes on.
+                from services.svg_templates.body_renders import attach_body_renders
+                package_model, render_artifact_ids = await attach_body_renders(session, package_model, source_path,
+                    captured_pdf=captured_pdf, operation_id=claim.operation_id)
                 package = package_model.model_dump(mode="json", by_alias=True)
                 if len(canonical_json_bytes(package)) > MAX_DRAFT_PACKAGE_BYTES:
                     raise ValueError("svg_template_package_size_limit")
@@ -435,6 +442,7 @@ class SvgTemplateOperationHandler:
                 for role in ("source_image_ref", "frame_image_ref"):
                     if isinstance(entry.get(role), dict) and entry[role].get("artifact_id"):
                         artifact_ids.append(entry[role]["artifact_id"])
+            artifact_ids.extend(render_artifact_ids)
             await retain_artifacts(session, template_id=template.id, artifact_ids=artifact_ids)
             result = {"package": package, "style_projection": profile,
                 "source_snapshot_id": str(snapshot_id), "review_evidence": evidence, "source_previews": previews,
