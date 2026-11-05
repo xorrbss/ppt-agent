@@ -37,7 +37,7 @@ from pathlib import Path
 import httpx
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from metrics import package_objects, retention, summarize, svg_structure  # noqa: E402
+from metrics import package_objects, retention, summarize, svg_structure, template_text_leaks  # noqa: E402
 from recovery import (atomic_write_json, load_existing, map_job_to_cell, newest_per_cell,  # noqa: E402
                       plan_resume)
 
@@ -168,9 +168,35 @@ def _make_judge_for(args: argparse.Namespace, selection: dict | None, cache: dic
     return cache[key]
 
 
+_TEMPLATE_TEXTS: dict[str, str] = {}
+
+
+def template_text(path: str | None) -> str | None:
+    """The text of a template's own deck (a .pptx: every text frame and table cell) or a .txt file, cached.
+    Read locally for the leak metric; it is never written to a result."""
+    if not path:
+        return None
+    if path not in _TEMPLATE_TEXTS:
+        if path.lower().endswith(".pptx"):
+            from pptx import Presentation
+
+            def texts(shapes):
+                for shape in shapes:
+                    if shape.has_text_frame:
+                        yield shape.text_frame.text
+                    if getattr(shape, "has_table", False) and shape.has_table:
+                        yield from (cell.text for row in shape.table.rows for cell in row.cells)
+                    if shape.shape_type == 6:  # group
+                        yield from texts(shape.shapes)
+            _TEMPLATE_TEXTS[path] = "\n".join(text for slide in Presentation(path).slides for text in texts(slide.shapes))
+        else:
+            _TEMPLATE_TEXTS[path] = Path(path).read_text(encoding="utf-8")
+    return _TEMPLATE_TEXTS[path]
+
+
 def _deck_record(client: httpx.Client | None, conn, judge, args: argparse.Namespace, data: dict, source: str | None,
                  cell: str | None, selection: dict | None, number: int, seconds: float, tag: str = "",
-                 parts: dict[str, str] | None = None) -> dict:
+                 parts: dict[str, str] | None = None, template: str | None = None) -> dict:
     """The record of one completed generation (``data`` is the task's result data), measured from the database.
     The PPTX parts come from ``parts`` when given, else from the API when ``--pptx`` is set."""
     extra = {"cell": cell} if cell else {}
@@ -179,6 +205,9 @@ def _deck_record(client: httpx.Client | None, conn, judge, args: argparse.Namesp
     if source is not None:
         kept = retention(source, texts)
         record["words_kept"], record["numbers_kept"] = (round(kept["words"], 3), round(kept["numbers"], 3))
+    if template is not None:
+        leaks = template_text_leaks(template, texts, source or "")
+        record["template_text_leak_ngrams"], record["template_text_leak_figures"] = leaks["ngrams"], leaks["figures"]
     if parts is None and args.pptx and client is not None:
         parts = _export_parts(client, data["presentation_id"], data.get("export_operation_id"), 240)
     record.update(package_objects(parts) if parts else {})
@@ -206,7 +235,7 @@ def _deck_record(client: httpx.Client | None, conn, judge, args: argparse.Namesp
 
 def _sample_runs(client: httpx.Client, conn, judge, args: argparse.Namespace, payload: dict, source: str | None,
                  cell: str | None, selection: dict | None = None, first: int = 1, count: int | None = None,
-                 on_run=None) -> list[dict]:
+                 on_run=None, template: str | None = None) -> list[dict]:
     """``count`` (default ``args.runs``) generations of one request numbered from ``first``, each measured; every
     record carries ``cell`` when given. ``on_run(runs_so_far)`` is called after each run (to save progress)."""
     runs: list[dict] = []
@@ -220,7 +249,7 @@ def _sample_runs(client: httpx.Client, conn, judge, args: argparse.Namespace, pa
             runs.append({"run": number, "completed": False, "state": str(state), **extra})
         else:
             runs.append(_deck_record(client, conn, judge, args, status["data"], source, cell, selection, number,
-                                     seconds, tag))
+                                     seconds, tag, template=template))
         if on_run is not None:
             on_run(runs)
     return runs
@@ -255,7 +284,8 @@ def run(args: argparse.Namespace) -> None:
     with _client(args) as client:
         runs = _sample_runs(client, conn, judge, args, payload, source, None,
                             on_run=lambda so_far: _write_result(args, judge, so_far, args.runs, quiet=True,
-                                                                payload=args.payload))
+                                                                payload=args.payload),
+                            template=template_text(args.template_text))
     _write_result(args, judge, runs, args.runs, payload=args.payload)
 
 
@@ -304,7 +334,8 @@ def matrix(args: argparse.Namespace) -> None:
             start, count = todo[cell["cell"]]
             source = (INPUTS / f"{cell['input']}.txt").read_text(encoding="utf-8")
             runs += _sample_runs(client, conn, _make_judge_for(args, cell["judge"], cache), args, cell["payload"],
-                                 source, cell["cell"], cell["judge"], first=start, count=count, on_run=save)
+                                 source, cell["cell"], cell["judge"], first=start, count=count, on_run=save,
+                                 template=template_text(cell["spec"].get("template_text")))
     save([], quiet=False)
 
 
@@ -444,6 +475,8 @@ def main() -> None:
     run_parser.add_argument("--label", required=True)
     run_parser.add_argument("--out", default="eval-results")
     run_parser.add_argument("--source", help="source text, to measure how much of it the deck kept")
+    run_parser.add_argument("--template-text", help="the template's own deck (.pptx) or text (.txt), local only:"
+                                                    " counts template wording that reached the deck")
     run_parser.add_argument("--pptx", action="store_true", help="also fetch the PPTX and count native tables and charts")
     run_parser.add_argument("--base", default="http://127.0.0.1:8000")
     run_parser.add_argument("--dsn", default=os.environ.get("EVAL_DATABASE_DSN", DEFAULT_DSN))
