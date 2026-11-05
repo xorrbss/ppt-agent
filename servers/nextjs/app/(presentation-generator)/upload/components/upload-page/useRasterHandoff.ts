@@ -1,5 +1,5 @@
 "use client";
-import { commonHeaderDesignForConfig } from "@/lib/common-header-design";
+import { commonHeaderDesignForConfig, hasCommonHeader } from "@/lib/common-header-design";
 /**
  * Hands a fully-approved raster review off to the SVG generation flow: it
  * verifies the approval pin against the requested analysis mode, stages the
@@ -35,7 +35,7 @@ export const useRasterHandoff = (
           pin.source_sha256 !== operation.analysis.source.source_sha256 || !referenceSnapshotId) {
         throw new Error("raster_approval_pin_invalid");
       }
-      if (pin.full_page_preserve_pages.length > 0 && (recovery.commonHeaderMode ?? "uniform") === "uniform") {
+      if (pin.full_page_preserve_pages.length > 0 && hasCommonHeader(recovery.commonHeaderMode)) {
         throw new Error("svg_common_header_source_preservation_conflict");
       }
       if (recovery.analysisMode === "auto_preserve") {
@@ -83,7 +83,7 @@ export const useRasterHandoff = (
           svgDesignReferenceSnapshotId: recovery.svgDesignReferenceSnapshotId,
           commonHeaderMode: recovery.commonHeaderMode ?? "uniform",
           commonHeaderDesign: commonHeaderDesignForConfig(recovery),
-          commonHeaderCoverException: recovery.commonHeaderMode === "uniform" && (recovery.commonHeaderCoverException ?? false),
+          commonHeaderCoverException: recovery.commonHeaderMode !== undefined && hasCommonHeader(recovery.commonHeaderMode) && (recovery.commonHeaderCoverException ?? false),
           ...(recovery.svgCanvas ? { svgCanvas: recovery.svgCanvas } : recovery.aspectRatio ? { aspectRatio: recovery.aspectRatio } : { pageSize: "A4" as const, orientation: recovery.orientation }),
           sourceMode: "raster_reconstruction",
           rasterApprovalPin: pin,

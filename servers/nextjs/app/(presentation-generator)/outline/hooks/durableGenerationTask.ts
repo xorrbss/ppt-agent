@@ -35,7 +35,7 @@ export interface DurableGenerationTask {
   authoredRequest?: {
     strategy?: "authored" | "svg";
     commonHeaderDesign?: import("@/lib/common-header-design").CommonHeaderDesign;
-  commonHeaderMode?: "uniform" | "free";
+  commonHeaderMode?: import("@/lib/common-header-design").CommonHeaderMode;
     commonHeaderCoverException?: boolean;
     language: string | null;
     instructions?: string | null;

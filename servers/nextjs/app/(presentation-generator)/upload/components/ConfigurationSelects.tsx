@@ -1,4 +1,5 @@
 import CommonHeaderDesignInput from "./CommonHeaderDesignInput";
+import { hasCommonHeader } from "@/lib/common-header-design";
 import { PresentationConfig } from "../type";
 import { useEffect, useState } from "react";
 import { Check, ChevronUp } from "lucide-react";
@@ -204,9 +205,10 @@ export function ConfigurationSelects({
                         className="rounded-md border border-slate-200 bg-white px-2 py-1.5"
                     >
                         <option value="uniform">{t("commonHeaderModeUniform")}</option>
+                        <option value="reduced">{t("commonHeaderModeReduced")}</option>
                         <option value="free">{t("commonHeaderModeFree")}</option>
                     </select>
-                    {(config.commonHeaderMode ?? "uniform") === "uniform" ? (
+                    {hasCommonHeader(config.commonHeaderMode) ? (
                         <label className="flex items-center gap-1.5 whitespace-nowrap">
                             <input
                                 type="checkbox"
@@ -219,7 +221,7 @@ export function ConfigurationSelects({
                 </div>
             ) : null}
             {generationStrategy === "svg" && (config.commonHeaderMode ?? "uniform") === "uniform" ? <CommonHeaderDesignInput config={config} onConfigChange={onConfigChange} /> : null}
-            {generationStrategy === "svg" && sourceContentMode && (config.commonHeaderMode ?? "uniform") === "uniform" ? (
+            {generationStrategy === "svg" && sourceContentMode && hasCommonHeader(config.commonHeaderMode) ? (
                 <p className="basis-full text-sm text-amber-700" role="alert">
                     {t("commonHeaderSourcePreservationNote")}
                 </p>

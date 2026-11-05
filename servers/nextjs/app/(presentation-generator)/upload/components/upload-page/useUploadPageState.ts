@@ -10,6 +10,7 @@ import {
   VerbosityType,
 } from "../../type";
 import { notify } from "@/components/ui/sonner";
+import { hasCommonHeader } from "@/lib/common-header-design";
 import {
   sourceContentSelectionErrorMessage,
   validateSourceContentFiles,
@@ -355,7 +356,7 @@ export const useUploadPageState = ({
    * @returns boolean indicating if the configuration is valid
    */
   const validateConfiguration = (selectedFiles: File[]): boolean => {
-    if (sourceContentMode && generationStrategy === "svg" && (config.commonHeaderMode ?? "uniform") === "uniform") {
+    if (sourceContentMode && generationStrategy === "svg" && hasCommonHeader(config.commonHeaderMode)) {
       notify.warning(tA2b("commonHeaderModeRequired"), tA2b("commonHeaderSourcePreservationNote"));
       return false;
     }
