@@ -376,7 +376,9 @@ def test_production_worker_command_is_json_argv_absolute_and_required(monkeypatc
 
     monkeypatch.setenv(
         "AUTHORED_RENDERER_WORKER_COMMAND_JSON",
-        json.dumps([str(pathlib.Path("C:/Windows/System32/cmd.exe")), "/c"]),
+        # An absolute executable on every OS (a Windows drive path is not
+        # absolute on POSIX) that is not the contract launcher.
+        json.dumps([str(executable), "-c"]),
     )
     with pytest.raises(renderer_isolation.RendererPolicyError, match="invoke.py"):
         renderer_isolation.worker_command()

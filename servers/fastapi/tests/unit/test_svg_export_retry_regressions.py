@@ -31,7 +31,9 @@ def test_renderless_producer_release_reuse_requires_current_artifact_review(harn
     from workers import public_svg_pptx_render as office
     from workers.public_svg_pptx_convert import converter_digest
 
-    checker_digest = sha256_hex(Path(office.__file__).read_bytes())
+    # The checker digest also binds the renderer's ownership dependency
+    # (17b81af57), so hashing the renderer file alone no longer matches it.
+    checker_digest = office.checker_digest()
 
     async def scenario():
         export = await harness()

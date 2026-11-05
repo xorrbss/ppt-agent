@@ -44,6 +44,7 @@ from tests.support.authored_vnext_master_memory_repository import (
 from services.authored_vnext.master.preview import build_preview
 from tests.support.authored_vnext_master_fixture import master_contract_payload
 from utils.authored_styles import resolve_authored_style
+from tests.support.environment_requirements import requires_osb_retained_reference
 
 
 def test_masterless_authored_uses_hidden_deterministic_internal_composition(monkeypatch) -> None:
@@ -97,6 +98,7 @@ def _overlaps(left, right) -> bool:
     )
 
 
+@requires_osb_retained_reference
 def test_company_standard_authored_template_vertical_slice(
     fake_async_session,
 ) -> None:

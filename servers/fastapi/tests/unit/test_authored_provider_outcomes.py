@@ -52,6 +52,24 @@ from utils.provider_overload import is_provider_overload, safe_provider_diagnost
 _GENERIC_PHASE_TIMEOUT = httpx.Timeout(connect=30.0, read=360.0, write=60.0, pool=30.0)
 
 
+def _assert_cloned_options(actual: dict, **expected) -> None:
+    """Exact option keys; ``httpx.Timeout`` phases compared within clock drift.
+
+    The read phase is derived from the remaining call deadline, so it is the
+    configured budget minus a few microseconds of real elapsed time.
+    """
+
+    assert set(actual) == set(expected)
+    for key, value in expected.items():
+        if isinstance(value, httpx.Timeout):
+            for phase in ("connect", "read", "write", "pool"):
+                assert getattr(actual[key], phase) == pytest.approx(
+                    getattr(value, phase), abs=0.05
+                )
+        else:
+            assert actual[key] == value
+
+
 _VALID_HTML = (
     "<!DOCTYPE html><html lang='ko'><head><meta charset='utf-8'></head>"
     "<body><h1 data-qid='title'>제목</h1></body></html>"
@@ -196,10 +214,9 @@ def test_every_cloneable_transport_gets_the_bounded_call_timeout():
     adapted = _ChatGPTClient([])
     _call(adapted)()
     assert adapted._client.options is None  # the shared client is never mutated
-    assert adapted._client.cloned_options == {
-        "max_retries": 0,
-        "timeout": _GENERIC_PHASE_TIMEOUT,
-    }
+    _assert_cloned_options(
+        adapted._client.cloned_options, max_retries=0, timeout=_GENERIC_PHASE_TIMEOUT
+    )
 
     plain = _PlainClient()
     generate = provider_generate_call(
@@ -212,7 +229,7 @@ def test_every_cloneable_transport_gets_the_bounded_call_timeout():
     generate()
     # Cloned purely for the timeout: no retry/idempotency adaptation applies.
     assert plain._client.options is None
-    assert plain._client.cloned_options == {"timeout": _GENERIC_PHASE_TIMEOUT}
+    _assert_cloned_options(plain._client.cloned_options, timeout=_GENERIC_PHASE_TIMEOUT)
 
 
 def test_call_timeout_is_a_distinct_recoverable_outcome():
@@ -345,6 +362,8 @@ def test_idempotent_overload_retry_reserves_and_stays_inside_deadline():
         "failureDiagnostics": [{
             "exceptionType": "ProviderError", "httpStatus": 503,
             "statusOrigin": "http_response", "failureKind": "overload",
+            # The stub error carries no provider error code at all.
+            "unrecognizedErrorCode": True,
         }],
     }
 
@@ -476,7 +495,7 @@ def test_a_generic_call_is_untouched_by_a_pending_authored_reservation():
     # reservation was never spent by a call that does not belong to it.
     assert receipt["physicalCallCount"] == 1
     assert receipt["idempotencyCapable"] is False
-    assert client._client.cloned_options == {"timeout": _GENERIC_PHASE_TIMEOUT}
+    _assert_cloned_options(client._client.cloned_options, timeout=_GENERIC_PHASE_TIMEOUT)
     assert len(still_pending) == 1
 
 
@@ -1225,7 +1244,13 @@ def test_structured_http_overload_keeps_original_cause_and_safe_receipt(status):
     assert raised.value.diagnostics["retryAfterSeconds"] == 5
     assert call.receipt["physicalCallCount"] == 1
     assert call.receipt["overloadRetryCount"] == 0
-    assert call.receipt["failureDiagnostics"] == [raised.value.diagnostics]
+    # The receipt also keeps the provider's raw code classification; the raised
+    # outcome carries only the normalized errorCode.
+    assert call.receipt["failureDiagnostics"] == [{
+        **raised.value.diagnostics,
+        "providerErrorCode": "server_error",
+        "unrecognizedErrorCode": True,
+    }]
     assert "private" not in str(call.receipt)
 
 

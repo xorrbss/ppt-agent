@@ -576,6 +576,9 @@ def test_exact_generation_provenance_survives_unimportable_review_without_model_
         async with AsyncSession(engine, expire_on_commit=False) as session:
             generation_request = GeneratePresentationRequest(
                 content="Exact topic",
+                # An omitted strategy resolves to svg, which would validate
+                # the style against the registered presets instead.
+                strategy="authored",
                 template="authored",
                 authored_style="exact-source",
             )

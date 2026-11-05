@@ -36,6 +36,9 @@ def _inputs():
 
 @pytest.fixture
 def office_host(monkeypatch):
+    # The fake host replaces the win32 process APIs, but the render child still
+    # imports the real COM runtime; without pywin32 it cannot run.
+    pytest.importorskip("pythoncom", reason="requires pywin32 (Windows-only COM runtime)")
     host = SimpleNamespace(events=[], launches=0, inflight=0, max_inflight=0, block_first=False,
         second_waiting=threading.Event(), mutex=threading.Lock(), wait_count=0, timeouts=[])
 

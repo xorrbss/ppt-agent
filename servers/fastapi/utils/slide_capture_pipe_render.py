@@ -81,7 +81,7 @@ def render_admitted_htmls_over_pipe(
 
     if private_diagnostic_profile not in (None, "fixed-glyph-dpr2/v1"):
         raise ValueError("renderer private diagnostic profile invalid")
-    if private_diagnostic_profile is not None and (width_px, height_px) != (1280, 720):
+    if private_diagnostic_profile is not None and (width_px, height_px) != (DEFAULT_CANVAS_WIDTH_PX, DEFAULT_CANVAS_HEIGHT_PX):
         raise ValueError("renderer private diagnostic canvas invalid")
     raster_scale = 2 if private_diagnostic_profile is not None else 1
 
