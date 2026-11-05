@@ -432,6 +432,35 @@ Acceptance, Check.
 - **Acceptance:** §5 paired runs. Target: −60 s or more per 6-slide deck, no
   drop in pass rate or judge score.
 - **Check:** the header policy unit test module.
+- **Status (2026-11-05): implemented behind a setting, default unchanged,
+  measurement pending.**
+  - `SVG_COMMON_HEADER_DEFAULT` (registered enum, `designed` | `reduced`,
+    default `designed` = previous behaviour) chooses the header of a fresh
+    prompt-only request that names no `common_header_mode`. `reduced` admits
+    it as `uniform` without a header design plan (no header calls) and
+    defaults `common_header_cover_exception` to true when the caller did not
+    set it. An explicit `uniform` stays the designed opt-in; a request with
+    `common_header_design` keeps the designed header.
+  - New request value `common_header_mode: "reduced"` (generate, create,
+    public v2) asks for the same header explicitly, independent of the
+    setting. It is admission-only: the durable payload keeps `uniform`
+    without a plan, which every worker already runs as the reduced header.
+  - Divider and eyebrow: such a request seals
+    `reduced_header_style = svg-reduced-header-style/v1` into its style
+    snapshot. The reduced header v1 then adds a divider and a page-position
+    eyebrow ("02 / 06"; omitted when a company master draws a page number),
+    and takes one deck-wide title size from 34/30/26 px so that a long title
+    still fits in two lines (there is no designed header to fall back from).
+    The contract stays `svg-common-header/v1`; snapshots without the seal
+    and frozen contracts are unchanged. Header verifier source state
+    re-pinned under `svg-common-header-verifier/1`.
+  - The UI offers "기본 상단(빠름)" (`reduced`) but keeps `uniform` and
+    cover exception off as its defaults.
+  - Paired runs (§5, N = 2 per arm per prompt) are blocked: the Anthropic
+    key had no credit on 2026-11-05. To adopt after they pass: set the
+    setting default to `reduced` and the UI defaults to `reduced` with the
+    cover exception on (the UI always sends an explicit mode).
+  - Check: `tests/unit/test_svg_common_header_reduced_default.py`.
 
 **P9 — Content brief cap** · P2 · gate: measured with §5
 - **Change:** cap brief output and effort, or skip the brief for short
