@@ -123,6 +123,7 @@ async def render_html_in_reusable_chrome(  # noqa: ASYNC109
                     issue_capability=False,
                     width_px=width_px,
                     height_px=height_px,
+                    identity_html=cache_html,
                 )
                 await command(
                     "Page.setDocumentContent", {"frameId": frame_id, "html": instrumented}

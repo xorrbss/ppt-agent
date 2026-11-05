@@ -140,7 +140,7 @@ async def _render_html_in_isolated_worker_impl(  # noqa: ASYNC109
             html, preserved_raster_svg, width=width_px, height=height_px,
             **({"system_furniture": system_furniture} if system_furniture is not None else {}))
     else:
-        admitted = _admit_render_source(html)
+        admitted = _admit_render_source(html, materialize_fonts=False)
         measured_html = html
     command = worker_command()
     if request_assets_root is not None:

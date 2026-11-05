@@ -79,6 +79,19 @@ def materialize_trusted_svg_fonts(source: str, admitted):
                    node_count=admitted.node_count + 1)
 
 
+def validate_trusted_svg_fonts(source: str, admitted):
+    """Parent-side trusted-font check for a source an isolated worker renders.
+
+    The default profile is validated without building its faces. The other
+    profiles interleave validation with materialization (template fallback
+    proofs), so they still materialize here exactly as the worker does.
+    """
+    from services.svg_default_fonts import FONT_PROFILE as DEFAULT_FONT_PROFILE, validate_default_fonts
+    if f'<html title="{DEFAULT_FONT_PROFILE}|' in source:
+        return validate_default_fonts(source, admitted)
+    return materialize_trusted_svg_fonts(source, admitted)
+
+
 def _template_font_used(root: ET.Element) -> bool:
     from utils.svg_template_fonts import FONT_FAMILY, font_material, trusted_font_fallback_plan
 
