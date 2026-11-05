@@ -380,7 +380,10 @@ def test_codex_sheet_still_requires_uniform_extents(transport, tmp_path):
     assert len(transport.requests) == 1
 
 
-def test_codex_sheet_reaches_offer_without_another_provider_check(transport, tmp_path, monkeypatch):
+def test_offer_never_asks_the_codex_provider_for_an_icon_sheet(transport, tmp_path, monkeypatch):
+    # e5fbc818f: icons come only from the deck's family picks and the bundled
+    # vector library; an image provider (here the transparent Codex one) is
+    # left to scenes, so a figure-only plan spends no provider call.
     from models.authored_infographic_plan import (
         AuthoredInfographicPlan, AuthoredSlideInfographic, InfographicNode,
     )
@@ -400,8 +403,6 @@ def test_codex_sheet_reaches_offer_without_another_provider_check(transport, tmp
         image_service=SimpleNamespace(output_directory=str(tmp_path / "images")), settings=_settings(),
     ))
     assert result.receipt["transparentProvider"] is True
-    assert result.receipt["providerCalls"] == 1
-    assert result.receipt["icons"] == 3
-    assert {slot.concept for slot in result.slots} == set(labels)
-    assert len(transport.requests) == len(transport.admissions) == len(transport.receipts) == 1
-    assert json.loads(transport.requests[0].content)["size"] == layout_for(3).size
+    assert result.receipt["providerCalls"] == 0
+    assert not {slot.concept for slot in result.slots} & set(labels)
+    assert not transport.requests and not transport.admissions and not transport.receipts
