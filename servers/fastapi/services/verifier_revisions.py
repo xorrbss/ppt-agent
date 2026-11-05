@@ -391,6 +391,12 @@ PARTIAL_RECOVERY_CODE_LEDGER = VerifierRevisionLedger(
         # offer.py act only when an asset offer is built, while recovery replays the
         # assetOfferPlan sealed in the page-0 checkpoint. Stored decks recover byte-identically.
         "83057000cd28d3e85f6cd5751d1870a91bd49c2e6bd070226d7feab818675921": "svg-partial-recovery-code/1",
+        # Template body renders (author_slide_svg.py): the render images, their prompt block and
+        # the ``template_body_renders`` receipt exist only for snapshots that pin
+        # ``template_body_renders`` (fresh admissions with SVG_TEMPLATE_BODY_RENDERS on); the
+        # design view drops that key, which no stored snapshot holds. Stored decks recover
+        # byte-identically.
+        "25e50dffd2ee74f3b2d8afe433314e7e860ce9b654aeb608bb397d1b9e568200": "svg-partial-recovery-code/1",
     }),
 )
 
@@ -421,6 +427,9 @@ PAGE_RENDER_CODE_LEDGER = VerifierRevisionLedger(
         # without the ``page_number_ink`` pin finalize byte-identically, and pinned
         # outlines and sealed asset offers are replayed, not rebuilt.
         "1eb28c7bb992e469a3f880719a08f22f318179e583291cc34191a39732dfec1f": "svg-page-render-code/1",
+        # Template body renders (same edit as the code ledger entry): pages of snapshots
+        # without the ``template_body_renders`` pin are authored from byte-identical prompts.
+        "216b7a9c6d1657134ab86a340a1248080d2e3b42894baf23fb80cad6d225de73": "svg-page-render-code/1",
     }),
 )
 
