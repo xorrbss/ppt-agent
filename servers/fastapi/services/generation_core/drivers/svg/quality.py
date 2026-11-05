@@ -462,7 +462,9 @@ async def _quality_first_deck_advisory(ctx, pages, *, job, read_png, run_advisor
         raise ValueError("svg_quality_recovery_review_binding_missing")
     per_phase = plan["phase_group_limit"]
     group_size = plan["review_group_size"]
-    full_review = len(pages) <= group_size
+    # A v5 plan reviews a deck of up to its page limit in one full call; an
+    # earlier plan only when the deck fits one local group.
+    full_review = len(pages) <= plan.get("full_review_page_limit", group_size)
     review_attempt_limit = 1 + plan.get("review_retry_limit", 0)
     global_retry_limit = plan["global_format_retry_limit"]
     if final_control and baseline_review_active(context):
@@ -470,8 +472,9 @@ async def _quality_first_deck_advisory(ctx, pages, *, job, read_png, run_advisor
         group_size = final_control["local_group_size"]
         global_retry_limit = final_control["global_format_retry_limit"]
         full_review = False
-    groups = [list(range(start, min(start + group_size, len(pages))))
-              for start in range(0, len(pages), group_size)]
+    groups = ([list(range(len(pages)))] if full_review else
+              [list(range(start, min(start + group_size, len(pages))))
+               for start in range(0, len(pages), group_size)])
     if (len(groups) + (not full_review) + global_retry_limit) * review_attempt_limit != per_phase:
         raise ValueError("svg_quality_recovery_review_allocation_invalid")
     local_pages, local_comparisons, records = {}, {}, []
