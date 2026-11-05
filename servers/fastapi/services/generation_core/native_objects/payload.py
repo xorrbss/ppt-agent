@@ -21,6 +21,10 @@ from typing import Any
 TABLE_SCHEMA = "authored-native-table/v1"
 CHART_SCHEMA = "authored-native-chart/v1"
 FIXED_CHART_SCHEMA = "authored-native-chart/v2"
+#: Stacked / percent-stacked bar and column charts. V1 and V2 keep their exact
+#: shape (clustered only); a stacked payload is only valid under this revision.
+STACKED_CHART_SCHEMA = "authored-native-chart/v3"
+STACKED_GROUPINGS = ("stacked", "percentStacked")
 FIXED_AXIS_CONTRACT = "native-chart-fixed-value-axis/v1"
 CHART_TYPES = ("bar", "column", "line", "area", "pie", "donut")
 
@@ -226,9 +230,10 @@ def parse_chart_payload(value: Any) -> dict:
                    "title", "fontFamily", "fontSizePt", "textColor", "palette", "legend", "categoryAxis",
                   "valueAxis", "axisContract", "retainedAxisTitle", "grouping", "plot_layout", "overlap", "gap_width"), "chart_payload_invalid")
     schema = value.get("schemaVersion", CHART_SCHEMA)
-    if schema not in (CHART_SCHEMA, FIXED_CHART_SCHEMA):
+    if schema not in (CHART_SCHEMA, FIXED_CHART_SCHEMA, STACKED_CHART_SCHEMA):
         _fail("chart_schema_unsupported")
     fixed_axis = schema == FIXED_CHART_SCHEMA
+    stacked = schema == STACKED_CHART_SCHEMA
     if (value.get("axisContract") != FIXED_AXIS_CONTRACT if fixed_axis else "axisContract" in value):
         _fail("chart_fixed_axis_contract_invalid")
     if value.get("chartType") not in CHART_TYPES:
@@ -279,7 +284,15 @@ def parse_chart_payload(value: Any) -> dict:
             "svgDigest": retained["svgDigest"],
             "nativeGroupIds": list(retained["nativeGroupIds"]),
         }
-    if value.get("grouping") is not None:
+    if stacked:
+        # The stack is what this revision adds: a stacked payload without a
+        # stacked grouping is a different chart. The stack axis is automatic
+        # (no fixed bounds) and overlap is implied by the grouping.
+        if (value["chartType"] not in ("bar", "column") or value.get("grouping") not in STACKED_GROUPINGS
+                or len(series) < 2 or "overlap" in value or "axisContract" in value):
+            _fail("chart_grouping_invalid")
+        parsed["grouping"] = value["grouping"]
+    elif value.get("grouping") is not None:
         if value["chartType"] not in ("bar", "column") or value["grouping"] != "clustered":
             _fail("chart_grouping_invalid")
         parsed["grouping"] = "clustered"
@@ -299,7 +312,8 @@ def parse_chart_payload(value: Any) -> dict:
             _fail("chart_overlap_invalid")
         parsed["overlap"] = value["overlap"]
     if value.get("gap_width") is not None:
-        if (value.get("grouping") != "clustered" or value["chartType"] not in ("bar", "column")
+        if (value.get("grouping") not in ("clustered", *STACKED_GROUPINGS)
+                or value["chartType"] not in ("bar", "column")
                 or type(value["gap_width"]) is not int or not 0 <= value["gap_width"] <= 500):
             _fail("chart_gap_width_invalid")
         parsed["gap_width"] = value["gap_width"]

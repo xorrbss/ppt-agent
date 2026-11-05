@@ -33,12 +33,16 @@ from services.generation_core.drivers.svg.native_geometry import (
 )
 from services.generation_core.drivers.svg.native_chart_visual import chart_appearance
 from services.generation_core.drivers.svg.native_chart_visual import _bar_matrix, _category_texts
+from services.generation_core.native_objects.payload import STACKED_CHART_SCHEMA, STACKED_GROUPINGS
 
 CHART_ELEMENTS = frozenset({"g", "rect", "line", "polyline", "polygon", "path", "circle", "ellipse",
                             "text", "tspan"})
 
 
 _FIXED_AXIS_CONTRACT = "native-chart-fixed-value-axis/v1"
+#: Declared ``grouping`` values: clustered is the V1 geometry, the other two
+#: stack one rect per series on a shared category baseline (payload revision v3).
+_GROUPINGS = ("clustered", *STACKED_GROUPINGS)
 _COHERENT_GRID_V2 = "native-chart-coherent-grid/v2"
 
 
@@ -54,10 +58,11 @@ def _model_chart(raw: dict) -> dict:
         raise NativeRejection("native_chart_json_invalid")
     if "geometryContract" in raw and raw["geometryContract"] not in {"native-chart-coherent-grid/v1", _COHERENT_GRID_V2}:
         raise NativeRejection("native_chart_json_invalid")
-    # Clustered is the existing V1 bar/column geometry, not a new export mode.
-    # Stacking cannot be silently discarded when projecting a declaration.
+    # Clustered is the existing V1 bar/column geometry; stacked and
+    # percentStacked are proven against the drawn stack (see ``_bar_matrix``).
+    # A grouping is never silently discarded when projecting a declaration.
     if "grouping" in raw and (raw.get("chartType") not in ("bar", "column")
-                             or raw["grouping"] != "clustered"
+                             or raw["grouping"] not in _GROUPINGS
                              or not {"categoryOrder", "valueLabels", "markers"} <= set(raw)):
         raise NativeRejection("native_chart_json_invalid")
     categories, series = raw.get("categories"), raw.get("series")
@@ -68,6 +73,13 @@ def _model_chart(raw: dict) -> dict:
                        for s in series)
             or (raw.get("title") is not None and not isinstance(raw["title"], str))):
         raise NativeRejection("native_chart_json_invalid")
+    if raw.get("grouping") in STACKED_GROUPINGS and (
+            len(series) < 2 or "geometryContract" in raw or "axisContract" in raw
+            or any("values" in s and isinstance(s["values"], list) and any(
+                isinstance(v, (int, float)) and v <= 0 for v in s["values"]) for s in series)):
+        # A stack needs 2+ series; the fixed-axis and coherent-grid contracts
+        # are clustered-only; a zero or negative segment has no drawn extent.
+        raise NativeRejection("native_chart_stack_invalid")
     if "geometryContract" in raw and (raw.get("chartType") not in ("bar", "column")
                                       or raw.get("grouping") != "clustered"
                                       or len(categories) < 2 or len(series) < 2):
@@ -95,6 +107,8 @@ def _model_chart(raw: dict) -> dict:
                            **({"pointColors": s["pointColors"]} if "pointColors" in s else {})}
                           for s in series],
                **({"grouping": raw["grouping"]} if "grouping" in raw else {})}
+    if raw.get("grouping") in STACKED_GROUPINGS:
+        payload["schemaVersion"] = STACKED_CHART_SCHEMA
     if raw.get("title"):
         payload["title"] = raw["title"]
     for key in ("categoryAxis", "valueAxis"):
@@ -304,9 +318,10 @@ def _source_plot_geometry(payload: dict, prims: GroupPrimitives, frame, *,
     """Return source plot layout, clustered overlap, and gap width when geometry proves them."""
     chart_type = payload.get("chartType")
     categories, series = payload["categories"], payload["series"]
-    if (chart_type not in {"bar", "column"} or payload.get("grouping") != "clustered"
+    if (chart_type not in {"bar", "column"} or payload.get("grouping") not in _GROUPINGS
             or len(categories) < 2 or len(series) < 2):
         return None
+    stacked = payload["grouping"] in STACKED_GROUPINGS
     expected = [normalize_text(value) for value in categories]
     category_texts = [text for text in prims.texts if normalize_text(" ".join(text.lines)) in expected]
     if (len(category_texts) != len(categories)
@@ -330,7 +345,7 @@ def _source_plot_geometry(payload: dict, prims: GroupPrimitives, frame, *,
 
     bars_by_category: list[list] = [[] for _ in categories]
     thicknesses: list[float] = []
-    if payload.get("axisContract") == _FIXED_AXIS_CONTRACT:
+    if payload.get("axisContract") == _FIXED_AXIS_CONTRACT or stacked:
         # A legend swatch can share a series colour and sit near a category
         # center. Reuse the stricter bar/data matcher for fixed-axis charts;
         # ordinary V1 automatic-axis geometry keeps its established path.
@@ -375,14 +390,18 @@ def _source_plot_geometry(payload: dict, prims: GroupPrimitives, frame, *,
     for bars in bars_by_category:
         if len(bars) != len(series):
             return None
+        if stacked:
+            continue  # Segments share one category slot; the converter forces overlap 100.
         ordered = sorted(bars, key=lambda box: box.y0 if horizontal else box.x0)
         for first, second in zip(ordered, ordered[1:], strict=False):
             gap = (second.y0 - first.y1) if horizontal else (second.x0 - first.x1)
             overlaps.append(-100.0 * gap / thickness)
-    if (not overlaps or max(overlaps) - min(overlaps) > 1.0
-            or any(not math.isfinite(value) or not -100 <= value <= 100 for value in overlaps)):
-        return None
-    overlap = round(sum(overlaps) / len(overlaps))
+    overlap = None
+    if not stacked:
+        if (not overlaps or max(overlaps) - min(overlaps) > 1.0
+                or any(not math.isfinite(value) or not -100 <= value <= 100 for value in overlaps)):
+            return None
+        overlap = round(sum(overlaps) / len(overlaps))
     group_bounds = [
         (min((box.y0 if horizontal else box.x0) for box in bars),
          max((box.y1 if horizontal else box.x1) for box in bars))
@@ -495,7 +514,7 @@ def _source_plot_geometry(payload: dict, prims: GroupPrimitives, frame, *,
 
 def _category_footer_frame(payload: dict, prims: GroupPrimitives, frame) -> Box:
     """Reserve one source category line box when column labels touch the frame."""
-    if payload.get("chartType") != "column" or payload.get("grouping") != "clustered":
+    if payload.get("chartType") != "column" or payload.get("grouping") not in _GROUPINGS:
         return frame
     expected = [normalize_text(value) for value in payload["categories"]]
     labels = [text for text in prims.texts if normalize_text(" ".join(text.lines)) in expected]
@@ -580,14 +599,16 @@ def chart_object(raw: dict, prims: GroupPrimitives, *,
         frame = frame.union(box)
     if frame.width <= 0 or frame.height <= 0:
         raise NativeRejection("native_chart_empty")
-    if payload.get("grouping") == "clustered":
+    if payload.get("grouping") in _GROUPINGS:
         frame = _category_footer_frame(payload, prims, frame)
         geometry = _source_plot_geometry(
             payload, prims, frame,
             coherent_grid=raw.get("geometryContract") in {"native-chart-coherent-grid/v1", _COHERENT_GRID_V2},
         )
         if geometry is not None:
-            payload["plot_layout"], payload["overlap"], gap_width = geometry
+            payload["plot_layout"], overlap, gap_width = geometry
+            if overlap is not None:
+                payload["overlap"] = overlap
             if gap_width is not None:
                 payload["gap_width"] = gap_width
     if payload.get("axisContract") == _FIXED_AXIS_CONTRACT:
