@@ -298,6 +298,9 @@ async def require_current_header_revision_authority(session, presentation, slide
         owner_scope=operation.owner_scope), presentation=presentation, slides=slides, receipts=receipts)
     from services.generation_core.drivers.svg.publish import svg_slide_content
     from services.generation_core.drivers.svg.native_publish import canvas_point_per_px
+    from services.generation_core.drivers.svg.native_requirements import (
+        REQUIREMENTS_VERSION_V4, requirements_revision,
+    )
     scale = canvas_point_per_px(presentation_canvas_metadata(presentation.theme))
     manifest = None
     if sealed is not None:
@@ -312,7 +315,9 @@ async def require_current_header_revision_authority(session, presentation, slide
             source_objects, source_summary = source_table_native_objects(slide.svg_content,
                 final["source_preservation"], manifest, index, pt_per_px=scale)
         expected = svg_slide_content(final, role=(slide.content or {}).get("role"), source=outlines[index]["content"],
-            pt_per_px=scale, source_native_objects=source_objects, source_native_summary=source_summary)
+            pt_per_px=scale, source_native_objects=source_objects, source_native_summary=source_summary,
+            **({"revision": REQUIREMENTS_VERSION_V4}
+               if requirements_revision(snapshot) == REQUIREMENTS_VERSION_V4 else {}))
         expected["svgReceipt"]["source_digest"] = sha256_hex(slide.svg_content.encode("utf-8"))
         from services.svg_quality_recovery_review import saved_page_render_input
         expected_page = SimpleNamespace(svg_content=slide.svg_content, content=expected)

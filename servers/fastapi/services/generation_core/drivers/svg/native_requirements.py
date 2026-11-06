@@ -24,9 +24,10 @@ from services.generation_core.drivers.svg.native_publish import page_native_obje
 #: (``prose_chart_literal.py``); that derivation lives in the pinned outline, not here.
 REQUIREMENTS_VERSION = "svg-native-requirements/v2"
 REQUIREMENTS_VERSION_V3 = "svg-native-requirements/v3"
-REQUIREMENTS_REVISIONS = (REQUIREMENTS_VERSION, REQUIREMENTS_VERSION_V3)
+REQUIREMENTS_VERSION_V4 = "svg-native-requirements/v4"
+REQUIREMENTS_REVISIONS = (REQUIREMENTS_VERSION, REQUIREMENTS_VERSION_V3, REQUIREMENTS_VERSION_V4)
 #: The revision a fresh svg admission pins.
-ADMITTED_REQUIREMENTS_REVISION = REQUIREMENTS_VERSION_V3
+ADMITTED_REQUIREMENTS_REVISION = REQUIREMENTS_VERSION_V4
 SNAPSHOT_REVISION_KEY = "native_requirements_revision"
 _NUMBER = r"[-+]?(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?"
 _UNIT = r"(?:%|％|[A-Za-z가-힣][A-Za-z가-힣/²³]*)"
@@ -381,7 +382,18 @@ def apply_requested_native_quality(quality: dict, payload: dict, svg: str, conte
     requirements = requested_native_data(content, revision)
     if not requirements:
         return
-    wire, summary = page_native_objects({**payload, "svg_content": svg}, pt_per_px=pt_per_px)
+    projection_kwargs = {"revision": revision} if revision == REQUIREMENTS_VERSION_V4 else {}
+    wire, summary = page_native_objects({**payload, "svg_content": svg}, pt_per_px=pt_per_px, **projection_kwargs)
+    evidence = {}
+    if revision == REQUIREMENTS_VERSION_V4:
+        from services.generation_core.drivers.svg.native_chart_evidence import (
+            chart_drawing_evidence, chart_projection_diagnostics, chart_value_differences,
+        )
+        evidence = chart_drawing_evidence(payload, svg, revision=revision)
+        summary = chart_projection_diagnostics(summary, evidence)
+        dropped_ids = {item.get("id") for item in (summary or {}).get("dropped", [])
+                       if item.get("kind") == "chart"}
+        evidence = {group_id: proof for group_id, proof in evidence.items() if group_id in dropped_ids}
     remaining = list((wire or {}).get("objects", []))
     failures = []
     for expected in requirements["tables"]:
@@ -397,9 +409,22 @@ def apply_requested_native_quality(quality: dict, payload: dict, svg: str, conte
             continue
         match = next((entry for entry in remaining if entry["kind"] == "chart" and _chart_matches(entry["payload"], expected)), None)
         if match is None:
-            failures.append({"kind": "native_requested_chart_missing", **expected})
+            # A native annotation is optional only after the bound declaration
+            # matches the requirement and its own group visibly draws every
+            # category, series/unit label and value occurrence. Independent
+            # visibility and content failures remain content failures.
+            drawn = next((group_id for group_id, proof in evidence.items()
+                if not proof["missingLabels"] and _chart_matches(proof["chart"], expected)
+                and not any(chart_value_differences(proof, expected).values())), None)
+            if drawn is not None:
+                evidence.pop(drawn)
+                failures.append({"kind": "native_requested_chart_not_editable", **expected,
+                                 "declarationId": drawn})
+            else:
+                failures.append({"kind": "native_requested_chart_missing", **expected})
         else:
             remaining.remove(match)
+            evidence.pop(match["id"], None)
     quality["requestedNativeObjects"] = {"version": requirements["version"],
         "requiredTables": len(requirements["tables"]), "requiredCharts": len(requirements["charts"]),
         "passed": not failures, "projection": summary,
@@ -407,3 +432,30 @@ def apply_requested_native_quality(quality: dict, payload: dict, svg: str, conte
     if failures:
         quality["passed"] = False
         quality.setdefault("failures", []).extend(failures)
+
+
+def native_chart_repair_hint(quality: dict, *, revision: str) -> str | None:
+    """V4 gives repair attempts the projection cause and missing drawing data."""
+    if revision != REQUIREMENTS_VERSION_V4:
+        return None
+    requested = quality.get("requestedNativeObjects") or {}
+    dropped = [item for item in (requested.get("projection") or {}).get("dropped", [])
+               if item.get("kind") == "chart"]
+    if not dropped:
+        return None
+    # Leave room for the renderer's writing and overlap witnesses without
+    # slicing serialized JSON in the middle of a label/value.
+    compact = [{key: str(item[key])[:120] for key in ("id", "reason") if key in item}
+               | {key: [str(value)[:60] for value in item.get(key, [])[:4]]
+                  for key in ("missingLabels", "missingValues", "unexpectedValues")}
+               for item in dropped[:3]]
+    kinds = [str(item.get("kind", "unknown"))[:80] for item in quality.get("failures", [])
+             if isinstance(item, dict)]
+    hint = {"kind": "native_chart_projection_repair", "dropped": compact,
+        "failureKinds": list(dict.fromkeys(kinds))[:8],
+        "minimumBodyPx": quality.get("body_font_floor_px"),
+        "instruction": "Keep exact categories, every series, value and unit. Draw missing labels/values inside their group; fix the projection reason and other page failures without deleting content or shrinking fonts. A unique single-series title naming its series may replace a legend."}
+    while len(json.dumps(hint, ensure_ascii=False, separators=(",", ":"))) > 2300 and len(compact) > 1:
+        compact.pop()
+    hint["omittedCharts"] = len(dropped) - len(compact)
+    return json.dumps(hint, ensure_ascii=False, separators=(",", ":"))

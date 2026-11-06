@@ -157,12 +157,12 @@ def derive_outline_chart_literals(outline: PresentationOutlineModel, *, revision
                                   ) -> tuple[PresentationOutlineModel, int]:
     """Add the ``chart:`` line each slide's prose series states (``prose_chart_literal.py``).
 
-    Only for a deck whose pinned revision derives them (v3); the lines then pass the same
+    Only for a deck whose pinned revision derives them (v3/v4); the lines then pass the same
     source guard as model-written chart lines. Returns the outline and the line count added."""
     from services.generation_core.drivers.svg.prose_chart_literal import DERIVATION_ID, with_chart_literals
-    from services.generation_core.drivers.svg.native_requirements import REQUIREMENTS_VERSION_V3
+    from services.generation_core.drivers.svg.native_requirements import REQUIREMENTS_VERSION_V3, REQUIREMENTS_VERSION_V4
 
-    if revision != REQUIREMENTS_VERSION_V3:
+    if revision not in (REQUIREMENTS_VERSION_V3, REQUIREMENTS_VERSION_V4):
         return outline, 0
     slides, added = [], 0
     for position, slide in enumerate(outline.slides):

@@ -33,18 +33,20 @@ from services.svg_page_publication import set_svg_page
 
 
 def svg_slide_content(payload: dict, *, role, source, pt_per_px: float,
-                      source_native_objects=None, source_native_summary=None) -> dict:
+                      source_native_objects=None, source_native_summary=None, revision=None) -> dict:
     """``slide.content`` of one published page: receipt, asset manifest, native objects.
 
     The page's raw native declarations never reach the receipt; only the
     publication summary (``native_publish.page_native_objects``) does.
     """
     from services.svg_cached_author_render_lineage import approved_sidecars
+    from services.generation_core.drivers.svg.native_requirements import REQUIREMENTS_VERSION_V4
+    projection_kwargs = {"revision": revision} if revision == REQUIREMENTS_VERSION_V4 else {}
     sidecars = approved_sidecars(payload)
     native_objects, native_summary = ((source_native_objects, source_native_summary)
         if source_native_summary is not None else page_native_objects(
             payload, pt_per_px=pt_per_px,
-            verified_fixed_axis_migrations=sidecars))
+            verified_fixed_axis_migrations=sidecars, **projection_kwargs))
     preservation = payload.get("source_preservation", {})
     if preservation is None:
         preservation = {}
@@ -56,7 +58,7 @@ def svg_slide_content(payload: dict, *, role, source, pt_per_px: float,
 
         projected, projected_summary = page_native_objects(
             payload, pt_per_px=pt_per_px,
-            verified_fixed_axis_migrations=sidecars)
+            verified_fixed_axis_migrations=sidecars, **projection_kwargs)
         required = {item["element_id"] for item in source_charts}
         charts = tuple(item for item in NativeObjects.from_wire(projected).objects
                        if item.kind == "chart" and item.id in required) if projected else ()
@@ -223,11 +225,16 @@ async def _publish(request, presentation_id, outline, language, session, job, sn
     published_slides = []
     for index, (payload, png) in enumerate(pages):
         native_kwargs = {}
+        from services.generation_core.drivers.svg.native_requirements import (
+            REQUIREMENTS_VERSION_V4, requirements_revision,
+        )
+        if requirements_revision(snapshot) == REQUIREMENTS_VERSION_V4:
+            native_kwargs["revision"] = REQUIREMENTS_VERSION_V4
         if source_preservation and (payload.get("source_preservation") or {}).get("native_tables"):
             from services.svg_source_native_tables import source_table_native_objects
             native_objects, native_summary = source_table_native_objects(payload["svg_content"],
                 payload["source_preservation"], manifest, index, pt_per_px=pt_per_px)
-            native_kwargs = dict(source_native_objects=native_objects, source_native_summary=native_summary)
+            native_kwargs.update(source_native_objects=native_objects, source_native_summary=native_summary)
         slide_content = svg_slide_content(payload, role=roles[index], source=outline.slides[index].content,
                                           pt_per_px=pt_per_px, **native_kwargs)
         fields = {}

@@ -371,7 +371,10 @@ tests/unit/test_svg_header_scoped_eligibility.py
 tests/unit/test_svg_icon_ink_binding.py
 tests/unit/test_svg_image_pipeline.py
 tests/unit/test_svg_live4_subset_review_replay.py
+tests/unit/test_svg_native_chart_guidance_v4.py
 tests/unit/test_svg_native_chart_probe.py
+tests/unit/test_svg_native_chart_retention_v4.py
+tests/unit/test_svg_native_chart_v4.py
 tests/unit/test_svg_native_declarations.py
 tests/unit/test_svg_native_objects_end_to_end.py
 tests/unit/test_svg_native_objects_export_scene.py

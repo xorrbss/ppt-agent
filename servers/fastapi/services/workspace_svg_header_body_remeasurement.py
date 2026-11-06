@@ -170,8 +170,13 @@ async def remeasure_header_body(row, *, owner, ctx, request, outline, index,
     if (row.content or {}).get("nativeObjects") and not ctx.source_reflow:
         from services.generation_core.drivers.svg.native_publish import page_native_objects, canvas_point_per_px
         from services.authored_canvas import request_canvas_metadata
+        from services.generation_core.drivers.svg.native_requirements import (
+            REQUIREMENTS_VERSION_V4, requirements_revision,
+        )
         objects, summary = page_native_objects(payload,
-            pt_per_px=canvas_point_per_px(request_canvas_metadata(request)))
+            pt_per_px=canvas_point_per_px(request_canvas_metadata(request)),
+            **({"revision": REQUIREMENTS_VERSION_V4}
+               if requirements_revision(snapshot) == REQUIREMENTS_VERSION_V4 else {}))
         if objects != row.content["nativeObjects"] or summary != receipt.get("nativeObjects"):
             reject()
     payload.update(svg_content=row.svg_content,
@@ -310,10 +315,16 @@ def require_body_remeasurement_witness(payload, *, owner, index, parent):
     if source["content"].get("nativeObjects"):
         from services.authored_canvas import presentation_canvas_metadata
         from services.generation_core.drivers.svg.native_publish import page_native_objects, canvas_point_per_px
+        from services.generation_core.drivers.svg.native_requirements import (
+            REQUIREMENTS_VERSION_V4, requirements_revision,
+        )
+        snapshot = (parent.get("theme") or {}).get("svg", {}).get("styleSnapshot") or {}
         objects, summary = page_native_objects({"svg_content": source["svg_content"],
             "nativeDeclarations": witness.get("source_native_declarations"),
             "nativeRequirements": witness.get("source_native_requirements")},
-            pt_per_px=canvas_point_per_px(presentation_canvas_metadata(parent.get("theme"))))
+            pt_per_px=canvas_point_per_px(presentation_canvas_metadata(parent.get("theme"))),
+            **({"revision": REQUIREMENTS_VERSION_V4}
+               if requirements_revision(snapshot) == REQUIREMENTS_VERSION_V4 else {}))
         if objects != source["content"]["nativeObjects"] or summary != receipt.get("nativeObjects"):
             raise ValueError("svg_common_header_body_remeasurement_unproven")
     if (payload.get("quality") or {}).get("passed") is True:

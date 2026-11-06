@@ -266,7 +266,8 @@ def _series_colors(payload: dict, prims: GroupPrimitives) -> list[str] | None:
     return None
 
 
-def _drawn_series_name(name: str, drawn: set[str], *, declared_title: str | None = None) -> str:
+def _drawn_series_name(name: str, drawn: set[str], *, declared_title: str | None = None,
+                       revision: str | None = None) -> str:
     exact = normalize_text(name)
     if exact in drawn:
         return name
@@ -278,6 +279,18 @@ def _drawn_series_name(name: str, drawn: set[str], *, declared_title: str | None
     # Candidate name proof only; requested_native_quality still checks the
     # exact source unit against this declared and visibly drawn title.
     if declared_title and normalize_text(declared_title) in drawn:
+        from services.generation_core.drivers.svg.native_requirements import REQUIREMENTS_VERSION_V4
+
+        if revision == REQUIREMENTS_VERSION_V4:
+            title = normalize_text(declared_title)
+            # A title can name one series without repeating it in a legend.
+            # Word boundaries reject unrelated substrings, including Korean
+            # compounds; more than one occurrence is not an unambiguous name.
+            for candidate in dict.fromkeys((exact, short)):
+                if candidate and len(re.findall(
+                    r"(?<!\w)" + re.escape(candidate) + r"(?!\w)", title,
+                )) == 1:
+                    return name
         match = re.fullmatch(
             re.escape(name) + r"\s*·\s*(?:단위|unit)\s*[:：]\s*([^:：·()]+)",
             declared_title.strip(),
@@ -533,7 +546,8 @@ def _category_footer_frame(payload: dict, prims: GroupPrimitives, frame) -> Box:
 
 
 def chart_object(raw: dict, prims: GroupPrimitives, *,
-                 canvas_texts: tuple = ()) -> tuple[dict, dict, dict | None]:
+                 canvas_texts: tuple = (), revision: str | None = None
+                 ) -> tuple[dict, dict, dict | None]:
     """``(anchor, payload, SVG appearance)`` for one declared chart."""
     if not prims.tags <= CHART_ELEMENTS:
         raise NativeRejection("native_group_element_unsupported")
@@ -564,10 +578,11 @@ def chart_object(raw: dict, prims: GroupPrimitives, *,
                 and drawn.count(normalize_text(raw["title"])) == 1
                 else None
             ),
+            revision=revision,
         )
     names = {normalize_text(item["name"]) for item in payload["series"]}
     if len(payload["series"]) == 1 and not names <= drawn_set:
-        # The preceding name proof can borrow only the unique declared unit title.
+        # The preceding name proof can borrow only the unique declared title.
         names = {normalize_text(raw["title"])}
     title = {normalize_text(payload["title"])} if payload.get("title") else set()
     title.update(normalize_text(payload[key]["title"]) for key in ("categoryAxis", "valueAxis")

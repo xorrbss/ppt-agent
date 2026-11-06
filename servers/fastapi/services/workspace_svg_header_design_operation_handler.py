@@ -579,6 +579,9 @@ class WorkspaceSvgHeaderDesignOperationHandler:
 async def _publish_revision(context, snapshot, outline, pages, inputs, session_factory):
     from services.generation_core.drivers.svg.publish import svg_slide_content
     from services.generation_core.drivers.svg.native_publish import canvas_point_per_px
+    from services.generation_core.drivers.svg.native_requirements import (
+        REQUIREMENTS_VERSION_V4, requirements_revision,
+    )
     from services.authored_canvas import presentation_canvas_metadata
     from services.presentation_publication_service import publish_presentation_revision
     from services.svg_page_publication import set_svg_page
@@ -642,7 +645,9 @@ async def _publish_revision(context, snapshot, outline, pages, inputs, session_f
                     source_objects, source_summary = source_table_native_objects(payload["svg_content"], receipt,
                         inputs["source_document"], index, pt_per_px=scale)
             content = svg_slide_content(payload, role=inputs["ctx"].roles[index], source=outline.slides[index].content,
-                pt_per_px=scale, source_native_objects=source_objects, source_native_summary=source_summary)
+                pt_per_px=scale, source_native_objects=source_objects, source_native_summary=source_summary,
+                **({"revision": REQUIREMENTS_VERSION_V4}
+                   if requirements_revision(snapshot) == REQUIREMENTS_VERSION_V4 else {}))
             if not _common_header_current(SimpleNamespace(svg_content=payload["svg_content"], content=content), quality):
                 raise ValueError("svg_common_header_evidence_stale")
             set_svg_page(row, svg_content=payload["svg_content"], content=content, quality=quality, png=pngs[index])

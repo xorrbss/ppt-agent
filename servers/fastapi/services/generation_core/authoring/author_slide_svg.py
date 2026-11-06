@@ -714,8 +714,10 @@ def svg_author_rules(style_snapshot: dict, body_floor: float, *, new_copy: bool 
                           + (SVG_NEW_COPY_ART_DIRECTION_RULES if new_copy else GENERIC_ART_DIRECTION_RULES))
     native_grid_rules = _native_grid_rules(style_snapshot.get("readability_policy"))
     quality_policy = read_quality_recovery_policy(style_snapshot)
-    native_rules = (native_author_rules(source_grounded=True)
-                    if quality_policy is not None and quality_policy["version"] == 2 else native_author_rules())
+    native_rules = native_author_rules(
+        source_grounded=quality_policy is not None and quality_policy["version"] == 2,
+        requirements_revision=requirements_revision(style_snapshot),
+    )
     author_rules = SVG_NEW_COPY_AUTHOR_RULES if new_copy else SVG_AUTHOR_RULES
     if (source_preserved
             and style_snapshot.get("source_authoring_contract") == {"version": "svg-source-whole-page/v1"}):

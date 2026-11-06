@@ -883,11 +883,16 @@ async def _attempt_render(*, ctx, request, presentation_id, index, content, payl
     elif ctx.source_reflow and payload.get("source_preservation", {}).get("whole_page_native_groups"):
         from services.authored_canvas import request_canvas_metadata
         from services.generation_core.drivers.svg.native_publish import canvas_point_per_px, page_native_objects
+        from services.generation_core.drivers.svg.native_requirements import (
+            REQUIREMENTS_VERSION_V4, requirements_revision,
+        )
 
         from services.svg_cached_author_render_lineage import approved_sidecars
         objects, summary = page_native_objects(
             payload, pt_per_px=canvas_point_per_px(request_canvas_metadata(request)),
-            verified_fixed_axis_migrations=approved_sidecars(payload))
+            verified_fixed_axis_migrations=approved_sidecars(payload),
+            **({"revision": REQUIREMENTS_VERSION_V4}
+               if requirements_revision(ctx.snapshot) == REQUIREMENTS_VERSION_V4 else {}))
         required = {item["element_id"] for item in payload["source_preservation"]["whole_page_native_groups"]}
         actual = {item["id"] for item in (objects or {}).get("objects", [])}
         if not required.issubset(actual):
@@ -1008,6 +1013,10 @@ async def _attempt_render(*, ctx, request, presentation_id, index, content, payl
         timeline_collisions = rendered.quality.get("timeline_caption_ink", {}).get("collisions")
         classification = rendered.quality.get("source_classification_association", {})
         paint_occlusion = rendered.quality.get("source_paint_occlusion", {})
+        from services.generation_core.drivers.svg.native_requirements import (
+            native_chart_repair_hint, requirements_revision,
+        )
+        chart_hint = native_chart_repair_hint(measured(), revision=requirements_revision(ctx.snapshot))
         if paint_occlusion.get("status") in {"occluded", "unproven"}:
             from services.generation_core.drivers.svg.source_paint_occlusion import source_paint_repair_hint
 
@@ -1038,6 +1047,8 @@ async def _attempt_render(*, ctx, request, presentation_id, index, content, payl
         elif header_body_hint:
             hint = header_body_hint
             repair_cause = static_cause(validation_error="svg_common_header_body_intrusion")
+        elif chart_hint:
+            hint = chart_hint
         elif table_pitch:
             hint = json.dumps({"kind": "svg_readability_repair", "native_table_line_pitch": table_pitch},
                 ensure_ascii=False, separators=(",", ":"))[:3000]

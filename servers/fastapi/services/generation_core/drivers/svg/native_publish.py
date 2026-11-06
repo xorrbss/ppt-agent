@@ -85,7 +85,8 @@ def _entry(root: ET.Element, declaration: dict, *, width: float, height: float,
            pt_per_px: float, svg: str,
            source_preservation: dict | None, native_group_ids: frozenset[str],
            native_group_ids_complete: bool, binding_digest: str,
-           verified_fixed_axis_migration: dict | None = None) -> NativeObject:
+           verified_fixed_axis_migration: dict | None = None,
+           revision: str | None = None) -> NativeObject:
     kind, group_id = declaration.get("kind"), declaration.get("id")
     if kind not in ("table", "chart") or not isinstance(group_id, str):
         raise NativeRejection("native_declaration_invalid")
@@ -115,7 +116,9 @@ def _entry(root: ET.Element, declaration: dict, *, width: float, height: float,
             if not native_group_ids_complete:
                 raise NativeRejection("native_chart_sibling_ownership_unproven")
             canvas_texts = _sibling_canvas_texts(root, native_group_ids)
-        anchor, payload, appearance = chart_object(raw, prims, canvas_texts=canvas_texts)
+        anchor, payload, appearance = chart_object(
+            raw, prims, canvas_texts=canvas_texts, revision=revision,
+        )
         if payload.get("retainedAxisTitle"):
             payload["retainedAxisTitle"].update(
                 svgDigest=binding_digest,
@@ -136,7 +139,8 @@ def _canvas_size(root: ET.Element) -> tuple[float, float]:
 
 
 def page_native_objects(payload: dict, *, pt_per_px: float,
-                        verified_fixed_axis_migrations: dict[str, dict] | None = None
+                        verified_fixed_axis_migrations: dict[str, dict] | None = None,
+                        revision: str | None = None
                         ) -> tuple[dict | None, dict | None]:
     """``(nativeObjects wire or None, receipt summary or None)`` for one page payload."""
     svg = payload.get("svg_content")
@@ -168,7 +172,8 @@ def page_native_objects(payload: dict, *, pt_per_px: float,
                            native_group_ids=native_group_ids,
                            native_group_ids_complete=native_group_ids_complete,
                            binding_digest=record["svgDigest"],
-                           verified_fixed_axis_migration=verified)
+                           verified_fixed_axis_migration=verified,
+                           revision=revision)
         except (NativeRejection, NativeObjectsError) as error:
             dropped.append({"id": item.get("id"), "kind": item.get("kind"), "reason": str(error)})
             continue
