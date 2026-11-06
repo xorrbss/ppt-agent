@@ -45,6 +45,8 @@ export default function SvgTemplatePicker({ config, onConfigChange, sourceConten
   const [file, setFile] = useState<File | null>(null);
   const [busy, setBusy] = useState(false);
   const [draft, setDraft] = useState<SvgTemplateDraft | null>(null);
+  const currentDraft = useRef(draft);
+  currentDraft.current = draft;
   const [selectedFrames, setSelectedFrames] = useState<string[]>([]);
   const [reviewDirty, setReviewDirty] = useState(false);
   const [confirmed, setConfirmed] = useState(false);
@@ -244,13 +246,19 @@ export default function SvgTemplatePicker({ config, onConfigChange, sourceConten
       return !frame || Boolean(frameReviewBlockReason(draft, frame));
     }))) return;
     const owner = ownerEpoch.current;
+    const epoch = draftEpoch.current;
+    const templateId = draft.template.templateId;
+    const operationId = draft.operationId;
+    const current = () => live(owner) && epoch === draftEpoch.current
+      && currentDraft.current?.template.templateId === templateId
+      && currentDraft.current?.operationId === operationId;
     setBusy(true);
     try {
       const result = await SvgTemplatesApi.publish(draft.template.templateId, { operationId: draft.operationId, expectedHeadRevision: draft.template.pin?.revision ?? 0, selectedFrameIds: selectedFrames, confirmReview: confirmed, ...(styleOnly ? { styleOnly: true } : {}) });
-      if (!live(owner)) return;
+      if (!current()) return;
       setDraft(null); setRefresh(value => value + 1); if (result.template) choose(result.template);
-    } catch { if (live(owner)) notify.error(t("publishFailed")); }
-    finally { if (live(owner)) setBusy(false); }
+    } catch { if (current()) notify.error(t("publishFailed")); }
+    finally { if (current()) setBusy(false); }
   };
 
   if (ownerInvalidated) return <p role="status" className="mt-4 text-sm text-slate-500">{t("sessionChanged")}</p>;
@@ -325,7 +333,7 @@ export default function SvgTemplatePicker({ config, onConfigChange, sourceConten
       {reviewDirty ? <p role="status" className="text-xs text-amber-800">{t("reviewDirty")}</p> : null}
       <p className="text-xs text-slate-500">{t("reviewGuide")}</p>
       <label className="flex gap-2 text-xs"><input type="checkbox" checked={confirmed} disabled={reviewDirty} onChange={event => setConfirmed(event.target.checked)} />{draft.package?.frames.some(frame => !frameReviewBlockReason(draft, frame)) ? t("confirmCompared") : t("confirmReference")}</label>
-      <div className="flex flex-wrap gap-2"><Button type="button" size="sm" variant="outline" disabled={busy} onClick={() => void openDraft(draft.template.templateId)}>{t("checkStatus")}</Button><Button type="button" size="sm" disabled={busy || reviewDirty || !confirmed || !selectedFrames.length || selectedFrames.some(id => { const frame = draft.package?.frames.find(item => item.frame_id === id); return !frame || Boolean(frameReviewBlockReason(draft, frame)); })} onClick={() => void publish()}>{t("registerSelected")}</Button>{draft.template.registrationState === "failed" || draft.template.registrationState === "review-required" ? <Button type="button" size="sm" variant="outline" disabled={busy || reviewDirty || !confirmed} onClick={() => void publish(true)}>{t("registerReferenceOnly")}</Button> : null}<Button type="button" size="sm" variant="ghost" onClick={() => { draftEpoch.current += 1; setDraft(null); }}>{t("close")}</Button></div>
+      <div className="flex flex-wrap gap-2"><Button type="button" size="sm" variant="outline" disabled={busy} onClick={() => void openDraft(draft.template.templateId)}>{t("checkStatus")}</Button><Button type="button" size="sm" disabled={busy || reviewDirty || !confirmed || !selectedFrames.length || selectedFrames.some(id => { const frame = draft.package?.frames.find(item => item.frame_id === id); return !frame || Boolean(frameReviewBlockReason(draft, frame)); })} onClick={() => void publish()}>{t("registerSelected")}</Button>{draft.template.registrationState === "failed" || draft.template.registrationState === "review-required" ? <Button type="button" size="sm" variant="outline" disabled={busy || reviewDirty || !confirmed} onClick={() => void publish(true)}>{t("registerReferenceOnly")}</Button> : null}<Button type="button" size="sm" variant="ghost" onClick={() => { draftEpoch.current += 1; setDraft(null); setBusy(false); }}>{t("close")}</Button></div>
     </div> : null}
   </section>;
 }

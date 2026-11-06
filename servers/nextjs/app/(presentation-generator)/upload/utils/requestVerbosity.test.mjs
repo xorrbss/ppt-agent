@@ -120,3 +120,62 @@ test("draft polling accepts only the current template operation and ignores supe
     cleanup();
   }
 });
+
+
+test("publish responses update only their current draft and leave superseding work untouched", async () => {
+  const source = await readFile(path.join(testDirectory, "../components/SvgTemplatePicker.tsx"), "utf8");
+  const start = source.indexOf("  const publish = async ");
+  const end = source.indexOf("\n\n  if (ownerInvalidated)", start);
+  assert.ok(start >= 0 && end > start);
+  const close = source.match(/onClick=\{\(\) => \{ (draftEpoch\.current \+= 1;.*?) \}\}>\{t\("close"\)\}/);
+  assert.ok(close);
+  for (const styleOnly of [false, true]) {
+    for (const failed of [false, true]) {
+      for (const scenario of ["current", "closed", "reopened", "other-template", "other-operation", "session-changed"]) {
+        const draft = { template: { templateId: "a", pin: { revision: 2 } }, operationId: "op-a", package: { frames: [{ frame_id: "frame-a" }] } };
+        const currentDraft = { current: draft };
+        const epoch = { current: 0 };
+        const writes = [];
+        const requests = [];
+        let ownerLive = true;
+        let resolveRequest, rejectRequest;
+        let serverPublished = false;
+        const pending = new Promise((resolve, reject) => { resolveRequest = resolve; rejectRequest = reject; });
+        // React applies state setters on the next render, after this async continuation.
+        const setDraft = value => writes.push(["draft", value]);
+        const setBusy = value => writes.push(["busy", value]);
+        const publish = new Function("draft", "busy", "confirmed", "reviewDirty", "ownerAlive", "available", "selectedFrames", "frameReviewBlockReason", "ownerEpoch", "draftEpoch", "currentDraft", "live", "SvgTemplatesApi", "setBusy", "setDraft", "setRefresh", "choose", "notify", "t",
+          `${source.slice(start, end)}; return publish;`)(
+          draft, false, true, false, { current: true }, true, ["frame-a"], () => null,
+          { current: 0 }, epoch, currentDraft, () => ownerLive,
+          { publish: (id, payload) => { requests.push([id, payload]); return pending; } },
+          setBusy, setDraft, value => writes.push(["refresh", value]), value => writes.push(["choose", value]),
+          { error: value => writes.push(["error", value]) }, value => value,
+        );
+        const completion = publish(styleOnly);
+        assert.equal(requests.length, 1);
+        assert.equal(requests[0][0], "a");
+        assert.equal(requests[0][1].operationId, "op-a");
+        assert.equal(Boolean(requests[0][1].styleOnly), styleOnly);
+        if (scenario === "closed" || scenario === "reopened") {
+          new Function("draftEpoch", "setDraft", "setBusy", close[1])(epoch, setDraft, setBusy);
+          currentDraft.current = null;
+          assert.equal(writes.at(-1)[1], false, "closing releases busy state");
+          if (scenario === "reopened") { epoch.current += 1; currentDraft.current = draft; setBusy(true); }
+        }
+        if (scenario === "other-template") currentDraft.current = { ...draft, template: { templateId: "b" } };
+        if (scenario === "other-operation") currentDraft.current = { ...draft, operationId: "op-b" };
+        if (scenario === "session-changed") ownerLive = false;
+        const beforeResponse = writes.length;
+        if (failed) rejectRequest(new Error("publish failed"));
+        else { serverPublished = true; resolveRequest({ template: { templateId: "a", registrationState: "ready" } }); }
+        await completion;
+        assert.equal(serverPublished, !failed, "stale UI handling does not cancel server publication");
+        const responseWrites = writes.slice(beforeResponse);
+        assert.deepEqual(responseWrites.map(([kind]) => kind), scenario === "current"
+          ? failed ? ["error", "busy"] : ["draft", "refresh", "choose", "busy"] : [], `${scenario}, styleOnly=${styleOnly}, failed=${failed}`);
+        if (scenario === "current") assert.deepEqual(writes.at(-1), ["busy", false]);
+      }
+    }
+  }
+});
