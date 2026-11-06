@@ -296,7 +296,10 @@ def test_template_redesign_icons_get_body_ids(library_icons, monkeypatch):
      "35cda8472b208ba8754def13bb95f97771485403942297c375ff0ac1016d4a0b",
      "ee685921ade193093337982a7c0cbafc98e1e7fc5fe3eba57cbcff75138fb371"),
 ])
-def test_asset_projection_legacy_matches_7c_png_and_svg_bytes(body, png_digest, svg_digest):
+def test_asset_projection_legacy_matches_7c_png_and_svg_bytes(body, png_digest, svg_digest, monkeypatch):
+    # Drawing normalizers register a default namespace globally; isolate serialization
+    # so the baseline bytes do not depend on which test module ran first.
+    monkeypatch.setattr(ET, "_namespace_map", {**ET._namespace_map, SVG_NS: ""})
     # Digests captured from the exact 7c42f37a4 flatten/raster implementations.
     from hashlib import sha256
     from services.generation_core.drivers.svg.icon_flatten import ASSET_PROJECTION_LEGACY

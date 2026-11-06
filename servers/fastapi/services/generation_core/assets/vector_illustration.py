@@ -17,7 +17,9 @@ from dataclasses import dataclass, replace
 from typing import Sequence
 
 from services.generation_core.drivers.svg.embed_assets import icon_group
-from services.generation_core.drivers.svg.icon_flatten import FlattenedIcon, flatten_icon_svg
+from services.generation_core.drivers.svg.icon_flatten import (
+    ASSET_PROJECTION_CURRENT, FlattenedIcon, flatten_icon_svg, validate_asset_projection_revision,
+)
 from services.svg_contract import SVG_NS
 
 MAX_SVG_BYTES = 400_000
@@ -74,8 +76,10 @@ def _bounds(icon: FlattenedIcon) -> tuple[float, float, float, float] | None:
     return min(xs), min(ys), max(xs), max(ys)
 
 
-def validate_drawing(svg: str, *, width: int, height: int, palette: Sequence[str], ink: str) -> ValidatedDrawing:
+def validate_drawing(svg: str, *, width: int, height: int, palette: Sequence[str], ink: str,
+                     projection_revision: str = ASSET_PROJECTION_CURRENT) -> ValidatedDrawing:
     """The accepted, normalised drawing; raises ``ValueError(reason)`` when it is not acceptable."""
+    validate_asset_projection_revision(projection_revision)
     if not isinstance(svg, str) or not svg.strip():
         raise ValueError("vector_illustration_empty")
     if len(svg.encode("utf-8")) > MAX_SVG_BYTES:
@@ -109,7 +113,8 @@ def validate_drawing(svg: str, *, width: int, height: int, palette: Sequence[str
     if elements > ELEMENT_CAP:
         raise ValueError("vector_illustration_element_cap")
     try:
-        drawing = flatten_icon_svg(svg, color=ink, point_budget=None, tolerance=TOLERANCE, palette=palette)
+        drawing = flatten_icon_svg(svg, color=ink, point_budget=None, tolerance=TOLERANCE, palette=palette,
+                                   projection_revision=projection_revision)
     except ValueError as error:
         reason = str(error)
         raise ValueError("vector_illustration_empty" if reason == "icon_empty"

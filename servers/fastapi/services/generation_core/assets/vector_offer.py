@@ -150,7 +150,7 @@ def _store(svg: str) -> Path:
 
 
 async def _run(job: _Job, *, palette: Sequence[str], ink: str, call_seconds: float,
-               receipt: dict) -> list[AssetSlot]:
+               receipt: dict, projection_revision: str) -> list[AssetSlot]:
     from dataclasses import replace
 
     from services.generation_core.assets.vector_illustration import validate_drawing
@@ -181,7 +181,8 @@ async def _run(job: _Job, *, palette: Sequence[str], ink: str, call_seconds: flo
                     continue
                 try:
                     accepted[spec.id] = validate_drawing(svg, width=spec.width, height=spec.height,
-                                                         palette=palette, ink=ink)
+                                                         palette=palette, ink=ink,
+                                                         projection_revision=projection_revision)
                 except ValueError as error:
                     receipt["rejected"][str(error).split(":", 1)[0]] += 1
         # A set keeps the members it got; only a single picture is worth asking twice.
@@ -204,7 +205,8 @@ async def _run(job: _Job, *, palette: Sequence[str], ink: str, call_seconds: flo
     return slots
 
 
-def pictograph_slots(plan, *, accent: str, family_id: Optional[str]) -> list[AssetSlot]:
+def pictograph_slots(plan, *, accent: str, family_id: Optional[str],
+                     projection_revision: str = "svg-asset-projection/v2") -> list[AssetSlot]:
     """One pictograph per gauge/KPI page whose figure states a percentage (no model call).
 
     The emphasised node is preferred, then the nodes in order; ``70%`` becomes
@@ -214,6 +216,8 @@ def pictograph_slots(plan, *, accent: str, family_id: Optional[str]) -> list[Ass
     from services.generation_core.assets.icon_pack import families
     from services.generation_core.assets.vector_illustration import validate_drawing
 
+    from services.generation_core.drivers.svg.icon_flatten import validate_asset_projection_revision
+    validate_asset_projection_revision(projection_revision)
     slots = []
     for slide in plan.slides:
         if slide.archetype not in PICTOGRAPH_ARCHETYPES:
@@ -231,7 +235,8 @@ def pictograph_slots(plan, *, accent: str, family_id: Optional[str]) -> list[Ass
                                                   family_id=family_id or families.DEFAULT_FAMILY)
             width = 5 * families.PICTOGRAPH_CELL
             height = -(-PICTOGRAPH_TOTAL // 5) * families.PICTOGRAPH_CELL
-            drawing = validate_drawing(svg, width=width, height=height, palette=[accent], ink=accent)
+            drawing = validate_drawing(svg, width=width, height=height, palette=[accent], ink=accent,
+                                       projection_revision=projection_revision)
             path = _store(drawing.svg)
             slots.append(AssetSlot(
                 page_index=slide.index, role="pictograph", kind="spot",
@@ -245,8 +250,11 @@ def pictograph_slots(plan, *, accent: str, family_id: Optional[str]) -> list[Ass
 
 async def build_vector_drawings(plan, *, outline, roles: Sequence[str], brand, style, timeout_seconds: float,
                                 vector_scene_pages: set[int],
-                                parts: Sequence[str] = DEFAULT_PARTS) -> tuple[list[AssetSlot], dict]:
+                                parts: Sequence[str] = DEFAULT_PARTS,
+                                projection_revision: str = "svg-asset-projection/v2") -> tuple[list[AssetSlot], dict]:
     """Draw this deck's vector pictures; returns their slots and a receipt. Never raises."""
+    from services.generation_core.drivers.svg.icon_flatten import validate_asset_projection_revision
+    validate_asset_projection_revision(projection_revision)
     receipt: dict = {"calls": 0, "retries": 0, "timeouts": 0, "accepted": 0, "requested": 0,
                      "rejected": Counter(), "fillRatios": [], "jobs": {}}
     try:
@@ -267,7 +275,7 @@ async def build_vector_drawings(plan, *, outline, roles: Sequence[str], brand, s
     async def run(job):
         try:
             return await _run(job, palette=colors, ink=palette["DARK"], call_seconds=timeout_seconds,
-                              receipt=receipt)
+                              receipt=receipt, projection_revision=projection_revision)
         except Exception as error:  # noqa: BLE001 - a picture is optional
             LOGGER.warning("[svg] vector drawing failed page=%s kind=%s: %s", job.page, job.kind,
                            type(error).__name__)
@@ -279,7 +287,8 @@ async def build_vector_drawings(plan, *, outline, roles: Sequence[str], brand, s
     if "pictograph" in set(parts):
         try:
             pictographs = await asyncio.to_thread(pictograph_slots, plan, accent=palette["ACCENT"],
-                                                  family_id=getattr(style, "icon_family", None))
+                                                  family_id=getattr(style, "icon_family", None),
+                                                  projection_revision=projection_revision)
         except (ValueError, OSError) as error:
             LOGGER.warning("[svg] pictograph failed: %s", type(error).__name__)
             receipt["rejected"]["pictograph_" + type(error).__name__] += 1

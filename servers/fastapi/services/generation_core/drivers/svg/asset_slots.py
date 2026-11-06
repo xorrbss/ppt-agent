@@ -292,6 +292,11 @@ async def resolve_offer(request, outline, roles, job, *, profile, checkpoint, du
                         style_snapshot: dict | None = None, has_source_assets: bool | None = None) -> AssetOffer:
     """Replay the persisted offer on resume, or build and persist a new one."""
 
+    from services.generation_core.drivers.svg.icon_flatten import (
+        ASSET_PROJECTION_CURRENT, ASSET_PROJECTION_KEY, asset_projection_revision,
+    )
+    revision = asset_projection_revision(style_snapshot)
+
     if job is not None and not durable:
         # A non-durable job replays inline checkpoints whose digest pins the
         # offered bytes; without a durable seed a resume would buy new ones.
@@ -322,7 +327,8 @@ async def resolve_offer(request, outline, roles, job, *, profile, checkpoint, du
     elif mode != "off":
         provider = not (image_service.is_image_generation_disabled or image_service.image_gen_func is None)
         offer = await _build(request, outline, roles, job, profile, image_service if provider else None,
-                             icons_only=not provider, illustration_mode=mode, illustration_parts=parts)
+                             icons_only=not provider, illustration_mode=mode, illustration_parts=parts,
+                             projection_revision=revision)
         if step_pictures:
             # Names the route in the receipt; every other receipt keeps its bytes.
             offer = replace(offer, receipt={**offer.receipt, "templateStepPictures": True})
@@ -331,13 +337,9 @@ async def resolve_offer(request, outline, roles, job, *, profile, checkpoint, du
         # provider: the plan still places icons, with no illustration or sprite
         # sheet. Persisted like any offer, so a resume after the setting
         # changes still matches the sealed source manifest.
-        offer = await _build(request, outline, roles, job, profile, None, icons_only=True)
+        offer = await _build(request, outline, roles, job, profile, None, icons_only=True, projection_revision=revision)
     else:
-        offer = await _build(request, outline, roles, job, profile, image_service)
-    from services.generation_core.drivers.svg.icon_flatten import (
-        ASSET_PROJECTION_CURRENT, ASSET_PROJECTION_KEY, asset_projection_revision,
-    )
-    revision = asset_projection_revision(style_snapshot)
+        offer = await _build(request, outline, roles, job, profile, image_service, projection_revision=revision)
     if revision == ASSET_PROJECTION_CURRENT:
         offer = replace(offer, receipt={**offer.receipt, ASSET_PROJECTION_KEY: revision})
     if job is not None:
@@ -348,7 +350,8 @@ async def resolve_offer(request, outline, roles, job, *, profile, checkpoint, du
 
 
 async def _build(request, outline, roles, job, profile, image_service, *, icons_only: bool = False,
-                 illustration_mode: str = "off", illustration_parts=None) -> AssetOffer:
+                 illustration_mode: str = "off", illustration_parts=None,
+                 projection_revision: str = "svg-asset-projection/v1") -> AssetOffer:
     from services.generation_core.assets.offer import build_asset_offer
     from services.generation_core.style.build import resolve_brand
     from services.provider_usage_instrumentation import provider_usage_scope
@@ -363,7 +366,7 @@ async def _build(request, outline, roles, job, profile, image_service, *, icons_
             instructions=request.instructions, budget=profile.illustration_budget,
             timeout_seconds=profile.illustration_timeout_seconds, image_service=image_service,
             icons_only=icons_only, illustration_mode=illustration_mode,
-            illustration_parts=illustration_parts)
+            illustration_parts=illustration_parts, projection_revision=projection_revision)
     return offer
 
 
