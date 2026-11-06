@@ -67,6 +67,30 @@ def test_deck_cooldown_is_one_shared_deadline():
     assert 9.0 < asyncio.run(run()) <= 10.0
 
 
+def test_wait_observes_deadline_extended_by_another_page(monkeypatch):
+    async def run():
+        loop = asyncio.get_running_loop()
+        now, sleeps = [0.0], []
+        cooldown = DeckCooldown()
+
+        async def sleep(delay):
+            if not sleeps:
+                now[0] += 10.0
+                cooldown.register(120.0)
+                now[0] -= 10.0
+            sleeps.append(delay)
+            now[0] += delay
+
+        with monkeypatch.context() as patch:
+            patch.setattr(loop, "time", lambda: now[0])
+            patch.setattr(asyncio, "sleep", sleep)
+            cooldown.register(30.0)
+            slept = await cooldown.wait(jitter=2.0)
+            return sleeps, slept, now[0]
+
+    assert asyncio.run(run()) == ([32.0, 100.0], 132.0, 132.0)
+
+
 def test_author_overload_registers_cooldown_and_does_not_sleep(monkeypatch):
     sleeps = []
 
