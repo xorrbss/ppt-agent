@@ -142,6 +142,11 @@ def _recovery_review_allocation(request, snapshot, slide_count):
     return review_calls, format_control, final_control
 
 
+_POST_ANCHOR_CODE_FILES = (
+    "services/generation_core/assets/vector_offer.py",
+    "services/generation_core/assets/vector_illustration.py",
+)
+
 CODE_FILES = (
     "services/svg_partial_recovery.py",
     "services/svg_source_local_review_continuation.py",
@@ -189,6 +194,7 @@ CODE_FILES = (
     "services/generation_core/drivers/svg/icon_flatten.py",
     "services/generation_core/drivers/svg/icon_geometry.py",
     "services/generation_core/assets/offer.py",
+    *_POST_ANCHOR_CODE_FILES,
     "utils/authored_image_slots.py",
     "utils/codex_stream_adapter.py",
     "utils/llm_calls/prepare_svg_common_header_titles.py",
@@ -1850,7 +1856,10 @@ def _base_code_digest(files=None):
 
 
 def _base_identity(hashes, files):
-    return digest([{ "path": name, "sha256": hashes[name]} for name in files])
+    # Only these newly inventoried dependencies are absent from the historical
+    # preimage. Current source states still read every file before reaching here.
+    return digest([{ "path": name, "sha256": hashes[name]} for name in files
+                   if name in hashes or name not in _POST_ANCHOR_CODE_FILES])
 
 
 def _code_file_digests(files):
