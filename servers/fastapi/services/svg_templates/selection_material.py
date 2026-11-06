@@ -23,6 +23,7 @@ from __future__ import annotations
 
 from collections import OrderedDict
 from copy import deepcopy
+from contextvars import ContextVar
 from threading import Lock
 
 from utils.hashing import canonical_json_digest
@@ -34,6 +35,10 @@ SELECTION_SCHEMAS = frozenset({SELECTION_SCHEMA_V1, SELECTION_SCHEMA_V2})
 _CACHE_LIMIT = 8
 _cache: OrderedDict[str, dict] = OrderedDict()
 _lock = Lock()
+# One verified material per execution context survives LRU eviction while its
+# operation awaits provider/render work. Child tasks inherit the same reference;
+# switching selections replaces it, and completing the task releases it.
+_active_material: ContextVar[tuple[str, dict] | None] = ContextVar("svg_template_material", default=None)
 
 
 def material_key(selection: dict) -> str:
@@ -49,11 +54,13 @@ def material_key(selection: dict) -> str:
 
 
 def _remember(key: str, package: dict, adaptations: dict) -> None:
+    material = {"package": package, "adaptations": adaptations}
     with _lock:
-        _cache[key] = {"package": package, "adaptations": adaptations}
+        _cache[key] = material
         _cache.move_to_end(key)
         while len(_cache) > _CACHE_LIMIT:
             _cache.popitem(last=False)
+    _active_material.set((key, material))
 
 
 def compact_selection(full: dict) -> dict:
@@ -74,12 +81,16 @@ def compact_selection(full: dict) -> dict:
 def _material(selection: dict) -> dict:
     if selection.get("schema_version") == SELECTION_SCHEMA_V1:
         return selection
+    active = _active_material.get()
+    if active is not None and active[0] == selection.get("material_key"):
+        return active[1]
     with _lock:
         material = _cache.get(selection.get("material_key"))
         if material is not None:
             _cache.move_to_end(selection["material_key"])
     if material is None:
         raise ValueError("svg_template_material_not_loaded")
+    _active_material.set((selection["material_key"], material))
     return material
 
 
@@ -132,3 +143,4 @@ def clear_material_cache() -> None:
     """Tests only."""
     with _lock:
         _cache.clear()
+    _active_material.set(None)

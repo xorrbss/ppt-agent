@@ -575,7 +575,8 @@ async def _attempt_render(*, ctx, request, presentation_id, index, content, payl
         try:
             from services.svg_templates.chapters import page_chapter
             template_page = template_page_context(ctx.snapshot, index, ctx.count, content,
-                                                  chapter=page_chapter(ctx, index))
+                                                  chapter=page_chapter(ctx, index),
+                                                  saved_context=payload.get("svg_template_page"))
             saved_template_page = payload.get("svg_template_page")
             if saved_template_page is not None and saved_template_page != template_page:
                 raise ValueError("svg_template_page_context_changed")

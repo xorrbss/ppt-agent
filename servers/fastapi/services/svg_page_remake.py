@@ -56,7 +56,8 @@ def _template_context(presentation, slides, index):
     receipt = (target.content or {}).get("svgReceipt") or {}
     from services.svg_templates.chapters import chapter_from_context
     context = template_page_context(snapshot, index, len(slides), source,
-                                    chapter=chapter_from_context(receipt.get("svg_template_page")))
+                                    chapter=chapter_from_context(receipt.get("svg_template_page")),
+                                    saved_context=receipt.get("svg_template_page"))
     if context != receipt.get("svg_template_page"):
         raise ValueError("svg_template_page_context_changed")
     return snapshot, context
