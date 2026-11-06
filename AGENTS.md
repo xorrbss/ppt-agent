@@ -24,7 +24,11 @@ requires changing them.
 This fork was derived from the official Presenton project
 ([`presenton/presenton`](https://github.com/presenton/presenton)) and is now
 maintained independently: it does not track, pin, or import upstream changes.
-The Bitbucket `origin` repository is the source of truth. Keep the upstream
+The GitHub repository `xorrbss/ppt-agent` is the source of truth (decided
+2026-11-06): branches, pull requests and merges happen there, and Codex cloud
+connects to it. The Bitbucket repository (`bitbucket.org/ibizsoftware/devax-ppt`)
+is a mirror kept for its CI (`bitbucket-pipelines.yml`): push GitHub `main` to it
+after merges so the Bitbucket gates run; never commit there first. Keep the upstream
 license and NOTICE attribution.
 
 ## Repository map
