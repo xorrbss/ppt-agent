@@ -129,6 +129,7 @@ test("publish responses update only their current draft and leave superseding wo
   assert.ok(start >= 0 && end > start);
   const close = source.match(/onClick=\{\(\) => \{ (draftEpoch\.current \+= 1;.*?) \}\}>\{t\("close"\)\}/);
   assert.ok(close);
+  for (const synchronousRef of [false, true]) {
   for (const styleOnly of [false, true]) {
     for (const failed of [false, true]) {
       for (const scenario of ["current", "closed", "reopened", "other-template", "other-operation", "session-changed"]) {
@@ -141,8 +142,11 @@ test("publish responses update only their current draft and leave superseding wo
         let resolveRequest, rejectRequest;
         let serverPublished = false;
         const pending = new Promise((resolve, reject) => { resolveRequest = resolve; rejectRequest = reject; });
-        // React applies state setters on the next render, after this async continuation.
-        const setDraft = value => writes.push(["draft", value]);
+        // Cover both a deferred render and a synchronous external-store flush.
+        const setDraft = value => {
+          if (synchronousRef) currentDraft.current = value;
+          writes.push(["draft", value]);
+        };
         const setBusy = value => writes.push(["busy", value]);
         const publish = new Function("draft", "busy", "confirmed", "reviewDirty", "ownerAlive", "available", "selectedFrames", "frameReviewBlockReason", "ownerEpoch", "draftEpoch", "currentDraft", "live", "SvgTemplatesApi", "setBusy", "setDraft", "setRefresh", "choose", "notify", "t",
           `${source.slice(start, end)}; return publish;`)(
@@ -173,9 +177,10 @@ test("publish responses update only their current draft and leave superseding wo
         assert.equal(serverPublished, !failed, "stale UI handling does not cancel server publication");
         const responseWrites = writes.slice(beforeResponse);
         assert.deepEqual(responseWrites.map(([kind]) => kind), scenario === "current"
-          ? failed ? ["error", "busy"] : ["draft", "refresh", "choose", "busy"] : [], `${scenario}, styleOnly=${styleOnly}, failed=${failed}`);
-        if (scenario === "current") assert.deepEqual(writes.at(-1), ["busy", false]);
+          ? failed ? ["busy", "error"] : ["busy", "draft", "refresh", "choose"] : [], `${scenario}, styleOnly=${styleOnly}, failed=${failed}, synchronousRef=${synchronousRef}`);
+        if (scenario === "current") assert.deepEqual(writes.filter(([kind]) => kind === "busy").at(-1), ["busy", false]);
       }
     }
+  }
   }
 });

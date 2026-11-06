@@ -256,9 +256,9 @@ export default function SvgTemplatePicker({ config, onConfigChange, sourceConten
     try {
       const result = await SvgTemplatesApi.publish(draft.template.templateId, { operationId: draft.operationId, expectedHeadRevision: draft.template.pin?.revision ?? 0, selectedFrameIds: selectedFrames, confirmReview: confirmed, ...(styleOnly ? { styleOnly: true } : {}) });
       if (!current()) return;
+      setBusy(false);
       setDraft(null); setRefresh(value => value + 1); if (result.template) choose(result.template);
-    } catch { if (current()) notify.error(t("publishFailed")); }
-    finally { if (current()) setBusy(false); }
+    } catch { if (current()) { setBusy(false); notify.error(t("publishFailed")); } }
   };
 
   if (ownerInvalidated) return <p role="status" className="mt-4 text-sm text-slate-500">{t("sessionChanged")}</p>;
