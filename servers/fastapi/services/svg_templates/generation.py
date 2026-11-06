@@ -66,6 +66,12 @@ async def prepare_template_request(request, session) -> None:
         require_source_canvas(selection["package"], canvas.model_dump(mode="json", by_alias=True))
     selection.update(schema_version=SELECTION_SCHEMA, frame_map=frame_map,
                      canvas=canvas.model_dump(mode="json", by_alias=True))
+    # Freeze the page-context contract for new admissions; existing snapshots
+    # retain their historical context bytes and selection digest.
+    if frozen is None:
+        selection["page_context_revision"] = 2
+    elif "page_context_revision" in frozen:
+        selection["page_context_revision"] = frozen["page_context_revision"]
     if mode == "template-redesign":
         frames = selection["package"].get("frames", [])
         if not frames or any(frame["frame_id"] not in selection["adaptations"] for frame in frames):
@@ -289,7 +295,8 @@ def _inset(box, margin: float) -> dict:
 
 
 def template_page_context(snapshot: dict, index: int, count: int, content: str,
-                          role: str | None = None, chapter: dict | None = None) -> dict | None:
+                          role: str | None = None, chapter: dict | None = None,
+                          saved_context: dict | None = None) -> dict | None:
     """The page's template contract. ``chapter`` (``{"number", "title"}``, from the
     outline page or a saved page's context) fills a frame's chapter tab."""
     selection = template_selection(snapshot)
@@ -298,7 +305,15 @@ def template_page_context(snapshot: dict, index: int, count: int, content: str,
     from utils.outline_utils import explicit_outline_title
     from services.svg_templates.frame_composition import body_background, render_frame_svg
 
-    frame = page_frame(snapshot, index, count, role, chapter=chapter)
+    revision = selection.get("page_context_revision", 1)
+    if revision not in {1, 2}:
+        raise ValueError("svg_template_page_context_invalid")
+    schema = f"svg-template-page/v{revision}"
+    if saved_context is not None and saved_context.get("schema_version") != schema:
+        raise ValueError("svg_template_page_context_invalid")
+    frame = (context_frame(snapshot, {**saved_context, "page_index": index, "page_count": count})
+             if saved_context is not None and revision == 1
+             else page_frame(snapshot, index, count, role, chapter=chapter))
     title = explicit_outline_title(content)
     if "title" in frame.dynamic_fields and not title:
         raise ValueError("svg_template_title_required")
@@ -314,7 +329,7 @@ def template_page_context(snapshot: dict, index: int, count: int, content: str,
     render_frame_svg(frame, dynamic_values=values)
     adaptation = template_adaptations(selection)[frame.frame_id]
     result = {
-        "schema_version": "svg-template-page/v1", "page_index": index, "page_count": count,
+        "schema_version": schema, "page_index": index, "page_count": count,
         "frame_id": frame.frame_id, "frame_digest": frame.digest,
         "adaptation_id": adaptation["adaptation_id"], "adaptation_digest": adaptation["digest"],
         "dynamic_values": values, "dynamic_fields": list(frame.dynamic_fields),
@@ -331,6 +346,18 @@ def template_page_context(snapshot: dict, index: int, count: int, content: str,
                                  if item["source_page"] == frame.source_page],
         "body_background": body_background(frame),
     }
+    if revision == 1 and saved_context is not None:
+        # v1 had three historical encodings: original regions without background
+        # guidance, original regions with it, then inset regions with it. Choose
+        # only that encoding; every field/digest is still recomputed and callers
+        # compare the complete context before accepting existing page evidence.
+        if "body_background" not in saved_context:
+            result.pop("body_background")
+            result["body_region"] = frame.body_region.model_dump(mode="json")
+            result["forbidden_regions"] = [box.model_dump(mode="json") for box in frame.forbidden_regions]
+        elif saved_context.get("body_region") == frame.body_region.model_dump(mode="json"):
+            result["body_region"] = frame.body_region.model_dump(mode="json")
+            result["forbidden_regions"] = [box.model_dump(mode="json") for box in frame.forbidden_regions]
     result["digest"] = canonical_json_digest(result)
     return result
 
@@ -630,8 +657,7 @@ def validate_template_publication(snapshot: dict, pages, outline) -> None:
         validate_template_publication_page(snapshot, payload, index=index, count=len(pages),
                                            content=outline.slides[index].content,
                                            chapter=getattr(outline.slides[index], "chapter", None))
-        if page_frame(snapshot, index, len(pages),
-                      chapter=getattr(outline.slides[index], "chapter", None)).schema_version == "svg-template-frame/v3":
+        if context_frame(snapshot, payload["svg_template_page"]).schema_version == "svg-template-frame/v3":
             from services.svg_presentation_checkpoint import _read_png
             from services.svg_templates.frame_fonts import bytes_digest
             png = _png if _png is not None else _read_png(payload)
@@ -644,7 +670,8 @@ def validate_template_publication_page(snapshot: dict, payload: dict, *, index: 
     """Share the intact page proof between terminal keep and deck publication."""
     from services.svg_master_furniture import master_furniture_receipt
     canvas = page_frame(snapshot, 0, count).source_canvas
-    expected = template_page_context(snapshot, index, count, content, chapter=chapter)
+    expected = template_page_context(snapshot, index, count, content, chapter=chapter,
+                                     saved_context=payload.get("svg_template_page"))
     if expected != payload.get("svg_template_page"):
         raise ValueError("svg_template_publication_context_mismatch")
     svg = payload["svg_content"]
@@ -662,7 +689,7 @@ def validate_template_publication_page(snapshot: dict, payload: dict, *, index: 
             or proof.get("body_paint_measured") is not True
             or (payload.get("quality") or {}).get("measurement_complete") is not True):
         raise ValueError("svg_template_preservation_unverified")
-    frame = page_frame(snapshot, index, count, chapter=chapter)
+    frame = context_frame(snapshot, expected)
     marker = payload.get("fixedGlyphPreview")
     quality = payload.get("quality") or {}
     glyph_quality = quality.get("fixed_glyph_preview")

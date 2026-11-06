@@ -19,6 +19,30 @@ from services.generation_core.drivers.svg.icon_geometry import (
     parse_transform, path_subpaths, rounded_rect_points,
 )
 
+ASSET_PROJECTION_KEY = "asset_projection_revision"
+ASSET_PROJECTION_LEGACY = "svg-asset-projection/v1"
+ASSET_PROJECTION_CURRENT = "svg-asset-projection/v2"
+
+
+def asset_projection_revision(snapshot: dict | None) -> str:
+    """Read only the server-owned immutable snapshot; absent pins replay v1."""
+    if snapshot is None or ASSET_PROJECTION_KEY not in snapshot:
+        return ASSET_PROJECTION_LEGACY
+    revision = snapshot[ASSET_PROJECTION_KEY]
+    if revision != ASSET_PROJECTION_CURRENT:
+        raise ValueError("svg_asset_projection_revision_invalid")
+    from utils.hashing import canonical_json_digest
+    if snapshot.get("digest") != canonical_json_digest(
+            {key: value for key, value in snapshot.items() if key != "digest"}, allow_nan=True):
+        raise ValueError("svg_asset_projection_snapshot_digest_invalid")
+    return revision
+
+
+def validate_asset_projection_revision(revision: str) -> None:
+    if revision not in (ASSET_PROJECTION_LEGACY, ASSET_PROJECTION_CURRENT):
+        raise ValueError("svg_asset_projection_revision_invalid")
+
+
 # Chord error bound in viewBox units: 0.25 of the library's 128-unit box is
 # about 0.5 px when an icon is drawn 256 px wide, invisible at slide sizes.
 DEFAULT_TOLERANCE = 0.25
@@ -165,7 +189,7 @@ def _scalar(node, name: str, default: float | None = 0.0) -> float | None:
 _OPACITY = ("opacity", "fill-opacity", "stroke-opacity")
 
 
-def _style(node, inherited: dict, ink: str, palette: "_Palette | None" = None) -> dict:
+def _style(node, inherited: dict, ink: str, palette: "_Palette | None" = None, *, projection_revision: str = ASSET_PROJECTION_CURRENT) -> dict:
     for key in node.attrib:
         name = _local(key)
         if name in _FORBIDDEN_ATTRIBUTES:
@@ -178,7 +202,8 @@ def _style(node, inherited: dict, ink: str, palette: "_Palette | None" = None) -
                 raise ValueError("icon_opacity_invalid")
             # Group opacity composites; multiplying it into each shape is the
             # flattened approximation, exact for shapes that do not overlap.
-            style[name] = style.get(name, 1.0) * value
+            # Fill/stroke opacity instead inherit until a child overrides them.
+            style[name] = style.get(name, 1.0) * value if name == "opacity" or projection_revision == ASSET_PROJECTION_LEGACY else value
     if node.get("fill") is not None:
         style["fill"] = _paint(node.get("fill"), ink, palette)
     if node.get("stroke") is not None:
@@ -194,7 +219,8 @@ _MAX_COMPOUND_POINTS = 1000
 
 
 class _Walker:
-    def __init__(self, ink: str, tolerance: float, palette: "_Palette | None" = None):
+    def __init__(self, ink: str, tolerance: float, palette: "_Palette | None" = None, *, projection_revision: str = ASSET_PROJECTION_CURRENT):
+        self.projection_revision = projection_revision
         self.ink, self.tolerance, self.items, self.palette = ink, tolerance, [], palette
         self._current: dict = {}
 
@@ -204,7 +230,7 @@ class _Walker:
             return
         if name not in _SHAPES and not (name == "g" or (name == "svg" and root)):
             raise ValueError("icon_element_unsupported:" + name[:40])
-        style = _style(node, style, self.ink, self.palette)
+        style = _style(node, style, self.ink, self.palette, projection_revision=self.projection_revision)
         if node.get("transform"):
             matrix = mul(matrix, parse_transform(node.get("transform")))
         if name in {"svg", "g"}:
@@ -351,7 +377,8 @@ class _Walker:
 
 
 def flatten_icon_svg(svg_text: str, *, color: str, point_budget: int | None = ICON_POINT_BUDGET,
-                     tolerance: float = DEFAULT_TOLERANCE, palette=None) -> FlattenedIcon:
+                     tolerance: float = DEFAULT_TOLERANCE, palette=None,
+                     projection_revision: str = ASSET_PROJECTION_CURRENT) -> FlattenedIcon:
     """Bake and sample an SVG icon or drawing into contract-safe primitives.
 
     Monochrome by default: every paint becomes ``color``. With ``palette`` the
@@ -359,6 +386,7 @@ def flatten_icon_svg(svg_text: str, *, color: str, point_budget: int | None = IC
     colour when it is off the palette (``FlattenedIcon.snapped_paints``).
     Opacity is kept in both modes.
     """
+    validate_asset_projection_revision(projection_revision)
     ink = normalize_color(color)
     palette = _Palette(palette) if palette is not None else None
     if not isinstance(svg_text, str) or re.search(r"<!|<\?xml-stylesheet", svg_text):
@@ -377,7 +405,7 @@ def flatten_icon_svg(svg_text: str, *, color: str, point_budget: int | None = IC
         view = [0.0, 0.0, _scalar(root, "width", 0.0), _scalar(root, "height", 0.0)]
     if len(view) != 4 or view[2] <= 0 or view[3] <= 0:
         raise ValueError("icon_viewbox_invalid")
-    walker = _Walker(ink, tolerance, palette)
+    walker = _Walker(ink, tolerance, palette, projection_revision=projection_revision)
     origin = (1.0, 0.0, 0.0, 1.0, -view[0], -view[1])
     walker.visit(root, origin, {"fill": ink, "stroke": None, "width": 1.0}, root=True)
     widths = [stroke for _, stroke in walker.items if stroke is not None]

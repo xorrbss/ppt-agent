@@ -305,3 +305,93 @@ def test_every_family_can_compose_a_pictograph(family_id):
     svg = compose_pictograph_svg(total=10, highlighted=4, color="#0E7C7B", family_id=family_id)
     drawing = validate_drawing(svg, width=640, height=256, palette=["#0E7C7B"], ink="#0E7C7B")
     assert drawing.elements >= 10
+
+
+_PROJECTION_BODY = ('<g fill-opacity="0.5"><circle cx="256" cy="230" r="150" '
+                    'fill="#00A3E0" fill-opacity="0.5"/></g>')
+
+
+def test_asset_projection_legacy_drawing_normalization_matches_7c_bytes():
+    from hashlib import sha256
+    from services.generation_core.drivers.svg.icon_flatten import ASSET_PROJECTION_LEGACY
+    args = dict(width=512, height=460, palette=PALETTE, ink="#051C2C")
+    svg = _svg(512, 460, _PROJECTION_BODY)
+    legacy = validate_drawing(svg, **args, projection_revision=ASSET_PROJECTION_LEGACY)
+    assert sha256(legacy.svg.encode()).hexdigest() == "417492234e4fed5d01522e55e42a94036ba43714d191394b1782ccb48dc188fd"
+    current = validate_drawing(svg, **args)
+    assert legacy.svg != current.svg
+    assert 'fill-opacity="0.25"' in legacy.svg
+    assert 'fill-opacity="0.5"' in current.svg
+    with pytest.raises(ValueError, match="svg_asset_projection_revision_invalid"):
+        validate_drawing(svg, **args, projection_revision="forged")
+
+
+@pytest.mark.parametrize("current", [False, True])
+def test_asset_projection_seedless_resume_pins_drawing_generation(vector_fakes, monkeypatch, tmp_path, current):
+    import uuid
+    from services.generation_core.drivers.svg import asset_slots
+    from services.generation_core.drivers.svg.icon_flatten import (
+        ASSET_PROJECTION_KEY, ASSET_PROJECTION_CURRENT, ASSET_PROJECTION_LEGACY,
+    )
+    from utils.hashing import canonical_json_digest
+    stored = {}
+    responses = {}
+
+    async def checkpoint(_job, _index, *, payload=None):
+        if payload is not None:
+            stored.update(payload)
+        return dict(stored)
+
+    async def draw(request):
+        vector_fakes["draw"].append(request)
+        result = {spec.id: _svg(spec.width, spec.height,
+            f'<g fill-opacity="0.5"><circle cx="{spec.width / 2}" cy="{spec.height / 2}" '
+            f'r="{spec.height / 3}" fill="#00A3E0" fill-opacity="0.5"/></g>')
+            for spec in request.drawings}
+        responses.update(result)
+        return result
+
+    monkeypatch.setattr(drawing_calls, "draw_vector_illustrations", draw)
+    monkeypatch.setattr("services.image_generation_service.ImageGenerationService",
+        lambda *_a: SimpleNamespace(is_image_generation_disabled=True, image_gen_func=None))
+    monkeypatch.setattr("utils.authored_styles.resolve_authored_style", lambda *_a: _style())
+    monkeypatch.setattr("services.generation_core.style.build.resolve_brand",
+        lambda *_a: SimpleNamespace(primary="#2563EB", topic="현장 자동화"))
+    monkeypatch.setattr("utils.get_env.get_svg_illustration_mode_env", lambda: "vector")
+    monkeypatch.setattr("utils.get_env.get_svg_illustration_parts_env", lambda: ("cover", "scene", "spots"))
+    monkeypatch.setattr(asset_slots, "get_app_data_directory_env", lambda: str(tmp_path))
+    snapshot = {ASSET_PROJECTION_KEY: ASSET_PROJECTION_CURRENT} if current else {}
+    snapshot["digest"] = canonical_json_digest(snapshot, allow_nan=True)
+    request = SimpleNamespace(authored_style=None, instructions=None, strategy="svg", language="Korean",
+        asset_projection_revision=ASSET_PROJECTION_LEGACY if current else ASSET_PROJECTION_CURRENT)
+    job = SimpleNamespace(id=uuid.uuid4(), attempt_number=1)
+    args = dict(profile=SimpleNamespace(illustration_budget=4, illustration_timeout_seconds=5),
+        checkpoint=checkpoint, durable=True, style_snapshot=snapshot, has_source_assets=False)
+    roles = ["cover", "content", "content", "content"]
+    offer = asyncio.run(asset_slots.resolve_offer(request, _outline(), roles, job, **args))
+    assert vector_fakes["draw"]
+    drawings = [slot for slot in offer.slots if slot.origin == "model-vector"]
+    assert drawings
+    revision = ASSET_PROJECTION_CURRENT if current else ASSET_PROJECTION_LEGACY
+    palette = list(dict.fromkeys(offer.receipt["vectorDrawings"]["palette"].values()))
+    for slot in drawings:
+        actual = slot.verify().decode()
+        expected = [validate_drawing(svg, width=slot.width, height=slot.height, palette=palette,
+            ink=offer.receipt["vectorDrawings"]["palette"]["DARK"], projection_revision=revision).svg
+            for svg in responses.values() if f'width="{slot.width}" height="{slot.height}"' in svg]
+        assert actual in expected
+        assert ('fill-opacity="0.5"' if current else 'fill-opacity="0.25"') in actual
+    call_count = len(vector_fakes["draw"])
+    replay = asyncio.run(asset_slots.resolve_offer(request, _outline(), roles, job, **args))
+    assert replay.to_json(root=tmp_path) == offer.to_json(root=tmp_path)
+    assert len(vector_fakes["draw"]) == call_count
+    with pytest.raises(ValueError, match="svg_asset_projection_revision_invalid"):
+        asyncio.run(asset_slots.resolve_offer(request, _outline(), roles, job,
+            **{**args, "style_snapshot": {ASSET_PROJECTION_KEY: "forged"}}))
+    assert len(vector_fakes["draw"]) == call_count
+
+
+def test_asset_projection_unknown_revision_rejected_before_drawing_builder(vector_fakes):
+    with pytest.raises(ValueError, match="svg_asset_projection_revision_invalid"):
+        _build(projection_revision="forged")
+    assert vector_fakes["draw"] == [] and vector_fakes["plan"] == []

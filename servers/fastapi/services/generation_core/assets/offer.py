@@ -277,7 +277,8 @@ async def build_asset_offer(*, outline, brand, style, roles: Sequence[str], inst
                             budget: int, timeout_seconds: float, image_service=None,
                             settings=None, icons_only: bool = False,
                             illustration_mode: str = "off",
-                            illustration_parts: Optional[Sequence[str]] = None) -> AssetOffer:
+                            illustration_parts: Optional[Sequence[str]] = None,
+                            projection_revision: str = "svg-asset-projection/v2") -> AssetOffer:
     """Plan and produce one deck's illustrations and icons; never raises for a provider.
 
     ``icons_only`` is the no-image-provider mode: the same deck plan decides
@@ -298,6 +299,8 @@ async def build_asset_offer(*, outline, brand, style, roles: Sequence[str], inst
     takes the image-provider path when a provider is configured. A node that
     got a step picture gets no icon.
     """
+    from services.generation_core.drivers.svg.icon_flatten import validate_asset_projection_revision
+    validate_asset_projection_revision(projection_revision)
     from models.authored_illustration_plan import illustrations_are_prohibited
     from models.authored_infographic_plan import without_scenes
     from services.generation_core.assets.infographic_assets import (
@@ -382,6 +385,7 @@ async def build_asset_offer(*, outline, brand, style, roles: Sequence[str], inst
 
         vector_task = asyncio.ensure_future(build_vector_drawings(
             plan, outline=outline, roles=roles, brand=brand, style=style, timeout_seconds=timeout_seconds,
+            projection_revision=projection_revision,
             vector_scene_pages={slide.index for slide in all_scenes} - {slide.index for slide in scenes},
             **({"parts": tuple(illustration_parts)} if illustration_parts else {})))
     with observe_image_provider_calls() as scene_calls, svg_outline_spans.span("scenes"):

@@ -309,13 +309,14 @@ async def _template_fallback(*, ctx, request, index, content, payload, error, jo
     from services.svg_presentation_checkpoint import _required_numeric_claims
     from services.svg_renderer import render_svg_with_metrics
     from services.svg_templates.generation import (
-        apply_template_body_quality, compose_template_page, page_frame, template_page_context,
+        apply_template_body_quality, compose_template_page, context_frame, template_page_context,
     )
 
     try:
         from services.svg_templates.chapters import page_chapter
-        context = template_page_context(ctx.snapshot, index, ctx.count, content, chapter=page_chapter(ctx, index))
-        frame = page_frame(ctx.snapshot, index, ctx.count, chapter=page_chapter(ctx, index))
+        context = template_page_context(ctx.snapshot, index, ctx.count, content, chapter=page_chapter(ctx, index),
+                                        saved_context=payload.get("svg_template_page"))
+        frame = context_frame(ctx.snapshot, context)
         faces = sorted(context["font_faces"], key=lambda face: face["weight"])
         body_face = min(faces, key=lambda face: abs(face["weight"] - 400))
         title_face = min(faces, key=lambda face: abs(face["weight"] - 700))

@@ -21,11 +21,12 @@ accepted only while:
 * the identity fields that are not provenance metadata (name, version,
   commit, source, license) are equal.
 
-The adapter files are hashed with their current bytes on both sides and are
-never aliased: an adapter change still invalidates older proofs. A vendored
-code change makes the ``files`` maps differ, so the alias stops applying by
-itself; ``tests/unit/test_svg_converter_digest_aliases.py`` then fails until the
-inert entry is removed.
+Raw aliases hash the current adapter bytes. A reviewed execution state of the
+anchor revision also accepts the historical alias reconstructed from the
+ledger's anchor files, using this checkout's LF/CRLF conventions. An unreviewed
+adapter change or a later execution revision cannot inherit that alias. A
+vendored code change makes the ``files`` maps differ, so the alias stops
+applying by itself.
 """
 from __future__ import annotations
 
@@ -85,6 +86,30 @@ def executed_identity_equal(superseded: dict, current: dict) -> bool:
         superseded.get(key) == current.get(key) for key in keys)
 
 
+def _historical_converter_identity_digest(vendor_manifest_sha256: str) -> str | None:
+    """Reconstruct an anchor alias only for that reviewed execution revision.
+
+    Source inventories may grow after the anchor: the ledger keeps the original
+    anchor preimage while requiring the complete current inventory to be reviewed.
+    Its source-state builder also retains each anchor file's checkout convention.
+    """
+    from services.verifier_revisions import CONVERTER_LEDGER
+    from workers.public_svg_pptx_convert import (
+        _PROJECTION_ADAPTER_FILES, _VENDOR_MANIFEST_KEY, VENDOR_ROOT,
+        converter_identity, converter_source_state,
+    )
+
+    if (CONVERTER_LEDGER.current != CONVERTER_LEDGER.anchor_revision
+            or CONVERTER_LEDGER.revision_of(converter_source_state()) != CONVERTER_LEDGER.current):
+        return None
+    root = Path(__file__).resolve().parents[1]
+    sources = {_VENDOR_MANIFEST_KEY: VENDOR_ROOT / "MANIFEST.json",
+               **{path.relative_to(root).as_posix(): path for path in _PROJECTION_ADAPTER_FILES}}
+    return CONVERTER_LEDGER.source_state(
+        sources, lambda hashes: converter_identity({**hashes, _VENDOR_MANIFEST_KEY: vendor_manifest_sha256}),
+    ).anchor
+
+
 def accepted_converter_digests() -> frozenset[str]:
     """The current converter digest plus every live, identity-backed alias."""
     from workers.public_svg_pptx_convert import VENDOR_ROOT, converter_digest
@@ -94,6 +119,9 @@ def accepted_converter_digests() -> frozenset[str]:
     for sha256 in SUPERSEDED_VENDOR_MANIFESTS:
         if executed_identity_equal(superseded_manifest(sha256), current):
             accepted.add(converter_identity_digest(sha256))
+            historical = _historical_converter_identity_digest(sha256)
+            if historical is not None:
+                accepted.add(historical)
     return frozenset(accepted)
 
 

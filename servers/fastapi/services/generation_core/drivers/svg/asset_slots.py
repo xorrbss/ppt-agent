@@ -98,13 +98,27 @@ def _data_url(png: bytes) -> str:
     return "data:image/png;base64," + base64.b64encode(png).decode()
 
 
-async def project_offer(session, offer: AssetOffer, *, presentation_id, count: int) -> SvgAssetOffer:
+def validate_offer_projection(offer: AssetOffer, style_snapshot: dict | None) -> str:
+    from services.generation_core.drivers.svg.icon_flatten import (
+        ASSET_PROJECTION_CURRENT, ASSET_PROJECTION_KEY, asset_projection_revision,
+    )
+    revision = asset_projection_revision(style_snapshot)
+    expected = {ASSET_PROJECTION_KEY: revision} if revision == ASSET_PROJECTION_CURRENT else {}
+    actual = {ASSET_PROJECTION_KEY: offer.receipt[ASSET_PROJECTION_KEY]} if ASSET_PROJECTION_KEY in offer.receipt else {}
+    if actual != expected:
+        raise ValueError("svg_asset_projection_receipt_conflict")
+    return revision
+
+
+async def project_offer(session, offer: AssetOffer, *, presentation_id, count: int,
+                        style_snapshot: dict | None = None) -> SvgAssetOffer:
     """Turn the format-neutral offer into this driver's per-page slots."""
     from services.generation_core.drivers.svg.embed_assets import (
         IconFlattenBudgetExceeded, flatten_icon_svg, rasterize_icon,
     )
     from utils.authored_image_slots import source_slot_id_for_asset
 
+    revision = validate_offer_projection(offer, style_snapshot)
     result = SvgAssetOffer(raster=[{} for _ in range(count)], vector=[{} for _ in range(count)],
                            slots=[{} for _ in range(count)], receipt=dict(offer.receipt))
     flattened = rasterized = drawings = 0
@@ -120,13 +134,13 @@ async def project_offer(session, offer: AssetOffer, *, presentation_id, count: i
 
             text = payload.decode("utf-8")
             colors = palette_of(text) or ["#000000"]
-            drawing = flatten_icon_svg(text, color=colors[0], point_budget=None, palette=colors)
+            drawing = flatten_icon_svg(text, color=colors[0], point_budget=None, palette=colors, projection_revision=revision)
             drawing = replace(drawing, line_cap="round", line_join="round")
             # Two step pictures of one page may be byte-identical; the slot id names the item too.
             slot_id = source_slot_id_for_asset(
                 f"vector:{presentation_id}:{slot.page_index}:{slot.role}:{slot.concept or ''}:{slot.sha256}")
             result.vector[slot.page_index][slot_id] = {
-                "data_url": _data_url(rasterize_icon(drawing, size=_DRAWING_PREVIEW_EDGE)),
+                "data_url": _data_url(rasterize_icon(drawing, size=_DRAWING_PREVIEW_EDGE, projection_revision=revision)),
                 "description": slot.alt, "required": False, "allowOmit": True,
                 "kind": slot.kind, "vector": drawing}
             result.slots[slot.page_index][slot_id] = {**meta, "mode": "drawing",
@@ -136,9 +150,10 @@ async def project_offer(session, offer: AssetOffer, *, presentation_id, count: i
         if slot.is_vector:
             text = payload.decode("utf-8")
             try:
-                icon = flatten_icon_svg(text, color=_ink(text, slot))
+                icon = flatten_icon_svg(text, color=_ink(text, slot), projection_revision=revision)
             except IconFlattenBudgetExceeded:
-                png = rasterize_icon(flatten_icon_svg(text, color=_ink(text, slot), point_budget=None))
+                png = rasterize_icon(flatten_icon_svg(text, color=_ink(text, slot), point_budget=None,
+                    projection_revision=revision), projection_revision=revision)
                 slot_id, candidate = await _register(session, presentation_id, slot, png, "image/png",
                                                      256, 256)
                 result.raster[slot.page_index][slot_id] = candidate
@@ -147,7 +162,7 @@ async def project_offer(session, offer: AssetOffer, *, presentation_id, count: i
                 continue
             slot_id = source_slot_id_for_asset(f"vector:{presentation_id}:{slot.sha256}")
             result.vector[slot.page_index][slot_id] = {
-                "data_url": _data_url(rasterize_icon(icon, size=_PREVIEW_EDGE)),
+                "data_url": _data_url(rasterize_icon(icon, size=_PREVIEW_EDGE, projection_revision=revision)),
                 "description": slot.alt, "required": False, "allowOmit": True,
                 "kind": slot.kind, "vector": icon}
             result.slots[slot.page_index][slot_id] = {**meta, "mode": "flattened",
@@ -277,13 +292,20 @@ async def resolve_offer(request, outline, roles, job, *, profile, checkpoint, du
                         style_snapshot: dict | None = None, has_source_assets: bool | None = None) -> AssetOffer:
     """Replay the persisted offer on resume, or build and persist a new one."""
 
+    from services.generation_core.drivers.svg.icon_flatten import (
+        ASSET_PROJECTION_CURRENT, ASSET_PROJECTION_KEY, asset_projection_revision,
+    )
+    revision = asset_projection_revision(style_snapshot)
+
     if job is not None and not durable:
         # A non-durable job replays inline checkpoints whose digest pins the
         # offered bytes; without a durable seed a resume would buy new ones.
         return AssetOffer(receipt={"status": "non_durable_job"})
     seed = (await checkpoint(job, 0) or {}) if job is not None else {}
     if seed.get(SEED_KEY):
-        return AssetOffer.from_json(seed[SEED_KEY], root=get_app_data_directory_env())
+        offer = AssetOffer.from_json(seed[SEED_KEY], root=get_app_data_directory_env())
+        validate_offer_projection(offer, style_snapshot)
+        return offer
     if seed.get("source_manifest_ref"):
         # An attempt sealed before offers existed must resume with its plan.
         return AssetOffer(receipt={"status": "sealed_without_offer"})
@@ -305,7 +327,8 @@ async def resolve_offer(request, outline, roles, job, *, profile, checkpoint, du
     elif mode != "off":
         provider = not (image_service.is_image_generation_disabled or image_service.image_gen_func is None)
         offer = await _build(request, outline, roles, job, profile, image_service if provider else None,
-                             icons_only=not provider, illustration_mode=mode, illustration_parts=parts)
+                             icons_only=not provider, illustration_mode=mode, illustration_parts=parts,
+                             projection_revision=revision)
         if step_pictures:
             # Names the route in the receipt; every other receipt keeps its bytes.
             offer = replace(offer, receipt={**offer.receipt, "templateStepPictures": True})
@@ -314,9 +337,11 @@ async def resolve_offer(request, outline, roles, job, *, profile, checkpoint, du
         # provider: the plan still places icons, with no illustration or sprite
         # sheet. Persisted like any offer, so a resume after the setting
         # changes still matches the sealed source manifest.
-        offer = await _build(request, outline, roles, job, profile, None, icons_only=True)
+        offer = await _build(request, outline, roles, job, profile, None, icons_only=True, projection_revision=revision)
     else:
-        offer = await _build(request, outline, roles, job, profile, image_service)
+        offer = await _build(request, outline, roles, job, profile, image_service, projection_revision=revision)
+    if revision == ASSET_PROJECTION_CURRENT:
+        offer = replace(offer, receipt={**offer.receipt, ASSET_PROJECTION_KEY: revision})
     if job is not None:
         seed = await checkpoint(job, 0) or {}
         seed[SEED_KEY] = offer.to_json(root=get_app_data_directory_env())
@@ -325,7 +350,8 @@ async def resolve_offer(request, outline, roles, job, *, profile, checkpoint, du
 
 
 async def _build(request, outline, roles, job, profile, image_service, *, icons_only: bool = False,
-                 illustration_mode: str = "off", illustration_parts=None) -> AssetOffer:
+                 illustration_mode: str = "off", illustration_parts=None,
+                 projection_revision: str = "svg-asset-projection/v1") -> AssetOffer:
     from services.generation_core.assets.offer import build_asset_offer
     from services.generation_core.style.build import resolve_brand
     from services.provider_usage_instrumentation import provider_usage_scope
@@ -340,7 +366,7 @@ async def _build(request, outline, roles, job, profile, image_service, *, icons_
             instructions=request.instructions, budget=profile.illustration_budget,
             timeout_seconds=profile.illustration_timeout_seconds, image_service=image_service,
             icons_only=icons_only, illustration_mode=illustration_mode,
-            illustration_parts=illustration_parts)
+            illustration_parts=illustration_parts, projection_revision=projection_revision)
     return offer
 
 

@@ -1,16 +1,78 @@
 """The converter digest alias is valid only because the executed converter bytes are identical (D5 C)."""
+import dataclasses
 import hashlib
 import json
 import shutil
 import uuid
+from pathlib import Path
 
 import pytest
 
 import workers.public_svg_converter_aliases as aliases
 import workers.public_svg_pptx_convert as convert
+import services.verifier_revisions as revisions
 from services.svg_final_pptx_review import final_render_current
 from utils.hashing import canonical_json_sha256
 from workers import public_svg_pptx_render
+
+
+# Git 9d389ba80's adapters with the retained superseded manifest. These fixed
+# fixtures predate the revision migration; never generate them from current code.
+_HISTORICAL_ALIASES = {
+    False: "3c40f9dc2b4816796bfc21a016347c2bb352763efcf31616563ad56259d591e0",
+    True: "cc4a2f5bc4dfb256e14bd63ca143424d578b43ca3668ae051021bbf0e1b4a00b",
+}
+
+
+def _reviewed_checkout(monkeypatch, crlf):
+    """Review this test's source state, independently of pending ledger integration."""
+    original = Path.read_bytes
+    ledger = revisions.CONVERTER_LEDGER
+    root = Path(convert.__file__).resolve().parents[1]
+    adapters = {path.resolve(): ledger.anchor_files.get(path.relative_to(root).as_posix())
+                for path in convert._PROJECTION_ADAPTER_FILES}
+
+    def checkout(path):
+        data = original(path)
+        if Path(path).resolve() not in adapters:
+            return data
+        data = data.replace(b"\r\n", b"\n")
+        entry = adapters[Path(path).resolve()]
+        return data.replace(b"\n", b"\r\n") if crlf and entry is not None and entry.crlf else data
+
+    monkeypatch.setattr(Path, "read_bytes", checkout)
+    state = convert.converter_source_state()
+    monkeypatch.setattr(revisions, "CONVERTER_LEDGER", dataclasses.replace(
+        ledger, reviewed={**ledger.reviewed, state.reviewed_key: ledger.current}))
+
+
+@pytest.mark.parametrize("crlf", [False, True])
+def test_historical_alias_survives_only_the_reviewed_anchor_execution(monkeypatch, crlf):
+    _reviewed_checkout(monkeypatch, crlf)
+    historical = _HISTORICAL_ALIASES[crlf]
+    assert aliases.converter_digest_accepted(historical)
+    assert _verifies(_final_render_proof(historical))
+
+    ledger = revisions.CONVERTER_LEDGER
+    state = convert.converter_source_state()
+    bumped_revision = ledger.name + "/2"
+    monkeypatch.setattr(revisions, "CONVERTER_LEDGER", dataclasses.replace(
+        ledger, current=bumped_revision, reviewed={**ledger.reviewed, state.reviewed_key: bumped_revision}))
+    assert not aliases.converter_digest_accepted(historical)
+
+
+def test_unreviewed_subset_change_cannot_inherit_a_historical_alias(monkeypatch):
+    _reviewed_checkout(monkeypatch, False)
+    assert aliases.converter_digest_accepted(_HISTORICAL_ALIASES[False])
+    original = Path.read_bytes
+    target = Path(convert.__file__).resolve().parents[1] / "services/svg_pptx_font_subset.py"
+
+    def changed(path):
+        data = original(path)
+        return data + b"\n# unreviewed subset change\n" if Path(path).resolve() == target else data
+
+    monkeypatch.setattr(Path, "read_bytes", changed)
+    assert not aliases.converter_digest_accepted(_HISTORICAL_ALIASES[False])
 
 
 def _vendor_files_on_disk(root):
@@ -55,7 +117,11 @@ def test_superseded_manifest_describes_byte_identical_executed_converter(sha256,
     old_digest = _digest_over_manifest(tmp_path, monkeypatch, kept)
     assert old_digest == aliases.converter_identity_digest(sha256)
     assert old_digest != convert.converter_digest()
-    assert aliases.accepted_converter_digests() == {convert.converter_digest(), old_digest}
+    expected = {convert.converter_digest(), old_digest}
+    historical = aliases._historical_converter_identity_digest(sha256)
+    if historical is not None:
+        expected.add(historical)
+    assert aliases.accepted_converter_digests() == expected
 
 
 def test_alias_stops_applying_when_executed_vendor_bytes_change(tmp_path, monkeypatch):

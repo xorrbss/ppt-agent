@@ -137,7 +137,7 @@ def _anchor(table: Mapping[str, tuple[str, str | None]]) -> Mapping[str, AnchorF
 
 
 #: ``workers/public_svg_pptx_convert.converter_digest()``: the vendored slide-master
-#: converter (manifest-verified on every call) plus the nine export adapter files.
+#: converter (manifest-verified on every call) plus the ten export adapter files.
 CONVERTER_EXECUTION_REVISION = "svg-pptx-converter/1"
 CONVERTER_LEDGER = VerifierRevisionLedger(
     name="svg-pptx-converter",
@@ -165,6 +165,10 @@ CONVERTER_LEDGER = VerifierRevisionLedger(
         # Migration commit: converter_digest() and common_header_verifier_digest()
         # resolve through this ledger; no conversion or verification behaviour changed.
         "e1fb878c24a10098e81cea86b14422b80ba33dffe8e2c7a51249b397266a9fcf": "svg-pptx-converter/1",
+        # Cover the already-executed font-subset helper in the current source
+        # inventory; historical converter aliases keep their original recipe.
+        # No conversion bytes or historical anchor inputs change.
+        "ce6b9c85984462c188f37385abcb30f4e8df458a8e986dc172223582045ad591": "svg-pptx-converter/1",
     }),
 )
 
@@ -222,6 +226,10 @@ COMMON_HEADER_VERIFIER_LEDGER = VerifierRevisionLedger(
         # snapshots pinned to v4. Legacy prompts, measurements and header evidence
         # remain byte-identical; stored header verification keeps this revision.
         "sha256:cd24bd647482fcaa18092812c869da0647e6adb6d8a99fded00a5b2607204c8e": "svg-common-header-verifier/1",
+        # Template page-context v2 is pinned only by fresh admissions. Render
+        # replay re-derives the saved v1 context encoding and still compares every
+        # field; header measurement and verification are unchanged.
+        "sha256:2d8c55610be61441571256dd905366acfc8491425f89cd600821198e9cf0ba8a": "svg-common-header-verifier/1",
     }),
 )
 
@@ -289,6 +297,9 @@ WHOLE_PAGE_VERIFIER_LEDGER = VerifierRevisionLedger(
         # remeasurement receive v4 only from its snapshot pin. Legacy chart
         # projection and export evidence verification remain byte-identical.
         "f672a0bb8d8761a363db6f5dad0b9ac355fee1cffdd0111c158479aefd5b2d4e": "svg-whole-page-verifier/1",
+        # Cover the already-executed font-subset helper in the current source
+        # inventory without changing export verification or historical anchors.
+        "67d5215fb1386032c3eeafda62ba95c9325b45abe79033813c68282042d14b3b": "svg-whole-page-verifier/1",
     }),
 )
 
@@ -412,6 +423,12 @@ PARTIAL_RECOVERY_CODE_LEDGER = VerifierRevisionLedger(
         # chart repair hints require the snapshot's v4 pin. Frozen legacy prompt
         # hashes and snapshot identity checks preserve stored recovery bytes.
         "db03f40f285488381ebac8e8ffb6d47c49929cd7a64946a892e162b15ddb495d": "svg-partial-recovery-code/1",
+        # Asset projection v2 requires a fresh immutable snapshot pin and a
+        # matching sealed offer receipt. Unpinned snapshots keep the legacy
+        # opacity, raster coverage and provider-drawing normalization, including
+        # seedless offers; saved v1 template contexts replay unchanged. Track
+        # both drawing helpers now while preserving the historical preimage.
+        "57aa07966d950e5dc470f9eba5b1ced173b6f5c4bde43332a4f9b88c6fbe5b49": "svg-partial-recovery-code/1",
     }),
 )
 
@@ -451,6 +468,10 @@ PAGE_RENDER_CODE_LEDGER = VerifierRevisionLedger(
         # snapshots pinned to v4 receive new guidance, diagnostics and repair
         # hints; legacy page prompts and rendering inputs stay byte-identical.
         "65fa2d2cd24e5e022c392582b9e4741a674cddf876b9cee289d7f474b4605586": "svg-page-render-code/1",
+        # The same snapshot-bound asset projection and template-context replay
+        # as the recovery entry: unpinned pages retain their historical bytes.
+        # Both drawing helper files are now covered by the current inventory.
+        "f5f97281424d071632bc81efa13c00abca135a19a75765b64687a04b9eb85bd5": "svg-page-render-code/1",
     }),
 )
 

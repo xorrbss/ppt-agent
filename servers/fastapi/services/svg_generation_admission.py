@@ -330,6 +330,10 @@ def pin_svg_style(request: object) -> dict:
                 from services.generation_core.drivers.svg.native_requirements import (
                     ADMITTED_REQUIREMENTS_REVISION, SNAPSHOT_REVISION_KEY)
                 frozen[SNAPSHOT_REVISION_KEY] = ADMITTED_REQUIREMENTS_REVISION
+                from services.generation_core.drivers.svg.icon_flatten import (
+                    ASSET_PROJECTION_CURRENT, ASSET_PROJECTION_KEY,
+                )
+                frozen[ASSET_PROJECTION_KEY] = ASSET_PROJECTION_CURRENT
                 # Page-number ink rule, pinned the same way: a fresh deck's page number
                 # reads on its page; a stored deck without the pin keeps the style primary.
                 from services.svg_contract import PAGE_NUMBER_INK_KEY, PAGE_NUMBER_INK_READABLE
@@ -367,6 +371,8 @@ def pin_svg_style(request: object) -> dict:
             selected = template_selection(frozen)
             if selected is None or selected != getattr(request, "_svg_template_selection", None):
                 raise ValueError("svg_template_execution_snapshot_conflict")
+        from services.generation_core.drivers.svg.icon_flatten import asset_projection_revision
+        asset_projection_revision(frozen)
         validate_profile_agreement(request, frozen)
         validate_quality_recovery_agreement(request, frozen)
         from services.svg_common_header_design_plan import require_header_design_plan, validate_header_design_plan

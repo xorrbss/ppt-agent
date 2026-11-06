@@ -98,3 +98,46 @@ def test_snapshots_without_a_v2_template_need_no_loading(monkeypatch):
     monkeypatch.setattr(catalog, "resolve_template_selection", forbidden)
     asyncio.run(material.ensure_snapshot_material(None, {}))
     asyncio.run(material.ensure_snapshot_material(None, {"svg_template": _full()}))
+
+
+def test_active_tasks_and_their_children_keep_material_across_lru_eviction():
+    async def scenario():
+        ready, evicted = asyncio.Event(), asyncio.Event()
+
+        async def generation():
+            compact = material.compact_selection(_full())
+            ready.set()
+            await evicted.wait()
+            assert compact["material_key"] not in material._cache
+            assert material.template_package(compact)["digest"] == "sha256:" + "1" * 64
+
+            async def child():
+                return material.template_adaptations(compact)
+
+            assert await asyncio.create_task(child()) == _full()["adaptations"]
+
+        active = asyncio.create_task(generation())
+        await ready.wait()
+        for index in range(material._CACHE_LIMIT + 1):
+            full = _full()
+            full["version_id"] = f"other-{index}"
+            material.compact_selection(full)
+        assert len(material._cache) == material._CACHE_LIMIT
+        evicted.set()
+        await active
+        # The caller did not acquire the completed task's private reference.
+        with pytest.raises(ValueError, match="svg_template_material_not_loaded"):
+            material.template_package({**_full(), "schema_version": material.SELECTION_SCHEMA_V2,
+                                       "material_key": material.material_key(_full())})
+
+    asyncio.run(scenario())
+
+
+def test_switching_active_selections_never_returns_another_material():
+    first = material.compact_selection(_full())
+    second_full = _full()
+    second_full["version_id"] = "other"
+    second_full["package"]["digest"] = "sha256:" + "9" * 64
+    second = material.compact_selection(second_full)
+    assert material.template_package(first)["digest"] == "sha256:" + "1" * 64
+    assert material.template_package(second)["digest"] == "sha256:" + "9" * 64

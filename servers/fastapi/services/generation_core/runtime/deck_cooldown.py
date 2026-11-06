@@ -34,10 +34,18 @@ class DeckCooldown:
 
     async def wait(self, *, jitter: float = 0.0) -> float:
         """Sleep until the shared deadline (plus ``jitter``); return the slept seconds."""
-        delay = self.remaining() + max(0.0, jitter)
-        if delay > 0.0:
+        loop = asyncio.get_running_loop()
+        spread = max(0.0, jitter)
+        deadline = max(loop.time(), self._deadline) + spread
+        slept = 0.0
+        while True:
+            # Another page can extend the shared deadline while this one sleeps.
+            deadline = max(deadline, self._deadline + spread)
+            delay = max(0.0, deadline - loop.time())
+            if delay == 0.0:
+                return slept
             await asyncio.sleep(delay)
-        return delay
+            slept += delay
 
 
 __all__ = ["DeckCooldown", "MAX_RETRY_JITTER_SECONDS", "retry_jitter"]

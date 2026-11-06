@@ -142,6 +142,11 @@ def _recovery_review_allocation(request, snapshot, slide_count):
     return review_calls, format_control, final_control
 
 
+_POST_ANCHOR_CODE_FILES = (
+    "services/generation_core/assets/vector_offer.py",
+    "services/generation_core/assets/vector_illustration.py",
+)
+
 CODE_FILES = (
     "services/svg_partial_recovery.py",
     "services/svg_source_local_review_continuation.py",
@@ -189,6 +194,7 @@ CODE_FILES = (
     "services/generation_core/drivers/svg/icon_flatten.py",
     "services/generation_core/drivers/svg/icon_geometry.py",
     "services/generation_core/assets/offer.py",
+    *_POST_ANCHOR_CODE_FILES,
     "utils/authored_image_slots.py",
     "utils/codex_stream_adapter.py",
     "utils/llm_calls/prepare_svg_common_header_titles.py",
@@ -1850,7 +1856,10 @@ def _base_code_digest(files=None):
 
 
 def _base_identity(hashes, files):
-    return digest([{ "path": name, "sha256": hashes[name]} for name in files])
+    # Only these newly inventoried dependencies are absent from the historical
+    # preimage. Current source states still read every file before reaching here.
+    return digest([{ "path": name, "sha256": hashes[name]} for name in files
+                   if name in hashes or name not in _POST_ANCHOR_CODE_FILES])
 
 
 def _code_file_digests(files):
@@ -2153,7 +2162,7 @@ async def verified_header_producer(session, operation, job, *, verification=None
 def _frozen_vector_offer(seed_row, job, operation, owner, tenant):
     """Read only the DB-frozen catalogue and its content-bound library files."""
     from services.generation_core.assets.offer import AssetOffer
-    from services.generation_core.drivers.svg.asset_slots import SEED_KEY, _ink
+    from services.generation_core.drivers.svg.asset_slots import SEED_KEY, _ink, validate_offer_projection
     from services.generation_core.drivers.svg.embed_assets import flatten_icon_svg, IconFlattenBudgetExceeded
     from utils.authored_image_slots import source_slot_id_for_asset
     from utils.get_env import get_app_data_directory_env
@@ -2164,6 +2173,7 @@ def _frozen_vector_offer(seed_row, job, operation, owner, tenant):
     if seed_row.job_id != job.id or seed_row.slide_index != 0 or job.workspace_operation_id != operation.id:
         reject("svg_partial_recovery_vector_seed_unbound")
     offer = AssetOffer.from_json(seed, root=get_app_data_directory_env())
+    revision = validate_offer_projection(offer, job.svg_style_snapshot)
     maps = [{} for _ in range(job.total_slides)]
     files = []
     for slot in offer.slots:
@@ -2180,7 +2190,7 @@ def _frozen_vector_offer(seed_row, job, operation, owner, tenant):
         text = payload.decode("utf-8")
         files.append({"page_index": slot.page_index, "sha256": slot.sha256})
         try:
-            icon = flatten_icon_svg(text, color=_ink(text, slot))
+            icon = flatten_icon_svg(text, color=_ink(text, slot), projection_revision=revision)
         except IconFlattenBudgetExceeded:
             # Original projection represents this as an owned raster slot.
             # Its raster authority stays in the source asset manifest.
