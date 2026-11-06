@@ -108,6 +108,51 @@ def test_declarations_are_rejected():
         flatten_icon_svg('<!DOCTYPE svg [<!ENTITY a "b">]>' + _svg('<path d="M0 0L1 1"/>'), color=INK)
 
 
+@pytest.mark.parametrize(("inner", "centre_alpha"), [
+    ("M6 6H18V18H6Z", 255),  # Same direction: winding 2 is still filled.
+    ("M6 6V18H18V6Z", 0),  # Opposite direction: winding 0 makes a hole.
+])
+def test_compound_path_preview_uses_the_emitted_svg_nonzero_rule(inner, centre_alpha):
+    path_data = f"M2 2H22V22H2Z {inner}"
+    icon = flatten_icon_svg(_svg(f'<path fill="#000" stroke="none" d="{path_data}"/>'), color=INK)
+    assert icon.primitives[0]["tag"] == "path"
+    restored = FlattenedIcon.from_json(icon.to_json())
+    group = icon_group(restored, x=0, y=0, width=96, height=96)
+    assert group[0].get("fill-rule", "nonzero") == "nonzero"
+    assert group[0].get("d").count("M") == 2
+    validate_svg(ET.tostring(_canvas(group), encoding="unicode"))
+    image = Image.open(io.BytesIO(rasterize_icon(restored, size=96)))
+    assert image.getpixel((48, 48))[3] == centre_alpha
+    assert image.getpixel((12, 12))[3] == 255
+    assert image.getpixel((0, 0))[3] == 0
+
+
+@pytest.mark.parametrize(("path_data", "centre_alpha"), [
+    ("M2 2H16V16H2Z M8 8H22V22H8Z", 255),  # Same-direction overlap.
+    ("M2 2H16V16H2Z M8 8V22H22V8Z", 0),  # Opposite-direction overlap cancels.
+    ("M2 2H22V22H2Z M4 4H20V20H4Z M6 6V18H18V6Z", 255),  # Winding 2 - 1.
+    ("M12 2L18 22L2 10L22 10L6 22Z M0 0H1V1Z", 255),  # Star centre has winding 2.
+])
+def test_nonzero_preview_counts_crossings_for_overlap_and_self_intersections(path_data, centre_alpha):
+    icon = flatten_icon_svg(_svg(f'<path fill="#000" stroke="none" d="{path_data}"/>'), color=INK)
+    image = Image.open(io.BytesIO(rasterize_icon(icon, size=96)))
+    assert image.getpixel((48, 48))[3] == centre_alpha
+
+
+@pytest.mark.parametrize("attribute", ["fill-opacity", "stroke-opacity"])
+@pytest.mark.parametrize("child_opacity", [None, 0.5, 1.0])
+def test_paint_opacity_inherits_or_is_overridden_but_group_opacity_multiplies(attribute, child_opacity):
+    override = "" if child_opacity is None else f' {attribute}="{child_opacity}"'
+    body = (f'<g opacity="0.5" {attribute}="0.5"><g opacity="0.5">'
+            f'<rect x="4" y="4" width="16" height="16" fill="#000"{override}/></g></g>')
+    icon = flatten_icon_svg(_svg(body), color=INK)
+    primitive = icon.primitives[0]
+    assert primitive["opacity"] == 0.25
+    assert primitive.get(attribute, 1.0) == (0.5 if child_opacity is None else child_opacity)
+    group = icon_group(icon, x=0, y=0, width=24, height=24)
+    assert float(group[0].get(attribute, "1")) == primitive.get(attribute, 1.0)
+
+
 def test_rasterize_produces_alpha_png_with_ink(library_icons):
     png = rasterize_icon(library_icons["ai-01-neural-network.svg"], size=128)
     image = Image.open(io.BytesIO(png))

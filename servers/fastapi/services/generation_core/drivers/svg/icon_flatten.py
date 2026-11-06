@@ -178,7 +178,8 @@ def _style(node, inherited: dict, ink: str, palette: "_Palette | None" = None) -
                 raise ValueError("icon_opacity_invalid")
             # Group opacity composites; multiplying it into each shape is the
             # flattened approximation, exact for shapes that do not overlap.
-            style[name] = style.get(name, 1.0) * value
+            # Fill/stroke opacity instead inherit until a child overrides them.
+            style[name] = style.get(name, 1.0) * value if name == "opacity" else value
     if node.get("fill") is not None:
         style["fill"] = _paint(node.get("fill"), ink, palette)
     if node.get("stroke") is not None:

@@ -11,6 +11,7 @@ icons that exceed ``ICON_POINT_BUDGET``.
 from __future__ import annotations
 
 import io
+import math
 import re
 import xml.etree.ElementTree as ET
 
@@ -118,9 +119,9 @@ def rasterize_icon(icon: FlattenedIcon, *, size: int = 256) -> bytes:
     A monochrome icon is drawn as one coverage mask in its colour, so the
     colour stays exact and never fringes at antialiased edges. A multi-colour
     drawing, or any shape with opacity, is painted shape by shape in order.
-    A compound path is filled even-odd, which keeps its holes.
+    A compound path uses the same nonzero winding rule as the emitted SVG.
     """
-    from PIL import Image, ImageChops, ImageDraw
+    from PIL import Image, ImageDraw
 
     if size <= 0:
         raise ValueError("icon_raster_size_invalid")
@@ -129,6 +130,34 @@ def rasterize_icon(icon: FlattenedIcon, *, size: int = 256) -> bytes:
 
     def point(px: float, py: float) -> tuple[float, float]:
         return offset_x + px * scale, offset_y + py * scale
+
+    def compound_coverage(subpaths, draw) -> None:
+        # Scan pixel centres, counting directed edge crossings. XOR of polygon
+        # masks is even-odd and punches false holes in overlapping or nested
+        # same-direction rings; signed winding also handles self intersections.
+        edges = []
+        for ring in subpaths:
+            points = [point(px, py) for px, py in ring]
+            for (ax, ay), (bx, by) in zip(points, points[1:] + points[:1]):
+                if ay != by:
+                    edges.append((ax, ay, bx, by))
+        if not edges:
+            return
+        first_row = max(0, math.ceil(min(min(ay, by) for _, ay, _, by in edges) - 0.5))
+        last_row = min(canvas, math.ceil(max(max(ay, by) for _, ay, _, by in edges) - 0.5))
+        for row in range(first_row, last_row):
+            y = row + 0.5
+            crossings = sorted((ax + (y - ay) * (bx - ax) / (by - ay), 1 if by > ay else -1)
+                               for ax, ay, bx, by in edges if min(ay, by) <= y < max(ay, by))
+            winding, previous_x = 0, None
+            for x, direction in crossings:
+                if winding and previous_x is not None:
+                    left = max(0, math.ceil(previous_x - 0.5))
+                    right = min(canvas - 1, math.ceil(x - 0.5) - 1)
+                    if left <= right:
+                        draw.line((left, row, right, row), fill=255)
+                winding += direction
+                previous_x = x
 
     def coverage(primitive: dict, mask) -> None:
         """Draw one primitive's fill and stroke coverage (255) into ``mask``."""
@@ -142,12 +171,7 @@ def rasterize_icon(icon: FlattenedIcon, *, size: int = 256) -> bytes:
             draw.ellipse((center[0] - radius, center[1] - radius, center[0] + radius, center[1] + radius), fill=255)
 
         if tag == "path":
-            hole_aware = Image.new("L", mask.size, 0)
-            for ring in primitive["subpaths"]:
-                layer = Image.new("L", mask.size, 0)
-                ImageDraw.Draw(layer).polygon([point(px, py) for px, py in ring], fill=255)
-                hole_aware = ImageChops.difference(hole_aware, layer)
-            mask.paste(ImageChops.lighter(mask, hole_aware))
+            compound_coverage(primitive["subpaths"], draw)
             return
         if tag in {"polyline", "polygon", "line"}:
             if tag == "line":
