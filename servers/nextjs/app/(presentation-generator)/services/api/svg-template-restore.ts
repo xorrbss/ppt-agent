@@ -19,7 +19,9 @@ export function savedSvgTemplateSelection(settingsValue: unknown, themeValue: un
 }
 export function templateRestoreConfig(selection: ReturnType<typeof savedSvgTemplateSelection>, settingsValue: unknown): PresentationConfig {
   const settings = object(settingsValue);
+  const verbosityTouched = Object.values(VerbosityType).includes(settings.verbosity as VerbosityType);
   return { slides: String(settings.n_slides ?? 8), language: Object.values(LanguageType).includes(settings.language as LanguageType) ? settings.language as LanguageType : null, prompt: "", tone: Object.values(ToneType).includes(settings.tone as ToneType) ? settings.tone as ToneType : ToneType.Default, verbosity: Object.values(VerbosityType).includes(settings.verbosity as VerbosityType) ? settings.verbosity as VerbosityType : VerbosityType.Standard, instructions: typeof settings.instructions === "string" ? settings.instructions : "", includeTableOfContents: settings.include_table_of_contents === true, includeTitleSlide: settings.include_title_slide === true, webSearch: settings.web_search === true,
+    verbosityTouched,
     commonHeaderMode: selection.svgTemplateMode === "template-redesign" ? "free" : "uniform", commonHeaderCoverException: false, aspectRatio: "16:9", codexGenerationPreset: null,
     svgTemplatePin: selection.svgTemplatePin, svgTemplateMode: selection.svgTemplateMode, svgTemplateFrameMap: selection.svgTemplateFrameMap };
 }

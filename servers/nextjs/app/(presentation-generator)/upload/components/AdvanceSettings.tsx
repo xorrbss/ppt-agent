@@ -9,6 +9,7 @@ import React, { useEffect, useState } from 'react';
 import CurrentConfig from "./CurrentConfig";
 import { PresentationConfig, ToneType, VerbosityType } from '../type';
 import { CODEX_GENERATION_PRESETS, type CodexGenerationPresetId } from '@/components/codex-config';
+import { requestVerbosity } from '../utils/requestVerbosity';
 
 interface ConfigurationSelectsProps {
     config: PresentationConfig;
@@ -44,7 +45,8 @@ const AdvanceSettings = ({
 
     const [advancedDraft, setAdvancedDraft] = useState({
         tone: config.tone,
-        verbosity: config.verbosity,
+        verbosity: requestVerbosity(config) === undefined ? VerbosityType.Text_Heavy : config.verbosity,
+        verbosityTouched: false,
         instructions: config.instructions,
         includeTableOfContents: config.includeTableOfContents,
         includeTitleSlide: config.includeTitleSlide,
@@ -55,7 +57,8 @@ const AdvanceSettings = ({
     const syncDraftFromConfig = () => {
         setAdvancedDraft({
             tone: config.tone,
-            verbosity: config.verbosity,
+            verbosity: requestVerbosity(config) === undefined ? VerbosityType.Text_Heavy : config.verbosity,
+            verbosityTouched: false,
             instructions: config.instructions,
             includeTableOfContents: config.includeTableOfContents,
             includeTitleSlide: config.includeTitleSlide,
@@ -75,7 +78,7 @@ const AdvanceSettings = ({
 
     const handleSaveAdvanced = () => {
         onConfigChange('tone', advancedDraft.tone);
-        if (advancedDraft.verbosity !== config.verbosity) {
+        if (advancedDraft.verbosityTouched) {
             onConfigChange('verbosity', advancedDraft.verbosity);
             onConfigChange('verbosityTouched', true);
         }
@@ -229,7 +232,7 @@ const AdvanceSettings = ({
                                     <Select
                                         value={advancedDraft.verbosity}
                                         onValueChange={(value) =>
-                                            setAdvancedDraft((prev) => ({ ...prev, verbosity: value as VerbosityType }))
+                                            setAdvancedDraft((prev) => ({ ...prev, verbosity: value as VerbosityType, verbosityTouched: true }))
                                         }
                                     >
                                         <SelectTrigger aria-label={t('verbosityLabel')} className="p-2.5 w-[120px] rounded-xl border-[#DBDBE1] bg-white font-syne text-sm font-medium text-[#2C2B37] shadow-none focus:ring-0 focus-visible:ring-0">

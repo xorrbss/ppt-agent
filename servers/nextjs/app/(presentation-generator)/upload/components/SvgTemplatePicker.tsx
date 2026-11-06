@@ -53,6 +53,7 @@ export default function SvgTemplatePicker({ config, onConfigChange, sourceConten
   const capabilityEpoch = useRef(0);
   const ownerEpoch = useRef(0);
   const preparationEpoch = useRef(0);
+  const draftEpoch = useRef(0);
   const ownerAlive = useRef(true);
   const [ownerInvalidated, setOwnerInvalidated] = useState(false);
   const live = (epoch: number) => ownerAlive.current && ownerEpoch.current === epoch;
@@ -163,16 +164,19 @@ export default function SvgTemplatePicker({ config, onConfigChange, sourceConten
     if (!analyzingTemplateId) return;
     const owner = ownerEpoch.current;
     if (!live(owner)) return;
+    const epoch = draftEpoch.current;
+    let cancelled = false;
     const timer = window.setTimeout(() => {
       SvgTemplatesApi.draft(analyzingTemplateId).then(result => {
-        if (!live(owner)) return;
+        if (cancelled || !live(owner) || epoch !== draftEpoch.current
+          || result.template.templateId !== analyzingTemplateId || result.operationId !== draft?.operationId) return;
         setDraft(result);
         if (result.template.registrationState === "analyzing") return;
         setReviewDirty(false); setConfirmed(false); setRefresh(value => value + 1);
         setSelectedFrames(result.package?.frames.filter(frame => !frameReviewBlockReason(result, frame)).map(frame => frame.frame_id) ?? []);
       }).catch(() => { /* keep the manual "분석 상태 확인" button as the fallback */ });
     }, 3000);
-    return () => window.clearTimeout(timer);
+    return () => { cancelled = true; window.clearTimeout(timer); };
   }, [analyzingTemplateId, draft]);
   const prepare = async () => {
     if (!selection || busy || !ownerAlive.current || available !== true) return;
@@ -200,20 +204,22 @@ export default function SvgTemplatePicker({ config, onConfigChange, sourceConten
   const openDraft = async (id: string) => {
     if (!ownerAlive.current) return;
     const owner = ownerEpoch.current;
+    const epoch = ++draftEpoch.current;
     setBusy(true);
-    try { const result = await SvgTemplatesApi.draft(id); if (!live(owner)) return; setDraft(result); setReviewDirty(false); setSelectedFrames(result.package?.frames.filter(frame => !frameReviewBlockReason(result, frame)).map(frame => frame.frame_id) ?? []); setConfirmed(false); }
+    try { const result = await SvgTemplatesApi.draft(id); if (!live(owner) || epoch !== draftEpoch.current) return; setDraft(result); setReviewDirty(false); setSelectedFrames(result.package?.frames.filter(frame => !frameReviewBlockReason(result, frame)).map(frame => frame.frame_id) ?? []); setConfirmed(false); }
     catch { if (live(owner)) notify.error(t("openDraftFailed")); }
     finally { if (live(owner)) setBusy(false); }
   };
   const register = async () => {
     if (!file || !name.trim() || busy || !ownerAlive.current || available !== true) return;
     const owner = ownerEpoch.current;
+    const epoch = ++draftEpoch.current;
     setBusy(true);
     try {
       const admission = await PresentationGenerationApi.uploadDoc([file], `svg-template:${crypto.randomUUID()}`);
-      if (!live(owner)) return;
+      if (!live(owner) || epoch !== draftEpoch.current) return;
       const result = await SvgTemplatesApi.register({ name: name.trim(), referenceSnapshotId: admission.referenceSnapshotId, registrationMode: "framed" });
-      if (!live(owner)) return;
+      if (!live(owner) || epoch !== draftEpoch.current) return;
       setReviewDirty(false);
       setDraft({ template: result.template, operationId: result.operationId, package: null });
       setRefresh(value => value + 1); setConfirmed(false);
@@ -319,7 +325,7 @@ export default function SvgTemplatePicker({ config, onConfigChange, sourceConten
       {reviewDirty ? <p role="status" className="text-xs text-amber-800">{t("reviewDirty")}</p> : null}
       <p className="text-xs text-slate-500">{t("reviewGuide")}</p>
       <label className="flex gap-2 text-xs"><input type="checkbox" checked={confirmed} disabled={reviewDirty} onChange={event => setConfirmed(event.target.checked)} />{draft.package?.frames.some(frame => !frameReviewBlockReason(draft, frame)) ? t("confirmCompared") : t("confirmReference")}</label>
-      <div className="flex flex-wrap gap-2"><Button type="button" size="sm" variant="outline" disabled={busy} onClick={() => void openDraft(draft.template.templateId)}>{t("checkStatus")}</Button><Button type="button" size="sm" disabled={busy || reviewDirty || !confirmed || !selectedFrames.length || selectedFrames.some(id => { const frame = draft.package?.frames.find(item => item.frame_id === id); return !frame || Boolean(frameReviewBlockReason(draft, frame)); })} onClick={() => void publish()}>{t("registerSelected")}</Button>{draft.template.registrationState === "failed" || draft.template.registrationState === "review-required" ? <Button type="button" size="sm" variant="outline" disabled={busy || reviewDirty || !confirmed} onClick={() => void publish(true)}>{t("registerReferenceOnly")}</Button> : null}<Button type="button" size="sm" variant="ghost" onClick={() => setDraft(null)}>{t("close")}</Button></div>
+      <div className="flex flex-wrap gap-2"><Button type="button" size="sm" variant="outline" disabled={busy} onClick={() => void openDraft(draft.template.templateId)}>{t("checkStatus")}</Button><Button type="button" size="sm" disabled={busy || reviewDirty || !confirmed || !selectedFrames.length || selectedFrames.some(id => { const frame = draft.package?.frames.find(item => item.frame_id === id); return !frame || Boolean(frameReviewBlockReason(draft, frame)); })} onClick={() => void publish()}>{t("registerSelected")}</Button>{draft.template.registrationState === "failed" || draft.template.registrationState === "review-required" ? <Button type="button" size="sm" variant="outline" disabled={busy || reviewDirty || !confirmed} onClick={() => void publish(true)}>{t("registerReferenceOnly")}</Button> : null}<Button type="button" size="sm" variant="ghost" onClick={() => { draftEpoch.current += 1; setDraft(null); }}>{t("close")}</Button></div>
     </div> : null}
   </section>;
 }
