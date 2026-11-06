@@ -21,6 +21,10 @@ The derivation runs once, at outline time (``services/outline_chart_grounding.py
 a deck whose frozen style snapshot pins ``svg-native-requirements/v3``; the derived line
 is part of the pinned outline, so a resumed deck keeps exactly the lines it was authored
 with. It never runs on a slide whose content already holds a chart literal.
+
+Revision v4 additionally reads an explicit unit header and joins a series over
+consecutive lines before validating it. An unreadable continuation refuses the
+whole run; its earlier lines are never emitted as a partial chart.
 """
 from __future__ import annotations
 
@@ -29,7 +33,8 @@ import re
 import unicodedata
 
 from services.generation_core.drivers.svg.native_requirements import (
-    REQUIREMENTS_VERSION_V3, _COMPOUND_AMOUNT_LABEL, _NUMBER, _UNIT_V3 as _UNIT, _split_outside_brackets,
+    REQUIREMENTS_VERSION_V3, REQUIREMENTS_VERSION_V4, _COMPOUND_AMOUNT_LABEL, _NUMBER,
+    _UNIT_V3 as _UNIT, _split_outside_brackets,
     requested_native_data)
 
 DERIVATION_ID = "svg-prose-chart-literal/v1"
@@ -194,26 +199,148 @@ def _literal(labels: list[str], values: list[str], unit: str) -> str:
     return "chart: " + ", ".join(f"{label} {prefix}{value}{suffix}" for label, value in zip(labels, values, strict=True))
 
 
+# A bare parenthesis must name a recognisable unit, rather than a note such as
+# (전망). An explicit 단위/unit marker can also name other literal-grammar units.
+_HEADER_UNIT = re.compile(
+    r"(?:[$€£₩¥]|[%％](?:p|포인트)?|(?:백|천|만|억|조)*(?:원|달러|명|대|건|개|회|배|시간|분|초|톤)"
+    r"|USD|KRW|EUR|JPY|million|billion|thousand|people|units|kg|g|t|km|m|cm|mm|m²|m³|ha)", re.I)
+_UNIT_MARKER = re.compile(r"(?:단위|\bunit)\s*[:：]?\s*(.+)", re.I)
+_BULLET = re.compile(r"^\s*(?:[-*•·]\s+|\d+[.)]\s+)")
+
+
+def _header_unit(text: str, *, explicit: bool = False) -> str | None:
+    marker = _UNIT_MARKER.fullmatch(text.strip())
+    if marker:
+        text, explicit = marker[1], True
+    # Whitespace in a unit header (억 원) has no numerical meaning. Copy its
+    # contiguous spelling, which is how the literal grammar spells that unit.
+    unit = "".join(text.split())
+    if (not re.fullmatch(rf"[$€£₩¥]?(?:{_UNIT})?", unit) or not unit
+            or _CALENDAR_UNIT.fullmatch(unit)):
+        return None
+    return unit if explicit or _HEADER_UNIT.fullmatch(unit) else None
+
+
+def _header_context(line: str) -> tuple[str, str | None, bool]:
+    """Return data after a label header, its unit, and whether this is a header.
+
+    Context is confined to a heading/standalone header or a label before a
+    colon. Parentheses inside a data item's label never supply a unit.
+    """
+    text = _BULLET.sub("", line.strip())
+    heading = bool(re.match(r"^#{1,6}\s+", text))
+    text = re.sub(r"^#{1,6}\s+", "", text)
+    split = _split_outside_brackets(text, r"[:：]")
+    # A unit marker's own colon is part of its header, not the data boundary.
+    standalone_marker = _UNIT_MARKER.fullmatch(text)
+    if standalone_marker:
+        unit = _header_unit(text)
+        if unit:
+            return "", unit, True
+    if len(split) == 2:
+        head, data = split
+    else:
+        head, data = text, ""
+        leading_header = re.fullmatch(r"([^,]*?\([^()]+\))\s+(.+)", text)
+        if leading_header and not _data_line(leading_header[1]) and _data_line(leading_header[2]):
+            head, data = leading_header.groups()
+        elif _data_line(text):
+            return text, None, False
+    candidates = [_header_unit(match[1]) for match in re.finditer(r"\(([^()]*)\)", head)]
+    units = {unit for unit in candidates if unit}
+    unit = next(iter(units)) if len(units) == 1 else None
+    is_header = heading or bool(units) or text.endswith((":", "："))
+    if data and is_header:
+        return data.strip(), unit, True
+    if is_header and not data:
+        return "", unit, True
+    return text, None, False
+
+
+def _data_line(line: str) -> bool:
+    """Include malformed neighbouring values so they cannot leave a valid subset."""
+    return bool("|" not in line and re.search(
+        r"\S+\s+(?:[$€£₩¥]?[-+]?\d|(?:약|대략|최대|최소|최고|최저|평균|about|approx(?:\.|imately)?|around|~)\s*\d)",
+        line, re.I))
+
+
+def _context_series(line: str, unit: str | None) -> tuple[list[str], list[str], str] | None:
+    segments = _split_outside_brackets(line, _SEPARATOR)
+    if len(segments) < MIN_ITEMS:
+        return None
+    items = _items(segments)
+    if not items:
+        return None
+    if unit:
+        prefix = unit[:1] if unit[:1] in "$€£₩¥" else ""
+        suffix = unit[len(prefix):]
+        for position, item in enumerate(items):
+            written = (item["prefix"] or "") + (item["unit"] or "")
+            # A sentence particle following a bare last value is prose, not a
+            # conflicting unit. _series still checks its qualifier/range tail.
+            if (position == len(items) - 1 and written != unit and not item["prefix"] and item["unit"]
+                    and _PARTICLE.fullmatch(item["unit"]) and not item["note"]):
+                item["tail"] = item["unit"] + (item["tail"] or "")
+                item["unit"], written = None, ""
+            if not written:
+                item["prefix"], item["unit"] = prefix, suffix
+            elif written != unit:
+                # Keep the existing parser's treatment of a unit plus a final
+                # Korean particle, while refusing every actual unit mismatch.
+                if not (position == len(items) - 1 and item["prefix"] == prefix
+                        and _resolve_last_unit(item, suffix)):
+                    return None
+    return _series(items)
+
+
+def _v4_series(content: str):
+    """Join an entire consecutive data run before attempting any derivation."""
+    lines = content.split("\n")
+    context, position = None, 0
+    while position < len(lines):
+        data, header_unit, header = _header_context(lines[position])
+        if header:
+            context = header_unit
+        if not _data_line(data):
+            if data.strip():
+                context = None
+            position += 1
+            continue
+        parts, end = [data.rstrip().rstrip(",、")], position
+        while end + 1 < len(lines):
+            following, _, next_header = _header_context(lines[end + 1])
+            if next_header or not _data_line(following):
+                break
+            parts.append(following.rstrip().rstrip(",、"))
+            end += 1
+        series = _context_series(", ".join(parts), context)
+        if series:
+            yield end, series
+        position = end + 1
+
+
 def derive_chart_literals(content: str, *, revision: str = REQUIREMENTS_VERSION_V3) -> list[DerivedChart]:
     """The chart literals a slide's prose states; none when it already holds a chart literal."""
-    if revision != REQUIREMENTS_VERSION_V3 or not isinstance(content, str):
+    if revision not in (REQUIREMENTS_VERSION_V3, REQUIREMENTS_VERSION_V4) or not isinstance(content, str):
         return []
     if requested_native_data(content, revision).get("charts"):
         return []
     derived = []
-    for index, line in enumerate(content.split("\n")):
-        if "|" in line or not re.search(r"\d", line):
+    if revision == REQUIREMENTS_VERSION_V4:
+        candidates = _v4_series(content)
+    else:
+        candidates = ((index, series) for index, line in enumerate(content.split("\n"))
+                      if "|" not in line and re.search(r"\d", line) for series in _line_series(line))
+    for index, (labels, values, unit) in candidates:
+        literal = _literal(labels, values, unit)
+        # The line must read back as exactly this series, unit and all.
+        charts = requested_native_data(literal, revision).get("charts", [])
+        if (len(charts) != 1 or charts[0].get("unsupportedReason")
+                or charts[0]["categories"] != labels
+                or charts[0]["values"] != [value.replace(",", "") for value in values]
+                or set(charts[0].get("units", [])) != {unit}):
             continue
-        for labels, values, unit in _line_series(line):
-            literal = _literal(labels, values, unit)
-            # The line must read back as exactly this series, unit and all.
-            charts = requested_native_data(literal, revision).get("charts", [])
-            if (len(charts) != 1 or charts[0].get("unsupportedReason")
-                    or charts[0]["categories"] != labels
-                    or charts[0]["values"] != [value.replace(",", "") for value in values]
-                    or set(charts[0].get("units", [])) != {unit}):
-                continue
-            derived.append(DerivedChart(index, literal, tuple(labels), tuple(values), unit))
+        derived.append(DerivedChart(index, literal, tuple(labels), tuple(values), unit))
     return derived
 
 

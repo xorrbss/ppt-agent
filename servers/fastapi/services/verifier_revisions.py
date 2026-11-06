@@ -218,6 +218,10 @@ COMMON_HEADER_VERIFIER_LEDGER = VerifierRevisionLedger(
         # P8 merged onto main (#132, #133): the combined source state of the two
         # behaviour-unchanged entries above.
         "sha256:8a7c3138c5515f3423038b1d419a6ed643f6e5769572a1f4765800abd1934ab8": "svg-common-header-verifier/1",
+        # Native requirements v4: render's chart repair hint is emitted only for
+        # snapshots pinned to v4. Legacy prompts, measurements and header evidence
+        # remain byte-identical; stored header verification keeps this revision.
+        "sha256:cd24bd647482fcaa18092812c869da0647e6adb6d8a99fded00a5b2607204c8e": "svg-common-header-verifier/1",
     }),
 )
 
@@ -281,6 +285,10 @@ WHOLE_PAGE_VERIFIER_LEDGER = VerifierRevisionLedger(
         # stored snapshot lacks it and finalizes byte-identically. validate_svg and
         # every export verification input are unchanged.
         "8416e5b6508fd714bee8039acd9355438341379b368175789e1cbbb8d273d2cd": "svg-whole-page-verifier/1",
+        # Native requirements v4: single-series title matching and publication
+        # remeasurement receive v4 only from its snapshot pin. Legacy chart
+        # projection and export evidence verification remain byte-identical.
+        "f672a0bb8d8761a363db6f5dad0b9ac355fee1cffdd0111c158479aefd5b2d4e": "svg-whole-page-verifier/1",
     }),
 )
 
@@ -400,6 +408,10 @@ PARTIAL_RECOVERY_CODE_LEDGER = VerifierRevisionLedger(
         # Template body renders review fixes: the render block is left out when no render was sent
         # (same pin condition as above). Stored decks recover byte-identically.
         "6d2edfe0a0038e4acc657fefe9239f254159fa0e2ef68eb2d1e5651afb7f15ad": "svg-partial-recovery-code/1",
+        # Native requirements v4: author guidance, declaration diagnostics and
+        # chart repair hints require the snapshot's v4 pin. Frozen legacy prompt
+        # hashes and snapshot identity checks preserve stored recovery bytes.
+        "db03f40f285488381ebac8e8ffb6d47c49929cd7a64946a892e162b15ddb495d": "svg-partial-recovery-code/1",
     }),
 )
 
@@ -435,6 +447,10 @@ PAGE_RENDER_CODE_LEDGER = VerifierRevisionLedger(
         "216b7a9c6d1657134ab86a340a1248080d2e3b42894baf23fb80cad6d225de73": "svg-page-render-code/1",
         # Template body renders review fixes (same edit as the code ledger entry).
         "e5321183bd24087425804c01919016eae2e35fe58835c6de7b0b6c72674de7bd": "svg-page-render-code/1",
+        # Native requirements v4 (same edit as the recovery code entry): only
+        # snapshots pinned to v4 receive new guidance, diagnostics and repair
+        # hints; legacy page prompts and rendering inputs stay byte-identical.
+        "65fa2d2cd24e5e022c392582b9e4741a674cddf876b9cee289d7f474b4605586": "svg-page-render-code/1",
     }),
 )
 

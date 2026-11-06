@@ -66,6 +66,23 @@ NATIVE_CHART_RULE = (
 )
 
 
+NATIVE_CHART_GUIDANCE_V4 = (
+    "Prefer donut or pie for composition (parts of a whole), and bar or line for trends and comparisons. "
+    "A single-series chart may use its one unique drawn title naming that series instead of a separate "
+    "legend; draw that title once above the plot. Multi-series charts still draw every series name "
+    "separately. Draw all data visibly inside the chart group: every category, series name and required "
+    "value; declaration metadata alone never counts as drawn data. Set valueLabels.shown=true for "
+    "required values and use their declared label position.\n"
+)
+
+
+def _native_chart_rules(requirements_revision: str | None) -> str:
+    # Local import: native_requirements imports native_publish, which imports this module.
+    from services.generation_core.drivers.svg.native_requirements import REQUIREMENTS_VERSION_V4
+
+    return NATIVE_CHART_RULE + (NATIVE_CHART_GUIDANCE_V4 if requirements_revision == REQUIREMENTS_VERSION_V4 else "")
+
+
 #: Revision ten's stacked bar/column rule (plan item S7), appended to ``NATIVE_CHART_RULE``.
 #: Earlier revisions never send it; their native rule bytes are unchanged.
 NATIVE_STACKED_CHART_RULE = (
@@ -77,7 +94,7 @@ NATIVE_STACKED_CHART_RULE = (
 )
 
 
-def native_author_rules_v10() -> str:
+def native_author_rules_v10(*, requirements_revision: str | None = None) -> str:
     """Revision ten's native rules: the table and chart rules plus the stacked chart rule.
 
     A new-copy free deck has no source tables or source-native bindings, so the source
@@ -85,7 +102,8 @@ def native_author_rules_v10() -> str:
     ``native_author_rules(source_grounded=True)`` are left out.
     """
     table_rule = NATIVE_TABLE_RULE.replace(_SOURCE_PARAGRAPH_SENTENCE, "")
-    return table_rule + (NATIVE_CHART_RULE + NATIVE_STACKED_CHART_RULE if NATIVE_CHARTS_OFFERED else "")
+    return table_rule + (_native_chart_rules(requirements_revision) + NATIVE_STACKED_CHART_RULE
+                         if NATIVE_CHARTS_OFFERED else "")
 
 
 _SOURCE_PARAGRAPH_SENTENCE = (
@@ -94,7 +112,7 @@ _SOURCE_PARAGRAPH_SENTENCE = (
 )
 
 
-def native_author_rules(*, source_grounded: bool = False) -> str:
+def native_author_rules(*, source_grounded: bool = False, requirements_revision: str | None = None) -> str:
     """The native-object rule text appended to the SVG author rules."""
     table_rule = NATIVE_TABLE_RULE
     if source_grounded:
@@ -110,7 +128,7 @@ def native_author_rules(*, source_grounded: bool = False) -> str:
             "boundary; all other grid and text requirements remain. Do not infer merging from "
             "empty cells or visual convenience alone.\n"
         )
-    return table_rule + (NATIVE_CHART_RULE if NATIVE_CHARTS_OFFERED else "")
+    return table_rule + (_native_chart_rules(requirements_revision) if NATIVE_CHARTS_OFFERED else "")
 
 
 def _drop(dropped: list, node, kind: str, reason: str) -> None:

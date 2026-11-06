@@ -5,12 +5,14 @@ import pytest
 
 from models.presentation_outline_model import PresentationOutlineModel, SlideOutlineModel
 from services.generation_core.drivers.svg.native_requirements import (
-    REQUIREMENTS_VERSION, REQUIREMENTS_VERSION_V3, SNAPSHOT_REVISION_KEY, requested_native_data,
+    REQUIREMENTS_VERSION, REQUIREMENTS_VERSION_V3, REQUIREMENTS_VERSION_V4,
+    SNAPSHOT_REVISION_KEY, requested_native_data,
     requirements_revision, same_requirements_as_v2)
 from services.generation_core.drivers.svg.prose_chart_literal import derive_chart_literals, with_chart_literals
 from services.outline_chart_grounding import derive_outline_chart_literals, ground_outline_charts
 
 V3 = REQUIREMENTS_VERSION_V3
+V4 = REQUIREMENTS_VERSION_V4
 SALES = "- 판매 추이: 2023년 16.2만대, 2024년 14.7만대, 2025년 18.5만대, 2026년 22만대(전망)"
 SHARE = "점유율은 현대 38%, 기아 27%, 테슬라 18%, BMW 5%, 기타 12%로 집계됐다."
 
@@ -134,3 +136,112 @@ def test_snapshot_pins_the_revision():
     assert same_requirements_as_v2("간트 차트: A 2개월, B 3개월", {})
     assert not same_requirements_as_v2("간트 차트: A 2개월, B 3개월", {SNAPSHOT_REVISION_KEY: V3})
     assert same_requirements_as_v2("차트: A 10, B 20", {SNAPSHOT_REVISION_KEY: V3})
+
+
+@pytest.mark.parametrize("header", [
+    "# 매출 (억원)",
+    "### 매출 (단위: 억 원)",
+    "(억 원)",
+    "단위: 억 원",
+    "매출(억원):",
+    "매출(억원): ",
+    "매출(억원) ",
+])
+def test_v4_copies_unit_from_heading_parenthesis_or_label_header(header):
+    separator = "" if header.endswith(" ") else "\n"
+    prose = header + separator + "서울 1,200.00, 부산 800.50, 대구 450"
+    [item] = derive_chart_literals(prose, revision=V4)
+    assert item.literal == "chart: 서울 1,200.00억원, 부산 800.50억원, 대구 450억원"
+    assert item.values == ("1,200.00", "800.50", "450")
+    assert item.unit == "억원"
+    assert derive_chart_literals(prose, revision=V3) == []
+
+
+def test_v4_joins_twelve_months_and_inserts_literal_after_the_last_source_line():
+    first = ", ".join(f"{month}월 {month}.50" for month in range(1, 7))
+    second = ", ".join(f"{month}월 {month}.50" for month in range(7, 13))
+    prose = "### 월별 매출(억원)\n" + first + ",\n" + second + "\n- 매출 추이"
+    content, [item] = with_chart_literals(prose, revision=V4)
+    assert item.categories == tuple(f"{month}월" for month in range(1, 13))
+    assert item.values == tuple(f"{month}.50" for month in range(1, 13))
+    assert item.line_index == 2
+    assert content == prose.replace(second + "\n", second + "\n" + item.literal + "\n")
+    assert with_chart_literals(content, revision=V4) == (content, [])
+
+
+def test_v4_joins_one_item_per_line_and_keeps_written_units_and_notes():
+    prose = "단위: %\n- A 30%\n- B 20\n- C 50(전망)"
+    [item] = derive_chart_literals(prose, revision=V4)
+    assert item.literal == "chart: A 30%, B 20%, C(전망) 50%"
+
+
+def test_v4_never_reinterprets_a_conflicting_unit_as_a_particle():
+    prose = "### 인원(명)\nA 10명, B 20명, C 30가구"
+    assert derive_chart_literals(prose, revision=V4) == []
+
+
+@pytest.mark.parametrize("last", ["30", "30가구", "30가구로 집계됐다", "30으로 집계됐다"])
+def test_v4_keeps_a_header_unit_beginning_with_a_particle_and_explicit_unit_particles(last):
+    prose = "단위: 가구\nA 10가구, B 20가구, C " + last
+    [item] = derive_chart_literals(prose, revision=V4)
+    assert item.literal == "chart: A 10가구, B 20가구, C 30가구"
+    assert item.unit == "가구"
+
+
+@pytest.mark.parametrize("prose", [
+    "### 매출(억원)\nA 10, B 20, C 30\nD 40명",             # mixed unit on continuation
+    "### 매출(억원)\nA 10, B 20, C 30\nD 40~50",           # range on continuation
+    "### 매출(억원)\nA 10, B 20, C 30\nD 약 40",           # qualified continuation
+    "### 매출(억원)\nA 10, B 20, C 30\nD 대략 40",         # another qualified continuation
+    "### 매출(억원)\nA 10, B 20, C 30\nD approx. 40",      # English qualifier
+    "### 매출(억원)\nA 10, B 20, C 30\nD 40 이상",         # qualified tail
+    "### 매출(억원)\nA 10, B 20, C 30\nD 1조 2,000억원",   # compound amount
+    "### 매출(억원)\nA 10, B 20, 현재 30",                  # state label
+    "### 비중(%)\n매출률 10, 이익률 20, 전환율 30",          # different measures
+    "### 매출(억원)\nA 10%, B 20, C 30",                    # header disagrees with item
+    "### 매출(억원)(명)\nA 10, B 20, C 30",                # ambiguous header
+    "### 일정(년)\n착수 2024, 중간 2025, 완료 2026",        # calendar unit
+    "### 매출(전망)\nA 10, B 20, C 30",                    # a note is not a unit
+    "### 매출(억원)\n### 인원\nA 10, B 20, C 30",          # heading ends unit scope
+    "### 매출(억원)\n다른 자료의 설명\nA 10, B 20, C 30",  # prose ends unit scope
+    "### 매출(억원)\nA 10, B 20\n\nC 30",                 # not consecutive
+    "A 10, B 20, C 30",                                    # no unit to inherit
+])
+def test_v4_refuses_entire_ambiguous_or_inexact_series(prose):
+    assert derive_chart_literals(prose, revision=V4) == []
+    assert with_chart_literals(prose, revision=V4) == (prose, [])
+
+
+@pytest.mark.parametrize("prose", [SALES, SHARE, "A 30%p, B 20%p, C 10%p 상승",
+                                   "A $1,200, B $800, C $450"])
+def test_v4_retains_explicit_unit_series(prose):
+    assert [item.literal for item in derive_chart_literals(prose, revision=V4)] == [
+        item.literal for item in derive_chart_literals(prose, revision=V3)]
+
+
+def test_v3_default_output_stays_byte_identical_for_split_series_and_unit_headers():
+    first, second = "A 10%, B 20%, C 30%", "D 15%, E 15%, F 10%"
+    prose = "### 비중(%)\n" + first + "\n" + second
+    expected = "### 비중(%)\n" + first + "\nchart: " + first + "\n" + second + "\nchart: " + second
+    assert with_chart_literals(prose)[0].encode("utf-8") == expected.encode("utf-8")
+    assert with_chart_literals(prose, revision=V3) == with_chart_literals(prose)
+    [joined] = derive_chart_literals(prose, revision=V4)
+    assert joined.literal == "chart: " + first + ", " + second
+    no_units = "### 비중(%)\nA 10, B 20, C 70"
+    assert with_chart_literals(no_units, revision=V3) == (no_units, [])
+    assert with_chart_literals(no_units) == (no_units, [])
+
+
+def test_v4_outline_derivation_still_grounds_every_joined_point_against_the_source():
+    source = "### 매출(억원)\n서울 1,200.00, 부산 800.50\n대구 450, 광주 300"
+    outline = PresentationOutlineModel(slides=[SlideOutlineModel(content=source)])
+    derived, added = derive_outline_chart_literals(outline, revision=V4)
+    assert added == 1
+    kept, dropped = ground_outline_charts(derived, source, revision=V4)
+    assert kept is derived and dropped == []
+    # The remaining points cannot ground a computed/altered value or a swapped label.
+    for changed in (source.replace("광주 300", "광주 301"), source.replace("광주 300", "제주 300")):
+        kept, dropped = ground_outline_charts(derived, changed, revision=V4)
+        assert kept.slides[0].content == source
+        assert len(dropped) == 1
+        assert dropped[0].ungrounded_values == ("광주 300",)

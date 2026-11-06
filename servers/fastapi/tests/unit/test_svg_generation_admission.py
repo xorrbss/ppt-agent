@@ -2185,7 +2185,7 @@ def test_authoring_profile_staging_preserves_legacy_and_frozen_new_identity(monk
         from services.document_canvas_generation import validate_svg_readability_policy
         from services.svg_common_header_design_plan import validate_header_design_plan
 
-        assert snapshot["native_requirements_revision"] == "svg-native-requirements/v3"
+        assert snapshot["native_requirements_revision"] == "svg-native-requirements/v4"
         assert snapshot["page_number_ink"] == "svg-page-number-ink/v1"
 
         assert validate_svg_readability_policy(snapshot["readability_policy"])["minimum_font_pt"] == 9

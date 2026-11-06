@@ -66,6 +66,8 @@ CONTENT_FAILURE_KINDS = frozenset({
 
 #: Every word is on the page; only its arrangement, size or style is defective.
 LAYOUT_FAILURE_KINDS = frozenset({
+    # V4 emits this only after exact bound data and visible values are proven.
+    "native_requested_chart_not_editable",
     "text_overlap",
     "small_body_text",
     "font_unresolved",

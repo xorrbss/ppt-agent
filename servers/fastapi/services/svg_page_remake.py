@@ -168,7 +168,9 @@ def _native_projection(svg, native, metadata, source, *, revision=None):
         apply_requested_native_quality(quality, payload, svg, source, pt_per_px=scale, revision=revision)
         if quality.get("passed") is False:
             raise ValueError("svg_page_remake_requested_native_missing")
-    return page_native_objects(payload, pt_per_px=scale)
+    from services.generation_core.drivers.svg.native_requirements import REQUIREMENTS_VERSION_V4
+    return page_native_objects(payload, pt_per_px=scale,
+        **({"revision": revision} if revision == REQUIREMENTS_VERSION_V4 else {}))
 
 
 async def preview_svg(presentation, slides, index, request, task, session):
