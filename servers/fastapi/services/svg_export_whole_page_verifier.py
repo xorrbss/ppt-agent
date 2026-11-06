@@ -10,6 +10,7 @@ _ROOT = Path(__file__).resolve().parents[1]
 _FILES = (
     "services/svg_export_whole_page_verifier.py",
     "services/svg_pptx_font_embedding.py",
+    "services/svg_pptx_font_subset.py",
     "services/svg_trusted_fonts.py",
     "services/authored_vnext/semantic/typography.py",
     "utils/svg_template_fonts.py",

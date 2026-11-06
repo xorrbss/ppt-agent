@@ -189,6 +189,18 @@ def test_partial_recovery_authority_edit_keeps_the_page_render_identity(monkeypa
     assert recovery._page_render_code_digest() == VERIFIERS["page-render-code"].stored
 
 
+@pytest.mark.parametrize("name", ["converter", "whole-page"])
+def test_font_subset_changes_both_export_code_identities(monkeypatch, name):
+    verifier = VERIFIERS[name]
+    target = FASTAPI_ROOT / "services/svg_pptx_font_subset.py"
+    assert target in verifier.inventory().values()
+    before = verifier.state()
+    _with_changed_bytes(monkeypatch, target)
+    after = verifier.state()
+    assert after.raw != before.raw and after.reviewed_key != before.reviewed_key
+    assert verifier.identity() == after.raw
+
+
 def test_vendored_converter_bytes_are_still_verified_on_every_call(tmp_path, monkeypatch):
     vendor = tmp_path / "vendor"
     shutil.copytree(convert.VENDOR_ROOT, vendor, ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
@@ -224,7 +236,10 @@ def test_ledger_is_well_formed(name):
     for key in ledger.reviewed:
         assert key.startswith(ledger.prefix) and len(key) == len(ledger.prefix) + 64
         assert all(char in "0123456789abcdef" for char in key[len(ledger.prefix):])
-    assert set(verifier.inventory()) <= set(ledger.anchor_files)
+    # This dependency already executed at the anchor, but was not hashed then.
+    # Cover it now without rewriting the historical identity's preimage.
+    added = {"services/svg_pptx_font_subset.py"} if name in {"converter", "whole-page"} else set()
+    assert set(verifier.inventory()) <= set(ledger.anchor_files) | added
     # The anchor's LF form is the stored identity and a reviewed state of its own revision.
     lf_anchor = (verifier.reviewed_formula or verifier.formula)(
         {key: entry.lf for key, entry in ledger.anchor_files.items()})
@@ -269,11 +284,13 @@ def test_windows_autocrlf_checkout_keeps_its_stored_identity(name, monkeypatch):
     verifier = VERIFIERS[name]
     ledger = verifier.ledger
     inventory = verifier.inventory()
-    relative = {key: path.resolve().relative_to(FASTAPI_ROOT).as_posix() for key, path in inventory.items()}
+    relative = {key: key for key in ledger.anchor_files}
+    current_relative = {key: path.resolve().relative_to(FASTAPI_ROOT).as_posix()
+                        for key, path in inventory.items()}
     ledger_file = Path(revisions.__file__).resolve().relative_to(FASTAPI_ROOT).as_posix()
-    exact = _unconverted_paths([*relative.values(), ledger_file])
+    exact = _unconverted_paths([*relative.values(), *current_relative.values(), ledger_file])
     assert ledger_file not in exact
-    assert {key for key in inventory if ledger.anchor_files[key].crlf is None} == {
+    assert {key for key in ledger.anchor_files if ledger.anchor_files[key].crlf is None} == {
         key for key, path in relative.items() if path in exact}
 
     def checkout(path, data):
@@ -286,11 +303,12 @@ def test_windows_autocrlf_checkout_keeps_its_stored_identity(name, monkeypatch):
     assert windows_stored != verifier.stored
 
     original = Path.read_bytes
-    converted = {FASTAPI_ROOT / path for path in [*relative.values(), ledger_file] if path not in exact}
+    converted = {FASTAPI_ROOT / path for path in [*relative.values(), *current_relative.values(), ledger_file]
+                 if path not in exact}
 
     def crlf_checkout(path):
         data = original(path)
-        return data.replace(b"\n", b"\r\n") if Path(path).resolve() in converted else data
+        return data.replace(b"\r\n", b"\n").replace(b"\n", b"\r\n") if Path(path).resolve() in converted else data
 
     monkeypatch.setattr(Path, "read_bytes", crlf_checkout)
     if verifier.windows_paths is not None:

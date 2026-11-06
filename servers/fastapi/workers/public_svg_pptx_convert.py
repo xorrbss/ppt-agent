@@ -27,6 +27,7 @@ _PROJECTION_ADAPTER_FILES = tuple(
         "workers/svg_common_header_export_v2.py",
         "services/svg_common_header_export_evidence.py",
         "services/svg_pptx_font_embedding.py",
+        "services/svg_pptx_font_subset.py",
         "services/svg_templates/frame_native_text.py",
     )
 )
