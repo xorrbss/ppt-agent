@@ -620,3 +620,51 @@ def test_the_style_icon_family_supplies_the_vocabulary_and_the_origin(fakes, mon
     assert icon.origin == "tabler-outline"
     assert (offer.receipt["iconSelection"]["family"], offer.receipt["iconSelection"]["version"]) == \
         ("tabler-outline", "3.50.0")
+
+
+@pytest.mark.parametrize("current", [False, True])
+def test_asset_projection_snapshot_binds_preview_final_vector_and_recovery(tmp_path, monkeypatch, current):
+    from types import SimpleNamespace
+    from services.generation_core.assets.offer import AssetOffer, AssetSlot
+    from services.generation_core.drivers.svg.icon_flatten import (
+        ASSET_PROJECTION_KEY, ASSET_PROJECTION_CURRENT,
+    )
+    from services.svg_partial_recovery import _frozen_vector_offer
+    from utils.hashing import canonical_json_digest
+    path = tmp_path / "icon.svg"
+    path.write_text('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">'
+        '<g fill-opacity="0.5"><rect x="2" y="2" width="20" height="20" '
+        'fill="#000" fill-opacity="0.5"/></g></svg>', encoding="utf-8")
+    slot = AssetSlot(page_index=0, role="figure-icon", kind="icon", alt="icon", path=str(path),
+        media_type="image/svg+xml", sha256=hashlib.sha256(path.read_bytes()).hexdigest(),
+        width=24, height=24, origin="library")
+    snapshot = {ASSET_PROJECTION_KEY: ASSET_PROJECTION_CURRENT} if current else {}
+    snapshot["digest"] = canonical_json_digest(snapshot, allow_nan=True)
+    receipt = {ASSET_PROJECTION_KEY: ASSET_PROJECTION_CURRENT} if current else {}
+    offer = AssetOffer(slots=(slot,), receipt=receipt)
+    presentation_id, job_id, operation_id = uuid.uuid4(), uuid.uuid4(), uuid.uuid4()
+    projected = asyncio.run(asset_slots.project_offer(_Session(), offer, presentation_id=presentation_id,
+        count=1, style_snapshot=snapshot))
+    monkeypatch.setattr("utils.get_env.get_app_data_directory_env", lambda: str(tmp_path))
+    seed = offer.to_json(root=tmp_path)
+    row = SimpleNamespace(id=uuid.uuid4(), job_id=job_id, slide_index=0,
+        svg_checkpoint={asset_slots.SEED_KEY: seed})
+    # The replay witness serializes SQL rows through _dump; only the row identity is needed here.
+    monkeypatch.setattr("services.svg_partial_recovery._dump", lambda value: {"id": str(value.id)})
+    job = SimpleNamespace(id=job_id, workspace_operation_id=operation_id, total_slides=1,
+        presentation_id=presentation_id, svg_style_snapshot=snapshot)
+    vectors, witness = _frozen_vector_offer(row, job, SimpleNamespace(id=operation_id), uuid.uuid4(), None)
+    entry = next(iter(projected.vector[0].values()))
+    recovered = next(iter(vectors[0].values()))
+    assert entry["vector"].to_json() == recovered.to_json()
+    assert recovered.primitives[0]["fill-opacity"] == (0.5 if current else 0.25)
+    assert witness["plan_digest"] == canonical_json_digest(seed).removeprefix("sha256:")
+    changed = dict(snapshot, **{ASSET_PROJECTION_KEY: "forged"})
+    with pytest.raises(ValueError, match="revision_invalid"):
+        asyncio.run(asset_slots.project_offer(_Session(), offer, presentation_id=presentation_id,
+            count=1, style_snapshot=changed))
+    changed = {ASSET_PROJECTION_KEY: ASSET_PROJECTION_CURRENT} if not current else {}
+    changed["digest"] = canonical_json_digest(changed, allow_nan=True)
+    with pytest.raises(ValueError, match="receipt_conflict"):
+        asyncio.run(asset_slots.project_offer(_Session(), offer, presentation_id=presentation_id,
+            count=1, style_snapshot=changed))

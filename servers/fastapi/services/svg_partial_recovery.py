@@ -2153,7 +2153,7 @@ async def verified_header_producer(session, operation, job, *, verification=None
 def _frozen_vector_offer(seed_row, job, operation, owner, tenant):
     """Read only the DB-frozen catalogue and its content-bound library files."""
     from services.generation_core.assets.offer import AssetOffer
-    from services.generation_core.drivers.svg.asset_slots import SEED_KEY, _ink
+    from services.generation_core.drivers.svg.asset_slots import SEED_KEY, _ink, validate_offer_projection
     from services.generation_core.drivers.svg.embed_assets import flatten_icon_svg, IconFlattenBudgetExceeded
     from utils.authored_image_slots import source_slot_id_for_asset
     from utils.get_env import get_app_data_directory_env
@@ -2164,6 +2164,7 @@ def _frozen_vector_offer(seed_row, job, operation, owner, tenant):
     if seed_row.job_id != job.id or seed_row.slide_index != 0 or job.workspace_operation_id != operation.id:
         reject("svg_partial_recovery_vector_seed_unbound")
     offer = AssetOffer.from_json(seed, root=get_app_data_directory_env())
+    revision = validate_offer_projection(offer, job.svg_style_snapshot)
     maps = [{} for _ in range(job.total_slides)]
     files = []
     for slot in offer.slots:
@@ -2180,7 +2181,7 @@ def _frozen_vector_offer(seed_row, job, operation, owner, tenant):
         text = payload.decode("utf-8")
         files.append({"page_index": slot.page_index, "sha256": slot.sha256})
         try:
-            icon = flatten_icon_svg(text, color=_ink(text, slot))
+            icon = flatten_icon_svg(text, color=_ink(text, slot), projection_revision=revision)
         except IconFlattenBudgetExceeded:
             # Original projection represents this as an owned raster slot.
             # Its raster authority stays in the source asset manifest.

@@ -113,7 +113,8 @@ def icon_group(icon: FlattenedIcon, *, x: float, y: float, width: float, height:
     return group
 
 
-def rasterize_icon(icon: FlattenedIcon, *, size: int = 256) -> bytes:
+def rasterize_icon(icon: FlattenedIcon, *, size: int = 256,
+                   projection_revision: str = "svg-asset-projection/v2") -> bytes:
     """Antialiased RGBA PNG of ``icon`` contain-fit into ``size`` x ``size``.
 
     A monochrome icon is drawn as one coverage mask in its colour, so the
@@ -121,7 +122,11 @@ def rasterize_icon(icon: FlattenedIcon, *, size: int = 256) -> bytes:
     drawing, or any shape with opacity, is painted shape by shape in order.
     A compound path uses the same nonzero winding rule as the emitted SVG.
     """
-    from PIL import Image, ImageDraw
+    from PIL import Image, ImageChops, ImageDraw
+    from services.generation_core.drivers.svg.icon_flatten import (
+        ASSET_PROJECTION_LEGACY, validate_asset_projection_revision,
+    )
+    validate_asset_projection_revision(projection_revision)
 
     if size <= 0:
         raise ValueError("icon_raster_size_invalid")
@@ -171,7 +176,16 @@ def rasterize_icon(icon: FlattenedIcon, *, size: int = 256) -> bytes:
             draw.ellipse((center[0] - radius, center[1] - radius, center[0] + radius, center[1] + radius), fill=255)
 
         if tag == "path":
-            compound_coverage(primitive["subpaths"], draw)
+            if projection_revision == ASSET_PROJECTION_LEGACY:
+                # Exact historical even-odd raster coverage, including boundary pixels.
+                hole_aware = Image.new("L", mask.size, 0)
+                for ring in primitive["subpaths"]:
+                    layer = Image.new("L", mask.size, 0)
+                    ImageDraw.Draw(layer).polygon([point(px, py) for px, py in ring], fill=255)
+                    hole_aware = ImageChops.difference(hole_aware, layer)
+                mask.paste(ImageChops.lighter(mask, hole_aware))
+            else:
+                compound_coverage(primitive["subpaths"], draw)
             return
         if tag in {"polyline", "polygon", "line"}:
             if tag == "line":

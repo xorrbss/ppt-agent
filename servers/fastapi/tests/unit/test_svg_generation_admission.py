@@ -5851,3 +5851,34 @@ def test_prepare_uses_fenced_current_job_snapshot_before_live_adaptation(conflic
         assert asyncio.run(partial_quality_recovery.current_quality_repair_authorized(
             repair_ctx, candidate, 0, source_job, current_checkpoint)) is False
         assert original == before
+
+
+def test_asset_projection_pin_is_fresh_server_owned_and_immutable_on_replay():
+    from copy import deepcopy
+    from services.svg_generation_admission import pin_svg_style
+    from services.generation_core.drivers.svg.icon_flatten import (
+        ASSET_PROJECTION_KEY, ASSET_PROJECTION_CURRENT, ASSET_PROJECTION_LEGACY,
+        asset_projection_revision,
+    )
+    from utils.hashing import canonical_json_digest
+    request = _v2_header_request()
+    request.common_header_mode = "free"
+    snapshot = pin_svg_style(request)
+    assert asset_projection_revision(snapshot) == ASSET_PROJECTION_CURRENT
+    frozen = deepcopy(snapshot)
+    assert pin_svg_style(request) == frozen
+    del snapshot[ASSET_PROJECTION_KEY]
+    snapshot["digest"] = canonical_json_digest({k: v for k, v in snapshot.items() if k != "digest"}, allow_nan=True)
+    legacy = deepcopy(snapshot)
+    assert asset_projection_revision(pin_svg_style(request)) == ASSET_PROJECTION_LEGACY
+    assert snapshot == legacy
+    snapshot[ASSET_PROJECTION_KEY] = ASSET_PROJECTION_CURRENT
+    with pytest.raises(HTTPException, match="snapshot_digest_invalid"):
+        pin_svg_style(request)
+    snapshot[ASSET_PROJECTION_KEY] = None
+    with pytest.raises(HTTPException, match="revision_invalid"):
+        pin_svg_style(request)
+    caller = GeneratePresentationRequest(content="hello", template="authored", strategy="svg",
+        common_header_mode="free", asset_projection_revision=ASSET_PROJECTION_LEGACY)
+    assert ASSET_PROJECTION_KEY not in caller.model_dump()
+    assert asset_projection_revision(pin_svg_style(caller)) == ASSET_PROJECTION_CURRENT

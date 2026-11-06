@@ -920,7 +920,7 @@ async def _offer_assets(request, presentation_id, outline, roles, job, planned, 
                              slots=[{} for _ in planned], receipt=dict(offer.receipt))
     async with _facade.async_session_maker() as offer_session:
         projected = await project_offer(offer_session, offer, presentation_id=presentation_id,
-                                        count=len(planned))
+                                        count=len(planned), style_snapshot=style_snapshot)
         await offer_session.commit()
     for index, page in enumerate(projected.raster):
         if not page:
