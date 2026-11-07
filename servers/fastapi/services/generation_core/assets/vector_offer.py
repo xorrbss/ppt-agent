@@ -25,7 +25,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional, Sequence
 
-from services.generation_core.assets.offer import AssetSlot, SCENE_BBOX_HINT
+from services.generation_core.assets.offer import AssetSlot, SCENE_BBOX_HINT, _Spend
 from utils.hashing import sha256_hex
 
 LOGGER = logging.getLogger(__name__)
@@ -52,6 +52,21 @@ COVER_SIZE = (560, 520)
 SPOT_SIZE = (220, 180)
 PAIR_SIZE = (440, 360)
 _CONTEXT_CHARS = 400
+
+
+def validate_template_picture_policy(value: dict) -> dict:
+    """Validate the explicit frozen policy; absence alone preserves legacy behavior."""
+    parts = value.get("parts") if isinstance(value, dict) else None
+    cap = value.get("max_calls") if isinstance(value, dict) else None
+    if (not isinstance(value, dict) or value.get("revision") != "svg-template-pictures/v1"
+            or not isinstance(parts, (list, tuple)) or not parts
+            or any(not isinstance(part, str) or part not in {"scene", "spots", "pairs", "pictograph"}
+                   for part in parts)
+            or type(cap) is not int or not 0 <= cap <= MAX_CALLS
+            or value.get("exclude_cover") is not True):
+        raise ValueError("svg_template_picture_policy_invalid")
+    return {"revision": value["revision"], "parts": tuple(dict.fromkeys(parts)),
+            "max_calls": cap, "exclude_cover": True}
 
 
 @dataclass(frozen=True)
@@ -86,7 +101,8 @@ def _first_line(content: str) -> str:
 
 
 def plan_jobs(plan, contents: Sequence[str], roles: Sequence[str], *, topic: str, palette: dict[str, str],
-              background: str, vector_scene_pages: set[int], parts: Sequence[str] = DEFAULT_PARTS) -> list[_Job]:
+              background: str, vector_scene_pages: set[int], parts: Sequence[str] = DEFAULT_PARTS,
+              template_picture_policy: Optional[dict] = None) -> list[_Job]:
     """Every drawing call this deck would make, highest priority first, capped at ``MAX_CALLS``."""
     from utils.llm_calls.draw_vector_illustrations import DrawingRequest, DrawingSpec
 
@@ -96,6 +112,13 @@ def plan_jobs(plan, contents: Sequence[str], roles: Sequence[str], *, topic: str
                               context=context, extra=tuple(extra))
 
     jobs: list[_Job] = []
+    excluded = set()
+    cap = MAX_CALLS
+    if template_picture_policy is not None:
+        policy = validate_template_picture_policy(template_picture_policy)
+        parts, cap = policy["parts"], policy["max_calls"]
+        excluded = {index for index, role in enumerate(roles)
+                    if (role or "").strip().upper() in COVER_ROLES}
     parts = set(parts)
     cover_pages = ([index for index, role in enumerate(roles) if (role or "").strip().upper() in COVER_ROLES]
                    if "cover" in parts else [])
@@ -107,6 +130,8 @@ def plan_jobs(plan, contents: Sequence[str], roles: Sequence[str], *, topic: str
                          ((drawing, "cover", f"cover picture: {subject}", None),)))
     for slide in plan.slides:
         page, labels = slide.index, [node.label for node in slide.nodes]
+        if page in excluded:
+            continue
         context = contents[page][:_CONTEXT_CHARS]
         if slide.archetype == "scene" and page in vector_scene_pages and "scene" in parts:
             drawing = f"scene-p{page}"
@@ -135,7 +160,7 @@ def plan_jobs(plan, contents: Sequence[str], roles: Sequence[str], *, topic: str
                                     "item's text", node.label)
                                    for spec, node in zip(specs, slide.nodes, strict=True))))
     jobs.sort(key=lambda job: (job.priority, job.page))
-    return jobs[:MAX_CALLS]
+    return jobs[:cap]
 
 
 def _store(svg: str) -> Path:
@@ -150,7 +175,7 @@ def _store(svg: str) -> Path:
 
 
 async def _run(job: _Job, *, palette: Sequence[str], ink: str, call_seconds: float,
-               receipt: dict, projection_revision: str) -> list[AssetSlot]:
+               receipt: dict, projection_revision: str, spend=None, call_budget=None) -> list[AssetSlot]:
     from dataclasses import replace
 
     from services.generation_core.assets.vector_illustration import validate_drawing
@@ -162,12 +187,19 @@ async def _run(job: _Job, *, palette: Sequence[str], ink: str, call_seconds: flo
         missing = [spec for spec in job.request.drawings if spec.id not in accepted]
         if not missing:
             break
+        if ((call_budget is not None and call_budget.remaining <= 0)
+                or (spend is not None and not spend.take())):
+            receipt["rejected"]["budget_exhausted"] += len(missing)
+            break
         request = job.request if attempt == 0 else replace(
             job.request, drawings=tuple(missing), semantic_slot=job.request.semantic_slot + "_retry")
         receipt["calls"] += 1
         receipt["retries"] += attempt
         try:
-            answer = await asyncio.wait_for(drawing_calls.draw_vector_illustrations(request), timeout=call_seconds)
+            bounded_kwargs = ({"call_budget": call_budget, "call_timeout_seconds": call_seconds}
+                              if call_budget is not None else {})
+            answer = await asyncio.wait_for(drawing_calls.draw_vector_illustrations(request, **bounded_kwargs),
+                                            timeout=call_seconds)
         except asyncio.TimeoutError:
             receipt["timeouts"] += 1
             answer = None
@@ -206,7 +238,8 @@ async def _run(job: _Job, *, palette: Sequence[str], ink: str, call_seconds: flo
 
 
 def pictograph_slots(plan, *, accent: str, family_id: Optional[str],
-                     projection_revision: str = "svg-asset-projection/v2") -> list[AssetSlot]:
+                     projection_revision: str = "svg-asset-projection/v2",
+                     excluded_pages: Optional[set[int]] = None) -> list[AssetSlot]:
     """One pictograph per gauge/KPI page whose figure states a percentage (no model call).
 
     The emphasised node is preferred, then the nodes in order; ``70%`` becomes
@@ -220,6 +253,8 @@ def pictograph_slots(plan, *, accent: str, family_id: Optional[str],
     validate_asset_projection_revision(projection_revision)
     slots = []
     for slide in plan.slides:
+        if excluded_pages is not None and slide.index in excluded_pages:
+            continue
         if slide.archetype not in PICTOGRAPH_ARCHETYPES:
             continue
         order = list(slide.nodes)
@@ -251,18 +286,33 @@ def pictograph_slots(plan, *, accent: str, family_id: Optional[str],
 async def build_vector_drawings(plan, *, outline, roles: Sequence[str], brand, style, timeout_seconds: float,
                                 vector_scene_pages: set[int],
                                 parts: Sequence[str] = DEFAULT_PARTS,
+                                template_picture_policy: Optional[dict] = None,
+                                budget: Optional[int] = None,
                                 projection_revision: str = "svg-asset-projection/v2") -> tuple[list[AssetSlot], dict]:
     """Draw this deck's vector pictures; returns their slots and a receipt. Never raises."""
     from services.generation_core.drivers.svg.icon_flatten import validate_asset_projection_revision
     validate_asset_projection_revision(projection_revision)
     receipt: dict = {"calls": 0, "retries": 0, "timeouts": 0, "accepted": 0, "requested": 0,
                      "rejected": Counter(), "fillRatios": [], "jobs": {}}
+    policy_kwargs, run_kwargs, pictograph_kwargs = {}, {}, {}
+    if template_picture_policy is not None:
+        from utils.structured_call_budget import StructuredProviderCallBudget
+
+        policy = validate_template_picture_policy(template_picture_policy)
+        parts = policy["parts"]
+        call_limit = min(policy["max_calls"], max(0, budget or 0))
+        policy_kwargs = {"template_picture_policy": policy}
+        run_kwargs = {"spend": _Spend(call_limit, timeout_seconds),
+                      "call_budget": StructuredProviderCallBudget(limit=call_limit)}
+        pictograph_kwargs = {"excluded_pages": {index for index, role in enumerate(roles)
+                             if (role or "").strip().upper() in COVER_ROLES}}
+        receipt.update(callLimit=call_limit, policyRevision=policy["revision"])
     try:
         palette, background = deck_palette(brand, style)
         contents = [slide.content for slide in outline.slides]
         jobs = plan_jobs(plan, contents, list(roles), topic=getattr(brand, "topic", "") or "",
                          palette=palette, background=background, vector_scene_pages=vector_scene_pages,
-                         parts=parts)
+                         parts=parts, **policy_kwargs)
     except (ValueError, IndexError, AttributeError) as error:
         LOGGER.warning("[svg] vector drawing plan failed: %s", type(error).__name__)
         return [], {**receipt, "rejected": {}, "status": "plan_failed", "reason": type(error).__name__}
@@ -275,7 +325,7 @@ async def build_vector_drawings(plan, *, outline, roles: Sequence[str], brand, s
     async def run(job):
         try:
             return await _run(job, palette=colors, ink=palette["DARK"], call_seconds=timeout_seconds,
-                              receipt=receipt, projection_revision=projection_revision)
+                              receipt=receipt, projection_revision=projection_revision, **run_kwargs)
         except Exception as error:  # noqa: BLE001 - a picture is optional
             LOGGER.warning("[svg] vector drawing failed page=%s kind=%s: %s", job.page, job.kind,
                            type(error).__name__)
@@ -283,12 +333,14 @@ async def build_vector_drawings(plan, *, outline, roles: Sequence[str], brand, s
             return []
 
     results = await asyncio.gather(*(run(job) for job in jobs))
+    if template_picture_policy is not None:
+        receipt["physicalCalls"] = run_kwargs["call_budget"].used
     slots = [slot for group in results for slot in group]
     if "pictograph" in set(parts):
         try:
             pictographs = await asyncio.to_thread(pictograph_slots, plan, accent=palette["ACCENT"],
                                                   family_id=getattr(style, "icon_family", None),
-                                                  projection_revision=projection_revision)
+                                                  projection_revision=projection_revision, **pictograph_kwargs)
         except (ValueError, OSError) as error:
             LOGGER.warning("[svg] pictograph failed: %s", type(error).__name__)
             receipt["rejected"]["pictograph_" + type(error).__name__] += 1
