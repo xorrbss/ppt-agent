@@ -469,6 +469,12 @@
       "retryable": true
     },
     {
+      "code": "workspace_asset_retained_by_template",
+      "status_code": 409,
+      "safe_message": "The attachment is used by a template and cannot be changed.",
+      "retryable": false
+    },
+    {
       "code": "workspace_asset_transition_invalid",
       "status_code": 409,
       "safe_message": "The requested attachment state transition is invalid.",
@@ -823,6 +829,390 @@
       "retryable": false
     },
     {
+      "code": "codex_auth_reauth_required",
+      "status_code": 409,
+      "safe_message": "ChatGPT login is required. Reconnect ChatGPT in Settings.",
+      "retryable": false
+    },
+    {
+      "code": "svg_quality_recovery_review_required",
+      "status_code": 409,
+      "safe_message": "The presentation quality review is incomplete. Continue the review before finishing.",
+      "retryable": false
+    },
+    {
+      "code": "svg_quality_recovery_review_unavailable",
+      "status_code": 409,
+      "safe_message": "The presentation quality review is incomplete. Continue the review before finishing.",
+      "retryable": false
+    },
+    {
+      "code": "svg_final_selected_evidence_unproven",
+      "status_code": 409,
+      "safe_message": "The recovery plan changed or cannot safely reuse the saved results. Review it again.",
+      "retryable": false
+    },
+    {
+      "code": "svg_final_selected_context_unproven",
+      "status_code": 409,
+      "safe_message": "The recovery plan changed or cannot safely reuse the saved results. Review it again.",
+      "retryable": false
+    },
+    {
+      "code": "svg_final_selected_runtime_unproven",
+      "status_code": 409,
+      "safe_message": "The recovery plan changed or cannot safely reuse the saved results. Review it again.",
+      "retryable": false
+    },
+    {
+      "code": "svg_partial_recovery_active_reservation",
+      "status_code": 409,
+      "safe_message": "The recovery plan changed or cannot safely reuse the saved results. Review it again.",
+      "retryable": false
+    },
+    {
+      "code": "svg_partial_recovery_additional_budget_required",
+      "status_code": 409,
+      "safe_message": "The recovery plan changed or cannot safely reuse the saved results. Review it again.",
+      "retryable": false
+    },
+    {
+      "code": "svg_partial_recovery_admission_conflict",
+      "status_code": 409,
+      "safe_message": "The recovery plan changed or cannot safely reuse the saved results. Review it again.",
+      "retryable": false
+    },
+    {
+      "code": "svg_partial_recovery_admission_unresolved",
+      "status_code": 409,
+      "safe_message": "The recovery plan changed or cannot safely reuse the saved results. Review it again.",
+      "retryable": false
+    },
+    {
+      "code": "svg_partial_recovery_archive_changed",
+      "status_code": 409,
+      "safe_message": "The recovery plan changed or cannot safely reuse the saved results. Review it again.",
+      "retryable": false
+    },
+    {
+      "code": "svg_partial_recovery_asset_binding_changed",
+      "status_code": 409,
+      "safe_message": "The recovery plan changed or cannot safely reuse the saved results. Review it again.",
+      "retryable": false
+    },
+    {
+      "code": "svg_partial_recovery_author_asset_unproven",
+      "status_code": 409,
+      "safe_message": "The recovery plan changed or cannot safely reuse the saved results. Review it again.",
+      "retryable": false
+    },
+    {
+      "code": "svg_partial_recovery_author_declarations_changed",
+      "status_code": 409,
+      "safe_message": "The recovery plan changed or cannot safely reuse the saved results. Review it again.",
+      "retryable": false
+    },
+    {
+      "code": "svg_partial_recovery_author_model_unbound",
+      "status_code": 409,
+      "safe_message": "The recovery plan changed or cannot safely reuse the saved results. Review it again.",
+      "retryable": false
+    },
+    {
+      "code": "svg_partial_recovery_author_transform_unproven",
+      "status_code": 409,
+      "safe_message": "The recovery plan changed or cannot safely reuse the saved results. Review it again.",
+      "retryable": false
+    },
+    {
+      "code": "svg_partial_recovery_budget_exceeds_policy",
+      "status_code": 409,
+      "safe_message": "The recovery plan changed or cannot safely reuse the saved results. Review it again.",
+      "retryable": false
+    },
+    {
+      "code": "svg_partial_recovery_budget_unavailable",
+      "status_code": 409,
+      "safe_message": "The recovery plan changed or cannot safely reuse the saved results. Review it again.",
+      "retryable": false
+    },
+    {
+      "code": "svg_partial_recovery_cached_source_changed",
+      "status_code": 409,
+      "safe_message": "The recovery plan changed or cannot safely reuse the saved results. Review it again.",
+      "retryable": false
+    },
+    {
+      "code": "svg_partial_recovery_cached_phase_invalid",
+      "status_code": 409,
+      "safe_message": "The recovery plan changed or cannot safely reuse the saved results. Review it again.",
+      "retryable": false
+    },
+    {
+      "code": "svg_partial_recovery_cached_phase_rollback",
+      "status_code": 409,
+      "safe_message": "The recovery plan changed or cannot safely reuse the saved results. Review it again.",
+      "retryable": false
+    },
+    {
+      "code": "svg_partial_recovery_cas_required",
+      "status_code": 409,
+      "safe_message": "The recovery plan changed or cannot safely reuse the saved results. Review it again.",
+      "retryable": false
+    },
+    {
+      "code": "svg_partial_recovery_checkpoint_set_incomplete",
+      "status_code": 409,
+      "safe_message": "The recovery plan changed or cannot safely reuse the saved results. Review it again.",
+      "retryable": false
+    },
+    {
+      "code": "svg_partial_recovery_episode_conflict",
+      "status_code": 409,
+      "safe_message": "The recovery plan changed or cannot safely reuse the saved results. Review it again.",
+      "retryable": false
+    },
+    {
+      "code": "svg_partial_recovery_episode_unbound",
+      "status_code": 409,
+      "safe_message": "The recovery plan changed or cannot safely reuse the saved results. Review it again.",
+      "retryable": false
+    },
+    {
+      "code": "svg_partial_recovery_explicit_decision_required",
+      "status_code": 409,
+      "safe_message": "The recovery plan changed or cannot safely reuse the saved results. Review it again.",
+      "retryable": false
+    },
+    {
+      "code": "svg_partial_recovery_frozen_outline_missing",
+      "status_code": 409,
+      "safe_message": "The recovery plan changed or cannot safely reuse the saved results. Review it again.",
+      "retryable": false
+    },
+    {
+      "code": "svg_partial_recovery_font_transform_unproven",
+      "status_code": 409,
+      "safe_message": "The recovery plan changed or cannot safely reuse the saved results. Review it again.",
+      "retryable": false
+    },
+    {
+      "code": "svg_partial_recovery_history_changed",
+      "status_code": 409,
+      "safe_message": "The recovery plan changed or cannot safely reuse the saved results. Review it again.",
+      "retryable": false
+    },
+    {
+      "code": "svg_partial_recovery_initial_render_unbound",
+      "status_code": 409,
+      "safe_message": "The recovery plan changed or cannot safely reuse the saved results. Review it again.",
+      "retryable": false
+    },
+    {
+      "code": "svg_partial_recovery_known_output_unproven",
+      "status_code": 409,
+      "safe_message": "The recovery plan changed or cannot safely reuse the saved results. Review it again.",
+      "retryable": false
+    },
+    {
+      "code": "svg_partial_recovery_known_source_required",
+      "status_code": 409,
+      "safe_message": "The recovery plan changed or cannot safely reuse the saved results. Review it again.",
+      "retryable": false
+    },
+    {
+      "code": "svg_partial_recovery_last_valid_source_unbound",
+      "status_code": 409,
+      "safe_message": "The recovery plan changed or cannot safely reuse the saved results. Review it again.",
+      "retryable": false
+    },
+    {
+      "code": "svg_partial_recovery_lineage_conflict",
+      "status_code": 409,
+      "safe_message": "The recovery plan changed or cannot safely reuse the saved results. Review it again.",
+      "retryable": false
+    },
+    {
+      "code": "svg_partial_recovery_live_lease",
+      "status_code": 409,
+      "safe_message": "The recovery plan changed or cannot safely reuse the saved results. Review it again.",
+      "retryable": false
+    },
+    {
+      "code": "svg_partial_recovery_local_output_requires_repair",
+      "status_code": 409,
+      "safe_message": "The recovery plan changed or cannot safely reuse the saved results. Review it again.",
+      "retryable": false
+    },
+    {
+      "code": "svg_partial_recovery_manifest_changed",
+      "status_code": 409,
+      "safe_message": "The recovery plan changed or cannot safely reuse the saved results. Review it again.",
+      "retryable": false
+    },
+    {
+      "code": "svg_partial_recovery_nonce_invalid",
+      "status_code": 409,
+      "safe_message": "The recovery plan changed or cannot safely reuse the saved results. Review it again.",
+      "retryable": false
+    },
+    {
+      "code": "svg_partial_recovery_page_unbound",
+      "status_code": 409,
+      "safe_message": "The recovery plan changed or cannot safely reuse the saved results. Review it again.",
+      "retryable": false
+    },
+    {
+      "code": "svg_partial_recovery_page_input_changed",
+      "status_code": 409,
+      "safe_message": "The recovery plan changed or cannot safely reuse the saved results. Review it again.",
+      "retryable": false
+    },
+    {
+      "code": "svg_partial_recovery_policy_unavailable",
+      "status_code": 409,
+      "safe_message": "The recovery plan changed or cannot safely reuse the saved results. Review it again.",
+      "retryable": false
+    },
+    {
+      "code": "svg_partial_recovery_render_measurement_unbound",
+      "status_code": 409,
+      "safe_message": "The recovery plan changed or cannot safely reuse the saved results. Review it again.",
+      "retryable": false
+    },
+    {
+      "code": "svg_partial_recovery_render_metrics_unbound",
+      "status_code": 409,
+      "safe_message": "The recovery plan changed or cannot safely reuse the saved results. Review it again.",
+      "retryable": false
+    },
+    {
+      "code": "svg_partial_recovery_render_png_unbound",
+      "status_code": 409,
+      "safe_message": "The recovery plan changed or cannot safely reuse the saved results. Review it again.",
+      "retryable": false
+    },
+    {
+      "code": "svg_partial_recovery_render_source_unbound",
+      "status_code": 409,
+      "safe_message": "The recovery plan changed or cannot safely reuse the saved results. Review it again.",
+      "retryable": false
+    },
+    {
+      "code": "svg_partial_recovery_render_transform_unproven",
+      "status_code": 409,
+      "safe_message": "The recovery plan changed or cannot safely reuse the saved results. Review it again.",
+      "retryable": false
+    },
+    {
+      "code": "svg_partial_recovery_runtime_budget_unbound",
+      "status_code": 409,
+      "safe_message": "The recovery plan changed or cannot safely reuse the saved results. Review it again.",
+      "retryable": false
+    },
+    {
+      "code": "svg_partial_recovery_runtime_unbound",
+      "status_code": 409,
+      "safe_message": "The recovery plan changed or cannot safely reuse the saved results. Review it again.",
+      "retryable": false
+    },
+    {
+      "code": "svg_partial_recovery_source_changed",
+      "status_code": 409,
+      "safe_message": "The recovery plan changed or cannot safely reuse the saved results. Review it again.",
+      "retryable": false
+    },
+    {
+      "code": "svg_partial_recovery_source_count_changed",
+      "status_code": 409,
+      "safe_message": "The recovery plan changed or cannot safely reuse the saved results. Review it again.",
+      "retryable": false
+    },
+    {
+      "code": "svg_partial_recovery_source_missing",
+      "status_code": 409,
+      "safe_message": "The recovery plan changed or cannot safely reuse the saved results. Review it again.",
+      "retryable": false
+    },
+    {
+      "code": "svg_partial_recovery_source_plan_invalid",
+      "status_code": 409,
+      "safe_message": "The recovery plan changed or cannot safely reuse the saved results. Review it again.",
+      "retryable": false
+    },
+    {
+      "code": "svg_partial_recovery_source_transform_unproven",
+      "status_code": 409,
+      "safe_message": "The recovery plan changed or cannot safely reuse the saved results. Review it again.",
+      "retryable": false
+    },
+    {
+      "code": "svg_partial_recovery_task_missing",
+      "status_code": 409,
+      "safe_message": "The recovery plan changed or cannot safely reuse the saved results. Review it again.",
+      "retryable": false
+    },
+    {
+      "code": "svg_partial_recovery_unknown_ack_required",
+      "status_code": 409,
+      "safe_message": "The recovery plan changed or cannot safely reuse the saved results. Review it again.",
+      "retryable": false
+    },
+    {
+      "code": "svg_partial_recovery_unproven",
+      "status_code": 409,
+      "safe_message": "The recovery plan changed or cannot safely reuse the saved results. Review it again.",
+      "retryable": false
+    },
+    {
+      "code": "svg_partial_recovery_vector_transform_unproven",
+      "status_code": 409,
+      "safe_message": "The recovery plan changed or cannot safely reuse the saved results. Review it again.",
+      "retryable": false
+    },
+    {
+      "code": "svg_partial_recovery_cached_provider_forbidden",
+      "status_code": 409,
+      "safe_message": "The recovery plan changed or cannot safely reuse the saved results. Review it again.",
+      "retryable": false
+    },
+    {
+      "code": "svg_partial_recovery_cached_quality_failed",
+      "status_code": 409,
+      "safe_message": "The recovery plan changed or cannot safely reuse the saved results. Review it again.",
+      "retryable": false
+    },
+    {
+      "code": "svg_provider_terminal_output_mismatch",
+      "status_code": 409,
+      "safe_message": "The recovery plan changed or cannot safely reuse the saved results. Review it again.",
+      "retryable": false
+    },
+    {
+      "code": "svg_provider_completed_checkpoint_authority_expired",
+      "status_code": 409,
+      "safe_message": "The recovery plan changed or cannot safely reuse the saved results. Review it again.",
+      "retryable": false
+    },
+    {
+      "code": "public_provider_result_unknown",
+      "status_code": 409,
+      "safe_message": "The model request result is unconfirmed. Review the saved pages and recovery plan.",
+      "retryable": false
+    },
+    {
+      "code": "public_provider_postresponse_failed",
+      "status_code": 409,
+      "safe_message": "The completed model response was saved, but processing stopped.",
+      "retryable": false
+    },
+    {
+      "code": "public_provider_dispatch_stopped",
+      "status_code": 409,
+      "safe_message": "No additional model request was dispatched.",
+      "retryable": false
+    },
+    {
       "code": "authored_batch_remake_preview_incomplete",
       "status_code": 503,
       "safe_message": "The operation could not finish. Try again.",
@@ -877,6 +1267,24 @@
       "retryable": false
     },
     {
+      "code": "svg_quality_review_input_invalid",
+      "status_code": 422,
+      "safe_message": "The operation request is invalid.",
+      "retryable": false
+    },
+    {
+      "code": "svg_quality_review_selection_invalid",
+      "status_code": 422,
+      "safe_message": "The operation request is invalid.",
+      "retryable": false
+    },
+    {
+      "code": "svg_quality_review_svg_required",
+      "status_code": 422,
+      "safe_message": "The operation request is invalid.",
+      "retryable": false
+    },
+    {
       "code": "authored_vnext_export_master_changed",
       "status_code": 409,
       "safe_message": "The presentation changed. Review it and try again.",
@@ -914,6 +1322,36 @@
     },
     {
       "code": "release_quality_review_runtime_changed",
+      "status_code": 409,
+      "safe_message": "The presentation changed. Review it and try again.",
+      "retryable": false
+    },
+    {
+      "code": "svg_export_source_snapshot_changed",
+      "status_code": 409,
+      "safe_message": "The presentation changed. Review it and try again.",
+      "retryable": false
+    },
+    {
+      "code": "svg_final_pptx_review_source_changed",
+      "status_code": 409,
+      "safe_message": "The presentation changed. Review it and try again.",
+      "retryable": false
+    },
+    {
+      "code": "svg_page_remake_source_changed",
+      "status_code": 409,
+      "safe_message": "The presentation changed. Review it and try again.",
+      "retryable": false
+    },
+    {
+      "code": "svg_quality_review_measurement_stale",
+      "status_code": 409,
+      "safe_message": "The presentation changed. Review it and try again.",
+      "retryable": false
+    },
+    {
+      "code": "svg_quality_review_source_changed",
       "status_code": 409,
       "safe_message": "The presentation changed. Review it and try again.",
       "retryable": false
@@ -1081,6 +1519,54 @@
       "retryable": false
     },
     {
+      "code": "public_admission_missing",
+      "status_code": 409,
+      "safe_message": "The presentation is not ready for this operation.",
+      "retryable": false
+    },
+    {
+      "code": "source_native_generation_removed",
+      "status_code": 409,
+      "safe_message": "The presentation is not ready for this operation.",
+      "retryable": false
+    },
+    {
+      "code": "svg_final_pptx_artifact_binding_invalid",
+      "status_code": 409,
+      "safe_message": "The presentation is not ready for this operation.",
+      "retryable": false
+    },
+    {
+      "code": "svg_final_pptx_export_not_succeeded",
+      "status_code": 409,
+      "safe_message": "The presentation is not ready for this operation.",
+      "retryable": false
+    },
+    {
+      "code": "svg_final_pptx_render_binding_invalid",
+      "status_code": 409,
+      "safe_message": "The presentation is not ready for this operation.",
+      "retryable": false
+    },
+    {
+      "code": "svg_preview_generation_job_required",
+      "status_code": 409,
+      "safe_message": "The presentation is not ready for this operation.",
+      "retryable": false
+    },
+    {
+      "code": "svg_preview_provider_recovery_required",
+      "status_code": 409,
+      "safe_message": "The presentation is not ready for this operation.",
+      "retryable": false
+    },
+    {
+      "code": "svg_template_checkpoint_missing",
+      "status_code": 409,
+      "safe_message": "The presentation is not ready for this operation.",
+      "retryable": false
+    },
+    {
       "code": "artifact_store_failed",
       "status_code": 503,
       "safe_message": "The operation could not finish. Try again later.",
@@ -1118,6 +1604,18 @@
     },
     {
       "code": "release_quality_review_failed",
+      "status_code": 503,
+      "safe_message": "The operation could not finish. Try again later.",
+      "retryable": false
+    },
+    {
+      "code": "svg_final_pptx_render_unavailable",
+      "status_code": 503,
+      "safe_message": "The operation could not finish. Try again later.",
+      "retryable": false
+    },
+    {
+      "code": "svg_quality_review_render_unavailable",
       "status_code": 503,
       "safe_message": "The operation could not finish. Try again later.",
       "retryable": false
