@@ -67,8 +67,14 @@ def _decode_native_raster(record, size, *, binary=False):
     _require(len(raw) == expected and decoder.eof and not decoder.unused_data and not decoder.unconsumed_tail,
              "native_raster_decoded_size_invalid")
     _require(sha256_prefixed(raw) == record["sha256"], "native_raster_digest_mismatch")
-    _require(not binary or all(value in (0, 255) for value in raw), "native_mask_domain_invalid")
+    # bytes.translate deletes every 0 and 255 byte; anything left is outside the domain.
+    _require(not binary or not raw.translate(None, b"\x00\xff"), "native_mask_domain_invalid")
     return Image.frombytes("L", tuple(size), raw)
+
+
+def masked_alpha_sum(alpha, raw):
+    from utils.slide_capture_chart_support import masked_alpha_sum as _masked_alpha_sum
+    return _masked_alpha_sum(alpha, raw)
 
 
 def _decode_native_mask(record, alpha, size):
@@ -77,7 +83,7 @@ def _decode_native_mask(record, alpha, size):
     mask = _decode_native_raster(record["encodedRaster"], size, binary=True)
     raw = mask.tobytes()
     expected = {"maskDigest": sha256_prefixed(raw), "pixelCount": raw.count(255),
-                "alphaSum": sum(value for value, selected in zip(alpha.tobytes(), raw, strict=False) if selected)}
+                "alphaSum": masked_alpha_sum(alpha, raw)}
     _require(_same({key: record[key] for key in expected}, expected), "native_mask_statistics_mismatch")
     return mask
 
@@ -85,7 +91,7 @@ def _decode_native_mask(record, alpha, size):
 def _native_mask_stats(mask, alpha):
     raw = mask.tobytes()
     return {"maskDigest": sha256_prefixed(raw), "pixelCount": raw.count(255),
-            "alphaSum": sum(value for value, selected in zip(alpha.tobytes(), raw, strict=False) if selected)}
+            "alphaSum": masked_alpha_sum(alpha, raw)}
 
 
 def _native_equal(actual, expected, reason):

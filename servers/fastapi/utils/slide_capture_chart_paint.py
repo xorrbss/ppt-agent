@@ -583,8 +583,11 @@ def _evaluate(command, script):
 
 def _shot(command):
     from PIL import Image
+    # PNG stays lossless; optimizeForSpeed only lowers Chrome's zlib effort, so the
+    # decoded pixels are identical while each of the hundreds of plane captures
+    # spends less time encoding.
     response = command("Page.captureScreenshot", {"format": "png", "fromSurface": True,
-                                                 "captureBeyondViewport": False})
+                                                 "captureBeyondViewport": False, "optimizeForSpeed": True})
     return Image.open(io.BytesIO(base64.b64decode(response["data"], validate=True))).convert("RGBA")
 
 

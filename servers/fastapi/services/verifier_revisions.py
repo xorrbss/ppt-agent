@@ -280,6 +280,10 @@ COMMON_HEADER_VERIFIER_LEDGER = VerifierRevisionLedger(
         # integer/float parity, and unreadable fonts leave a proof incomplete. Stored
         # V4 and legacy evidence is unchanged.
         "sha256:b816323be5451aa00c7b340daf376565ad12cb36140ca2fbf515e0d4772646ce": "svg-common-header-verifier/1",
+        # 2026-11-08 V5 capture speed, no proof change: lossless PNG screenshots with
+        # optimizeForSpeed (identical decoded pixels) and numpy mask statistics with
+        # exact parity to the byte loops they replace.
+        "sha256:570ea9ac5a2335c149ce82a7c443035a16b3c992af3af2321610863337cf7391": "svg-common-header-verifier/1",
     }),
 )
 
@@ -389,6 +393,10 @@ WHOLE_PAGE_VERIFIER_LEDGER = VerifierRevisionLedger(
         # attribute is refused only when the SVG has a stylesheet. V5 is default-off;
         # V4 and legacy evidence is unchanged.
         "cecda577a73f92754d019e34c5e24701bcf842df5af284485b9b57c43acaac0d": "svg-whole-page-verifier/1",
+        # 2026-11-08 V5 capture speed, no proof change: lossless PNG screenshots with
+        # optimizeForSpeed (identical decoded pixels) and numpy mask statistics with
+        # exact parity to the byte loops they replace.
+        "1247bee2ae8175e4132bb85b2ede679451c882e9bf3c7baed8fa1cd89c035d14": "svg-whole-page-verifier/1",
     }),
 )
 
@@ -568,6 +576,10 @@ PARTIAL_RECOVERY_CODE_LEDGER = VerifierRevisionLedger(
         # attribute is refused only when the SVG has a stylesheet. V5 is default-off;
         # V4 and legacy evidence is unchanged.
         "25c77661f1fbc99d56d14f3b43339c37c6b983cf6351879b4a54721cca6bc7dd": "svg-partial-recovery-code/1",
+        # 2026-11-08 V5 capture speed, no proof change: lossless PNG screenshots with
+        # optimizeForSpeed (identical decoded pixels) and numpy mask statistics with
+        # exact parity to the byte loops they replace.
+        "564299af476ee6c10f61612502cf29281ba5e2acd38335c8c2960c7837d581e1": "svg-partial-recovery-code/1",
     }),
 )
 
@@ -658,6 +670,10 @@ PAGE_RENDER_CODE_LEDGER = VerifierRevisionLedger(
         # attribute is refused only when the SVG has a stylesheet. V5 is default-off;
         # V4 and legacy evidence is unchanged.
         "33419649189c7e3045bb97ae2ad73eb1d5ffd659dc9a0f9e48343ca13ad3e9fc": "svg-page-render-code/1",
+        # 2026-11-08 V5 capture speed, no proof change: lossless PNG screenshots with
+        # optimizeForSpeed (identical decoded pixels) and numpy mask statistics with
+        # exact parity to the byte loops they replace.
+        "a5caec9a42896023d3c8f465c47b64171c26e041d014f7674e9281e86bd9c1e0": "svg-page-render-code/1",
     }),
 )
 

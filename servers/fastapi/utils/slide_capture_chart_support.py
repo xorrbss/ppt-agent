@@ -21,7 +21,16 @@ from utils.hashing import canonical_json_bytes, sha256_prefixed
 def mask_record(mask, alpha):
     """The single canonical codec for every chart diagnostic mask receipt."""
     return {"maskDigest": sha256_prefixed(mask.tobytes()), "pixelCount": mask.histogram()[255],
-            "alphaSum": sum(a for a, covered in zip(alpha.tobytes(), mask.tobytes(), strict=False) if covered)}
+            "alphaSum": masked_alpha_sum(alpha, mask.tobytes())}
+
+
+def masked_alpha_sum(alpha, mask_bytes):
+    """Sum of alpha bytes where the mask byte is non-zero (pairs truncated to the shorter)."""
+    import numpy as np
+    alpha_values = np.frombuffer(alpha.tobytes(), dtype=np.uint8)
+    covered = np.frombuffer(mask_bytes, dtype=np.uint8)
+    length = min(alpha_values.size, covered.size)
+    return int(alpha_values[:length][covered[:length] != 0].sum(dtype=np.int64))
 
 
 def encode_native_raster(image):
