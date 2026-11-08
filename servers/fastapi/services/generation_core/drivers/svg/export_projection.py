@@ -17,6 +17,8 @@ agree when they sum to the anchor height).
 """
 from __future__ import annotations
 
+from decimal import Decimal, ROUND_HALF_UP
+import math
 from typing import Any
 
 from services.generation_core.native_objects import NativeObject
@@ -122,6 +124,31 @@ def _borders(borders: dict, *, pt_per_px: float = _PT_PER_PX) -> dict:
     }
 
 
+class NativeChartDonutHoleUnrepresentable(ValueError):
+    """A proved source donut hole lies outside OOXML's integer-percent range."""
+
+    def __init__(self, hole_ratio: float, quantized_percent: int):
+        self.receipt = {
+            "reason": "native_chart_donut_hole_unrepresentable",
+            "holeRatio": hole_ratio,
+            "quantizedHolePercent": quantized_percent,
+            "minimumHolePercent": 10,
+            "maximumHolePercent": 90,
+            "quantization": "decimal-half-up-integer-percent",
+        }
+        super().__init__(self.receipt["reason"])
+
+
+def _donut_hole_percent(hole_ratio: float) -> int:
+    if (type(hole_ratio) not in (int, float) or not 0 < hole_ratio < 1
+            or not math.isfinite(hole_ratio)):
+        raise ValueError("native_chart_appearance_invalid")
+    percent = int((Decimal(str(hole_ratio)) * 100).quantize(Decimal("1"), rounding=ROUND_HALF_UP))
+    if not 10 <= percent <= 90:
+        raise NativeChartDonutHoleUnrepresentable(hole_ratio, percent)
+    return percent
+
+
 def _chart(chart: dict, appearance: dict | None = None, *, pt_per_px: float = _PT_PER_PX) -> dict:
     """Small, separate chart projection (category charts only; V1 has no other)."""
     if chart.get("retainedAxisTitle") and chart.get("valueAxis", {}).get("title"):
@@ -149,7 +176,11 @@ def _chart(chart: dict, appearance: dict | None = None, *, pt_per_px: float = _P
             projected[key] = chart[key]
     if chart.get("title") is not None:
         projected["title"] = chart["title"]
-    if appearance is not None:
+    if appearance is not None and "holeRatio" in appearance:
+        if chart_type != "doughnut":
+            raise ValueError("native_chart_appearance_invalid")
+        projected["hole_size"] = _donut_hole_percent(appearance["holeRatio"])
+    if appearance is not None and {"categoryOrder", "valueLabels", "markers"} <= set(appearance):
         if chart.get("title"):
             projected["title_reserve_space"] = True
         if chart_type == "bar" and appearance["categoryOrder"] == "topToBottom":

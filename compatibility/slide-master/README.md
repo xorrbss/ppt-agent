@@ -73,6 +73,13 @@ reversed. They are applied between `text-advance-1.patch` and
 disjoint files. Any new vendor edit needs a patch file and a `PATCHES` entry in
 `rebuild.py`; the manifest is generated with LF line endings.
 
+`svg-donut-hole.1` records the optional V5 SVG-to-native doughnut hole mapping in
+`chart_data.py` and `chart_xml.py`. Explicit `hole_size` accepts integer OOXML
+percentages from 10 to 90 only for doughnut charts; absence retains the existing
+75 percent default. The patch changes executed vendor bytes and is not eligible
+for a metadata-only superseded-manifest alias. Its rebuild preserves every other
+vendored file, the exporter version and existing integrity checks.
+
 `CONVERTER_VERSION` in `workers/public_svg_pptx_convert.py` is the exporter
 identity, not the vendor manifest version: its `native-fixed-text.2` suffix is
 the worker-side revision of `f86ae0f67` (v3 template fixed text), which changed

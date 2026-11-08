@@ -1,0 +1,190 @@
+{
+  "schema": "svg-chart-session-source-state/v1",
+  "generatedUtc": "2026-11-07T19:33:21.557267+00:00",
+  "baselineCommit": "8d6d21fb8611fe6b6312fc2d4ba5186406aa05d6",
+  "requirementsRevision": "svg-native-requirements/v5",
+  "admittedDefaultRevision": "svg-native-requirements/v4",
+  "check": {
+    "result": "482 passed in 28.60s; exit 0",
+    "scope": "Static geometry, synthetic typed receipts tied to actual builder identities and pinned legacy parity; no actual browser/PPTX/release acceptance",
+    "historicalResults": [
+      "231 passed bounded implementation (superseded scope)",
+      "391 passed, 10 failed in 31.11s before relevant corrections",
+      "402 passed in 29.61s before final local support/gate changes"
+    ]
+  },
+  "legacyParity": {
+    "sha256": "0a2eb5b3483d0aa8972044eaa8140ce4e813f6d9273e3c1ef87441647034b4a7",
+    "rows": 104,
+    "bytes": 160906
+  },
+  "ledgerSourceStates": {
+    "whole_page": {
+      "baseline": {
+        "raw": "5e01fe7847eae665ec34c2607300f82d8853d2db33431e8bebc2c12d857c550a",
+        "reviewed_key": "67d5215fb1386032c3eeafda62ba95c9325b45abe79033813c68282042d14b3b",
+        "anchor": "2ed110c10e9ac4c0668d4c6b905556f8ba1fdc6cfd93b436476f5025281294fa"
+      },
+      "current": {
+        "raw": "4047fcaf89236282a543dfab5c40c640096d72d2dee6efd517ba128eea410f66",
+        "reviewed_key": "88e89901af5c95b9ee968c52d90264da51959cc501be2170b5813b180879835b",
+        "anchor": "2ed110c10e9ac4c0668d4c6b905556f8ba1fdc6cfd93b436476f5025281294fa"
+      },
+      "baselineResolved": "2ed110c10e9ac4c0668d4c6b905556f8ba1fdc6cfd93b436476f5025281294fa",
+      "currentResolved": "4047fcaf89236282a543dfab5c40c640096d72d2dee6efd517ba128eea410f66",
+      "requiresRootReview": true,
+      "changedSources": [
+        "services/generation_core/drivers/svg/native_chart.py"
+      ]
+    },
+    "common_header": {
+      "baseline": {
+        "raw": "sha256:016f2da5d690f534ceb22083b0fa7904c45ba04e548c6504535cc4fbad4df508",
+        "reviewed_key": "sha256:2d8c55610be61441571256dd905366acfc8491425f89cd600821198e9cf0ba8a",
+        "anchor": "sha256:aa3fed253c857188c3f7602c3626bd397058cdf05e67f9dea550bb9b886d6e7e"
+      },
+      "current": {
+        "raw": "sha256:a0134c46b572382758cc00e3d62e7926d48e000ab424a5bfc0b4730e311b8a7f",
+        "reviewed_key": "sha256:0f5379564db0fe5834f35845058b8bd07bd0765d5b5638a400ffdacb208407f5",
+        "anchor": "sha256:aa3fed253c857188c3f7602c3626bd397058cdf05e67f9dea550bb9b886d6e7e"
+      },
+      "baselineResolved": "sha256:aa3fed253c857188c3f7602c3626bd397058cdf05e67f9dea550bb9b886d6e7e",
+      "currentResolved": "sha256:a0134c46b572382758cc00e3d62e7926d48e000ab424a5bfc0b4730e311b8a7f",
+      "requiresRootReview": true,
+      "changedSources": [
+        "services/generation_core/drivers/svg/render.py"
+      ]
+    },
+    "partial_recovery": {
+      "baseline": {
+        "raw": "57a6b1af95dba46e5833b1227e8e7ae16ad240c61ca6d8e3905b6029e5b52f20",
+        "reviewed_key": "57aa07966d950e5dc470f9eba5b1ced173b6f5c4bde43332a4f9b88c6fbe5b49",
+        "anchor": "cc594e17c5e3661e7e366d8286fe0412909e3ed78357fd2ba5afda85c1ef4e64"
+      },
+      "current": {
+        "raw": "cbfbb9c617eccd212254d3672f5bb8824043f40db6a87d4586f776f417391816",
+        "reviewed_key": "dc54ef05d8a27b85b16b431f5e711b00798f30128acec52bf74ccc5467f23d72",
+        "anchor": "cc594e17c5e3661e7e366d8286fe0412909e3ed78357fd2ba5afda85c1ef4e64"
+      },
+      "baselineResolved": "cc594e17c5e3661e7e366d8286fe0412909e3ed78357fd2ba5afda85c1ef4e64",
+      "currentResolved": "cbfbb9c617eccd212254d3672f5bb8824043f40db6a87d4586f776f417391816",
+      "requiresRootReview": true,
+      "changedSources": [
+        "services/generation_core/drivers/svg/render.py",
+        "services/generation_core/drivers/svg/native_declarations.py"
+      ]
+    },
+    "page_render": {
+      "baseline": {
+        "raw": "191c9c651c853df1b694b5362b9fbf3509f50349e1dc4e995d575007b6ec8714",
+        "reviewed_key": "f5f97281424d071632bc81efa13c00abca135a19a75765b64687a04b9eb85bd5",
+        "anchor": "0372263e010f7a40cde1274bb6b4456f4d8e61a59179763bd100df5257dff9bd"
+      },
+      "current": {
+        "raw": "5f0ae2c91d9ea57154fbd67550f9414a47b1a86d5096a27711fb76dd5a569e9c",
+        "reviewed_key": "ef19cf908ccf9623908ad54583072398bc2de469fdf8402dcd75f70099d3b7a1",
+        "anchor": "0372263e010f7a40cde1274bb6b4456f4d8e61a59179763bd100df5257dff9bd"
+      },
+      "baselineResolved": "0372263e010f7a40cde1274bb6b4456f4d8e61a59179763bd100df5257dff9bd",
+      "currentResolved": "5f0ae2c91d9ea57154fbd67550f9414a47b1a86d5096a27711fb76dd5a569e9c",
+      "requiresRootReview": true,
+      "changedSources": [
+        "services/generation_core/drivers/svg/render.py",
+        "services/generation_core/drivers/svg/native_declarations.py"
+      ]
+    }
+  },
+  "files": [
+    {
+      "path": "servers/fastapi/services/generation_core/drivers/svg/native_chart.py",
+      "sha256": "76e5e79914f72487532db771a61741cab3e9aa3cca597b6591712520b0750584",
+      "lfSha256": "76e5e79914f72487532db771a61741cab3e9aa3cca597b6591712520b0750584"
+    },
+    {
+      "path": "servers/fastapi/services/generation_core/drivers/svg/native_chart_evidence.py",
+      "sha256": "0ef42d7c44b99138a44fa2d5a0dce10604e53b47d8aca246b94bfb2d469fcdd2",
+      "lfSha256": "3a123da87aed2f4de50d7c56a0a324e391a98ee366fb2f1d186dd4deaa5e1285"
+    },
+    {
+      "path": "servers/fastapi/services/generation_core/drivers/svg/native_declarations.py",
+      "sha256": "72ff6429375c97c7f0e534740053ba2610634a0b7d389c76904dd7a11c03096b",
+      "lfSha256": "72ff6429375c97c7f0e534740053ba2610634a0b7d389c76904dd7a11c03096b"
+    },
+    {
+      "path": "servers/fastapi/services/generation_core/drivers/svg/native_requirements.py",
+      "sha256": "c08a29300ed0b3a0b8b8b84716550d0c211954abaf8806d6ee9a331fa22b32da",
+      "lfSha256": "da321153a25025fd360daf98c6f6c310b18879944984afe3dd0d49b3295a37e1"
+    },
+    {
+      "path": "servers/fastapi/services/generation_core/drivers/svg/prose_chart_literal.py",
+      "sha256": "e22c1147d6049475d85e012493337296366d3c42d081257c206132a75e52992d",
+      "lfSha256": "2a1f94595223c1b3f59fdd20f7cb5ca7136f87439cdaed3a9ee257c9496a5cce"
+    },
+    {
+      "path": "servers/fastapi/services/generation_core/drivers/svg/publish.py",
+      "sha256": "56b7276ba7b81a8b8df1717b79063353d3e01a045de00a27ad932de633207c25",
+      "lfSha256": "8d44ecb448540629ab37fd91ffada35f1bbebcfa6edb2c295fdf2576ac8d87e4"
+    },
+    {
+      "path": "servers/fastapi/services/generation_core/drivers/svg/render.py",
+      "sha256": "cb7936f09efcec15fdd63da72abc2217eb2ead165a7e271ffead531e3cd51d67",
+      "lfSha256": "cc18c1d117efc20ee7f06da0139d04a5e672b1882cceeb85259f3ac413940f9c"
+    },
+    {
+      "path": "servers/fastapi/services/generation_core/drivers/svg/chart_content_cartesian.py",
+      "sha256": "95cadeaa28b059e067debc5d83a47c9669da0adb4555a0c98d6fbfed4a64e17f",
+      "lfSha256": "95cadeaa28b059e067debc5d83a47c9669da0adb4555a0c98d6fbfed4a64e17f"
+    },
+    {
+      "path": "servers/fastapi/services/generation_core/drivers/svg/chart_content_polar.py",
+      "sha256": "44759acdb3973753396b9ff7c9c786029e3657a246193a62086f2dffa1bb7cf5",
+      "lfSha256": "44759acdb3973753396b9ff7c9c786029e3657a246193a62086f2dffa1bb7cf5"
+    },
+    {
+      "path": "servers/fastapi/services/generation_core/drivers/svg/chart_content_paint.py",
+      "sha256": "5cfd43f2d544e6d0f1d3e1ed4ee3f2c08eed80f7e154a74786c2242978c3211a",
+      "lfSha256": "5cfd43f2d544e6d0f1d3e1ed4ee3f2c08eed80f7e154a74786c2242978c3211a"
+    },
+    {
+      "path": "servers/fastapi/services/svg_page_remake.py",
+      "sha256": "328fd7829df2ecd4ce4b306a4df514279f1bf60eda60d1db3b8c193f0b34a63d",
+      "lfSha256": "34cf8d662a578560db86c7308e2e3d6cd22599d64559d955ab7cb7965c08dd28"
+    },
+    {
+      "path": "servers/fastapi/tests/unit/test_svg_native_chart_retention_v5.py",
+      "sha256": "b0238a25fe4192bfd86fbdce2d56237cfd6c26df51ece8747e478e78b5cc18fd",
+      "lfSha256": "b0238a25fe4192bfd86fbdce2d56237cfd6c26df51ece8747e478e78b5cc18fd"
+    },
+    {
+      "path": "servers/fastapi/tests/unit/test_svg_chart_content_cartesian.py",
+      "sha256": "94b11ce9594220db21ae4a5de1fb95e4ce9a6bfb94c5eb7cdbb2cd908a0f279d",
+      "lfSha256": "94b11ce9594220db21ae4a5de1fb95e4ce9a6bfb94c5eb7cdbb2cd908a0f279d"
+    },
+    {
+      "path": "servers/fastapi/tests/unit/test_svg_chart_content_paint.py",
+      "sha256": "67db1a43b00c6393e34a4a21e12b8f8dd7a330a167e0f48102ff86b3a3f6fe99",
+      "lfSha256": "67db1a43b00c6393e34a4a21e12b8f8dd7a330a167e0f48102ff86b3a3f6fe99"
+    }
+  ],
+  "openIntegration": [
+    "Root actual-browser acceptance of all exact typed witnesses, including synchronized marker value-anchor predicate",
+    "One existing worker capture measured within unchanged runtime budget after source/proof alignment",
+    "Root closure review and ledger/source inventories including new Cartesian/polar/paint dependencies before pinning",
+    "Default-off selector/env/admission/replay integration and final publication/export/release artifacts remain root-owned"
+  ],
+  "machineArtifacts": [
+    {
+      "path": "docs/session-results/svg-chart-support-graph-v1.schema.json",
+      "sha256": "f0587ecfea87de32bcaa45909981c6d1dccdc5f0e11dff110a44dd74585d86c0"
+    },
+    {
+      "path": "docs/session-results/svg-chart-support-graph-examples-20261108.json",
+      "sha256": "71ec0d653fce73e2fe5217ab05d69e70bf4517690338e146696723d805aa5a2f"
+    },
+    {
+      "path": "docs/session-results/svg-chart-local-support-contract-request-20261108.json",
+      "sha256": "52ff33828caa6e4234c4c2791cc42d4f11a752461dffdca202f34a80bb4ceee1"
+    }
+  ],
+  "sourceEvidenceBoundary": "No verifier ledger was edited or mapped to historical anchors here. Existing-inventory source states are observations, not approval of the new transitive source closure."
+}

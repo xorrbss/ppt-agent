@@ -1,0 +1,38 @@
+diff --git a/servers/fastapi/vendor/slide_master/svg_to_pptx/native_objects/chart_data.py b/servers/fastapi/vendor/slide_master/svg_to_pptx/native_objects/chart_data.py
+index 71abb9169e2ffa866ddd5cb9419184b33ad4c540..e234544a08b4ba6cc52390bbbb373b445182803b 100644
+--- a/servers/fastapi/vendor/slide_master/svg_to_pptx/native_objects/chart_data.py
++++ b/servers/fastapi/vendor/slide_master/svg_to_pptx/native_objects/chart_data.py
+@@ -663,6 +663,11 @@ def _category_chart_data(
+     alias_style: str | None,
+ ) -> dict[str, Any]:
+     source_options = {}
++    if "hole_size" in payload:
++        hole_size = payload["hole_size"]
++        if chart_type != "doughnut" or type(hole_size) is not int or not 10 <= hole_size <= 90:
++            raise RuntimeError("Native PPTX doughnut hole_size must be an integer from 10 to 90")
++        source_options["hole_size"] = hole_size
+     if "vary_colors" in payload:
+         source_options["vary_colors"] = _chart_bool(payload["vary_colors"])
+     if "gap_width" in payload:
+@@ -1308,6 +1313,8 @@ def _xy_chart_data(
+ 
+ def _chart_data(payload: dict[str, Any]) -> dict[str, Any]:
+     chart_type, alias_grouping, alias_style = _chart_kind(payload)
++    if "hole_size" in payload and chart_type != "doughnut":
++        raise RuntimeError("Native PPTX hole_size is supported for doughnut charts only")
+     if (
+         chart_type not in _CATEGORY_CHART_TYPES | {"combo", "stock"} | _XY_CHART_TYPES
+         and _data_labels_config(payload) is not None
+diff --git a/servers/fastapi/vendor/slide_master/svg_to_pptx/native_objects/chart_xml.py b/servers/fastapi/vendor/slide_master/svg_to_pptx/native_objects/chart_xml.py
+index b1c8aa008a0521a7d8c4b1e84a2de5953dab6275..47a4e8e96a06304a6cc162d2e8769b3ad41cf476 100644
+--- a/servers/fastapi/vendor/slide_master/svg_to_pptx/native_objects/chart_xml.py
++++ b/servers/fastapi/vendor/slide_master/svg_to_pptx/native_objects/chart_xml.py
+@@ -1169,7 +1169,7 @@ def _chart_plot_xml(
+         return (
+             '<c:doughnutChart><c:varyColors val="1"/>'
+             f"{ser_xml}"
+-            '<c:firstSliceAng val="0"/><c:holeSize val="75"/>'
++            f'<c:firstSliceAng val="0"/><c:holeSize val="{chart_data.get("hole_size", 75)}"/>'
+             "</c:doughnutChart>"
+         )
+     if chart_type == "of_pie":

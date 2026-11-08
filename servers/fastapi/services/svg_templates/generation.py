@@ -128,6 +128,15 @@ def apply_template_snapshot(snapshot: dict, request) -> None:
         if get_svg_template_body_renders_env():
             # Frozen: every page, retry and remake of this deck follows its admission.
             snapshot["template_body_renders"] = True
+        from utils.get_env_concurrency import get_svg_template_content_sizing_env
+        if get_svg_template_content_sizing_env():
+            snapshot["template_content_sizing"] = True
+            snapshot["template_content_sizing_revision"] = TEMPLATE_CONTENT_SIZING_REVISION
+        from utils.get_env_concurrency import get_svg_template_pictures_env
+        if get_svg_template_pictures_env():
+            from services.svg_templates.picture_policy import TEMPLATE_PICTURES_REVISION
+            snapshot["template_pictures"] = True
+            snapshot["template_pictures_revision"] = TEMPLATE_PICTURES_REVISION
     snapshot["digest"] = canonical_json_digest({key: value for key, value in snapshot.items() if key != "digest"}, allow_nan=True)
 
 
@@ -146,6 +155,15 @@ TEMPLATE_VOCABULARY_LINE = (
     " offered icon beside the label of its own item; a key figure as a compact tile next to its"
     " explanation, not a page-dominating number. Decoration without such content is not an improvement."
 )
+
+
+TEMPLATE_CONTENT_SIZING_REVISION = "svg-template-content-sizing/v1"
+
+
+def snapshot_has_content_sizing(snapshot: dict) -> bool:
+    """Read only the admitted policy; missing or unsupported policies stay off."""
+    return (snapshot.get("template_content_sizing") is True
+            and snapshot.get("template_content_sizing_revision") == TEMPLATE_CONTENT_SIZING_REVISION)
 
 
 def snapshot_has_visual_guidance(snapshot: dict) -> bool:
@@ -377,7 +395,8 @@ def body_author_rules(rules: str, snapshot: dict, *, body_floor: float | None = 
         from services.svg_templates.body_composition import composition_rules
         component_rules += composition_rules(template_package(selection).get("body_composition"),
                                              body_floor=body_floor, exemplars=composition == "on",
-                                             visual_guidance=snapshot_has_visual_guidance(snapshot))
+                                             visual_guidance=snapshot_has_visual_guidance(snapshot),
+                                             content_sizing=snapshot_has_content_sizing(snapshot))
         from services.svg_templates.body_renders import BODY_RENDER_RULE, snapshot_body_renders
         if composition == "on" and snapshot_body_renders(snapshot):
             component_rules += BODY_RENDER_RULE
@@ -399,6 +418,13 @@ def body_author_rules(rules: str, snapshot: dict, *, body_floor: float | None = 
     # here (svg_template_body_namespace_required: every body id starts with body-).
     for kind in ("table", "chart"):
         rules = rules.replace(f'id="native-{kind}-SLUG"', f'id="body-native-{kind}-SLUG"')
+    if snapshot.get("template_pictures") is True:
+        from services.svg_templates.picture_policy import (
+            TEMPLATE_PICTURES_REVISION, template_picture_guidance)
+        if snapshot.get("template_pictures_revision") == TEMPLATE_PICTURES_REVISION:
+            picture_guidance = template_picture_guidance(snapshot)
+            if picture_guidance:
+                component_rules += "\n" + picture_guidance
     return rules + "\n" + "\n".join(snapshot["composition_guidance"]) + (
         "\nThe template_page input is authoritative. Return one full-canvas SVG coordinate system,"
         " with all body paint strictly inside body_region and outside forbidden_regions."

@@ -1,0 +1,1520 @@
+{
+  "schema": "svg-verifier-font-source-state/v1",
+  "createdUtc": "2026-11-07T22:12:11.173234+00:00",
+  "status": "append-only candidate; independent static review and focused ROOT ledger check pending",
+  "acceptedPreviousReport": {
+    "path": "docs/session-results/svg-verifier-final-source-state-20261108.json",
+    "rawSha256": "f27de8d438fea3c01ecfe6abd24e91532cf0aefad6ba0869e8b95c8ad5912eb4",
+    "ledgerLfSha256": "f199de488a8c7ef5ca3cb79725fcf8671d85f37550c733f180eab93f9529d32c"
+  },
+  "sourceAggregateEncoding": "SHA-256 canonical UTF-8 JSON object of sorted direct-inventory relative paths to bare file SHA-256 values; test files, reports and verifier_revisions.py excluded",
+  "directSourceFileCount": 156,
+  "directSourceLfAggregateSha256": "af842b43c5e2fb27120b2a16fa1e721e5226467f55ef1017207815f726ac588a",
+  "directSourceRawAggregateSha256": "f5b93511c94337b0a08331dcfe6e61aa94515c9aea33acea2e966c8fe3729651",
+  "changedDirectSourceFilesSinceAcceptedReport": [
+    "utils/slide_capture_chart_paint.py"
+  ],
+  "ledgerImplementationExcludedFromAllInventories": true,
+  "ledgerFileRawSha256": "ee4320326ea8925f01925fa45cc54615ea55cbd9e0b0027caff75fe5dc26da55",
+  "ledgerFileLfSha256": "7825c7f1a16354ab2baf48472b8dbbd5d527525c2787aef5eb0b903c12e7e38c",
+  "appendOnlyReviewedKeys": {
+    "COMMON_HEADER_VERIFIER_LEDGER": "sha256:fa334b37935ad6b4c80be221002323c3ea727802168165064bb1ab051a0451e9",
+    "PARTIAL_RECOVERY_CODE_LEDGER": "b46fbe0f342b19825687d44334e6da6e0abecd1b6fef92c90fccca6f74a6645e",
+    "PAGE_RENDER_CODE_LEDGER": "1dff1ddd35525d61ba752705fc74179e4d7ffbfedd6c23a5fe035590068173f7"
+  },
+  "acceptedPreviousReviewedKeysAllPreserved": true,
+  "entireAstOutsideAddedReviewedKeysUnchanged": true,
+  "historicalPartialAnchorTableUnchanged": true,
+  "unchangedInventoryCounts": {
+    "postAnchor": 57,
+    "commonHeaderPostAnchor": 18,
+    "wholePagePostAnchor": 32
+  },
+  "fontFix": {
+    "helper": {
+      "path": "utils/slide_capture_chart_paint.py",
+      "rawSha256": "7312a050e7fdd54d42852707aa81b7c611ab807f9ffbe07e00962403c1f345b4",
+      "lfSha256": "7312a050e7fdd54d42852707aa81b7c611ab807f9ffbe07e00962403c1f345b4"
+    },
+    "test": {
+      "path": "tests/unit/test_svg_chart_paint_carrier.py",
+      "rawSha256": "a8913bf2c44ce1cb4bfa00f56c25c3d8a4a7b0bbbbad82986f77f0e7da068265",
+      "lfSha256": "a8913bf2c44ce1cb4bfa00f56c25c3d8a4a7b0bbbbad82986f77f0e7da068265"
+    },
+    "contract": "Exact nameID25 match from the hash-bound admitted font subset, limited to a valid custom variable font with unique resource and face binding. Legacy/static matching and all other proof checks remain unchanged.",
+    "rootReportedFocusedCheck": {
+      "file": "tests/unit/test_svg_chart_paint_carrier.py",
+      "passed": 46,
+      "durationSeconds": 3.75,
+      "exitCode": 0,
+      "executedBy": "ROOT; not re-executed for this metadata refresh"
+    },
+    "actualRuntimeEvidence": "Original normal-column attempt 1 failed closed after 32.6508936 seconds with eight glyph_fontcoverage_unproven failures; original artifacts retained. No successful post-fix runtime capture is claimed."
+  },
+  "compatibilityReasons": [
+    {
+      "scope": "Fresh pin isolation",
+      "basis": "Explicit exact V5 free-page pin selects numeric/native paint behavior; picture/content-sizing require exact fresh default-off policies. Stored V2/V3/V4/unpinned, source/raster and non-SVG routes retain existing boundaries. Global admitted native default remains V4."
+    },
+    {
+      "scope": "Current parser wire",
+      "basis": "Root reported 51 focused numeric-span cases passed in 6.53s, including 24 actual local Git HEAD parser-byte comparisons over unpinned/V2/V3/V4 representative inputs. Production native_requirements/render source hashes did not change in subsequent test-only fixture repair.",
+      "limit": "Parser-module wire/current imported dependency boundary, not all legacy renderer or export behavior."
+    },
+    {
+      "scope": "Native/donut absent fields",
+      "basis": "Root independently approved absent-field native wire/XML HEAD samples; absent hole_size retains 75 percent, explicit V5 physical doughnut appearance maps the measured ratio. Root observed persisted actual chart101.xml holeSize70; raw serializer differences were semantically equal after XML parsing.",
+      "limit": "Bounded source/OOXML samples. Final test-only part-name repair remains separately reviewed; no claim of full exporter/render parity."
+    },
+    {
+      "scope": "Source presets",
+      "basis": "Root accepted 36 focused checks with ten actual HEAD SVG/receipt byte differentials; straightConnector1 shape-role rectangle path preserved.",
+      "report": "docs/session-results/svg-source-preset-compatibility-20261108.md",
+      "limit": "Module delta with current imported dependencies and default styling."
+    },
+    {
+      "scope": "Legitimate vendor reproducibility",
+      "basis": "Actual rebuild executed once from pinned local baseline eba5e731c5fd480b891098395a981567f0fb47b3; all87 rebuilt files equaled reviewed active vendor bytes; only generated MANIFEST copied. Executed change is not a metadata-only alias.",
+      "report": "docs/session-results/svg-donut-vendor-rebuild-20261108.json"
+    },
+    "This append recognizes only the reviewed exact variable-font admitted-subset identity fix; no fuzzy name acceptance, revision bump, anchor change, metadata alias or capture restamping."
+  ],
+  "historicalEvidenceLimits": [
+    "104-row static legacy byte corpus predates the final numeric/donut/polar changes; it is not fresh global proof.",
+    "166-pass paint consumer evidence predates later numeric/donut/polar integration; its genuine capture/text-binding scope is not all final production behavior.",
+    "ROOT reported actual HEAD/current absent-manifest renderer parity passed before this font helper change; that observation is not fresh post-font-fix runtime parity."
+  ],
+  "unmeasured": [
+    "Post-font-fix genuine normal-column runtime capture and remaining eight runtime cases are pending; no runtime success inferred from 46 unit cases.",
+    "No tests, browser, provider, server restart or publication executed for this ledger metadata refresh."
+  ],
+  "vendorManifest": {
+    "rawSha256": "6b0c83384670cd3f1c92adf1de6b44c1878ebdb31263eefbb654cee33194cc3d",
+    "version": "vendored-20260916+document-canvas.2+text-advance.1+chart-furniture.16+native-fixed-text.1+xfrm-bounds.1+svg-donut-hole.1",
+    "coveredCount": 87,
+    "coveredBytesMatch": true,
+    "coveredFiles": {
+      "LICENSE": {
+        "manifestSha256": "80cefc234c1ec12a8cece4344f16300c634fa03df7891686fcf979e3828f0921",
+        "actualRawSha256": "80cefc234c1ec12a8cece4344f16300c634fa03df7891686fcf979e3828f0921"
+      },
+      "config.py": {
+        "manifestSha256": "25e8bc8b158721255cda2e3addf8a7e05e9ec5b95674a56d6488e75dd2c6c1f7",
+        "actualRawSha256": "25e8bc8b158721255cda2e3addf8a7e05e9ec5b95674a56d6488e75dd2c6c1f7"
+      },
+      "console_encoding.py": {
+        "manifestSha256": "71022e21fd89b91f0d96cb3ca128b140dbbe9a5b0dfbf2f46baf26404f20206b",
+        "actualRawSha256": "71022e21fd89b91f0d96cb3ca128b140dbbe9a5b0dfbf2f46baf26404f20206b"
+      },
+      "error_helper.py": {
+        "manifestSha256": "07e2352a12891e946c3fecd9c6b6bd6ee64feb6a374908cc15dc40d530d01e5d",
+        "actualRawSha256": "07e2352a12891e946c3fecd9c6b6bd6ee64feb6a374908cc15dc40d530d01e5d"
+      },
+      "pptx_animations.py": {
+        "manifestSha256": "bd4e7372f720135cb51ec4951ea2d2fc00b46978c56d1b734a3cfd1f6e8569b8",
+        "actualRawSha256": "bd4e7372f720135cb51ec4951ea2d2fc00b46978c56d1b734a3cfd1f6e8569b8"
+      },
+      "pptx_shapes/__init__.py": {
+        "manifestSha256": "5e49743459f1f2c57ad9198f858004f35d1c892c2a8367b1c903769b446c4339",
+        "actualRawSha256": "5e49743459f1f2c57ad9198f858004f35d1c892c2a8367b1c903769b446c4339"
+      },
+      "pptx_shapes/data/LICENSE-APACHE-2.0.txt": {
+        "manifestSha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+        "actualRawSha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+      },
+      "pptx_shapes/data/LICENSE-OPEN-XML-SDK-MIT.txt": {
+        "manifestSha256": "cfc21f5e8bd655ae997eec916138b707b1d290b83272c02a95c9f821b8c87310",
+        "actualRawSha256": "cfc21f5e8bd655ae997eec916138b707b1d290b83272c02a95c9f821b8c87310"
+      },
+      "pptx_shapes/data/NOTICE.md": {
+        "manifestSha256": "57f3e499fbf289e2d03a3a494ea69a5cd1685a707ad8f2618e46144ea1ec88cb",
+        "actualRawSha256": "57f3e499fbf289e2d03a3a494ea69a5cd1685a707ad8f2618e46144ea1ec88cb"
+      },
+      "pptx_shapes/data/presetShapeDefinitions.xml": {
+        "manifestSha256": "4a762444d8d85876881c02a5b1dedf6f73006fcd8acb7b4e393435615b37c780",
+        "actualRawSha256": "4a762444d8d85876881c02a5b1dedf6f73006fcd8acb7b4e393435615b37c780"
+      },
+      "pptx_shapes/data/shape_type_values.txt": {
+        "manifestSha256": "f2c3bdcda8569b358ce3196cfeb183849e33bfc7955fac961dc85fceb6b3b587",
+        "actualRawSha256": "f2c3bdcda8569b358ce3196cfeb183849e33bfc7955fac961dc85fceb6b3b587"
+      },
+      "pptx_shapes/errors.py": {
+        "manifestSha256": "ee3a22954c6c49eabeb76ae4a26bdea395d8b4318cfde8233758ccd9d28bab6b",
+        "actualRawSha256": "ee3a22954c6c49eabeb76ae4a26bdea395d8b4318cfde8233758ccd9d28bab6b"
+      },
+      "pptx_shapes/formula.py": {
+        "manifestSha256": "4e140cffb5413362746f20abbbdce107f8a4de8a79edcf4843093c662985259f",
+        "actualRawSha256": "4e140cffb5413362746f20abbbdce107f8a4de8a79edcf4843093c662985259f"
+      },
+      "pptx_shapes/loader.py": {
+        "manifestSha256": "81e04c63f65d39bcbec3b27322ba04e8706d062add4f85c8cfd8730b6104f422",
+        "actualRawSha256": "81e04c63f65d39bcbec3b27322ba04e8706d062add4f85c8cfd8730b6104f422"
+      },
+      "pptx_shapes/models.py": {
+        "manifestSha256": "6e1a6f38e8dde4f0a40abb3142e748a03e52ccced5e29684cdd69573527e5423",
+        "actualRawSha256": "6e1a6f38e8dde4f0a40abb3142e748a03e52ccced5e29684cdd69573527e5423"
+      },
+      "pptx_shapes/registry.py": {
+        "manifestSha256": "1e2299877aa96f704deacd3216ed3add6d24226d0267941682de755b08dc9155",
+        "actualRawSha256": "1e2299877aa96f704deacd3216ed3add6d24226d0267941682de755b08dc9155"
+      },
+      "pptx_shapes/semantic_hash.py": {
+        "manifestSha256": "e47096d88923df44e38185ada3b32fd1dc9789c04e20809bbabdb5f2d280a597",
+        "actualRawSha256": "e47096d88923df44e38185ada3b32fd1dc9789c04e20809bbabdb5f2d280a597"
+      },
+      "pptx_shapes/xml_safety.py": {
+        "manifestSha256": "b411dc284fc176bee652de58ca27a93f293b952c8f804b2aaf44394c574dbc3c",
+        "actualRawSha256": "b411dc284fc176bee652de58ca27a93f293b952c8f804b2aaf44394c574dbc3c"
+      },
+      "pptx_to_svg/__init__.py": {
+        "manifestSha256": "4a5941d48756ae70027d6110d738e25515b8436fc7170a9bdc41649083e01bfb",
+        "actualRawSha256": "4a5941d48756ae70027d6110d738e25515b8436fc7170a9bdc41649083e01bfb"
+      },
+      "pptx_to_svg/chart_to_svg.py": {
+        "manifestSha256": "efa0cfc66eeffa1960f40b34a9d05b9de7c1bffb91aca83f588c0f22aa3cbf79",
+        "actualRawSha256": "efa0cfc66eeffa1960f40b34a9d05b9de7c1bffb91aca83f588c0f22aa3cbf79"
+      },
+      "pptx_to_svg/chartex_to_svg.py": {
+        "manifestSha256": "087b91936ee1df2a2c70a6afb09a6baceae118e5934226182635411c4981691a",
+        "actualRawSha256": "087b91936ee1df2a2c70a6afb09a6baceae118e5934226182635411c4981691a"
+      },
+      "pptx_to_svg/color_resolver.py": {
+        "manifestSha256": "69430e84ab3b25d152128a0a0e6a0f08a5c978eabfa4ae729e38aa5f1d344ff6",
+        "actualRawSha256": "69430e84ab3b25d152128a0a0e6a0f08a5c978eabfa4ae729e38aa5f1d344ff6"
+      },
+      "pptx_to_svg/converter.py": {
+        "manifestSha256": "1906bc44b7b09bdd9b441bb3f18783cf1652cf55b77d76d23cc09db22c715594",
+        "actualRawSha256": "1906bc44b7b09bdd9b441bb3f18783cf1652cf55b77d76d23cc09db22c715594"
+      },
+      "pptx_to_svg/custgeom_to_svg.py": {
+        "manifestSha256": "15ae3847547b5add69b773ec2c827acc2f874bf4d26aebe559082838b80ae4c1",
+        "actualRawSha256": "15ae3847547b5add69b773ec2c827acc2f874bf4d26aebe559082838b80ae4c1"
+      },
+      "pptx_to_svg/effect_to_svg.py": {
+        "manifestSha256": "df55f794afd2411ca9e619b9c03176cb4a43e745b48191c7959576181f0ba7e0",
+        "actualRawSha256": "df55f794afd2411ca9e619b9c03176cb4a43e745b48191c7959576181f0ba7e0"
+      },
+      "pptx_to_svg/emu_units.py": {
+        "manifestSha256": "feb0f15a98f148f2a573051f90654b3e6087774823d01fa7ce0004ad75407c36",
+        "actualRawSha256": "feb0f15a98f148f2a573051f90654b3e6087774823d01fa7ce0004ad75407c36"
+      },
+      "pptx_to_svg/fill_to_svg.py": {
+        "manifestSha256": "580dc80c0a30153aba7523bf4b020d54773f953b6b31dae2453e43a9bfa8399a",
+        "actualRawSha256": "580dc80c0a30153aba7523bf4b020d54773f953b6b31dae2453e43a9bfa8399a"
+      },
+      "pptx_to_svg/ln_to_svg.py": {
+        "manifestSha256": "2da66c7ebfb85157c91aa0eca62815a885878141e3ced040c6f50289ebd176fa",
+        "actualRawSha256": "2da66c7ebfb85157c91aa0eca62815a885878141e3ced040c6f50289ebd176fa"
+      },
+      "pptx_to_svg/normalized_chart_svg.py": {
+        "manifestSha256": "6c7e85db006364eee74674049b2563508869b867daaa7425a16b789d8175e603",
+        "actualRawSha256": "6c7e85db006364eee74674049b2563508869b867daaa7425a16b789d8175e603"
+      },
+      "pptx_to_svg/ooxml_loader.py": {
+        "manifestSha256": "26339727716ed177ad4577d625f8c514ee7204bfa99c80e6d899dd7063581a99",
+        "actualRawSha256": "26339727716ed177ad4577d625f8c514ee7204bfa99c80e6d899dd7063581a99"
+      },
+      "pptx_to_svg/pic_to_svg.py": {
+        "manifestSha256": "c296cd4005d38cb722b25ff807af1b66fab2744ca044b637226f009b545539e3",
+        "actualRawSha256": "c296cd4005d38cb722b25ff807af1b66fab2744ca044b637226f009b545539e3"
+      },
+      "pptx_to_svg/preset_authoring.py": {
+        "manifestSha256": "1ab7f601511f4b06fcb2eecac7fbe23a1130fdb3cc46e645ba3f698b103bf2ee",
+        "actualRawSha256": "1ab7f601511f4b06fcb2eecac7fbe23a1130fdb3cc46e645ba3f698b103bf2ee"
+      },
+      "pptx_to_svg/preset_registry_to_svg.py": {
+        "manifestSha256": "41344cfe2cdcd42c88b2a716b7a56f8245be7a1f2076f6284a5075ed46012825",
+        "actualRawSha256": "41344cfe2cdcd42c88b2a716b7a56f8245be7a1f2076f6284a5075ed46012825"
+      },
+      "pptx_to_svg/preset_svg_markup.py": {
+        "manifestSha256": "47452a8b46e6fc6a148d84d270f58c6449f1044c902d43f55c340a940a122323",
+        "actualRawSha256": "47452a8b46e6fc6a148d84d270f58c6449f1044c902d43f55c340a940a122323"
+      },
+      "pptx_to_svg/prstgeom_to_svg.py": {
+        "manifestSha256": "bd087aac7757430b8ea5742403865fddcbbb2b6721885ec78757cec2c2c75445",
+        "actualRawSha256": "bd087aac7757430b8ea5742403865fddcbbb2b6721885ec78757cec2c2c75445"
+      },
+      "pptx_to_svg/shape_walker.py": {
+        "manifestSha256": "f9de904f1ce02ceac1380704a540325262883cf7d2bc37257c832dba9459ca1e",
+        "actualRawSha256": "f9de904f1ce02ceac1380704a540325262883cf7d2bc37257c832dba9459ca1e"
+      },
+      "pptx_to_svg/slide_to_svg.py": {
+        "manifestSha256": "cae4477a0dae3caef98a278858aa58b7e5dc244adcf4c8cf20161b7378cb5910",
+        "actualRawSha256": "cae4477a0dae3caef98a278858aa58b7e5dc244adcf4c8cf20161b7378cb5910"
+      },
+      "pptx_to_svg/tbl_to_svg.py": {
+        "manifestSha256": "ac5b06a72ad3750ff6874b2a9abaccfda9af75fd1079a1dcba31e9c28abe4ca7",
+        "actualRawSha256": "ac5b06a72ad3750ff6874b2a9abaccfda9af75fd1079a1dcba31e9c28abe4ca7"
+      },
+      "pptx_to_svg/txbody_to_svg.py": {
+        "manifestSha256": "15b717605f18659f6a5239df0f885b391d00c9174af09e11ed462634e0cc9f28",
+        "actualRawSha256": "15b717605f18659f6a5239df0f885b391d00c9174af09e11ed462634e0cc9f28"
+      },
+      "pptx_transitions.py": {
+        "manifestSha256": "12d0e912658fec71102ae056dec75bfbf8bac3eb868820306eee60a4b7c923ac",
+        "actualRawSha256": "12d0e912658fec71102ae056dec75bfbf8bac3eb868820306eee60a4b7c923ac"
+      },
+      "project_utils.py": {
+        "manifestSha256": "e632df3393c4cd84725f9d75a8ca112fa8c97b06de4702b11d70fbfcf3daee1b",
+        "actualRawSha256": "e632df3393c4cd84725f9d75a8ca112fa8c97b06de4702b11d70fbfcf3daee1b"
+      },
+      "resource_paths.py": {
+        "manifestSha256": "faab374cec2a7e4abacc6e2cb9e3a6f250671eea82abdfb3acb057a6d5a8c85a",
+        "actualRawSha256": "faab374cec2a7e4abacc6e2cb9e3a6f250671eea82abdfb3acb057a6d5a8c85a"
+      },
+      "svg_finalize/__init__.py": {
+        "manifestSha256": "70e938bc248b6788a58fe6275d1a3b12601817440b1d4e689d22d3fe6b81d826",
+        "actualRawSha256": "70e938bc248b6788a58fe6275d1a3b12601817440b1d4e689d22d3fe6b81d826"
+      },
+      "svg_finalize/align_embed_images.py": {
+        "manifestSha256": "98db1c10f38c75fa302eb7a64ef4d1195d3f7e35698b5d502023efe6ea802348",
+        "actualRawSha256": "98db1c10f38c75fa302eb7a64ef4d1195d3f7e35698b5d502023efe6ea802348"
+      },
+      "svg_finalize/crop_images.py": {
+        "manifestSha256": "ad51ef4acd69007dca0436e609608912d2dfb37e07979ecd985f9d317238f4ff",
+        "actualRawSha256": "ad51ef4acd69007dca0436e609608912d2dfb37e07979ecd985f9d317238f4ff"
+      },
+      "svg_finalize/embed_icons.py": {
+        "manifestSha256": "e6786bf6496cafad1b89967c75bcc094d64af50b243f95353514da3f38c2a8ba",
+        "actualRawSha256": "e6786bf6496cafad1b89967c75bcc094d64af50b243f95353514da3f38c2a8ba"
+      },
+      "svg_finalize/embed_images.py": {
+        "manifestSha256": "87b8be5633ba167252f605cb6d223937aa9d4a3888a1664c338eb7741f6733de",
+        "actualRawSha256": "87b8be5633ba167252f605cb6d223937aa9d4a3888a1664c338eb7741f6733de"
+      },
+      "svg_finalize/fix_image_aspect.py": {
+        "manifestSha256": "5e0519809ffa278a0de91f9ad6e0abde60053a3fc5204701e4452de9f2ce110f",
+        "actualRawSha256": "5e0519809ffa278a0de91f9ad6e0abde60053a3fc5204701e4452de9f2ce110f"
+      },
+      "svg_finalize/flatten_tspan.py": {
+        "manifestSha256": "dee21b868c443905608d23898e2f68e96820bc3ca729a439ba67a40aa78e6566",
+        "actualRawSha256": "dee21b868c443905608d23898e2f68e96820bc3ca729a439ba67a40aa78e6566"
+      },
+      "svg_finalize/svg_rect_to_path.py": {
+        "manifestSha256": "56fbe63d9e67c5835ac3ebdf25ce6f70e2356e71e1f1c6afd9411a0bb38780c5",
+        "actualRawSha256": "56fbe63d9e67c5835ac3ebdf25ce6f70e2356e71e1f1c6afd9411a0bb38780c5"
+      },
+      "svg_to_pptx/__init__.py": {
+        "manifestSha256": "6ca92e75bb02274044f61700e141481f48c4e970b156b21c31aef9fd362c9df7",
+        "actualRawSha256": "6ca92e75bb02274044f61700e141481f48c4e970b156b21c31aef9fd362c9df7"
+      },
+      "svg_to_pptx/animation_config.py": {
+        "manifestSha256": "a738e1b8e95fa7fcda0156369fd5278d0dbb5d13a6c817f4cd7d39a4614b0afa",
+        "actualRawSha256": "a738e1b8e95fa7fcda0156369fd5278d0dbb5d13a6c817f4cd7d39a4614b0afa"
+      },
+      "svg_to_pptx/conversion_context.py": {
+        "manifestSha256": "275e689795a8065f5d6f37ec155db83d08846ef6c6c8da52a318a09a19a86f40",
+        "actualRawSha256": "275e689795a8065f5d6f37ec155db83d08846ef6c6c8da52a318a09a19a86f40"
+      },
+      "svg_to_pptx/drawingml/__init__.py": {
+        "manifestSha256": "9313e6cb2ce93064d10a3f96f65252241a95300efcbfa3de3455fc5e2d1775dd",
+        "actualRawSha256": "9313e6cb2ce93064d10a3f96f65252241a95300efcbfa3de3455fc5e2d1775dd"
+      },
+      "svg_to_pptx/drawingml/context.py": {
+        "manifestSha256": "96a4286fcb5100c145576d9cebece10977efbb4e48325baaebf23c8b2bf61d1a",
+        "actualRawSha256": "96a4286fcb5100c145576d9cebece10977efbb4e48325baaebf23c8b2bf61d1a"
+      },
+      "svg_to_pptx/drawingml/converter.py": {
+        "manifestSha256": "337ef9bb9b972113bedf2b14fb598379fd566935d9d626adfb3aa926681fe423",
+        "actualRawSha256": "337ef9bb9b972113bedf2b14fb598379fd566935d9d626adfb3aa926681fe423"
+      },
+      "svg_to_pptx/drawingml/elements.py": {
+        "manifestSha256": "4e7c8260422a63982ef72aac44c7cf840f7d46ecf0039cba3286d48ccedba5a5",
+        "actualRawSha256": "4e7c8260422a63982ef72aac44c7cf840f7d46ecf0039cba3286d48ccedba5a5"
+      },
+      "svg_to_pptx/drawingml/paths.py": {
+        "manifestSha256": "155496190ddb9322f577e21e5d665916635935b5a8c417a8bf73888c9ac51262",
+        "actualRawSha256": "155496190ddb9322f577e21e5d665916635935b5a8c417a8bf73888c9ac51262"
+      },
+      "svg_to_pptx/drawingml/styles.py": {
+        "manifestSha256": "bc09854175b2973621bc8669ff68ebe4bda0f285dad7b45dcc82537b05bae036",
+        "actualRawSha256": "bc09854175b2973621bc8669ff68ebe4bda0f285dad7b45dcc82537b05bae036"
+      },
+      "svg_to_pptx/drawingml/theme_colors.py": {
+        "manifestSha256": "c632de1a8453fa60398b2f6dc3075c0d8c7ec20caf94a0089f624b08e412a573",
+        "actualRawSha256": "c632de1a8453fa60398b2f6dc3075c0d8c7ec20caf94a0089f624b08e412a573"
+      },
+      "svg_to_pptx/drawingml/theme_fonts.py": {
+        "manifestSha256": "d280dd0204f6ccce997f9b9fe9882037fec4b05d9e7fa611f61cbeb01262c978",
+        "actualRawSha256": "d280dd0204f6ccce997f9b9fe9882037fec4b05d9e7fa611f61cbeb01262c978"
+      },
+      "svg_to_pptx/drawingml/utils.py": {
+        "manifestSha256": "49a2ab7d7c5673b3733f399ec257f842c4e94eed475078a7131200a3556a2746",
+        "actualRawSha256": "49a2ab7d7c5673b3733f399ec257f842c4e94eed475078a7131200a3556a2746"
+      },
+      "svg_to_pptx/geometry_properties.py": {
+        "manifestSha256": "4408dbc0cc6b9b392ef1d97c613595a5f61b3b6107c79ea892b28365b874de0e",
+        "actualRawSha256": "4408dbc0cc6b9b392ef1d97c613595a5f61b3b6107c79ea892b28365b874de0e"
+      },
+      "svg_to_pptx/native_objects/__init__.py": {
+        "manifestSha256": "41ec5af48a25a9c96e91afb6b4350d587372eaade44c2275e6041805c9769890",
+        "actualRawSha256": "41ec5af48a25a9c96e91afb6b4350d587372eaade44c2275e6041805c9769890"
+      },
+      "svg_to_pptx/native_objects/chart_data.py": {
+        "manifestSha256": "828081eb2128afda818309c5f3da0f261c65047bc1480584dcb2bea647064748",
+        "actualRawSha256": "828081eb2128afda818309c5f3da0f261c65047bc1480584dcb2bea647064748"
+      },
+      "svg_to_pptx/native_objects/chart_style.py": {
+        "manifestSha256": "b96478dbbf037b8a83baecb01b4c6a52eda4fc19227ac09b55c8738c3c261446",
+        "actualRawSha256": "b96478dbbf037b8a83baecb01b4c6a52eda4fc19227ac09b55c8738c3c261446"
+      },
+      "svg_to_pptx/native_objects/chart_xml.py": {
+        "manifestSha256": "0b51015f7df6771024c1f5a519b9c925677c5256a0a41d53697546667a8ccd4d",
+        "actualRawSha256": "0b51015f7df6771024c1f5a519b9c925677c5256a0a41d53697546667a8ccd4d"
+      },
+      "svg_to_pptx/native_objects/chartex.py": {
+        "manifestSha256": "58301af31c7ac33795b3a95577f1b90402a446bf87579d149bf7b97d79970b61",
+        "actualRawSha256": "58301af31c7ac33795b3a95577f1b90402a446bf87579d149bf7b97d79970b61"
+      },
+      "svg_to_pptx/native_objects/fallback_hash.py": {
+        "manifestSha256": "354da4a4b2c0626af530e9e3f91dced0d93d99dd34e46e2d8320cfc26301d170",
+        "actualRawSha256": "354da4a4b2c0626af530e9e3f91dced0d93d99dd34e46e2d8320cfc26301d170"
+      },
+      "svg_to_pptx/native_objects/marker_common.py": {
+        "manifestSha256": "729b4d400294310cc3c93615629c111f3b314c5dd503842825c0a8847dc525fc",
+        "actualRawSha256": "729b4d400294310cc3c93615629c111f3b314c5dd503842825c0a8847dc525fc"
+      },
+      "svg_to_pptx/native_objects/marker_status.py": {
+        "manifestSha256": "d055178f48b9ca12eded206b53cbe53489111c2e2dc8bdb8e86b2ce637edc9ec",
+        "actualRawSha256": "d055178f48b9ca12eded206b53cbe53489111c2e2dc8bdb8e86b2ce637edc9ec"
+      },
+      "svg_to_pptx/native_objects/table.py": {
+        "manifestSha256": "ca1562e42299dd934f538eb63538c6c645062e02ef5622a41a4dea6f9acd6344",
+        "actualRawSha256": "ca1562e42299dd934f538eb63538c6c645062e02ef5622a41a4dea6f9acd6344"
+      },
+      "svg_to_pptx/native_objects/workbook.py": {
+        "manifestSha256": "f725bb2dc58aadc8ffc293bba994a91cf0477b871829fffbe965acaa36a5b3ea",
+        "actualRawSha256": "f725bb2dc58aadc8ffc293bba994a91cf0477b871829fffbe965acaa36a5b3ea"
+      },
+      "svg_to_pptx/pptx_package/__init__.py": {
+        "manifestSha256": "78dce81eda479c89d16308e13a536bcd45de039778d80eb0f5a2184415c42f2d",
+        "actualRawSha256": "78dce81eda479c89d16308e13a536bcd45de039778d80eb0f5a2184415c42f2d"
+      },
+      "svg_to_pptx/pptx_package/builder.py": {
+        "manifestSha256": "6b61bf78ae04141903caa73a4fd408f81c5b6e8ce9ba43769ad0ac253e16c2dd",
+        "actualRawSha256": "6b61bf78ae04141903caa73a4fd408f81c5b6e8ce9ba43769ad0ac253e16c2dd"
+      },
+      "svg_to_pptx/pptx_package/cli.py": {
+        "manifestSha256": "5bdd8f3b638ff53e7f5457025a4e926a1078a5df0f18ef86ac430c87bf9a0e7d",
+        "actualRawSha256": "5bdd8f3b638ff53e7f5457025a4e926a1078a5df0f18ef86ac430c87bf9a0e7d"
+      },
+      "svg_to_pptx/pptx_package/dimensions.py": {
+        "manifestSha256": "e4edd463153fcedf64c33bd485a13fab1abab378339942641035ea3a3e311e61",
+        "actualRawSha256": "e4edd463153fcedf64c33bd485a13fab1abab378339942641035ea3a3e311e61"
+      },
+      "svg_to_pptx/pptx_package/discovery.py": {
+        "manifestSha256": "59133176b309b46d8f6f440b7eb1f1015c2ffc9ebf48fe182af056aa88694683",
+        "actualRawSha256": "59133176b309b46d8f6f440b7eb1f1015c2ffc9ebf48fe182af056aa88694683"
+      },
+      "svg_to_pptx/pptx_package/media.py": {
+        "manifestSha256": "5d359bfc890d151160a980b46ebc3299efe89972fc5d3972956897c88eef87a3",
+        "actualRawSha256": "5d359bfc890d151160a980b46ebc3299efe89972fc5d3972956897c88eef87a3"
+      },
+      "svg_to_pptx/pptx_package/narration.py": {
+        "manifestSha256": "a5887ce598c4a8020141bd19471f9393a2761e48209a473c3b26125be4fc9c89",
+        "actualRawSha256": "a5887ce598c4a8020141bd19471f9393a2761e48209a473c3b26125be4fc9c89"
+      },
+      "svg_to_pptx/pptx_package/notes.py": {
+        "manifestSha256": "6a8a1a2581eda04a8db7388098570f87b5d4c38a1506a965e7ee4c31f89b18ec",
+        "actualRawSha256": "6a8a1a2581eda04a8db7388098570f87b5d4c38a1506a965e7ee4c31f89b18ec"
+      },
+      "svg_to_pptx/pptx_package/slide_xml.py": {
+        "manifestSha256": "b9b8970e262601940cc9b617fc7e71c4597f49de546e88797f8ce6986d7154d1",
+        "actualRawSha256": "b9b8970e262601940cc9b617fc7e71c4597f49de546e88797f8ce6986d7154d1"
+      },
+      "svg_to_pptx/pptx_package/template_structure.py": {
+        "manifestSha256": "5a50072355496d63152b8ffd98aba83a311b99ab258ad7b01cc3173b3b33b80b",
+        "actualRawSha256": "5a50072355496d63152b8ffd98aba83a311b99ab258ad7b01cc3173b3b33b80b"
+      },
+      "svg_to_pptx/pptx_package/template_validation.py": {
+        "manifestSha256": "1545160cee3c129ad62192213e1c5d8eb617c80a4b0e639e7828c2d980863802",
+        "actualRawSha256": "1545160cee3c129ad62192213e1c5d8eb617c80a4b0e639e7828c2d980863802"
+      },
+      "svg_to_pptx/semantic_markers.py": {
+        "manifestSha256": "027101bda2ac4917a6900b7b440dfaef5ffaa5670a1abcaa166357322d7e3754",
+        "actualRawSha256": "027101bda2ac4917a6900b7b440dfaef5ffaa5670a1abcaa166357322d7e3754"
+      },
+      "svg_to_pptx/tspan_flattener.py": {
+        "manifestSha256": "3a6c21ef027041e4eb2c617f3c6419d46f86c2bad95efafaad29927b610ee404",
+        "actualRawSha256": "3a6c21ef027041e4eb2c617f3c6419d46f86c2bad95efafaad29927b610ee404"
+      },
+      "svg_to_pptx/use_expander.py": {
+        "manifestSha256": "9d25c63caed8e06d59cf25322515bfccdfb70ec3d70dbfadec70716764dab17c",
+        "actualRawSha256": "9d25c63caed8e06d59cf25322515bfccdfb70ec3d70dbfadec70716764dab17c"
+      }
+    }
+  },
+  "ledgers": [
+    {
+      "ledgerAttribute": "CONVERTER_LEDGER",
+      "name": "svg-pptx-converter",
+      "current": "svg-pptx-converter/1",
+      "inventory": [
+        "vendor/slide_master/MANIFEST.json",
+        "services/generation_core/drivers/svg/export_projection.py",
+        "services/generation_core/drivers/svg/export_scene.py",
+        "services/generation_core/drivers/svg/export_chart_style.py",
+        "workers/public_svg_pptx_convert.py",
+        "workers/svg_common_header_export.py",
+        "workers/svg_common_header_export_v2.py",
+        "services/svg_common_header_export_evidence.py",
+        "services/svg_pptx_font_embedding.py",
+        "services/svg_pptx_font_subset.py",
+        "services/svg_templates/frame_native_text.py"
+      ],
+      "lfPosixAnchor": "52b87dbae3b651a8a2eba3b1bceac779f375d4ab94ed8f030af8adde933b88a8",
+      "raw": "d02e879e2ec12c7481b46725aba80bc052e25d800cac6e807ffe0b996874a394",
+      "reviewedKey": "82c2b1c3b18a71ca0c6919fa43ec6132f347814886c5809441caf001a17ae228",
+      "checkoutAnchor": "45d5f784269dd9ba95292dfbd0dbd9972bd6814b603611fd95488e7b88728dae",
+      "resolvedIdentity": "45d5f784269dd9ba95292dfbd0dbd9972bd6814b603611fd95488e7b88728dae",
+      "mappedRevision": "svg-pptx-converter/1",
+      "acceptedPreviousKey": "82c2b1c3b18a71ca0c6919fa43ec6132f347814886c5809441caf001a17ae228",
+      "acceptedReviewedCount": 4,
+      "currentReviewedCount": 4,
+      "addedKeysComparedWithAcceptedF199": [],
+      "allAcceptedKeysPreserved": true,
+      "anchorExpressionUnchanged": true,
+      "currentExpressionUnchanged": true
+    },
+    {
+      "ledgerAttribute": "COMMON_HEADER_VERIFIER_LEDGER",
+      "name": "svg-common-header-verifier",
+      "current": "svg-common-header-verifier/1",
+      "inventory": [
+        "services/svg_common_header_export_evidence.py",
+        "services/svg_common_header_v2.py",
+        "services/svg_common_header_v2_geometry.py",
+        "services/svg_common_header.py",
+        "services/svg_renderer.py",
+        "services/svg_text_overlap.py",
+        "workers/svg_common_header_export_v2.py",
+        "workers/svg_common_header_export.py",
+        "services/svg_export_page_evidence.py",
+        "services/svg_export_quality.py",
+        "services/generation_core/drivers/svg/render.py",
+        "services/svg_master_furniture.py",
+        "utils/slide_capture.py",
+        "utils/slide_capture_chart_adapter.py",
+        "utils/slide_capture_chart_paint.py",
+        "utils/slide_capture_chart_text.py",
+        "utils/slide_capture_chart_support.py",
+        "utils/slide_capture_worker_client.py",
+        "utils/renderer_isolation.py",
+        "utils/authored_renderer_worker.py",
+        "utils/authored_renderer_session.py",
+        "utils/renderer_worker_policy.py",
+        "utils/slide_capture_pipe_render.py",
+        "utils/slide_capture_glyph_probe.py",
+        "utils/slide_capture_local_fit.py",
+        "utils/authored_dom_quality.py",
+        "utils/authored_fit_edits.py",
+        "utils/authored_qid_namespace.py",
+        "utils/authored_dom_tags.py",
+        "utils/slide_capture_chart_timing.py"
+      ],
+      "lfPosixAnchor": "sha256:86232705ab2c98b9e19f18193e5ce4fadafe969f6d7de892cbc956899be263e0",
+      "raw": "sha256:9e61b5f410fedb5b11500cfa9d188ef76c2ed1fae3b40113d77288e58b1c8b9e",
+      "reviewedKey": "sha256:fa334b37935ad6b4c80be221002323c3ea727802168165064bb1ab051a0451e9",
+      "checkoutAnchor": "sha256:575d383ba0f836bdb14e4e2ea9595769be4848f6c0c42c9659cd8b5e8369f056",
+      "resolvedIdentity": "sha256:575d383ba0f836bdb14e4e2ea9595769be4848f6c0c42c9659cd8b5e8369f056",
+      "mappedRevision": "svg-common-header-verifier/1",
+      "acceptedPreviousKey": "sha256:8fa7c744b7d81233953c5833f4afff8f11149e062a7c2d6ec5e1bed64025f358",
+      "acceptedReviewedCount": 9,
+      "currentReviewedCount": 10,
+      "addedKeysComparedWithAcceptedF199": [
+        "sha256:fa334b37935ad6b4c80be221002323c3ea727802168165064bb1ab051a0451e9"
+      ],
+      "allAcceptedKeysPreserved": true,
+      "anchorExpressionUnchanged": true,
+      "currentExpressionUnchanged": true
+    },
+    {
+      "ledgerAttribute": "WHOLE_PAGE_VERIFIER_LEDGER",
+      "name": "svg-whole-page-verifier",
+      "current": "svg-whole-page-verifier/1",
+      "inventory": [
+        "services/svg_export_whole_page_verifier.py",
+        "services/svg_pptx_font_embedding.py",
+        "services/svg_pptx_font_subset.py",
+        "services/svg_trusted_fonts.py",
+        "services/authored_vnext/semantic/typography.py",
+        "utils/svg_template_fonts.py",
+        "services/svg_text_advance.py",
+        "services/svg_export_whole_page_adapter.py",
+        "services/svg_export_source_preservation.py",
+        "services/svg_export_operation.py",
+        "services/svg_export_bundle.py",
+        "services/svg_export_identity.py",
+        "services/svg_export_quality.py",
+        "services/svg_final_pptx_review.py",
+        "services/svg_quality_review_service.py",
+        "models/svg_quality_review.py",
+        "services/generation_core/quality/vision_advisory.py",
+        "services/generation_core/quality/vision_advisory_prompt.py",
+        "services/svg_source_layout.py",
+        "services/svg_source_preset_shapes.py",
+        "services/svg_source_charts.py",
+        "services/svg_source_native_tables.py",
+        "services/generation_core/drivers/svg/native_chart_visual.py",
+        "services/generation_core/drivers/svg/export_chart_style.py",
+        "services/generation_core/drivers/svg/native_chart.py",
+        "services/generation_core/drivers/svg/native_geometry.py",
+        "services/svg_contract.py",
+        "services/source_content/manifest_store.py",
+        "services/source_content/contracts.py",
+        "services/source_content/digests.py",
+        "services/source_content/pptx_chart_provenance.py",
+        "services/source_content/pptx_package_parts.py",
+        "services/source_content/pptx_extraction_constants.py",
+        "services/source_content/security.py",
+        "workers/public_svg_export_worker.py",
+        "workers/public_svg_whole_page_convert.py",
+        "workers/public_svg_pptx_readback.py",
+        "workers/public_svg_pptx_render.py",
+        "services/generation_core/drivers/svg/native_chart_evidence.py",
+        "services/generation_core/drivers/svg/native_requirements.py",
+        "services/generation_core/drivers/svg/prose_chart_literal.py",
+        "services/generation_core/drivers/svg/chart_content_cartesian.py",
+        "services/generation_core/drivers/svg/chart_content_polar.py",
+        "services/generation_core/drivers/svg/chart_content_paint.py",
+        "services/generation_core/drivers/svg/native_declarations.py",
+        "services/generation_core/drivers/svg/native_paint.py",
+        "services/generation_core/drivers/svg/native_publish.py",
+        "services/generation_core/drivers/svg/native_table.py",
+        "services/generation_core/drivers/svg/fixed_axis_migration.py",
+        "services/generation_core/drivers/svg/fallback.py",
+        "services/generation_core/drivers/svg/source_paint_occlusion.py",
+        "services/generation_core/drivers/svg/source_classification_association.py",
+        "services/generation_core/native_objects/__init__.py",
+        "services/generation_core/native_objects/model.py",
+        "services/generation_core/native_objects/payload.py",
+        "services/source_content/pptx_custom_geometry.py",
+        "vendor/slide_master/pptx_shapes/__init__.py",
+        "vendor/slide_master/pptx_shapes/errors.py",
+        "vendor/slide_master/pptx_shapes/formula.py",
+        "vendor/slide_master/pptx_shapes/loader.py",
+        "vendor/slide_master/pptx_shapes/models.py",
+        "vendor/slide_master/pptx_shapes/registry.py",
+        "vendor/slide_master/pptx_shapes/semantic_hash.py",
+        "vendor/slide_master/pptx_shapes/xml_safety.py",
+        "vendor/slide_master/pptx_shapes/data/presetShapeDefinitions.xml",
+        "vendor/slide_master/pptx_shapes/data/shape_type_values.txt",
+        "services/svg_text_overlap.py",
+        "services/generation_core/authoring/author_slide_svg.py"
+      ],
+      "lfPosixAnchor": "aa559f555120a1600b4a011ec2e0e00b013074649adad43703d5d649e2cb2469",
+      "raw": "f1a4b8e3eb67da284a3f62ffb241b17e24f2c9aa2e3cddfbec1969dbaa05cbaf",
+      "reviewedKey": "2bb40cac39ddf79d9a81a5db0becceb539d39e25233a6a1bb3b08e8b6ddf450f",
+      "checkoutAnchor": "e4994b92a0f5e52839b8c930aa96b30a039342246338593b2dec063a794f6f41",
+      "resolvedIdentity": "e4994b92a0f5e52839b8c930aa96b30a039342246338593b2dec063a794f6f41",
+      "mappedRevision": "svg-whole-page-verifier/1",
+      "acceptedPreviousKey": "2bb40cac39ddf79d9a81a5db0becceb539d39e25233a6a1bb3b08e8b6ddf450f",
+      "acceptedReviewedCount": 6,
+      "currentReviewedCount": 6,
+      "addedKeysComparedWithAcceptedF199": [],
+      "allAcceptedKeysPreserved": true,
+      "anchorExpressionUnchanged": true,
+      "currentExpressionUnchanged": true
+    },
+    {
+      "ledgerAttribute": "PARTIAL_RECOVERY_CODE_LEDGER",
+      "name": "svg-partial-recovery-code",
+      "current": "svg-partial-recovery-code/1",
+      "inventory": [
+        "services/svg_partial_recovery.py",
+        "services/svg_source_local_review_continuation.py",
+        "services/generation_core/drivers/svg/collect.py",
+        "services/generation_core/drivers/svg/author.py",
+        "services/generation_core/drivers/svg/attempt_cause.py",
+        "services/generation_core/drivers/svg/render.py",
+        "services/generation_core/drivers/svg/quality.py",
+        "services/generation_core/drivers/svg/quality_recovery.py",
+        "services/generation_core/quality/vision_advisory.py",
+        "services/generation_core/quality/vision_advisory_prompt.py",
+        "services/generation_core/quality/review_coverage.py",
+        "services/svg_source_layout.py",
+        "services/svg_source_native_tables.py",
+        "services/document_canvas_generation.py",
+        "services/presentation_generation_staging.py",
+        "services/presentation_generation_pipeline.py",
+        "services/workspace_service.py",
+        "services/svg_authoring_profile.py",
+        "services/provider_durable_admission.py",
+        "services/provider_usage_instrumentation.py",
+        "services/provider_runtime_job_registration.py",
+        "services/generation_core/drivers/svg/partial_quality_recovery.py",
+        "services/svg_presentation_prepare.py",
+        "services/svg_common_header.py",
+        "services/svg_common_header_generation.py",
+        "services/svg_common_header_design_checkpoint.py",
+        "services/svg_common_header_titles.py",
+        "services/svg_common_header_title_budget.py",
+        "services/svg_generation_inputs.py",
+        "services/svg_presentation_checkpoint.py",
+        "services/svg_generation_assets.py",
+        "services/svg_default_fonts.py",
+        "services/svg_contract.py",
+        "utils/svg_validation.py",
+        "services/svg_renderer.py",
+        "utils/svg_template_fonts.py",
+        "services/authored_vnext/semantic/typography.py",
+        "services/svg_text_advance.py",
+        "services/svg_text_overlap.py",
+        "services/svg_master_furniture.py",
+        "services/generation_core/drivers/svg/native_declarations.py",
+        "services/generation_core/drivers/svg/asset_slots.py",
+        "services/generation_core/drivers/svg/embed_assets.py",
+        "services/generation_core/drivers/svg/icon_flatten.py",
+        "services/generation_core/drivers/svg/icon_geometry.py",
+        "services/generation_core/assets/offer.py",
+        "services/generation_core/assets/vector_offer.py",
+        "services/generation_core/assets/vector_illustration.py",
+        "services/svg_templates/generation.py",
+        "services/svg_templates/body_composition.py",
+        "services/svg_templates/picture_policy.py",
+        "services/generation_core/assets/infographic_plan.py",
+        "services/generation_core/assets/infographic_assets.py",
+        "utils/llm_calls/draw_vector_illustrations.py",
+        "services/generation_core/drivers/svg/native_chart_evidence.py",
+        "services/generation_core/drivers/svg/native_chart.py",
+        "services/generation_core/drivers/svg/native_requirements.py",
+        "services/generation_core/drivers/svg/prose_chart_literal.py",
+        "services/generation_core/drivers/svg/native_geometry.py",
+        "services/generation_core/drivers/svg/chart_content_cartesian.py",
+        "services/generation_core/drivers/svg/chart_content_polar.py",
+        "services/generation_core/drivers/svg/chart_content_paint.py",
+        "services/generation_core/drivers/svg/native_chart_visual.py",
+        "services/generation_core/drivers/svg/native_paint.py",
+        "services/generation_core/drivers/svg/native_publish.py",
+        "services/generation_core/drivers/svg/native_table.py",
+        "services/generation_core/drivers/svg/export_chart_style.py",
+        "services/generation_core/drivers/svg/fixed_axis_migration.py",
+        "services/generation_core/drivers/svg/fallback.py",
+        "services/generation_core/drivers/svg/source_paint_occlusion.py",
+        "services/generation_core/drivers/svg/source_classification_association.py",
+        "services/generation_core/native_objects/__init__.py",
+        "services/generation_core/native_objects/model.py",
+        "services/generation_core/native_objects/payload.py",
+        "utils/slide_capture_chart_adapter.py",
+        "utils/slide_capture_chart_paint.py",
+        "utils/slide_capture_chart_text.py",
+        "utils/slide_capture_chart_support.py",
+        "utils/slide_capture_worker_client.py",
+        "utils/renderer_isolation.py",
+        "utils/authored_renderer_worker.py",
+        "utils/authored_renderer_session.py",
+        "utils/renderer_worker_policy.py",
+        "utils/slide_capture_pipe_render.py",
+        "services/svg_source_preset_shapes.py",
+        "services/source_content/pptx_custom_geometry.py",
+        "vendor/slide_master/pptx_shapes/__init__.py",
+        "vendor/slide_master/pptx_shapes/errors.py",
+        "vendor/slide_master/pptx_shapes/formula.py",
+        "vendor/slide_master/pptx_shapes/loader.py",
+        "vendor/slide_master/pptx_shapes/models.py",
+        "vendor/slide_master/pptx_shapes/registry.py",
+        "vendor/slide_master/pptx_shapes/semantic_hash.py",
+        "vendor/slide_master/pptx_shapes/xml_safety.py",
+        "vendor/slide_master/pptx_shapes/data/presetShapeDefinitions.xml",
+        "vendor/slide_master/pptx_shapes/data/shape_type_values.txt",
+        "utils/slide_capture_glyph_probe.py",
+        "utils/slide_capture_local_fit.py",
+        "utils/authored_dom_quality.py",
+        "utils/authored_fit_edits.py",
+        "utils/authored_qid_namespace.py",
+        "utils/authored_dom_tags.py",
+        "utils/slide_capture_chart_timing.py",
+        "utils/authored_image_slots.py",
+        "utils/codex_stream_adapter.py",
+        "utils/llm_calls/prepare_svg_common_header_titles.py",
+        "utils/ppt_writing_prompt.py",
+        "services/ppt_writing_policy.py",
+        "services/ppt_writing_visible.py",
+        "services/svg_recovery_source_evidence.py",
+        "services/generation_core/authoring/author_slide_svg.py",
+        "services/svg_author_output_view.py",
+        "services/generation_core/authoring/source_id_alias.py",
+        "services/svg_text_defaults.py",
+        "services/generation_core/authoring/author_source_svg_layout.py",
+        "models/presentation_outline_model.py",
+        "utils/slide_capture_result.py",
+        "utils/slide_capture.py",
+        "utils/slide_capture_text_ink.py",
+        "services/svg_final_selected_continuation.py"
+      ],
+      "lfPosixAnchor": "91280a73f656aa9b0d49d8701f159aa8474d6228d4fa63e40171a7b6fe5ade1a",
+      "raw": "2d0f63d021d7c8eadc069724af2cef004539c83712564eaa04676b4876b3e71f",
+      "reviewedKey": "b46fbe0f342b19825687d44334e6da6e0abecd1b6fef92c90fccca6f74a6645e",
+      "checkoutAnchor": "378251518ec8f11aea9ca5f9e94688ec1763cfc2eaa467737320515d66f8d3b1",
+      "resolvedIdentity": "378251518ec8f11aea9ca5f9e94688ec1763cfc2eaa467737320515d66f8d3b1",
+      "mappedRevision": "svg-partial-recovery-code/1",
+      "acceptedPreviousKey": "db959aa6cdb0ff323b99d641153a4d18f441ddbd3ad31c5fc3175f836424c69e",
+      "acceptedReviewedCount": 11,
+      "currentReviewedCount": 12,
+      "addedKeysComparedWithAcceptedF199": [
+        "b46fbe0f342b19825687d44334e6da6e0abecd1b6fef92c90fccca6f74a6645e"
+      ],
+      "allAcceptedKeysPreserved": true,
+      "anchorExpressionUnchanged": true,
+      "currentExpressionUnchanged": true
+    },
+    {
+      "ledgerAttribute": "PAGE_RENDER_CODE_LEDGER",
+      "name": "svg-page-render-code",
+      "current": "svg-page-render-code/1",
+      "inventory": [
+        "services/generation_core/drivers/svg/collect.py",
+        "services/generation_core/drivers/svg/author.py",
+        "services/generation_core/drivers/svg/attempt_cause.py",
+        "services/generation_core/drivers/svg/render.py",
+        "services/generation_core/drivers/svg/quality_recovery.py",
+        "services/svg_source_layout.py",
+        "services/svg_source_native_tables.py",
+        "services/document_canvas_generation.py",
+        "services/presentation_generation_staging.py",
+        "services/presentation_generation_pipeline.py",
+        "services/svg_authoring_profile.py",
+        "services/generation_core/drivers/svg/partial_quality_recovery.py",
+        "services/svg_presentation_prepare.py",
+        "services/svg_common_header.py",
+        "services/svg_common_header_generation.py",
+        "services/svg_common_header_design_checkpoint.py",
+        "services/svg_common_header_titles.py",
+        "services/svg_common_header_title_budget.py",
+        "services/svg_generation_inputs.py",
+        "services/svg_presentation_checkpoint.py",
+        "services/svg_generation_assets.py",
+        "services/svg_default_fonts.py",
+        "services/svg_contract.py",
+        "utils/svg_validation.py",
+        "services/svg_renderer.py",
+        "utils/svg_template_fonts.py",
+        "services/authored_vnext/semantic/typography.py",
+        "services/svg_text_advance.py",
+        "services/svg_text_overlap.py",
+        "services/svg_master_furniture.py",
+        "services/generation_core/drivers/svg/native_declarations.py",
+        "services/generation_core/drivers/svg/asset_slots.py",
+        "services/generation_core/drivers/svg/embed_assets.py",
+        "services/generation_core/drivers/svg/icon_flatten.py",
+        "services/generation_core/drivers/svg/icon_geometry.py",
+        "services/generation_core/assets/offer.py",
+        "services/generation_core/assets/vector_offer.py",
+        "services/generation_core/assets/vector_illustration.py",
+        "services/svg_templates/generation.py",
+        "services/svg_templates/body_composition.py",
+        "services/svg_templates/picture_policy.py",
+        "services/generation_core/assets/infographic_plan.py",
+        "services/generation_core/assets/infographic_assets.py",
+        "utils/llm_calls/draw_vector_illustrations.py",
+        "services/generation_core/drivers/svg/native_chart_evidence.py",
+        "services/generation_core/drivers/svg/native_chart.py",
+        "services/generation_core/drivers/svg/native_requirements.py",
+        "services/generation_core/drivers/svg/prose_chart_literal.py",
+        "services/generation_core/drivers/svg/native_geometry.py",
+        "services/generation_core/drivers/svg/chart_content_cartesian.py",
+        "services/generation_core/drivers/svg/chart_content_polar.py",
+        "services/generation_core/drivers/svg/chart_content_paint.py",
+        "services/generation_core/drivers/svg/native_chart_visual.py",
+        "services/generation_core/drivers/svg/native_paint.py",
+        "services/generation_core/drivers/svg/native_publish.py",
+        "services/generation_core/drivers/svg/native_table.py",
+        "services/generation_core/drivers/svg/export_chart_style.py",
+        "services/generation_core/drivers/svg/fixed_axis_migration.py",
+        "services/generation_core/drivers/svg/fallback.py",
+        "services/generation_core/drivers/svg/source_paint_occlusion.py",
+        "services/generation_core/drivers/svg/source_classification_association.py",
+        "services/generation_core/native_objects/__init__.py",
+        "services/generation_core/native_objects/model.py",
+        "services/generation_core/native_objects/payload.py",
+        "utils/slide_capture_chart_adapter.py",
+        "utils/slide_capture_chart_paint.py",
+        "utils/slide_capture_chart_text.py",
+        "utils/slide_capture_chart_support.py",
+        "utils/slide_capture_worker_client.py",
+        "utils/renderer_isolation.py",
+        "utils/authored_renderer_worker.py",
+        "utils/authored_renderer_session.py",
+        "utils/renderer_worker_policy.py",
+        "utils/slide_capture_pipe_render.py",
+        "services/svg_source_preset_shapes.py",
+        "services/source_content/pptx_custom_geometry.py",
+        "vendor/slide_master/pptx_shapes/__init__.py",
+        "vendor/slide_master/pptx_shapes/errors.py",
+        "vendor/slide_master/pptx_shapes/formula.py",
+        "vendor/slide_master/pptx_shapes/loader.py",
+        "vendor/slide_master/pptx_shapes/models.py",
+        "vendor/slide_master/pptx_shapes/registry.py",
+        "vendor/slide_master/pptx_shapes/semantic_hash.py",
+        "vendor/slide_master/pptx_shapes/xml_safety.py",
+        "vendor/slide_master/pptx_shapes/data/presetShapeDefinitions.xml",
+        "vendor/slide_master/pptx_shapes/data/shape_type_values.txt",
+        "utils/slide_capture_glyph_probe.py",
+        "utils/slide_capture_local_fit.py",
+        "utils/authored_dom_quality.py",
+        "utils/authored_fit_edits.py",
+        "utils/authored_qid_namespace.py",
+        "utils/authored_dom_tags.py",
+        "utils/slide_capture_chart_timing.py",
+        "utils/authored_image_slots.py",
+        "utils/codex_stream_adapter.py",
+        "utils/llm_calls/prepare_svg_common_header_titles.py",
+        "utils/ppt_writing_prompt.py",
+        "services/ppt_writing_policy.py",
+        "services/ppt_writing_visible.py",
+        "services/svg_recovery_source_evidence.py",
+        "services/generation_core/authoring/author_slide_svg.py",
+        "services/svg_author_output_view.py",
+        "services/generation_core/authoring/source_id_alias.py",
+        "services/svg_text_defaults.py",
+        "services/generation_core/authoring/author_source_svg_layout.py",
+        "models/presentation_outline_model.py",
+        "utils/slide_capture_result.py",
+        "utils/slide_capture.py",
+        "utils/slide_capture_text_ink.py",
+        "services/svg_final_selected_continuation.py"
+      ],
+      "lfPosixAnchor": "80cbd150c5d4f35086749c0faefadcd15181f3a74019c5cf43247bbb70b8ce36",
+      "raw": "4d3de2c79ab164b6708ef13fd169b5ead34a907fedd6ed3c9f6442a505348b54",
+      "reviewedKey": "1dff1ddd35525d61ba752705fc74179e4d7ffbfedd6c23a5fe035590068173f7",
+      "checkoutAnchor": "7301c3c4f11f43bd551274eecffff2fb6e8ace93a97f474ddf018eac398df31d",
+      "resolvedIdentity": "7301c3c4f11f43bd551274eecffff2fb6e8ace93a97f474ddf018eac398df31d",
+      "mappedRevision": "svg-page-render-code/1",
+      "acceptedPreviousKey": "db764d70860c09b34b18d4a71baef943c56c51a8a4a51487c7a8b92926dd0053",
+      "acceptedReviewedCount": 10,
+      "currentReviewedCount": 11,
+      "addedKeysComparedWithAcceptedF199": [
+        "1dff1ddd35525d61ba752705fc74179e4d7ffbfedd6c23a5fe035590068173f7"
+      ],
+      "allAcceptedKeysPreserved": true,
+      "anchorExpressionUnchanged": true,
+      "currentExpressionUnchanged": true
+    }
+  ],
+  "sourceFiles": {
+    "models/presentation_outline_model.py": {
+      "rawSha256": "912401ffce905ca8b9e83c18f56eb79ce787c75bd128120fa0c0d724f58eb24e",
+      "lfSha256": "98bfe0ada17614ae087dadae55249ddfafb1bb7e452bf84b397bfb670477bf49"
+    },
+    "models/svg_quality_review.py": {
+      "rawSha256": "6c341dd6919e4d5a14ef9318d64843925a085d8a48da9df7af565be3f9faa293",
+      "lfSha256": "6c341dd6919e4d5a14ef9318d64843925a085d8a48da9df7af565be3f9faa293"
+    },
+    "services/authored_vnext/semantic/typography.py": {
+      "rawSha256": "5c697f53b69f08cdc9b8f5a15143fea7a2187ae43dac3425a1ffae5737ef5f61",
+      "lfSha256": "9960420ffef7a2cf56e741b2680c63937722847302adab388b806c53a701f1b1"
+    },
+    "services/document_canvas_generation.py": {
+      "rawSha256": "f98df79de82b7c8d388985ca2f7aeb3cdf14d739bc2b9c598ba2f3714e470364",
+      "lfSha256": "07315aab2d1dd4a9a46eeedcc983fe6895d1069cd8cf19544f2769dabc27e288"
+    },
+    "services/generation_core/assets/infographic_assets.py": {
+      "rawSha256": "9b24dfec7f00479ba4bb287d5bed2f24e6841b673772077cce24a8e9aec7afbf",
+      "lfSha256": "3d2b9187c62e71cbcc86666fff6f33d2c30af91ac6c0c250f8f136c9c4252ef0"
+    },
+    "services/generation_core/assets/infographic_plan.py": {
+      "rawSha256": "c5e216b8ae7b1f4bb8412a2cdc47a62ab524980338944e071c7bc0a42cf718ad",
+      "lfSha256": "c5e216b8ae7b1f4bb8412a2cdc47a62ab524980338944e071c7bc0a42cf718ad"
+    },
+    "services/generation_core/assets/offer.py": {
+      "rawSha256": "c9a9b32a3cfa5fc584a316e788a10cdb3cb8ba58543673012efdfbddd63182a0",
+      "lfSha256": "c9a9b32a3cfa5fc584a316e788a10cdb3cb8ba58543673012efdfbddd63182a0"
+    },
+    "services/generation_core/assets/vector_illustration.py": {
+      "rawSha256": "9edc3ace921863aa2e24576783bea1aa39200daa61cc502288f6c5f2a51f0fef",
+      "lfSha256": "4cf36981cf34251cb7703174ada97d218baed58fa15c761a07582b6d52951b6c"
+    },
+    "services/generation_core/assets/vector_offer.py": {
+      "rawSha256": "cb961b36e6340e5c2ef254c560888d3c9da02f208d1ba5f6ca4f2ebf57eafe40",
+      "lfSha256": "cb961b36e6340e5c2ef254c560888d3c9da02f208d1ba5f6ca4f2ebf57eafe40"
+    },
+    "services/generation_core/authoring/author_slide_svg.py": {
+      "rawSha256": "8389f6979c50b2a966f6629f2770d79a91fe0a7202d8efb6bd557ccf033dc6b5",
+      "lfSha256": "09b6623b78c7f196d18d5d219fa34b8ba0bbadb85428b1b917685d70993aeef3"
+    },
+    "services/generation_core/authoring/author_source_svg_layout.py": {
+      "rawSha256": "5b91061977700113cfb48aa442275eb624257d91ba9422c4e0d638587536ca85",
+      "lfSha256": "3a9f7d9270709ffdca499fb6ed2b10be84f4dfdd6cfe341737137cf747475a3a"
+    },
+    "services/generation_core/authoring/source_id_alias.py": {
+      "rawSha256": "fdfc57caf4d2a8bca963c817285cb83c438205719dcf5208246cbcdb3f545fa3",
+      "lfSha256": "71d98e39e8298d85bafdb09302c03df92e8344eeeb5eb91feb34b75d1e4851c5"
+    },
+    "services/generation_core/drivers/svg/asset_slots.py": {
+      "rawSha256": "cebf446db844add4d82fcb0520588cbbed9df52d53029a4c2663c515ad9302b0",
+      "lfSha256": "cebf446db844add4d82fcb0520588cbbed9df52d53029a4c2663c515ad9302b0"
+    },
+    "services/generation_core/drivers/svg/attempt_cause.py": {
+      "rawSha256": "9e3796ac2aa9074a62e3b05c1ea5b8f0e9d9285a1e9cf0880434ec53f9228b72",
+      "lfSha256": "8fd66314acd1c7a27ea7753f38256a9ca1e1b8e55e52a4ef88b9a344c5116739"
+    },
+    "services/generation_core/drivers/svg/author.py": {
+      "rawSha256": "65cfde8f6d1f1a8d7e2e4d9161fc19327fd94f0ea258d9ada8de23e407cb7ec4",
+      "lfSha256": "7252c6fd9ce29409cb1bd8fc4ef257e5a46cb79f12f9908a8d63070f5e5447a4"
+    },
+    "services/generation_core/drivers/svg/chart_content_cartesian.py": {
+      "rawSha256": "95cadeaa28b059e067debc5d83a47c9669da0adb4555a0c98d6fbfed4a64e17f",
+      "lfSha256": "95cadeaa28b059e067debc5d83a47c9669da0adb4555a0c98d6fbfed4a64e17f"
+    },
+    "services/generation_core/drivers/svg/chart_content_paint.py": {
+      "rawSha256": "65464e8803c4fe6a74f57ac2864db674821e90301954da65f69d3c0db5f3c2cb",
+      "lfSha256": "65464e8803c4fe6a74f57ac2864db674821e90301954da65f69d3c0db5f3c2cb"
+    },
+    "services/generation_core/drivers/svg/chart_content_polar.py": {
+      "rawSha256": "7c09b5b92f765b59ee95b13157714a177359df4edb72aef777a90fb4f6a10bd6",
+      "lfSha256": "7c09b5b92f765b59ee95b13157714a177359df4edb72aef777a90fb4f6a10bd6"
+    },
+    "services/generation_core/drivers/svg/collect.py": {
+      "rawSha256": "2d3551c584ba0c0419b749592521ad41f1989887badc48462ec8b2b4819d1d60",
+      "lfSha256": "2c7db8461dcf44ff05af456c60d17b2cffc73c7966d95b065b21e92b8f238283"
+    },
+    "services/generation_core/drivers/svg/embed_assets.py": {
+      "rawSha256": "91a7027f9568b3bf456473cabaca01db86d230f4a1f012afeb29b5ff4c3cbfa0",
+      "lfSha256": "b5c19653795029112c8042c09140404c23b9d79a4f099a456f7dcb3512dce9ed"
+    },
+    "services/generation_core/drivers/svg/export_chart_style.py": {
+      "rawSha256": "fcb8ed17325952caecefd611bc843e91986b22fe1c044be7a9db58d7596a5061",
+      "lfSha256": "fcb8ed17325952caecefd611bc843e91986b22fe1c044be7a9db58d7596a5061"
+    },
+    "services/generation_core/drivers/svg/export_projection.py": {
+      "rawSha256": "64126d9f755d285fdf8fe0de2ab707b59b45347b1fc138562c836c859a2dac2a",
+      "lfSha256": "64126d9f755d285fdf8fe0de2ab707b59b45347b1fc138562c836c859a2dac2a"
+    },
+    "services/generation_core/drivers/svg/export_scene.py": {
+      "rawSha256": "75e0dfed23fea5c6c6be50ce1ba4b26a011b453d5a14b66a8ebdc183fb183a4a",
+      "lfSha256": "75e0dfed23fea5c6c6be50ce1ba4b26a011b453d5a14b66a8ebdc183fb183a4a"
+    },
+    "services/generation_core/drivers/svg/fallback.py": {
+      "rawSha256": "fbd315bea1cc3869babc20b5bde964332b595948346893b3b3dc0c55f693bcfb",
+      "lfSha256": "29ffcccd3f6ad1ee13f9f77fd1298910094944739582a18605e425aaa221838d"
+    },
+    "services/generation_core/drivers/svg/fixed_axis_migration.py": {
+      "rawSha256": "783b43cd769bff6e8bee35cb2cdf124fd38ff74e5fa95196bbf8c8e1de2abcef",
+      "lfSha256": "783b43cd769bff6e8bee35cb2cdf124fd38ff74e5fa95196bbf8c8e1de2abcef"
+    },
+    "services/generation_core/drivers/svg/icon_flatten.py": {
+      "rawSha256": "7f6ac98fc8e250addcdd4dd8a7bd348efbd5c7e6df54fdcabdc416fd57f94ff4",
+      "lfSha256": "37e484ee2f381bbeddaa5fbaadd86fac0c576450ed7a9655723d105656e31f09"
+    },
+    "services/generation_core/drivers/svg/icon_geometry.py": {
+      "rawSha256": "cae5e33c95d0fbc5b8281a33785929a2a6980ab2939c39fab789577aeaf611ba",
+      "lfSha256": "1836ecbbd9684af1b05cdea06f479634ef0560e039a6f3f61e49097ceb73642c"
+    },
+    "services/generation_core/drivers/svg/native_chart.py": {
+      "rawSha256": "76e5e79914f72487532db771a61741cab3e9aa3cca597b6591712520b0750584",
+      "lfSha256": "76e5e79914f72487532db771a61741cab3e9aa3cca597b6591712520b0750584"
+    },
+    "services/generation_core/drivers/svg/native_chart_evidence.py": {
+      "rawSha256": "0ef42d7c44b99138a44fa2d5a0dce10604e53b47d8aca246b94bfb2d469fcdd2",
+      "lfSha256": "3a123da87aed2f4de50d7c56a0a324e391a98ee366fb2f1d186dd4deaa5e1285"
+    },
+    "services/generation_core/drivers/svg/native_chart_visual.py": {
+      "rawSha256": "b4f75ae230168399eb4f74d9d5cda3d8d754d3cebfe750fe8a1dc9bea6ea3d44",
+      "lfSha256": "ba34b79847c268aa2c73ea928f2bc0906d0a59c0fca928b46196adabb6d7e9ea"
+    },
+    "services/generation_core/drivers/svg/native_declarations.py": {
+      "rawSha256": "72ff6429375c97c7f0e534740053ba2610634a0b7d389c76904dd7a11c03096b",
+      "lfSha256": "72ff6429375c97c7f0e534740053ba2610634a0b7d389c76904dd7a11c03096b"
+    },
+    "services/generation_core/drivers/svg/native_geometry.py": {
+      "rawSha256": "8a4fffc2edb10d2f2f2afa6c0fda573755dec4131238eb9f6e72e3ff58975bfc",
+      "lfSha256": "6fae7cbb976f61b8a6cd7fd2c7b40e936c9cd094e62400336d8f759e333ac7f6"
+    },
+    "services/generation_core/drivers/svg/native_paint.py": {
+      "rawSha256": "953427317936e0958306f65659d79295d391da10e87f18429bafcb15a6bdf1aa",
+      "lfSha256": "5b906a05357c1bad4dd29de19d64866b7551cd04f1b43e9bc798d958b4d3933f"
+    },
+    "services/generation_core/drivers/svg/native_publish.py": {
+      "rawSha256": "cbc2419f5e5d1108bffc986e34a76bcb9c5c84c4445f2f9ba17c8bca8467c74e",
+      "lfSha256": "cbc2419f5e5d1108bffc986e34a76bcb9c5c84c4445f2f9ba17c8bca8467c74e"
+    },
+    "services/generation_core/drivers/svg/native_requirements.py": {
+      "rawSha256": "d04a5f80dd7a3f539cfbb9bb5c1cc7f02a181db95f61b6b28411e9ba4c13a478",
+      "lfSha256": "d4092e56d38577b8848c4c7c4757e32c9218c73a565f8e7a05abad5690ae19a6"
+    },
+    "services/generation_core/drivers/svg/native_table.py": {
+      "rawSha256": "77c699756d45108bee048633c03f84245afba363de05a344cfaea7d67c7fd55d",
+      "lfSha256": "a11bad6505dd4682d01599f4e125cce66675430f1f6f567ae365ee0f17686dc2"
+    },
+    "services/generation_core/drivers/svg/partial_quality_recovery.py": {
+      "rawSha256": "cd18aca1ec31092c555fe878198bf04ad71f2ac75d463a6a6345aa4d6e845bae",
+      "lfSha256": "2c996b1e7666ddd81efb8180ccab0b0e75a2d0f718200472a9ac2869ce39c661"
+    },
+    "services/generation_core/drivers/svg/prose_chart_literal.py": {
+      "rawSha256": "e22c1147d6049475d85e012493337296366d3c42d081257c206132a75e52992d",
+      "lfSha256": "2a1f94595223c1b3f59fdd20f7cb5ca7136f87439cdaed3a9ee257c9496a5cce"
+    },
+    "services/generation_core/drivers/svg/quality.py": {
+      "rawSha256": "71d52b35926628cdfa77a476bbc7c3c4d4ddd5c5c2bb8895c13f561898ff0921",
+      "lfSha256": "4526b51bda67eb63d793a0630ec66a044132016dd6054c5cfb73afed98479d8a"
+    },
+    "services/generation_core/drivers/svg/quality_recovery.py": {
+      "rawSha256": "75c94e44f0b670fc4621b209007ab8163c0fcbbc43c59fd20a44bccd29f86466",
+      "lfSha256": "026b375376bd1aef392f273181800ad7d954121bdb308deb1738b6c347f54e55"
+    },
+    "services/generation_core/drivers/svg/render.py": {
+      "rawSha256": "e4bc7ec6528ae1aee383347701c68f0616ad9b026edcc6dc50436fd3bac060c5",
+      "lfSha256": "62987e4aab8c032b2214699e971f895cc00efdce382e8d25f986dbb4c18f622a"
+    },
+    "services/generation_core/drivers/svg/source_classification_association.py": {
+      "rawSha256": "73a3a7df660263008cc73720e93e57aa24782f599c1d29fb50637e6f923a685a",
+      "lfSha256": "65f8ed5e02f036cae6d56bbd6359674ccbb806a4ea4d0d1cf82568a43aa55da7"
+    },
+    "services/generation_core/drivers/svg/source_paint_occlusion.py": {
+      "rawSha256": "95b989e28f4bd9dba07e72d04b919f2ae7c055ac8aadc515fb2b0747221e7673",
+      "lfSha256": "95b989e28f4bd9dba07e72d04b919f2ae7c055ac8aadc515fb2b0747221e7673"
+    },
+    "services/generation_core/native_objects/__init__.py": {
+      "rawSha256": "cea3a198213c2c2dfca4d01e8cc61364a8a9634cbe33e22304d56cb36319aa0c",
+      "lfSha256": "64a7a2adfe39c98580000ea024be56cf1ed2d60ff8bf1a1adb2843ab491ecc09"
+    },
+    "services/generation_core/native_objects/model.py": {
+      "rawSha256": "774c30461416142d63b998e100a977abff57d6ed5996a67a90f66010b4e1519f",
+      "lfSha256": "ad0e489cd0a93070a473a4207f417eede006e98b87de31118fa55efac5dfe3ab"
+    },
+    "services/generation_core/native_objects/payload.py": {
+      "rawSha256": "c1118eb71d3ab70470ed1563ad9e36cec0fcc34476f40083f9aacabe6cb05cf9",
+      "lfSha256": "c1118eb71d3ab70470ed1563ad9e36cec0fcc34476f40083f9aacabe6cb05cf9"
+    },
+    "services/generation_core/quality/review_coverage.py": {
+      "rawSha256": "6a19d370f6065f8830484b6025e2866e4d79eae9e820745bca7203385c064152",
+      "lfSha256": "833f85e7a78df0c1b1cdd5752768923c385072cac3893d8dcc3f70a1aaa088ea"
+    },
+    "services/generation_core/quality/vision_advisory.py": {
+      "rawSha256": "c3bca0938f0f2c73a57038bc3958327e71636bbf3a918871008b03cc41159a92",
+      "lfSha256": "c888bd6015f006bd24b5d81986c1761dd855f624d7a4ab83a2c8f0abe0c9f9e3"
+    },
+    "services/generation_core/quality/vision_advisory_prompt.py": {
+      "rawSha256": "1f687c9bfdebe54748362b03c7cdbdc25201175d84d2df72e7d6b8204edd1c67",
+      "lfSha256": "fce6e11347f660aa0b66a17ee14f531b91a531b59162e741defebb6b791228be"
+    },
+    "services/ppt_writing_policy.py": {
+      "rawSha256": "23350b241a8b6069c6b44e6d8bc4d77b7c0b7d4eb0b1688543649b77468da2e7",
+      "lfSha256": "69831c4dc5886aa26e099c948bf31adb0a1b3b880d2104dd368e9eb7357353a0"
+    },
+    "services/ppt_writing_visible.py": {
+      "rawSha256": "3b6e1784c52fa07bc271edeb6d0fd8737436a1653d0ff554a3f923092c46e156",
+      "lfSha256": "9f62050df418788910e3f810b5ee5f01af57b6409ad365adcfb547224e489c1f"
+    },
+    "services/presentation_generation_pipeline.py": {
+      "rawSha256": "1f5b59cabf029a8cfaa6bd5c1878cb31e8306feb4f2061a67be9273dd3139f47",
+      "lfSha256": "fac6f3d2d05631f5de84d76cd81ab94016b36d74a53096373474051d32c8a048"
+    },
+    "services/presentation_generation_staging.py": {
+      "rawSha256": "e68f706e3da73e3a545d04e1178b48bcfb112501d216e307f2352c7295034418",
+      "lfSha256": "91803bb564886db687021dc19ecc33bec8b8814bd1fdff0a5d8dabfd14909293"
+    },
+    "services/provider_durable_admission.py": {
+      "rawSha256": "31dfebac921a7634d3224e01687976f63577b7e74cd3996160c062bbe5edb083",
+      "lfSha256": "017d3bc087199f1a56a79a43071218645b2dfc758e801a04886ce464566977e2"
+    },
+    "services/provider_runtime_job_registration.py": {
+      "rawSha256": "b6c15e8c4b84f07571f6fb1a73d6633cb1816b511f190032d0507d74968fe75e",
+      "lfSha256": "70e96662a291e8951855ac9d1a5213ce35fd9eac99a5f254e0d1f4001125e864"
+    },
+    "services/provider_usage_instrumentation.py": {
+      "rawSha256": "705b35fb322a23d8735a937bb925de1d48ffaced2255dd30fa2cc7747634da77",
+      "lfSha256": "f02f6be4a3be27cbab7848b5ab8c89018805b3c3ca02bd08d155f56fca7f2241"
+    },
+    "services/source_content/contracts.py": {
+      "rawSha256": "adbb261ca3adacb35d559ca8c3fb1a12769262530f622a8df5630b66c9cb3c93",
+      "lfSha256": "a4b0f05d5accfb23a9ba282f9bebf5cc0ec9ef7ef7ff5a28c06e54186130a49a"
+    },
+    "services/source_content/digests.py": {
+      "rawSha256": "644d51c284417afe8e3aaa720b62ee15cc4a0b11c6a54c324bbbf1c0e531b24e",
+      "lfSha256": "60cb8e97247e83b25b1adfb5cbc3cbcad40d5abe3f64b2ecbf244337a171b024"
+    },
+    "services/source_content/manifest_store.py": {
+      "rawSha256": "4d8d60c5ae3b8747847d2573e42526e999b24c343d7fd1b25dfbfb525cefd8e5",
+      "lfSha256": "23af04eb67af4f9dde1760bd15708b58ade17042516e62d906ba6a94f6a23543"
+    },
+    "services/source_content/pptx_chart_provenance.py": {
+      "rawSha256": "b1542725f5e4bcb727f914fc1425480827196351c686039b64c2023d83a5a048",
+      "lfSha256": "b1542725f5e4bcb727f914fc1425480827196351c686039b64c2023d83a5a048"
+    },
+    "services/source_content/pptx_custom_geometry.py": {
+      "rawSha256": "1fab2cdcc0321f15ff4da3cd0f2f113b131119f4c2049a3c1e27c47c17f429d9",
+      "lfSha256": "9df7f6a07ba7e3186428c7be89dddf507c8e26f0bf1d83f38b12019d03462a55"
+    },
+    "services/source_content/pptx_extraction_constants.py": {
+      "rawSha256": "e500786ca0e4eff12205cbe8c5b65cfec1bc78fa3b8d0388f870dce012e1a09a",
+      "lfSha256": "dd1582dc0fa247f9cf97ca3ea625ed0a06274b1f13657bcc8baeb19ad4dbcf72"
+    },
+    "services/source_content/pptx_package_parts.py": {
+      "rawSha256": "2ef954b13e42a977bef5306004c502d4fc3842a4484f7b98025d32022f456d19",
+      "lfSha256": "d683f8ccd868243ae2580eac1e507bb1606debbe83a0e7463d0d8e58de1d4503"
+    },
+    "services/source_content/security.py": {
+      "rawSha256": "c31e499119a00571155a07b91df6ebb8b3da08032b5b48c3d9eab1ae5768b335",
+      "lfSha256": "f16960aa59e71f62db5a5bb85290c3b2a70d594dbbb9cf8743cfc1cd67b3b02b"
+    },
+    "services/svg_author_output_view.py": {
+      "rawSha256": "cc68459698455d624bd99ebfa1ac39737126bb325cf42c927e0c39f21949c6e7",
+      "lfSha256": "a61dc9e5b6ec8509fabe27825312775d5603ed6a6ae0bb4d183efa3ddbc1c92d"
+    },
+    "services/svg_authoring_profile.py": {
+      "rawSha256": "011c0d7272eb840b3694a8226af7c94dec763bd23b313f8835a145461e71725d",
+      "lfSha256": "d41e5b046740346b8bd247ca7af90a1a146cbf3be9481f38d7085643b71ea272"
+    },
+    "services/svg_common_header.py": {
+      "rawSha256": "1b46df512769948019e8423f000e6f9d3b8f9ddfa28812b6b4a43dc9ded00255",
+      "lfSha256": "bace248b1f8ea27771ed4f7fddea1a72dd67bd5289ff0b55a59b5307f0c40f61"
+    },
+    "services/svg_common_header_design_checkpoint.py": {
+      "rawSha256": "83ff700ec76609af85188a340a9d77e2013110b0b44c0addfdf0d9e3d6856028",
+      "lfSha256": "7664ab95f54988deebf3bdaa6a1a62c54e5ff36fa737d6f730107a0aa5479ae0"
+    },
+    "services/svg_common_header_export_evidence.py": {
+      "rawSha256": "faaf5fd601c70088fa89c4e4760a25bc78c4e52bcecd904f538310d8021232bd",
+      "lfSha256": "2837eb485c448cd277eaf3a71b7f105b4d75ec7f345293b29b8f12f680587be6"
+    },
+    "services/svg_common_header_generation.py": {
+      "rawSha256": "77858b919be10eb5cdd24128d5e0510b319117e495de45c6a2538351a96db256",
+      "lfSha256": "b07052fe1c6ab5130d09235a44e2c51193d85551511affbb004f2230299a17f2"
+    },
+    "services/svg_common_header_title_budget.py": {
+      "rawSha256": "29d9b85cc5188b6d47cc4836cb7986172bbb6def84c7abdcd9b9cdd8d206c36a",
+      "lfSha256": "8fc63d4a064df6eef41ff5dcee2f0bde0cad75a246d00fb38940a24bbc8e477c"
+    },
+    "services/svg_common_header_titles.py": {
+      "rawSha256": "c42b84596db6a7bf1c58405ec2055d377ea9b5ed74fa8dbb3599e31cdbb6553c",
+      "lfSha256": "8291849dc51fd8f8fa993bcbd055943e63a915365b517ac4fcb1a2d95d579970"
+    },
+    "services/svg_common_header_v2.py": {
+      "rawSha256": "37a17cb796ccf6a567c8fd9eb34708aded94a6a0eee9858369a98126305007a7",
+      "lfSha256": "0ef99c63474030bb3bde53aa05bcb72f901364c4616fa4d29c1c96e619f9fe52"
+    },
+    "services/svg_common_header_v2_geometry.py": {
+      "rawSha256": "4742aa9788113fcba05be1429bf8bb00afd7dfa39bd46e8460a851398dd0b28a",
+      "lfSha256": "6b021f4454958fd7788e1eb1847b7495d00bdd7eea8354500c5f2a3bd25613e5"
+    },
+    "services/svg_contract.py": {
+      "rawSha256": "743f8bf4a2cf3a84f5523f69adc7a66620ffba62cdb388716bead0adf4cc16a7",
+      "lfSha256": "c829c998cd269a844d213f60b2e53010c1720580054759129d33b54741c07fb6"
+    },
+    "services/svg_default_fonts.py": {
+      "rawSha256": "4cc78a7165d9c3199aef749d559c5f69b7f5a0ba340b0b6ed22627fc3da5f688",
+      "lfSha256": "a8ebecbba96e6c6355d301851e402c915b00b3240ac838c738cb9d20e753e4c3"
+    },
+    "services/svg_export_bundle.py": {
+      "rawSha256": "627fc51996e30e86f89bc27e5262ecb448b9646ef4953518675a32c109c1fd9e",
+      "lfSha256": "6689d4aca72fb1d495563ccc328b782169c862a5b0803db995449d4897138d14"
+    },
+    "services/svg_export_identity.py": {
+      "rawSha256": "4208823bfa6544dbf9d8c62ab9e8a08665c9b2343ac23581aeb9c00c5d0d0599",
+      "lfSha256": "1d29726115e8e7d3f8ffe98e7f8a3a592ca239157f417015f81437ebfde85665"
+    },
+    "services/svg_export_operation.py": {
+      "rawSha256": "5ba82ee10cefd6a6acd4eaa67c991a14029f7124dd783c4230eaf79f02caeb12",
+      "lfSha256": "5d6152c1004d0d1e59b92f164374bc0c7aa0ea5891ec65085a3904dad36f5f4d"
+    },
+    "services/svg_export_page_evidence.py": {
+      "rawSha256": "e214c7bf0c5e3aaf2df27128e193ed746df0394cb37ec4a578ca88cb70aa9f2d",
+      "lfSha256": "5a3a12c3e9095387e1933a3aaf82119f2cd8b7bf2bb5703c4990c6e4833064a3"
+    },
+    "services/svg_export_quality.py": {
+      "rawSha256": "270c97239727d39c45609d4329324b09b8a097a26f8d72064d014cbbc59df27f",
+      "lfSha256": "f3c0637c58356a93b0d0e618089671ef0179a3a1b574c6000ff6eb3949181e85"
+    },
+    "services/svg_export_source_preservation.py": {
+      "rawSha256": "663b659fabd920cd2998664098f12b2a0992bfb552e4eb20534e30cebeeb7bec",
+      "lfSha256": "ff36d93d15c57874aa9d94c49e83621df6cadccd5a0ea928c7867b554f560f40"
+    },
+    "services/svg_export_whole_page_adapter.py": {
+      "rawSha256": "3b26e515fd542e869aac6d823fede6f94e9d09f4e7d998ec02d1e63ba271e86e",
+      "lfSha256": "6588054eec4c7baba8a9fd27157a38277929bc3c3f4eacf0a11ac3de11f65d83"
+    },
+    "services/svg_export_whole_page_verifier.py": {
+      "rawSha256": "24d1ffc32438e4c85d6da314be196c0f105a3c939ae8dcc221576849ff292658",
+      "lfSha256": "72e1d7ba4d752b0e3981f1a176c2cadb81019a7b1dfe0427f16232aee938d5c6"
+    },
+    "services/svg_final_pptx_review.py": {
+      "rawSha256": "642849282e3f856b91d272c0a803212b87882f3869d3b5ccca4b9e809b4d336a",
+      "lfSha256": "93ca73f4c3ff7761404bc8f2f2a961d3101c4a22b19e021192bd85c400a529e3"
+    },
+    "services/svg_final_selected_continuation.py": {
+      "rawSha256": "f45bf0b0323c5ae7a017a2285fe21d8daac5bc2073b2e603e4338d6e0e5c1bc6",
+      "lfSha256": "8a53fc3f0f6562a5465bed48ed012edacc21590c49f46380c8b721976f3b40d3"
+    },
+    "services/svg_generation_assets.py": {
+      "rawSha256": "8738382c19723610100c49309b7921b33120a30f3a1f2360726a06dafe4afe69",
+      "lfSha256": "fd3b1ae23180c9a8e469660ae243c919c602b62737f46722e7168fc95dc65d57"
+    },
+    "services/svg_generation_inputs.py": {
+      "rawSha256": "c78934761ee886d8b7af9e167967315c1ad03c05a1565cf72364cb1b13642ab8",
+      "lfSha256": "a907286b10f99c5e05f099a4e03e4c5707673b7d39abd6ab38ded42632284fac"
+    },
+    "services/svg_master_furniture.py": {
+      "rawSha256": "6e623a7caed650d70525301fd2d42927be1935b5490748e26c5b75b6170570a2",
+      "lfSha256": "2561a15cc5156ffe5f4ecbdd260888770499461fe9c83bba0444bdd076d26c08"
+    },
+    "services/svg_partial_recovery.py": {
+      "rawSha256": "37f85ef560f22f0400b7d2589fe6b09bc57b2898ec4eb5dfb8f8419cbc8b4664",
+      "lfSha256": "037cf160769b9ebcfe6f680b64430e341f41b8f4610239f8bf50a1cb67a18fc5"
+    },
+    "services/svg_pptx_font_embedding.py": {
+      "rawSha256": "72eaaef12609be778adcd963b0f107b71f6fd60c74585fc861055e5f51652c12",
+      "lfSha256": "a6ab3ff15de1c3e84aaf5a1b0ee2a6f4b1cbf3dfab5cbf561a8ae5e57ae95d42"
+    },
+    "services/svg_pptx_font_subset.py": {
+      "rawSha256": "a02ca032ba30a1211cd2afab8e87f3133da639646f92f061e2fff3b7e4a2e9dd",
+      "lfSha256": "c015f83e401fbefb582a195994ffb70268a346184e9a24bb65d1f739186539ee"
+    },
+    "services/svg_presentation_checkpoint.py": {
+      "rawSha256": "55e550999b587eab2993f84eb4488c3274b9c72958d8f5353619dfa5bb5e1adf",
+      "lfSha256": "0effe00507b954a5310d677263d08a62f6e6a73704297b6c1ad6709e8d4a8527"
+    },
+    "services/svg_presentation_prepare.py": {
+      "rawSha256": "0e1b578572d0bac56af9a4362ca492d1e901b1bf6f2277ee4556e71dc81407c6",
+      "lfSha256": "43b036a8b458723f463e11ec5c04575910ae44949c175434d2e59f89e8886f30"
+    },
+    "services/svg_quality_review_service.py": {
+      "rawSha256": "d130ee22356562193b41a481f4ac1f6e6dceb3c6fadb73ea0fb6e759a1fac84f",
+      "lfSha256": "91a447b7d1ff7dc1e0e8109d1b6b0056a722393b25488d83cd2da1f684b24c30"
+    },
+    "services/svg_recovery_source_evidence.py": {
+      "rawSha256": "b0d787bc4d109e1914007d144d1756c9f3570360d3425b7c6e509c23fac15237",
+      "lfSha256": "c97aec2706cf573c6b5da0c01379fe8bc54bd7b3e3448b8e2a9e3123f43fc50d"
+    },
+    "services/svg_renderer.py": {
+      "rawSha256": "28004ae3d78cfec235a49d0fdc8bca11d5c71ad2a4aa50a6a18cd856b8457c30",
+      "lfSha256": "28004ae3d78cfec235a49d0fdc8bca11d5c71ad2a4aa50a6a18cd856b8457c30"
+    },
+    "services/svg_source_charts.py": {
+      "rawSha256": "194c2440b0c16f27365e7fa2752825aa46ebe017eb9500ed51fb45a5be0a7c37",
+      "lfSha256": "194c2440b0c16f27365e7fa2752825aa46ebe017eb9500ed51fb45a5be0a7c37"
+    },
+    "services/svg_source_layout.py": {
+      "rawSha256": "4971622979c957284a277b451d68e627311041466a9266af82f984f7cdedaaa9",
+      "lfSha256": "21af8290309c7057affdb523730c7c22253207e3374aa43f1db4f9e1a67a8c29"
+    },
+    "services/svg_source_local_review_continuation.py": {
+      "rawSha256": "95cb4e7a281ffc9f1e3f45f3a4244142d1c009009509fcbf560ca9e352030abd",
+      "lfSha256": "ed1ae2d0c9e32b7a53fdca4b41a4aa03146f5a0108329d95d20547abd3e39a82"
+    },
+    "services/svg_source_native_tables.py": {
+      "rawSha256": "c83327ca1185909b57b5ee9f8e9a0310003887f0b66d5c9606b2510c47d94cca",
+      "lfSha256": "713690b1dfe2d6621eaa270720321a1e92f3506272019b89919b9968ffe95ad8"
+    },
+    "services/svg_source_preset_shapes.py": {
+      "rawSha256": "13da0920f0a031c75f42c2be3cce85c0544048ccd612ace5e9de3ab7040cac51",
+      "lfSha256": "13da0920f0a031c75f42c2be3cce85c0544048ccd612ace5e9de3ab7040cac51"
+    },
+    "services/svg_templates/body_composition.py": {
+      "rawSha256": "a9d05f0abb4868baf8378ab1f551c985557a67e105fdcf61ca19746494f8cee7",
+      "lfSha256": "1ac36e46420416a73af95884ad1d82d11945040817ea7562955013df0fe2819e"
+    },
+    "services/svg_templates/frame_native_text.py": {
+      "rawSha256": "60ba8d5262f13abb7df3d8f198121218478b1497b6d35318595cbb138a124ddf",
+      "lfSha256": "b57abe55abdbca5f630fa6b02c764495526368ab2ca987de854e25544f24e390"
+    },
+    "services/svg_templates/generation.py": {
+      "rawSha256": "4eaf9cffcf5f4247716fd9c85a8bc3038142dcf197044ccae7605e92230fb140",
+      "lfSha256": "4eaf9cffcf5f4247716fd9c85a8bc3038142dcf197044ccae7605e92230fb140"
+    },
+    "services/svg_templates/picture_policy.py": {
+      "rawSha256": "65fb77f0e3ad12fa538659327126e2663af8d97c49eb33ff033f996f9c5d8000",
+      "lfSha256": "65fb77f0e3ad12fa538659327126e2663af8d97c49eb33ff033f996f9c5d8000"
+    },
+    "services/svg_text_advance.py": {
+      "rawSha256": "d1562ca34dd0fbb93b3996dfd6caa7e0edb7a1fca08a17f0cc798425720e3722",
+      "lfSha256": "d1562ca34dd0fbb93b3996dfd6caa7e0edb7a1fca08a17f0cc798425720e3722"
+    },
+    "services/svg_text_defaults.py": {
+      "rawSha256": "47919c31a11ae271a42f1a1773747d09dc5feff8c8578f8a6a09935d988e8e26",
+      "lfSha256": "8a4107f3a098d9428fad97f5873a85cb94dc2d608e2143579bdc3a1b7844efbe"
+    },
+    "services/svg_text_overlap.py": {
+      "rawSha256": "6900f9117c7d25df77bff3ad1b739e988178d9387d1d947f4938392c2ecf5943",
+      "lfSha256": "6900f9117c7d25df77bff3ad1b739e988178d9387d1d947f4938392c2ecf5943"
+    },
+    "services/svg_trusted_fonts.py": {
+      "rawSha256": "36e0cfd0244e2dfa1d29d6c30ee5554ddbdb2a85fd9275bfdeaa97aacbefc2b0",
+      "lfSha256": "d909f3a7787b582a92bddfca1c89812ec94d2cbdad0df2845f6c48afd3fba104"
+    },
+    "services/workspace_service.py": {
+      "rawSha256": "4a55f9998f1dea4c7bf6a429ac857afbcca420f79ecfd5a2fec512200610b210",
+      "lfSha256": "d9c7c8cc9b8c6963cee60827a7ff6053991f13ac7ab0fab3d2d38fca8467594d"
+    },
+    "utils/authored_dom_quality.py": {
+      "rawSha256": "998aa7e59aa7c27e35b14f39ee20cd4274d0d04b318cd70226c698f99e08dd16",
+      "lfSha256": "1ad316bdba75042b2928ac279d499a8f9641325e040f7a42f1ba6100f5a24410"
+    },
+    "utils/authored_dom_tags.py": {
+      "rawSha256": "78b5a92dd1efe0a08c3f3ef3658496464bea0473baf578f10f9be07522419184",
+      "lfSha256": "6594c82ef4caccb68b6ffa7811bd5cd4e943b7a6fb1dc6660ce9cb2a246bc62c"
+    },
+    "utils/authored_fit_edits.py": {
+      "rawSha256": "4cdb07a3fc5c8c8d8ffa589e4a26614ae637a253a61d925668f5f266588c1f92",
+      "lfSha256": "963459d6c862f199daff2fa592fb452de06123c83738f77583e94ae5655bb426"
+    },
+    "utils/authored_image_slots.py": {
+      "rawSha256": "b735af79ba2a7178d8ffaf287833bad889f27692134c4399edff9d1d686b4467",
+      "lfSha256": "315de39121eec548e3e7bf8dc78193fb6bb247599abf7bc304ed3e920a5205ab"
+    },
+    "utils/authored_qid_namespace.py": {
+      "rawSha256": "eb3d81a721747f09a38ee6bd13689f29750c7ee25a7f91c11f481eabed0424a8",
+      "lfSha256": "8e6b161f4be05fdcd5ca99729f74fa976c2b23b551ec48093182c658bab188f2"
+    },
+    "utils/authored_renderer_session.py": {
+      "rawSha256": "0c4a737f5f77aa4d134b02f0c64050c370cb9f30de22ac1696c7a5883be686dc",
+      "lfSha256": "0c4a737f5f77aa4d134b02f0c64050c370cb9f30de22ac1696c7a5883be686dc"
+    },
+    "utils/authored_renderer_worker.py": {
+      "rawSha256": "302c66d1d987d76588fdb000fa7f618b2fb61a0bfd386e12e7346944310ce258",
+      "lfSha256": "302c66d1d987d76588fdb000fa7f618b2fb61a0bfd386e12e7346944310ce258"
+    },
+    "utils/codex_stream_adapter.py": {
+      "rawSha256": "94da540d3144d8787f45e552e1b391a199c9ca5bc1ab88c5f5c8db5651a526c0",
+      "lfSha256": "644b72952d731ad83a1c7a57d0453d263f34120d0d6ae50ecafe24c0e9b85784"
+    },
+    "utils/llm_calls/draw_vector_illustrations.py": {
+      "rawSha256": "be4635e8f79db13c4177b7410254ed16e965e675109516cd925a807028a582ae",
+      "lfSha256": "be4635e8f79db13c4177b7410254ed16e965e675109516cd925a807028a582ae"
+    },
+    "utils/llm_calls/prepare_svg_common_header_titles.py": {
+      "rawSha256": "6b56ec7371d36138f1543010e33fe9ed771ba5ecf6978014ef6b4e8d124fe586",
+      "lfSha256": "215d1fb7c93593b56689ee9345a956c7f2436148312c45dfb3336bb39f71d50d"
+    },
+    "utils/ppt_writing_prompt.py": {
+      "rawSha256": "75fcebba7dc093827e9e890daf10df726d137bdcb7bc4d0ad8deae240d782da1",
+      "lfSha256": "b8c97f381b58f89900ab011adc6f7560c60c9338ab13a67f3b84c04c432bd63c"
+    },
+    "utils/renderer_isolation.py": {
+      "rawSha256": "d1dcfec9bd0e86929050e6d60c589e99a12d5f47a60d9df512071357563c353a",
+      "lfSha256": "d1dcfec9bd0e86929050e6d60c589e99a12d5f47a60d9df512071357563c353a"
+    },
+    "utils/renderer_worker_policy.py": {
+      "rawSha256": "d5b3f2ceaf7cc4ecbc628e6e3737f906f6ae7112aa2dbb91a206f08e245704ab",
+      "lfSha256": "9c6ec161e848d66050d8a44d968b1e9f026f2406505c0d73f63a87e912eff1b4"
+    },
+    "utils/slide_capture.py": {
+      "rawSha256": "551e609f5c9440e9cf9204dead3adc56a93148b3814e2910185d59bb96ee2d17",
+      "lfSha256": "551e609f5c9440e9cf9204dead3adc56a93148b3814e2910185d59bb96ee2d17"
+    },
+    "utils/slide_capture_chart_adapter.py": {
+      "rawSha256": "1efaab400db8af599a75f133992cb3740e56c5605d8ae7ee112fe9926e0ace78",
+      "lfSha256": "1efaab400db8af599a75f133992cb3740e56c5605d8ae7ee112fe9926e0ace78"
+    },
+    "utils/slide_capture_chart_paint.py": {
+      "rawSha256": "7312a050e7fdd54d42852707aa81b7c611ab807f9ffbe07e00962403c1f345b4",
+      "lfSha256": "7312a050e7fdd54d42852707aa81b7c611ab807f9ffbe07e00962403c1f345b4"
+    },
+    "utils/slide_capture_chart_support.py": {
+      "rawSha256": "bfb49aef2ff5843275d8adc0818ce23110d3f5a05c2092c70e94d4e7c363d466",
+      "lfSha256": "bfb49aef2ff5843275d8adc0818ce23110d3f5a05c2092c70e94d4e7c363d466"
+    },
+    "utils/slide_capture_chart_text.py": {
+      "rawSha256": "a985f73ee53721a74faa268a05dccf59d5790adca4903842a1d5d253f7db93b8",
+      "lfSha256": "a985f73ee53721a74faa268a05dccf59d5790adca4903842a1d5d253f7db93b8"
+    },
+    "utils/slide_capture_chart_timing.py": {
+      "rawSha256": "0b8fab590985666d6622aef97648e6c29bd5b9f52a555e82184caaf8e90dad9a",
+      "lfSha256": "0b8fab590985666d6622aef97648e6c29bd5b9f52a555e82184caaf8e90dad9a"
+    },
+    "utils/slide_capture_glyph_probe.py": {
+      "rawSha256": "521cd72adafeea71c272130e68656a7d517bdd67c592916a570672bc8fca914d",
+      "lfSha256": "84ef14d5a67dd912f81dc6323f198bc9c4808458f9f02402a1adf0194ba6c74c"
+    },
+    "utils/slide_capture_local_fit.py": {
+      "rawSha256": "c5ffed397fe47ab013f9bf39afa3badd505e261241261fbee0a3180b7c69ed17",
+      "lfSha256": "77b03eaaeec4e696f7c404937a684822e617ade0132df38f7b611ba644134c1e"
+    },
+    "utils/slide_capture_pipe_render.py": {
+      "rawSha256": "b6814b360e44762de716880cce446a746bb4da94f48c6b3eff8b0e883fa2178b",
+      "lfSha256": "b6814b360e44762de716880cce446a746bb4da94f48c6b3eff8b0e883fa2178b"
+    },
+    "utils/slide_capture_result.py": {
+      "rawSha256": "c30dc38acc97423ce2c3015e5e03e7fc46a7a4d9240cbe092b336e9165aa93d0",
+      "lfSha256": "bc45be1a82e7ff86e9957fd15ab3d90442279bf3d512fa2e63a76edc3862cb61"
+    },
+    "utils/slide_capture_text_ink.py": {
+      "rawSha256": "2b590d909d7d0023cfb9198609519dbb8ef40a6de92fc96e01ab37b9faa79e2e",
+      "lfSha256": "2b590d909d7d0023cfb9198609519dbb8ef40a6de92fc96e01ab37b9faa79e2e"
+    },
+    "utils/slide_capture_worker_client.py": {
+      "rawSha256": "3ba76e14e721e80efb9991707cc5e27839ac44c1ab35a9771d45e3599c434fd7",
+      "lfSha256": "3ba76e14e721e80efb9991707cc5e27839ac44c1ab35a9771d45e3599c434fd7"
+    },
+    "utils/svg_template_fonts.py": {
+      "rawSha256": "020a193e3b66ebf722e8d7e9da815d8480642cf6589427325438856df8e76ee4",
+      "lfSha256": "88e19651c40d0e679b9aeae31f52731979337e635e96353b815801e462eac6a1"
+    },
+    "utils/svg_validation.py": {
+      "rawSha256": "b11454c979b937126a1941e6558051b98f276f8e3fcbae5862aeae0a7e507ba9",
+      "lfSha256": "bd57ffb5a282108d23a722c6baa09ac61f49d1e6c11179200b7098d2ab82815a"
+    },
+    "vendor/slide_master/MANIFEST.json": {
+      "rawSha256": "6b0c83384670cd3f1c92adf1de6b44c1878ebdb31263eefbb654cee33194cc3d",
+      "lfSha256": "6b0c83384670cd3f1c92adf1de6b44c1878ebdb31263eefbb654cee33194cc3d"
+    },
+    "vendor/slide_master/pptx_shapes/__init__.py": {
+      "rawSha256": "5e49743459f1f2c57ad9198f858004f35d1c892c2a8367b1c903769b446c4339",
+      "lfSha256": "5e49743459f1f2c57ad9198f858004f35d1c892c2a8367b1c903769b446c4339"
+    },
+    "vendor/slide_master/pptx_shapes/data/presetShapeDefinitions.xml": {
+      "rawSha256": "4a762444d8d85876881c02a5b1dedf6f73006fcd8acb7b4e393435615b37c780",
+      "lfSha256": "4a762444d8d85876881c02a5b1dedf6f73006fcd8acb7b4e393435615b37c780"
+    },
+    "vendor/slide_master/pptx_shapes/data/shape_type_values.txt": {
+      "rawSha256": "f2c3bdcda8569b358ce3196cfeb183849e33bfc7955fac961dc85fceb6b3b587",
+      "lfSha256": "f2c3bdcda8569b358ce3196cfeb183849e33bfc7955fac961dc85fceb6b3b587"
+    },
+    "vendor/slide_master/pptx_shapes/errors.py": {
+      "rawSha256": "ee3a22954c6c49eabeb76ae4a26bdea395d8b4318cfde8233758ccd9d28bab6b",
+      "lfSha256": "ee3a22954c6c49eabeb76ae4a26bdea395d8b4318cfde8233758ccd9d28bab6b"
+    },
+    "vendor/slide_master/pptx_shapes/formula.py": {
+      "rawSha256": "4e140cffb5413362746f20abbbdce107f8a4de8a79edcf4843093c662985259f",
+      "lfSha256": "4e140cffb5413362746f20abbbdce107f8a4de8a79edcf4843093c662985259f"
+    },
+    "vendor/slide_master/pptx_shapes/loader.py": {
+      "rawSha256": "81e04c63f65d39bcbec3b27322ba04e8706d062add4f85c8cfd8730b6104f422",
+      "lfSha256": "81e04c63f65d39bcbec3b27322ba04e8706d062add4f85c8cfd8730b6104f422"
+    },
+    "vendor/slide_master/pptx_shapes/models.py": {
+      "rawSha256": "6e1a6f38e8dde4f0a40abb3142e748a03e52ccced5e29684cdd69573527e5423",
+      "lfSha256": "6e1a6f38e8dde4f0a40abb3142e748a03e52ccced5e29684cdd69573527e5423"
+    },
+    "vendor/slide_master/pptx_shapes/registry.py": {
+      "rawSha256": "1e2299877aa96f704deacd3216ed3add6d24226d0267941682de755b08dc9155",
+      "lfSha256": "1e2299877aa96f704deacd3216ed3add6d24226d0267941682de755b08dc9155"
+    },
+    "vendor/slide_master/pptx_shapes/semantic_hash.py": {
+      "rawSha256": "e47096d88923df44e38185ada3b32fd1dc9789c04e20809bbabdb5f2d280a597",
+      "lfSha256": "e47096d88923df44e38185ada3b32fd1dc9789c04e20809bbabdb5f2d280a597"
+    },
+    "vendor/slide_master/pptx_shapes/xml_safety.py": {
+      "rawSha256": "b411dc284fc176bee652de58ca27a93f293b952c8f804b2aaf44394c574dbc3c",
+      "lfSha256": "b411dc284fc176bee652de58ca27a93f293b952c8f804b2aaf44394c574dbc3c"
+    },
+    "workers/public_svg_export_worker.py": {
+      "rawSha256": "bb1d7a7441e8929ad77349e09802bb7dbeb4df066f1ca2621b7975b92482b138",
+      "lfSha256": "758f6a553079e3ef5b982111af43f6b37be62c4edc263c436e0aae98467d3bb7"
+    },
+    "workers/public_svg_pptx_convert.py": {
+      "rawSha256": "4a993d2db3cc54ad805ddf9f994f79bcba372a991f63f4206a1c64fe1151139f",
+      "lfSha256": "4a993d2db3cc54ad805ddf9f994f79bcba372a991f63f4206a1c64fe1151139f"
+    },
+    "workers/public_svg_pptx_readback.py": {
+      "rawSha256": "a3068edf9ede4c1d8c9b773f7bfe927a73ecda93ff4df92b36eeb947ca8f4e2e",
+      "lfSha256": "76a4d36a384b77f9423ccf6f366adfffef1c26f604650369570527a06e4a8de6"
+    },
+    "workers/public_svg_pptx_render.py": {
+      "rawSha256": "7e3210fcac8c6c7eb5c39ee0e1fca86786d05ce3d017e818965cfaec7f646651",
+      "lfSha256": "f3431c93330bc418cf67df1a8b2bf603272cc450c409f250f47d3cef548039c4"
+    },
+    "workers/public_svg_whole_page_convert.py": {
+      "rawSha256": "6effcc440c2b2e9ee961fbc08df2580ab7f26bad13ea215bc0994043d0ddbf3c",
+      "lfSha256": "b7e26aed3cac6b9c711cb811bb84b296a03be89d8eedab86d06c1de205bd29ac"
+    },
+    "workers/svg_common_header_export.py": {
+      "rawSha256": "7c8ad98b16dfa1ae9d2fd29dbf681df4cbad63aeae58ae55461e2fbf33a74ae9",
+      "lfSha256": "e6cef710e72e13d44af2b62c2ace733950ea28417918c1e2cc4afab84c61dde6"
+    },
+    "workers/svg_common_header_export_v2.py": {
+      "rawSha256": "e67b58dd5de1cda16f8660e4df5c2b7dcd51f62ddc67f5e0518a18d6286cc15e",
+      "lfSha256": "cd4f2162bfeb59ba3976dd295d4d20511deef4c12d6bb72b78860e4abb7338c3"
+    }
+  }
+}

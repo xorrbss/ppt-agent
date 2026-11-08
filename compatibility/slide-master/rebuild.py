@@ -28,6 +28,8 @@ PATCHES = (
      "native-fixed-text.1: trusted invocation-local fixed-text adapter on the conversion context"),
     (HERE / "patches/xfrm-bounds-1.patch", "xfrm-bounds.1",
      "xfrm-bounds.1: axis-aligned xfrm shapes trace the exact off+ext frame their xfrm declares"),
+    (HERE / "patches/svg-donut-hole-1.patch", "svg-donut-hole.1",
+     "svg-donut-hole.1: optional V5-mapped doughnut hole_size; absent values retain the legacy 75 percent default"),
 )
 
 

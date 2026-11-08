@@ -1,6 +1,6 @@
 {
   "name": "slide-master-svg-converter",
-  "version": "vendored-20260916+document-canvas.2+text-advance.1+chart-furniture.16+native-fixed-text.1+xfrm-bounds.1",
+  "version": "vendored-20260916+document-canvas.2+text-advance.1+chart-furniture.16+native-fixed-text.1+xfrm-bounds.1+svg-donut-hole.1",
   "license": "MIT",
   "source": "https://github.com/byungjunjang/slide-master",
   "files": {
@@ -68,9 +68,9 @@
     "svg_to_pptx/drawingml/utils.py": "49a2ab7d7c5673b3733f399ec257f842c4e94eed475078a7131200a3556a2746",
     "svg_to_pptx/geometry_properties.py": "4408dbc0cc6b9b392ef1d97c613595a5f61b3b6107c79ea892b28365b874de0e",
     "svg_to_pptx/native_objects/__init__.py": "41ec5af48a25a9c96e91afb6b4350d587372eaade44c2275e6041805c9769890",
-    "svg_to_pptx/native_objects/chart_data.py": "83e7aad4875131a4d635840cb286cedac4fa24f451184668f7514b3b8164ab33",
+    "svg_to_pptx/native_objects/chart_data.py": "828081eb2128afda818309c5f3da0f261c65047bc1480584dcb2bea647064748",
     "svg_to_pptx/native_objects/chart_style.py": "b96478dbbf037b8a83baecb01b4c6a52eda4fc19227ac09b55c8738c3c261446",
-    "svg_to_pptx/native_objects/chart_xml.py": "31e3eda18f317f0dcfb90c24f666946efcbe2659e785dfd7033a51949f863865",
+    "svg_to_pptx/native_objects/chart_xml.py": "0b51015f7df6771024c1f5a519b9c925677c5256a0a41d53697546667a8ccd4d",
     "svg_to_pptx/native_objects/chartex.py": "58301af31c7ac33795b3a95577f1b90402a446bf87579d149bf7b97d79970b61",
     "svg_to_pptx/native_objects/fallback_hash.py": "354da4a4b2c0626af530e9e3f91dced0d93d99dd34e46e2d8320cfc26301d170",
     "svg_to_pptx/native_objects/marker_common.py": "729b4d400294310cc3c93615629c111f3b314c5dd503842825c0a8847dc525fc",
@@ -99,13 +99,15 @@
     "text-advance.1: single-line text frames never narrower than the caller's exact font advance",
     "chart-furniture.16: native chart manual layouts, per-series data labels, gap/overlap/vary-colors options, title bold/alignment; table paragraph spacing, soft breaks and cell padding",
     "native-fixed-text.1: trusted invocation-local fixed-text adapter on the conversion context",
-    "xfrm-bounds.1: axis-aligned xfrm shapes trace the exact off+ext frame their xfrm declares"
+    "xfrm-bounds.1: axis-aligned xfrm shapes trace the exact off+ext frame their xfrm declares",
+    "svg-donut-hole.1: optional V5-mapped doughnut hole_size; absent values retain the legacy 75 percent default"
   ],
   "patches": {
     "document-canvas-1.patch": "70aa54650ee16995534d5ff7eaff6de7c24782e23970bf5c48b6a7ffcf60ab61",
     "text-advance-1.patch": "c8e7fe0fd5de7693876e4f9c9da40b16f533db88d69d93eba7e18ab5ea18ff3a",
     "chart-furniture-16.patch": "dcafca281905b59bcc601acbf847c01e6a77d91e24ee3741e3657c0838a8987a",
     "native-fixed-text-1.patch": "76dd2c860fdb42aec461c650f94a2ae6e41b955cdcc49cfcc761d684ea6b1b0d",
-    "xfrm-bounds-1.patch": "71022608ad679891b827bf09036bc7616507b7de1e7b52f425f2e42e67e25eb4"
+    "xfrm-bounds-1.patch": "71022608ad679891b827bf09036bc7616507b7de1e7b52f425f2e42e67e25eb4",
+    "svg-donut-hole-1.patch": "5f4e105454f439ee340757a9bf8681237ea30d872a1695d8db7da24699c3f2f9"
   }
 }

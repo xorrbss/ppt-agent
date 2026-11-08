@@ -25,7 +25,9 @@ from services.generation_core.drivers.svg.native_publish import page_native_obje
 REQUIREMENTS_VERSION = "svg-native-requirements/v2"
 REQUIREMENTS_VERSION_V3 = "svg-native-requirements/v3"
 REQUIREMENTS_VERSION_V4 = "svg-native-requirements/v4"
-REQUIREMENTS_REVISIONS = (REQUIREMENTS_VERSION, REQUIREMENTS_VERSION_V3, REQUIREMENTS_VERSION_V4)
+REQUIREMENTS_VERSION_V5 = "svg-native-requirements/v5"
+REQUIREMENTS_REVISIONS = (REQUIREMENTS_VERSION, REQUIREMENTS_VERSION_V3, REQUIREMENTS_VERSION_V4,
+                         REQUIREMENTS_VERSION_V5)
 #: The revision a fresh svg admission pins.
 ADMITTED_REQUIREMENTS_REVISION = REQUIREMENTS_VERSION_V4
 SNAPSHOT_REVISION_KEY = "native_requirements_revision"
@@ -152,9 +154,12 @@ def _pair_parts(source: str, revision: str) -> list[str]:
     return _split_outside_brackets(source, _PAIR_SEPARATOR)
 
 
-def _chart_pairs(source: str, revision: str = REQUIREMENTS_VERSION) -> dict | None:
-    pairs = []
+def _chart_pairs(source: str, revision: str = REQUIREMENTS_VERSION, *, value_spans=None,
+                 source_offset: int = 0) -> dict | None:
+    pairs, spans, cursor = [], [], 0
     for part in _pair_parts(source, revision):
+        part_start = source.find(part, cursor)
+        cursor = part_start + len(part)
         if revision == REQUIREMENTS_VERSION:
             match = _PAIR.fullmatch(part)
             if not match:
@@ -170,11 +175,15 @@ def _chart_pairs(source: str, revision: str = REQUIREMENTS_VERSION) -> dict | No
                 return None
             label += note or ""
         pairs.append((label.strip(), value.replace(",", ""), prefix + (suffix or "")))
+        spans.append((source_offset + part_start + match.start(3),
+                      source_offset + part_start + (match.end(4) if suffix else match.end(3))))
     if len(pairs) < 2:
         return None
     result = {"categories": [pair[0] for pair in pairs], "values": [pair[1] for pair in pairs]}
     if any(pair[2] for pair in pairs):
         result["units"] = [pair[2] for pair in pairs]
+    if value_spans is not None:
+        value_spans.extend(spans)
     return result
 
 
@@ -225,7 +234,7 @@ def _chart_unit_contract(chart: dict) -> None:
             for name, unit in series_units]
 
 
-def _charts(content: str, revision: str | None = None) -> list[dict]:
+def _charts(content: str, revision: str | None = None, *, value_spans=None) -> list[dict]:
     revision = _revision(revision)
     unit_pattern = _UNIT if revision == REQUIREMENTS_VERSION else _UNIT_V3
     charts = []
@@ -236,14 +245,18 @@ def _charts(content: str, revision: str | None = None) -> list[dict]:
                 continue
         segments = re.split(r"\.(?!\d)", marker.group(1), maxsplit=1)
         source = segments[0].strip()
+        source_offset = marker.start(1) + len(segments[0]) - len(segments[0].lstrip())
         unit = re.fullmatch(rf"\s*(?:단위|unit)\s*[:：]?\s*({unit_pattern})\s*\.?\s*", segments[1], re.I) if len(segments) > 1 else None
         series_parts = re.split(rf";\s*(?={_SERIES_NAME}[:：])", source)
         named_parts = [_NAMED_SERIES.fullmatch(part) for part in series_parts]
-        named = []
+        named, spans, cursor = [], [], 0
         if all(named_parts):
             for part in named_parts:
                 name, values = part.groups()
-                parsed = _chart_pairs(values, revision)
+                part_start = source.find(part.string, cursor)
+                cursor = part_start + len(part.string)
+                parsed = _chart_pairs(values, revision, value_spans=spans,
+                                      source_offset=source_offset + part_start + part.start(2))
                 if parsed is None:
                     break
                 named.append({"name": name.strip(), **parsed})
@@ -252,13 +265,15 @@ def _charts(content: str, revision: str | None = None) -> list[dict]:
             chart = {"categories": named[0]["categories"], "series": [
                 {key: value for key, value in item.items() if key != "categories"} for item in named]}
         else:
-            chart = _chart_pairs(source, revision)
+            chart = _chart_pairs(source, revision, value_spans=spans, source_offset=source_offset)
         if chart is None:
             continue
         if unit:
             chart["unit"] = unit[1]
         _chart_unit_contract(chart)
         charts.append({"id": f"chart-{len(charts) + 1}", **chart})
+        if value_spans is not None:
+            value_spans[charts[-1]["id"]] = tuple(spans)
     return charts
 
 
@@ -377,25 +392,207 @@ def _chart_matches(chart: dict, expected: dict) -> bool:
     return True
 
 
+def required_numeric_claims_with_native_charts(content: str, payload: dict, svg: str, *,
+                                             native_source: str, pt_per_px: float,
+                                             revision: str | None = None, quality_policy=None) -> list[str]:
+    """V5 data-value occurrences may use bound geometry instead of plaintext.
+
+    Only successful literal value spans are removed before the existing numeric
+    deduplication. Categories, notes and equal-valued prose keep their claims.
+    This is a private pre-render decision; the same-capture final paint gate is
+    still mandatory and no scratch evidence is written to page quality.
+    """
+    from services.svg_presentation_checkpoint import _required_numeric_claims
+
+    legacy = _required_numeric_claims(content, quality_policy=quality_policy)
+    if revision != REQUIREMENTS_VERSION_V5 or not isinstance(native_source, str):
+        return legacy
+    try:
+        requested = _charts(native_source, revision)
+        if not requested:
+            return legacy
+        scratch = {"passed": True, "failures": []}
+        apply_requested_native_quality(scratch, payload, svg, native_source,
+                                       pt_per_px=pt_per_px, revision=revision)
+        if any(item.get("kind") != "native_requested_chart_not_editable"
+               for item in scratch["failures"]):
+            return legacy
+        from services.generation_core.drivers.svg.native_chart_evidence import chart_drawing_evidence
+
+        evidence = chart_drawing_evidence(payload, svg, revision=revision)
+        candidates = []
+        for expected in requested:
+            matches = []
+            for identifier, proof in evidence.items():
+                if proof.get("missingLabels") or proof.get("contentGeometry", {}).get("passed") is not True:
+                    continue
+                chart = proof["chart"]
+                if (chart.get("axisContract") == "native-chart-fixed-value-axis/v1"
+                        and proof["contentGeometry"].get("calibrated")):
+                    chart = {**chart, "title": chart.get("title", "") + " " + chart.get("valueAxis", {}).get("title", "")}
+                if _chart_matches(chart, expected):
+                    matches.append(identifier)
+            candidates.append(matches)
+        # An occurrence consumes one distinct declaration. Equivalent repeated
+        # requests may consume equivalent distinct charts; no numeric set grants authority.
+        owners = {}
+
+        def assign(index, seen):
+            for identifier in candidates[index]:
+                if identifier in seen:
+                    continue
+                seen.add(identifier)
+                if identifier not in owners or assign(owners[identifier], seen):
+                    owners[identifier] = index
+                    return True
+            return False
+
+        if not all(assign(index, set()) for index in range(len(requested))):
+            return legacy
+
+        def signature(chart):
+            if chart.get("unsupportedReason"):
+                return None
+            series = chart.get("series", [chart])
+            return (tuple(_compact(value) for value in chart["categories"]),
+                    tuple((_compact(item["name"]) if "name" in item else None,
+                           tuple(Decimal(value) for value in item["values"])) for item in series),
+                    tuple((_compact(item["seriesName"]) if "seriesName" in item else None,
+                           _unit_key(item["unit"])) for item in chart.get("requiredUnitLabels", [])))
+
+        available = {}
+        for expected in requested:
+            key = signature(expected)
+            if key is not None:
+                available[key] = available.get(key, 0) + 1
+        measured = content
+        if quality_policy is not None and quality_policy.get("version") == 2:
+            from services.generation_core.drivers.svg.visual_intent import source_content_evidence
+
+            measured = "\n".join(block["text"] for block in source_content_evidence(content)["blocks"])
+        spans = {}
+        literal_charts = _charts(measured, revision, value_spans=spans)
+        excluded = []
+        for chart in literal_charts:
+            key = signature(chart)
+            if key is not None and available.get(key, 0):
+                available[key] -= 1
+                excluded.extend(spans[chart["id"]])
+        if not excluded:
+            return legacy
+        masked = list(measured)
+        for start, end in excluded:
+            masked[start:end] = " " * (end - start)
+        return _required_numeric_claims("".join(masked))
+    except (ValueError, TypeError, KeyError, AttributeError, InvalidOperation, RecursionError):
+        # Parsing or association uncertainty keeps every original text claim.
+        return legacy
+
+
 def apply_requested_native_quality(quality: dict, payload: dict, svg: str, content: str, *, pt_per_px: float,
-                                   revision: str | None = None) -> None:
+                                   revision: str | None = None, render_capture=None, post_render: bool = False,
+                                   declared_chart_only: bool = False) -> None:
     requirements = requested_native_data(content, revision)
+    declared_charts = []
+    if revision == REQUIREMENTS_VERSION_V5:
+        from services.generation_core.drivers.svg.native_declarations import bound_declarations
+        record, _ = bound_declarations(payload, svg)
+        declared_charts = [item for item in [*(record or {}).get("objects", []), *(record or {}).get("dropped", [])]
+                           if isinstance(item, dict) and item.get("kind") == "chart"]
+        if declared_charts and not requirements:
+            requirements = {"version": revision, "tables": [], "charts": []}
     if not requirements:
         return
-    projection_kwargs = {"revision": revision} if revision == REQUIREMENTS_VERSION_V4 else {}
+    if revision == REQUIREMENTS_VERSION_V5 and declared_chart_only:
+        # Preservation paths retain their existing table authority. The
+        # additive final chart gate still checks every source chart literal.
+        requirements = {**requirements, "tables": []}
+    projection_kwargs = {"revision": revision} if revision in (REQUIREMENTS_VERSION_V4, REQUIREMENTS_VERSION_V5) else {}
     wire, summary = page_native_objects({**payload, "svg_content": svg}, pt_per_px=pt_per_px, **projection_kwargs)
     evidence = {}
-    if revision == REQUIREMENTS_VERSION_V4:
+    if revision in (REQUIREMENTS_VERSION_V4, REQUIREMENTS_VERSION_V5):
         from services.generation_core.drivers.svg.native_chart_evidence import (
             chart_drawing_evidence, chart_projection_diagnostics, chart_value_differences,
         )
-        evidence = chart_drawing_evidence(payload, svg, revision=revision)
+        evidence = chart_drawing_evidence(payload, svg, revision=revision,
+            **({"measurement": quality, "render_capture": render_capture, "post_render": post_render}
+               if revision == REQUIREMENTS_VERSION_V5 else {}))
         summary = chart_projection_diagnostics(summary, evidence)
         dropped_ids = {item.get("id") for item in (summary or {}).get("dropped", [])
                        if item.get("kind") == "chart"}
-        evidence = {group_id: proof for group_id, proof in evidence.items() if group_id in dropped_ids}
+        if revision == REQUIREMENTS_VERSION_V4:
+            evidence = {group_id: proof for group_id, proof in evidence.items() if group_id in dropped_ids}
     remaining = list((wire or {}).get("objects", []))
     failures = []
+
+    def v5_chart_matches(proof, expected):
+        if proof is None:
+            return False
+        chart = proof["chart"]
+        if _chart_matches(chart, expected):
+            return True
+        if (chart.get("axisContract") == "native-chart-fixed-value-axis/v1"
+                and proof.get("contentGeometry", {}).get("calibrated")):
+            axis_title = chart.get("valueAxis", {}).get("title", "")
+            return _chart_matches({**chart, "title": chart.get("title", "") + " " + axis_title}, expected)
+        return False
+
+    def v5_proven(proof, expected=None):
+        if (proof is None or proof["missingLabels"]
+                or not proof.get("contentGeometry", {}).get("passed")):
+            return False
+        own = dict(proof["chart"])
+        title = own.get("title", "")
+        title_unit = _series_name_unit(title) if title.count("(") <= 1 else None
+        if (own.get("axisContract") == "native-chart-fixed-value-axis/v1"
+                and proof["contentGeometry"].get("calibrated")):
+            axis_title = own.get("valueAxis", {}).get("title", "")
+            axis_unit = _series_name_unit(axis_title) or _series_name_unit(f"({axis_title})")
+            if title_unit and axis_unit and _unit_key(title_unit) != _unit_key(axis_unit):
+                return False
+            title_unit = title_unit or axis_unit
+        series_units = [_series_name_unit(series["name"]) for series in own["series"]]
+        if title_unit and any(unit and _unit_key(title_unit) != _unit_key(unit) for unit in series_units):
+            return False
+        bindings = proof["contentGeometry"].get("valueLabelBindings", [])
+        if expected is not None:
+            declared_units = {_unit_key(unit) for unit in (title_unit, *series_units) if unit}
+            expected_units = {_unit_key(label["unit"]) for label in expected.get("requiredUnitLabels", [])}
+            if not declared_units <= expected_units:
+                return False
+            for binding in bindings:
+                unit = _unit_key(binding["unit"])
+                if not unit:
+                    continue
+                series_index = binding["seriesIndex"]
+                expected_series = expected.get("series", [expected])[series_index]
+                own_units = {_unit_key(label["unit"]) for label in expected.get("requiredUnitLabels", [])
+                             if "seriesName" not in label or label["seriesName"] == expected_series.get("name")}
+                if unit not in own_units:
+                    return False
+            return v5_chart_matches(proof, expected)
+        # Without a source literal this proves only the drawing/declaration
+        # relationship. Do not infer source fidelity from self-declared JSON.
+        return all(not binding["unit"] or _unit_key(binding["unit"]) in {
+            _unit_key(unit) for unit in (title_unit, series_units[binding["seriesIndex"]]) if unit}
+            for binding in bindings)
+
+    paint_evidence = {group_id: proof.get("paintEvidence", {}) for group_id, proof in evidence.items()}
+    if revision == REQUIREMENTS_VERSION_V5:
+        for declaration in declared_charts:
+            proof = evidence.get(declaration.get("id"))
+            candidates = [expected for expected in requirements["charts"]
+                          if proof is not None and v5_chart_matches(proof, expected)]
+            proven = any(v5_proven(proof, expected) for expected in candidates) if candidates else v5_proven(proof)
+            if not proven:
+                failures.append({"kind": "native_requested_chart_missing",
+                                 "declarationId": declaration.get("id"),
+                                 "reason": "drawing_content_unproven"})
+            elif (proof.get("paintEvidence", {}).get("status") != "pending"
+                    and proof.get("paintEvidence", {}).get("passed") is not True):
+                failures.append({"kind": "measurement_incomplete", "scope": "native_chart_paint",
+                                 "declarationId": declaration.get("id"),
+                                 "reason": proof.get("paintEvidence", {}).get("reason", "native_chart_capture_unproven")})
     for expected in requirements["tables"]:
         match = next((entry for entry in remaining if entry["kind"] == "table"
                       and _table_rows_match(entry["payload"].get("rows", []), expected["rows"])), None)
@@ -407,15 +604,18 @@ def apply_requested_native_quality(quality: dict, payload: dict, svg: str, conte
         if expected.get("unsupportedReason"):
             failures.append({"kind": "native_requested_chart_unsupported", **expected})
             continue
-        match = next((entry for entry in remaining if entry["kind"] == "chart" and _chart_matches(entry["payload"], expected)), None)
+        match = next((entry for entry in remaining if entry["kind"] == "chart"
+                      and (v5_proven(evidence.get(entry["id"]), expected) if revision == REQUIREMENTS_VERSION_V5
+                           else _chart_matches(entry["payload"], expected))), None)
         if match is None:
             # A native annotation is optional only after the bound declaration
             # matches the requirement and its own group visibly draws every
             # category, series/unit label and value occurrence. Independent
             # visibility and content failures remain content failures.
             drawn = next((group_id for group_id, proof in evidence.items()
-                if not proof["missingLabels"] and _chart_matches(proof["chart"], expected)
-                and not any(chart_value_differences(proof, expected).values())), None)
+                if (v5_proven(proof, expected) if revision == REQUIREMENTS_VERSION_V5 else
+                    not proof["missingLabels"] and _chart_matches(proof["chart"], expected)
+                    and not any(chart_value_differences(proof, expected).values()))), None)
             if drawn is not None:
                 evidence.pop(drawn)
                 failures.append({"kind": "native_requested_chart_not_editable", **expected,
@@ -429,6 +629,14 @@ def apply_requested_native_quality(quality: dict, payload: dict, svg: str, conte
         "requiredTables": len(requirements["tables"]), "requiredCharts": len(requirements["charts"]),
         "passed": not failures, "projection": summary,
         "repairInstruction": "Preserve each independent table/chart with its exact data and all series in its own data-native-table/data-native-chart group. Retain explicit source cell paragraph breaks; additional visual wrapping may occur within a paragraph, but cannot replace its original boundary with a space. Retain every required unit label with its series association in the declared chart title. Unsupported unit mappings cannot be repaired by changing values or inventing units. Fix rejected declaration geometry without changing its meaning."}
+    if revision == REQUIREMENTS_VERSION_V5:
+        quality["requestedNativeObjects"]["drawingEvidence"] = {
+            group_id: proof["contentGeometry"] for group_id, proof in evidence.items()
+            if "contentGeometry" in proof}
+        quality["requestedNativeObjects"]["paintEvidence"] = paint_evidence
+        quality["requestedNativeObjects"]["contentRetentionProven"] = (
+            bool(paint_evidence) and all(item.get("passed") is True for item in paint_evidence.values())
+            and all(item["kind"] == "native_requested_chart_not_editable" for item in failures))
     if failures:
         quality["passed"] = False
         quality.setdefault("failures", []).extend(failures)
@@ -436,7 +644,7 @@ def apply_requested_native_quality(quality: dict, payload: dict, svg: str, conte
 
 def native_chart_repair_hint(quality: dict, *, revision: str) -> str | None:
     """V4 gives repair attempts the projection cause and missing drawing data."""
-    if revision != REQUIREMENTS_VERSION_V4:
+    if revision not in (REQUIREMENTS_VERSION_V4, REQUIREMENTS_VERSION_V5):
         return None
     requested = quality.get("requestedNativeObjects") or {}
     dropped = [item for item in (requested.get("projection") or {}).get("dropped", [])

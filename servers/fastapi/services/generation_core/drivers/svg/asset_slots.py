@@ -309,37 +309,48 @@ async def resolve_offer(request, outline, roles, job, *, profile, checkpoint, du
     if seed.get("source_manifest_ref"):
         # An attempt sealed before offers existed must resume with its plan.
         return AssetOffer(receipt={"status": "sealed_without_offer"})
-    from services.image_generation_service import ImageGenerationService
-    from utils.asset_directory_utils import get_images_directory
-
-    from utils.get_env import get_svg_illustration_mode_env, get_svg_illustration_parts_env
-
-    literal_pages = _native_literal_pages(request, outline, style_snapshot=style_snapshot,
-                                          has_source_assets=has_source_assets)
-    image_service = ImageGenerationService(get_images_directory()) if literal_pages is None else None
-    mode, parts = get_svg_illustration_mode_env(), get_svg_illustration_parts_env()
-    step_pictures = mode == "off" and template_step_pictures(request)
-    if step_pictures:
-        # SVG_TEMPLATE_STEP_PICTURES: step pictures only, no cover or scene drawing.
-        mode, parts = "vector", ("spots",)
-    if literal_pages is not None:
-        offer = await _native_literal_offer(literal_pages, request)
-    elif mode != "off":
-        provider = not (image_service.is_image_generation_disabled or image_service.image_gen_func is None)
-        offer = await _build(request, outline, roles, job, profile, image_service if provider else None,
-                             icons_only=not provider, illustration_mode=mode, illustration_parts=parts,
-                             projection_revision=revision)
-        if step_pictures:
-            # Names the route in the receipt; every other receipt keeps its bytes.
-            offer = replace(offer, receipt={**offer.receipt, "templateStepPictures": True})
-    elif image_service.is_image_generation_disabled or image_service.image_gen_func is None:
-        # No picture can be made, but the bundled vector library needs no
-        # provider: the plan still places icons, with no illustration or sprite
-        # sheet. Persisted like any offer, so a resume after the setting
-        # changes still matches the sealed source manifest.
-        offer = await _build(request, outline, roles, job, profile, None, icons_only=True, projection_revision=revision)
+    from services.svg_templates.picture_policy import template_picture_policy
+    picture_policy = template_picture_policy(request, style_snapshot)
+    if picture_policy is not None:
+        # This opt-in route reads only admitted policy and never constructs an
+        # image provider or consults the live illustration-mode settings.
+        offer = await _build(
+            request, outline, roles, job, profile, None, icons_only=True,
+            illustration_mode="vector", illustration_parts=picture_policy["parts"],
+            projection_revision=revision, template_picture_policy=picture_policy,
+            style_snapshot=style_snapshot)
     else:
-        offer = await _build(request, outline, roles, job, profile, image_service, projection_revision=revision)
+        from services.image_generation_service import ImageGenerationService
+        from utils.asset_directory_utils import get_images_directory
+
+        from utils.get_env import get_svg_illustration_mode_env, get_svg_illustration_parts_env
+
+        literal_pages = _native_literal_pages(request, outline, style_snapshot=style_snapshot,
+                                              has_source_assets=has_source_assets)
+        image_service = ImageGenerationService(get_images_directory()) if literal_pages is None else None
+        mode, parts = get_svg_illustration_mode_env(), get_svg_illustration_parts_env()
+        step_pictures = mode == "off" and template_step_pictures(request)
+        if step_pictures:
+            # SVG_TEMPLATE_STEP_PICTURES: step pictures only, no cover or scene drawing.
+            mode, parts = "vector", ("spots",)
+        if literal_pages is not None:
+            offer = await _native_literal_offer(literal_pages, request)
+        elif mode != "off":
+            provider = not (image_service.is_image_generation_disabled or image_service.image_gen_func is None)
+            offer = await _build(request, outline, roles, job, profile, image_service if provider else None,
+                                 icons_only=not provider, illustration_mode=mode, illustration_parts=parts,
+                                 projection_revision=revision)
+            if step_pictures:
+                # Names the route in the receipt; every other receipt keeps its bytes.
+                offer = replace(offer, receipt={**offer.receipt, "templateStepPictures": True})
+        elif image_service.is_image_generation_disabled or image_service.image_gen_func is None:
+            # No picture can be made, but the bundled vector library needs no
+            # provider: the plan still places icons, with no illustration or sprite
+            # sheet. Persisted like any offer, so a resume after the setting
+            # changes still matches the sealed source manifest.
+            offer = await _build(request, outline, roles, job, profile, None, icons_only=True, projection_revision=revision)
+        else:
+            offer = await _build(request, outline, roles, job, profile, image_service, projection_revision=revision)
     if revision == ASSET_PROJECTION_CURRENT:
         offer = replace(offer, receipt={**offer.receipt, ASSET_PROJECTION_KEY: revision})
     if job is not None:
@@ -351,7 +362,8 @@ async def resolve_offer(request, outline, roles, job, *, profile, checkpoint, du
 
 async def _build(request, outline, roles, job, profile, image_service, *, icons_only: bool = False,
                  illustration_mode: str = "off", illustration_parts=None,
-                 projection_revision: str = "svg-asset-projection/v1") -> AssetOffer:
+                 projection_revision: str = "svg-asset-projection/v1",
+                 template_picture_policy: dict | None = None, style_snapshot: dict | None = None) -> AssetOffer:
     from services.generation_core.assets.offer import build_asset_offer
     from services.generation_core.style.build import resolve_brand
     from services.provider_usage_instrumentation import provider_usage_scope
@@ -359,6 +371,18 @@ async def _build(request, outline, roles, job, profile, image_service, *, icons_
 
     style = resolve_authored_style(request.authored_style)
     brand = resolve_brand(request, outline, getattr(request, "language", None))
+    picture_kwargs = {}
+    if template_picture_policy is not None:
+        from services.svg_templates.picture_policy import template_picture_style
+        try:
+            style = template_picture_style(style_snapshot, style)
+        except ValueError:
+            # Pictures are optional even if the frozen design identity lacks
+            # usable colors. Do not silently draw in a different deck's style.
+            return AssetOffer(receipt={"status": "template_picture_style_unavailable",
+                                       "templatePictures": template_picture_policy["revision"]})
+        brand = replace(brand, primary=style.primary_color, primary_is_explicit=False)
+        picture_kwargs["template_picture_policy"] = template_picture_policy
     with provider_usage_scope(job_id=job.id if job else None, operation="authored_generation",
                               stage="illustrate", attempt_number=job.attempt_number if job else 0):
         offer = await build_asset_offer(
@@ -366,7 +390,7 @@ async def _build(request, outline, roles, job, profile, image_service, *, icons_
             instructions=request.instructions, budget=profile.illustration_budget,
             timeout_seconds=profile.illustration_timeout_seconds, image_service=image_service,
             icons_only=icons_only, illustration_mode=illustration_mode,
-            illustration_parts=illustration_parts, projection_revision=projection_revision)
+            illustration_parts=illustration_parts, projection_revision=projection_revision, **picture_kwargs)
     return offer
 
 

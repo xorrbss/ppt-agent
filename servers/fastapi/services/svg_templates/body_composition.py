@@ -765,9 +765,11 @@ FILL_BY_EXPLAINING = (" When the facts are few, give each item its full explanat
 
 
 def composition_rules(composition: dict | None, *, body_floor: float | None = None,
-                      exemplars: bool = True, visual_guidance: bool = False) -> str:
+                      exemplars: bool = True, visual_guidance: bool = False,
+                      content_sizing: bool = False) -> str:
     """The author-rule paragraph for a stored composition grammar; empty when there is none.
-    ``visual_guidance`` (``SVG_TEMPLATE_VISUAL_GUIDANCE``) swaps the density line's closing advice."""
+    ``visual_guidance`` (``SVG_TEMPLATE_VISUAL_GUIDANCE``) swaps the density line's closing advice.
+    Only literal ``True`` for ``content_sizing`` enables content-sized density guidance."""
     if not composition:
         return ""
     grammar = SvgTemplateBodyComposition.model_validate(composition).grammar
@@ -799,6 +801,22 @@ def composition_rules(composition: dict | None, *, body_floor: float | None = No
         " point fully; give labels a short explanation from the source);"
         + (FILL_BY_EXPLAINING if visual_guidance else FILL_BY_ENLARGING) + " Never invent facts to fill space.",
     ]
+    if content_sizing is True:
+        lines[2] = (
+            f"- Density: {items_mid} text items per page (quartiles {items_low}-{items_high}), body text about"
+            f" {shown(usual):g}px (from {shown(small):g} to {shown(big):g}px); elements cover"
+            f" {_percent(grammar.ink_coverage)} of the body area and reach"
+            f" {_percent(min(1.0, grammar.bottom_reach))} of its height in the reference."
+            " Size cards, tables and other components to their actual content, including readable typography,"
+            " appropriate padding and legible spacing. Set table column widths according to their content;"
+            " end card heights after the last line with appropriate padding. Retain template body font sizes"
+            " and the minimum body font floor; never shrink type to fit. Preserve every fact, label and figure in reading order;"
+            " use full source explanations where available without inventing content. Consider whitespace inside"
+            " components and across the whole body together: arrange content to make balanced use of the body"
+            " without stretching components or enlarging type merely to fill the page. Consolidate unavoidable"
+            " leftover body whitespace rather than distributing it through oversized components. Compose freely for this"
+            " page's content."
+        )
     if exemplars:
         lines.append(
             "- template_exemplars, when given, outline one or two of this template's own body pages whose"

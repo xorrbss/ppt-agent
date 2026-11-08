@@ -1169,7 +1169,7 @@ def _chart_plot_xml(
         return (
             '<c:doughnutChart><c:varyColors val="1"/>'
             f"{ser_xml}"
-            '<c:firstSliceAng val="0"/><c:holeSize val="75"/>'
+            f'<c:firstSliceAng val="0"/><c:holeSize val="{chart_data.get("hole_size", 75)}"/>'
             "</c:doughnutChart>"
         )
     if chart_type == "of_pie":

@@ -72,3 +72,68 @@ def test_template_text_leaks_count_template_wording_the_source_does_not_explain(
     assert template_text_leaks(template, "운영 센터는 12명이 근무한다.", source) == {"ngrams": 0, "figures": 0}
     # Counts only: the result never carries the words.
     assert set(leaks) == {"ngrams", "figures"} and all(isinstance(value, int) for value in leaks.values())
+
+
+def test_page_rates_need_valid_actual_page_counts_and_never_fill_missing_counts_with_zero():
+    assert metrics.normalized_page_metrics({"pages": 4, "first_try_ok": 3, "fallback_pages": 1}) == {
+        "first_try_ok_rate": 0.75, "fallback_rate": 0.25}
+    for pages in (None, 0, -1, True, 4.5, float("nan")):
+        assert metrics.normalized_page_metrics({"pages": pages, "first_try_ok": 1}) == {}
+    assert metrics.normalized_page_metrics({"pages": 4, "first_try_ok": 5, "fallback_pages": None}) == {}
+
+
+def test_attempt_accounting_retains_failed_retry_and_unknown_outcome_with_separate_page_coverage():
+    runs = [{"completed": False, "run": 1},
+            {"completed": True, "run": 1, "retry_of": "attempt-1", "pages": 4,
+             "first_try_ok": 3, "fallback_pages": 1},
+            {"completed": True, "run": 2, "pages": 6, "first_try_ok": 6},
+            {"run": 3}]
+    result = metrics.attempt_accounting(runs, requested_runs=3)
+    assert (result["attempted_runs"], result["completed_runs"], result["failed_runs"],
+            result["unknown_outcome_runs"], result["retry_attempts"]) == (4, 2, 1, 1, 1)
+    assert result["completion_rate"] == 0.5 and result["failure_rate"] == 0.25
+    assert result["first_try_ok_rate"] == {"value": 0.9, "numerator": 9, "pages": 10,
+                                           "available_runs": 2, "missing_runs": 0}
+    assert result["fallback_rate"] == {"value": 0.25, "numerator": 1, "pages": 4,
+                                      "available_runs": 1, "missing_runs": 1}
+    assert result["requested_runs"] == 3
+    assert metrics.attempt_accounting([])["completion_rate"] is None
+
+
+def _row(category, value, unit="%", series="current"):
+    return {"category": category, "value": value, "unit": unit, "series": series}
+
+
+def test_structured_integrity_detects_reassigned_categories_units_series_and_duplicate_values():
+    expected = [_row("Alpha", 20), _row("Beta", 80)]
+    assert metrics.structured_data_integrity(expected, [_row("Beta", "80.0"), _row("Alpha", 20)])["status"] == "matched"
+    variants = [[_row("Alpha", 80), _row("Beta", 20)],
+                [_row("Alpha", 20, "USD"), _row("Beta", 80)],
+                [_row("Alpha", 20, series="previous"), _row("Beta", 80)],
+                [_row("Alpha", 20), _row("Alpha", 20), _row("Beta", 80)]]
+    for observed in variants:
+        result = metrics.structured_data_integrity(expected, observed)
+        assert result["status"] == "mismatch"
+        assert result["missing_rows"] or result["unexpected_rows"]
+    # Retained text tokens do not establish their category/value association.
+    assert metrics.retention("Alpha 20 Beta 80", "Alpha 80 Beta 20")["numbers"] == 1.0
+
+
+def test_structured_integrity_is_unavailable_without_bounded_explicit_evidence():
+    for expected, observed in ((None, None), ([_row("Alpha", 20)], None), ([], []),
+                               ([{"value": 20}], [_row("Alpha", 20)]),
+                               ([_row("Alpha", float("nan"))], [_row("Alpha", 20)])):
+        assert metrics.structured_data_integrity(expected, observed)["status"] == "unavailable"
+    assert metrics.structured_data_integrity([_row("Alpha", 20)] * 2, [], max_rows=1)["status"] == "unavailable"
+
+
+def test_common_phrase_candidates_are_separated_only_with_supplied_common_phrase_evidence():
+    result = metrics.template_text_leaks("Unique Platform 운영 센터", "Unique Platform 운영 센터", "",
+                                         common_phrase_text="운영 센터")
+    assert result["ngrams"] == 3
+    assert result["common_phrase_ngrams"] == 1 and result["specific_ngrams"] == 2
+
+
+def test_nonfinite_metric_values_are_not_summarized_as_observations():
+    assert metrics.summarize([{"a": float("nan"), "b": float("inf")}, {"a": 2}]) == {
+        "a": {"mean": 2.0, "min": 2, "max": 2, "n": 1}}

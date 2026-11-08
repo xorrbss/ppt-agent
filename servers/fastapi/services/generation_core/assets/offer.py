@@ -278,6 +278,7 @@ async def build_asset_offer(*, outline, brand, style, roles: Sequence[str], inst
                             settings=None, icons_only: bool = False,
                             illustration_mode: str = "off",
                             illustration_parts: Optional[Sequence[str]] = None,
+                            template_picture_policy: Optional[dict] = None,
                             projection_revision: str = "svg-asset-projection/v2") -> AssetOffer:
     """Plan and produce one deck's illustrations and icons; never raises for a provider.
 
@@ -310,7 +311,18 @@ async def build_asset_offer(*, outline, brand, style, roles: Sequence[str], inst
     from services.generation_core.authoring.author_slide import EXACT_RECONSTRUCTION, normalize_reference_mode
     from services.image_generation_service import image_request_scope, observe_image_provider_calls
 
+    policy_kwargs = {}
+    if template_picture_policy is not None:
+        from services.generation_core.assets.vector_offer import validate_template_picture_policy
+
+        template_picture_policy = validate_template_picture_policy(template_picture_policy)
+        policy_kwargs = {"template_picture_policy": template_picture_policy}
+        illustration_mode = "vector"
+        illustration_parts = template_picture_policy["parts"]
+        icons_only, image_service = True, None
     receipt: dict = {"budget": 0 if icons_only else budget, "timeoutSeconds": timeout_seconds}
+    if template_picture_policy is not None:
+        receipt["templatePicturePolicy"] = template_picture_policy
     if icons_only:
         receipt["iconsOnly"] = True
     if illustrations_are_prohibited(instructions):
@@ -330,7 +342,8 @@ async def build_asset_offer(*, outline, brand, style, roles: Sequence[str], inst
     with svg_outline_spans.span("plan_llm"):
         plan = await resolve_infographic_plan(outline, brand, style, roles=list(roles),
                                               instructions=instructions,
-                                              vector_illustrations=vector and not demote_scenes)
+                                              vector_illustrations=vector and not demote_scenes,
+                                              **policy_kwargs)
     if plan is None:
         return AssetOffer(receipt={**receipt, "status": "plan_unavailable"})
     if demote_scenes:
@@ -387,6 +400,7 @@ async def build_asset_offer(*, outline, brand, style, roles: Sequence[str], inst
             plan, outline=outline, roles=roles, brand=brand, style=style, timeout_seconds=timeout_seconds,
             projection_revision=projection_revision,
             vector_scene_pages={slide.index for slide in all_scenes} - {slide.index for slide in scenes},
+            **({**policy_kwargs, "budget": budget} if policy_kwargs else {}),
             **({"parts": tuple(illustration_parts)} if illustration_parts else {})))
     with observe_image_provider_calls() as scene_calls, svg_outline_spans.span("scenes"):
         scene_slots = await asyncio.gather(*(scene(slide) for slide in scenes))

@@ -25,6 +25,32 @@ from utils.hashing import sha256_hex
 RETRY = object()
 
 
+def _native_source_content(request, index, count, content):
+    source_pages = getattr(request, "slides_markdown", None)
+    return source_pages[index] if source_pages and len(source_pages) == count else content
+
+
+def _apply_preserved_v5_chart_quality(quality, payload, svg, content, *, revision, render_capture,
+                                      pt_per_px=None, request=None):
+    """Add final declared-chart evidence without replacing preservation gates."""
+    from services.generation_core.drivers.svg.native_declarations import bound_declarations
+    from services.generation_core.drivers.svg.native_requirements import (
+        REQUIREMENTS_VERSION_V5, apply_requested_native_quality,
+    )
+    if revision != REQUIREMENTS_VERSION_V5:
+        return
+    declarations, _current = bound_declarations(payload, svg)
+    if not declarations or not any(item.get("kind") == "chart" for key in ("objects", "dropped")
+                                   for item in declarations.get(key, []) if isinstance(item, dict)):
+        return
+    if pt_per_px is None:
+        from services.authored_canvas import request_canvas_metadata
+        from services.generation_core.drivers.svg.native_publish import canvas_point_per_px
+        pt_per_px = canvas_point_per_px(request_canvas_metadata(request))
+    apply_requested_native_quality(quality, payload, svg, content, pt_per_px=pt_per_px,
+        revision=revision, render_capture=render_capture, post_render=True, declared_chart_only=True)
+
+
 def source_structural_visual_retry(ctx, payload, *, index):
     """One measured correction may follow one failed source-structure response."""
     contract = {"version": "svg-source-whole-page/v1"}
@@ -650,6 +676,17 @@ async def _attempt_render(*, ctx, request, presentation_id, index, content, payl
             if ctx.source_reflow else _required_numeric_claims(
                 content, quality_policy=read_quality_recovery_policy(ctx.snapshot))
         )
+        if not (ctx.source_reflow or ctx.raster_reconstruction):
+            from services.generation_core.drivers.svg.native_requirements import (
+                REQUIREMENTS_VERSION_V5, SNAPSHOT_REVISION_KEY, required_numeric_claims_with_native_charts)
+            if ctx.snapshot.get(SNAPSHOT_REVISION_KEY) == REQUIREMENTS_VERSION_V5:
+                from services.authored_canvas import request_canvas_metadata
+                from services.generation_core.drivers.svg.native_publish import canvas_point_per_px
+                required_text = required_numeric_claims_with_native_charts(
+                    content, payload, final,
+                    native_source=_native_source_content(request, index, ctx.count, content),
+                    pt_per_px=canvas_point_per_px(request_canvas_metadata(request)),
+                    revision=REQUIREMENTS_VERSION_V5, quality_policy=read_quality_recovery_policy(ctx.snapshot))
         source_values = ()
         if getattr(request, "writing_policy", None) is not None:
             from services.ppt_writing_visible import literal_source_values, substitute_svg_visible_symbols
@@ -790,12 +827,16 @@ async def _attempt_render(*, ctx, request, presentation_id, index, content, payl
 
                         source_font_kwargs["minimum_font_px"] = max(source_font_kwargs["minimum_font_px"],
                             svg_quality_font_floor(readability_policy))
+                from services.generation_core.drivers.svg.native_chart_evidence import chart_witness_render_kwargs
+                from services.generation_core.drivers.svg.native_requirements import requirements_revision
+                chart_render_kwargs = chart_witness_render_kwargs(payload, final, revision=requirements_revision(ctx.snapshot))
                 render_request = functools.partial(render_svg_with_metrics, final, width=ctx.canvas.width_px,
                                                      height=ctx.canvas.height_px,
                                                      # Source instructions are resolved into the hard
                                                      # minimum above, including the 7px lower bound.
                                                      instructions=None if ctx.source_reflow else request.instructions,
                                                      **source_font_kwargs,
+                                                     **chart_render_kwargs,
                                                      **({"readability_policy": readability_policy} if readability_policy is not None else {}),
                                                      required_text=required_text,
                                                      **({"allow_image_only": True}
@@ -875,31 +916,37 @@ async def _attempt_render(*, ctx, request, presentation_id, index, content, payl
         from services.authored_canvas import request_canvas_metadata
         from services.generation_core.drivers.svg.native_publish import canvas_point_per_px
         from services.generation_core.drivers.svg.native_requirements import (
-            apply_requested_native_quality, requirements_revision)
-        source_pages = getattr(request, "slides_markdown", None)
-        native_source = source_pages[index] if source_pages and len(source_pages) == ctx.count else content
+            REQUIREMENTS_VERSION_V5, apply_requested_native_quality, requirements_revision)
+        native_source = _native_source_content(request, index, ctx.count, content)
         apply_requested_native_quality(rendered.quality, payload, final, native_source,
             pt_per_px=canvas_point_per_px(request_canvas_metadata(request)),
-            revision=requirements_revision(ctx.snapshot))
+            revision=requirements_revision(ctx.snapshot),
+            **({"render_capture": rendered, "post_render": True}
+               if requirements_revision(ctx.snapshot) == REQUIREMENTS_VERSION_V5 else {}))
     elif ctx.source_reflow and payload.get("source_preservation", {}).get("whole_page_native_groups"):
         from services.authored_canvas import request_canvas_metadata
         from services.generation_core.drivers.svg.native_publish import canvas_point_per_px, page_native_objects
         from services.generation_core.drivers.svg.native_requirements import (
-            REQUIREMENTS_VERSION_V4, requirements_revision,
+            REQUIREMENTS_VERSION_V4, REQUIREMENTS_VERSION_V5, requirements_revision,
         )
 
         from services.svg_cached_author_render_lineage import approved_sidecars
         objects, summary = page_native_objects(
             payload, pt_per_px=canvas_point_per_px(request_canvas_metadata(request)),
             verified_fixed_axis_migrations=approved_sidecars(payload),
-            **({"revision": REQUIREMENTS_VERSION_V4}
-               if requirements_revision(ctx.snapshot) == REQUIREMENTS_VERSION_V4 else {}))
+            **({"revision": requirements_revision(ctx.snapshot)}
+               if requirements_revision(ctx.snapshot) in (REQUIREMENTS_VERSION_V4, REQUIREMENTS_VERSION_V5) else {}))
         required = {item["element_id"] for item in payload["source_preservation"]["whole_page_native_groups"]}
         actual = {item["id"] for item in (objects or {}).get("objects", [])}
         if not required.issubset(actual):
             rendered.quality["passed"] = False
             rendered.quality.setdefault("failures", []).append({"kind": "source_native_chart_unprojectable",
                 "missing_count": len(required - actual), "native_summary": summary})
+    if ctx.source_reflow or ctx.raster_reconstruction:
+        from services.generation_core.drivers.svg.native_requirements import requirements_revision
+        _apply_preserved_v5_chart_quality(rendered.quality, payload, final, content,
+            revision=requirements_revision(ctx.snapshot),
+            request=request, render_capture=rendered)
     if timeline_source:
         apply_timeline_ink_quality(rendered.quality, final, timeline_source,
                                   **({"allow_unlabeled": True} if profile["version"] in (6, 7, 8) else {}))

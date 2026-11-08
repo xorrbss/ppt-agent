@@ -1251,6 +1251,7 @@ async def render_html_to_png_with_metrics(
     fit: bool = False, fit_policy: Mapping[str, Any] | None = None,
     fresh: bool = False,
     width_px: int = SLIDE_W, height_px: int = SLIDE_H,
+    chart_witness_manifest: dict | None = None,
 ) -> "RenderCapture":
     """Render one slide and return telemetry tied to the same HTML cache identity.
     This is the preferred API for quality-review callers.  It preserves the legacy
@@ -1261,6 +1262,22 @@ async def render_html_to_png_with_metrics(
     # Preserve renderer admission semantics even when the atomic result cache
     # contains a prior successful capture.
     ensure_renderer_enabled()
+    if chart_witness_manifest is not None:
+        if fit or fit_policy is not None:
+            raise ValueError("chart paint proof requires an unchanged source")
+        from utils.slide_capture_chart_paint import validate_manifest
+        validate_manifest(chart_witness_manifest, source_html=html, width_px=width_px, height_px=height_px)
+        _bind_worker_client()
+        with set_render_deck_scope(deck_scope) if deck_scope else nullcontext():
+            async with _get_render_sem():
+                png, metrics = await _render_html_in_isolated_worker(
+                    html, timeout, width_px=width_px, height_px=height_px,
+                    chart_witness_manifest=chart_witness_manifest,
+                )
+        return RenderCapture.from_payload(
+            html_digest=sha256_prefixed(html.encode("utf-8")), png=png,
+            browser_metrics=metrics, runtime_counters=get_render_runtime_counters(),
+        )
     if fit_policy is not None:
         from utils.slide_capture_local_fit import capture_with_policy
         return await capture_with_policy(
@@ -1919,6 +1936,7 @@ async def _render_admitted_html_in_worker(
     admitted: AdmittedHtml, *, timeout: int,
     width_px: int = SLIDE_W, height_px: int = SLIDE_H,
     private_diagnostic_profile: str | None = None,
+    chart_witness_manifest: dict | None = None,
 ) -> tuple[bytes, Mapping[str, Any] | None]:
     """Low-level worker-only CDP entry; never starts another worker or file render."""
 
@@ -1933,6 +1951,7 @@ async def _render_admitted_html_in_worker(
     return _render_admitted_html_over_pipe(
         admitted, timeout, width_px=width_px, height_px=height_px,
         private_diagnostic_profile=private_diagnostic_profile,
+        **({"chart_witness_manifest": chart_witness_manifest} if chart_witness_manifest is not None else {}),
     )
 
 

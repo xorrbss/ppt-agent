@@ -328,8 +328,11 @@ def pin_svg_style(request: object) -> dict:
                 # Native chart/table requirement revision, pinned once so a resumed deck keeps the
                 # literal grammar (and outline-time prose chart lines) it was authored with.
                 from services.generation_core.drivers.svg.native_requirements import (
-                    ADMITTED_REQUIREMENTS_REVISION, SNAPSHOT_REVISION_KEY)
-                frozen[SNAPSHOT_REVISION_KEY] = ADMITTED_REQUIREMENTS_REVISION
+                    ADMITTED_REQUIREMENTS_REVISION, REQUIREMENTS_VERSION_V5, SNAPSHOT_REVISION_KEY)
+                from utils.get_env_concurrency import get_svg_native_chart_integrity_v5_env
+                frozen[SNAPSHOT_REVISION_KEY] = (
+                    REQUIREMENTS_VERSION_V5 if get_svg_native_chart_integrity_v5_env()
+                    else ADMITTED_REQUIREMENTS_REVISION)
                 from services.generation_core.drivers.svg.icon_flatten import (
                     ASSET_PROJECTION_CURRENT, ASSET_PROJECTION_KEY,
                 )

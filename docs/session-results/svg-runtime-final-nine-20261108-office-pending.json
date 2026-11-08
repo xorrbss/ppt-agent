@@ -1,0 +1,345 @@
+{
+  "schema": "svg-freeze-final-local-verification/v1",
+  "recordedUtc": "2026-11-08T00:45:56.094392+00:00",
+  "status": "office-rendering-pending",
+  "synthetic": true,
+  "generationHttpMeasured": false,
+  "sourceBaseline": "8d6d21fb8611fe6b6312fc2d4ba5186406aa05d6",
+  "orchestrationRun": "run_140c2e5d0d3b",
+  "freeze": {
+    "nonSvgCodeAndTestsPreserved": true,
+    "ciHeadCount": 478,
+    "ciCurrentCount": 495,
+    "ciRemoved": 0,
+    "trackedDeletions": 0
+  },
+  "capture": {
+    "manifestPath": "C:\\Users\\ibiz\\orca\\workspaces\\ppt-agent\\svg-chart-render-proof-1108\\docs\\session-results\\svg-chart-render-proof-20261108\\normal-profile-nine\\acceptance-nine-native-composition-attempt-1\\capture-manifest.json",
+    "manifestSha256": "7f193942624cd751e202842aa17c4179d685d60418d2ba5ecb807a0fb3c6f616",
+    "cases": [
+      {
+        "case": "column",
+        "status": "passed",
+        "elapsedSeconds": 60.8865365,
+        "timeoutArgumentOmitted": true
+      },
+      {
+        "case": "coincident-line",
+        "status": "passed",
+        "elapsedSeconds": 63.4157123,
+        "timeoutArgumentOmitted": true
+      },
+      {
+        "case": "stacked-column",
+        "status": "passed",
+        "elapsedSeconds": 79.0888955,
+        "timeoutArgumentOmitted": true
+      },
+      {
+        "case": "donut",
+        "status": "passed",
+        "elapsedSeconds": 64.3683821,
+        "timeoutArgumentOmitted": true
+      },
+      {
+        "case": "fixed-column",
+        "status": "passed",
+        "elapsedSeconds": 63.9256235,
+        "timeoutArgumentOmitted": true
+      },
+      {
+        "case": "separator-pie",
+        "status": "passed",
+        "elapsedSeconds": 46.7638368,
+        "timeoutArgumentOmitted": true
+      },
+      {
+        "case": "marker-line",
+        "status": "passed",
+        "elapsedSeconds": 47.7974753,
+        "timeoutArgumentOmitted": true
+      },
+      {
+        "case": "horizontal-bar",
+        "status": "passed",
+        "elapsedSeconds": 60.5539284,
+        "timeoutArgumentOmitted": true
+      },
+      {
+        "case": "signed-zero-multiseries-area",
+        "status": "passed",
+        "elapsedSeconds": 54.2665262,
+        "timeoutArgumentOmitted": true
+      }
+    ]
+  },
+  "publication": {
+    "status": "published",
+    "revision": 1,
+    "normalPublishFunction": true,
+    "privateStartedAndCompletionAudit": true
+  },
+  "httpExport": {
+    "status": "succeeded",
+    "sourceRevision": 1,
+    "singleSubmission": true,
+    "artifactSha256": "e3b953f8c13b293d3f668c5c8c58f8d9203e3daf8878bd69abe83d25f2a5589e",
+    "artifactSizeBytes": 148200,
+    "nativeOffered": 9,
+    "nativeRetained": 9,
+    "nativeFellBack": 0,
+    "fontEmbedded": true
+  },
+  "nativePptx": {
+    "passed": true,
+    "slides": [
+      {
+        "axisTitleObservation": null,
+        "case": "column",
+        "categoryCount": 3,
+        "chartPart": "ppt/charts/chart101.xml",
+        "chartSha256": "ebc1fa434cd97e7a18612a5756737bf1c9b2e9aa2c85c4fe4445f232aca215ee",
+        "family": "column",
+        "index": 0,
+        "nativeCharts": 1,
+        "passed": true,
+        "seriesCount": 1,
+        "workbookPart": "ppt/embeddings/Microsoft_Excel_Sheet101.xlsx",
+        "workbookSha256": "be9b0c16c54984c2c31c1163d2d9bb00d77bee030d535a839bc8e58b2205ad11"
+      },
+      {
+        "axisTitleObservation": null,
+        "case": "coincident-line",
+        "categoryCount": 3,
+        "chartPart": "ppt/charts/chart201.xml",
+        "chartSha256": "c51892db2969fb6d6030bdbda736f55ff6db7c0ac302abc543b3012843ab22cd",
+        "family": "line",
+        "index": 1,
+        "nativeCharts": 1,
+        "passed": true,
+        "seriesCount": 2,
+        "workbookPart": "ppt/embeddings/Microsoft_Excel_Sheet201.xlsx",
+        "workbookSha256": "4f7f7c766a7e128bd4edd8bd814e605fb57ad57a1f210d0ef9b400e13b98c58c"
+      },
+      {
+        "axisTitleObservation": null,
+        "case": "stacked-column",
+        "categoryCount": 3,
+        "chartPart": "ppt/charts/chart301.xml",
+        "chartSha256": "d1e71b4f9edaf9b85bd4772dcaba4f0d2d1182a0e526fcad9af75c2ffbcf7e5b",
+        "family": "column",
+        "index": 2,
+        "nativeCharts": 1,
+        "passed": true,
+        "seriesCount": 2,
+        "workbookPart": "ppt/embeddings/Microsoft_Excel_Sheet301.xlsx",
+        "workbookSha256": "6cd2bb030f41ab9af3862ca01fb39037ebf16514851dd132d6a3f0c27bb4b551"
+      },
+      {
+        "axisTitleObservation": null,
+        "case": "donut",
+        "categoryCount": 3,
+        "chartPart": "ppt/charts/chart401.xml",
+        "chartSha256": "a2342aeefb1a115f57d0a266db37cd733d14a62e9730ba6a25d0faadb489bc39",
+        "family": "donut",
+        "index": 3,
+        "nativeCharts": 1,
+        "passed": true,
+        "seriesCount": 1,
+        "workbookPart": "ppt/embeddings/Microsoft_Excel_Sheet401.xlsx",
+        "workbookSha256": "bbc1885487f9477b751dd709ba7dbef41ff364400f20d04b2038ef1a0bea5ee4"
+      },
+      {
+        "axisTitleObservation": "native-sibling-text-present;position-binding-not-verified",
+        "case": "fixed-column",
+        "categoryCount": 2,
+        "chartPart": "ppt/charts/chart501.xml",
+        "chartSha256": "5640fc2dd4316f0546db070304d0d6eafbaa658a0e07d9080cecc07b60f456f6",
+        "family": "column",
+        "index": 4,
+        "nativeCharts": 1,
+        "passed": true,
+        "seriesCount": 2,
+        "workbookPart": "ppt/embeddings/Microsoft_Excel_Sheet501.xlsx",
+        "workbookSha256": "82a40cadf611e5a886411c526dcd8ac6ab95da0343fb2154d81d67e0fae687be"
+      },
+      {
+        "axisTitleObservation": null,
+        "case": "separator-pie",
+        "categoryCount": 3,
+        "chartPart": "ppt/charts/chart601.xml",
+        "chartSha256": "61dd441f480ddf82e4de3d65185bb139f6cb11c8d3624d6cc15d6f11d8069309",
+        "family": "pie",
+        "index": 5,
+        "nativeCharts": 1,
+        "passed": true,
+        "seriesCount": 1,
+        "workbookPart": "ppt/embeddings/Microsoft_Excel_Sheet601.xlsx",
+        "workbookSha256": "bbc1885487f9477b751dd709ba7dbef41ff364400f20d04b2038ef1a0bea5ee4"
+      },
+      {
+        "axisTitleObservation": null,
+        "case": "marker-line",
+        "categoryCount": 3,
+        "chartPart": "ppt/charts/chart701.xml",
+        "chartSha256": "90b82d92c87acb93ae1f27730764b96616cdd10b8ab58632c362726705f29865",
+        "family": "line",
+        "index": 6,
+        "nativeCharts": 1,
+        "passed": true,
+        "seriesCount": 1,
+        "workbookPart": "ppt/embeddings/Microsoft_Excel_Sheet701.xlsx",
+        "workbookSha256": "0505b2713974a8ab44ca957342f2bfda3b9d3a0207e72a19d0e266b189d2ed7a"
+      },
+      {
+        "axisTitleObservation": null,
+        "case": "horizontal-bar",
+        "categoryCount": 3,
+        "chartPart": "ppt/charts/chart801.xml",
+        "chartSha256": "d2e91629ba9185303a6c0595501637f271b6205f3d235bc9b8abdb47f5e4c36e",
+        "family": "bar",
+        "index": 7,
+        "nativeCharts": 1,
+        "passed": true,
+        "seriesCount": 1,
+        "workbookPart": "ppt/embeddings/Microsoft_Excel_Sheet801.xlsx",
+        "workbookSha256": "bbc1885487f9477b751dd709ba7dbef41ff364400f20d04b2038ef1a0bea5ee4"
+      },
+      {
+        "axisTitleObservation": null,
+        "case": "signed-zero-multiseries-area",
+        "categoryCount": 3,
+        "chartPart": "ppt/charts/chart901.xml",
+        "chartSha256": "09107b6d347e4040dbec120d7f71659c9b19a76fe5a9eff96affcad61f338ab4",
+        "family": "area",
+        "index": 8,
+        "nativeCharts": 1,
+        "passed": true,
+        "seriesCount": 2,
+        "workbookPart": "ppt/embeddings/Microsoft_Excel_Sheet901.xlsx",
+        "workbookSha256": "f7ec9594c61cb713d9e3ab0511ea8fd30abb22584efc7eb5f9de4d7bde736fa8"
+      }
+    ],
+    "scope": "native chart data, workbook and bounded OOXML appearance; no rendering or visual acceptance",
+    "unverified": [
+      "publication/export receipt provenance",
+      "separator stroke visual fidelity",
+      "retained sibling axis title position binding",
+      "COM visual fidelity"
+    ]
+  },
+  "office": {
+    "status": "unavailable",
+    "reasonCode": "svg_final_pptx_office_instance_busy",
+    "artifactHashInvariant": true,
+    "existingProcessesModified": false,
+    "completionRequires": "Existing PowerPoint owner saves and closes their application, or supplies a clean dedicated Office worker."
+  },
+  "server": {
+    "baseUrl": "http://localhost:5000",
+    "health": [
+      {
+        "name": "proxy-root",
+        "status": 200,
+        "authenticated": null
+      },
+      {
+        "name": "proxy-auth",
+        "status": 200,
+        "authenticated": true
+      },
+      {
+        "name": "next-health",
+        "status": 200,
+        "authenticated": null
+      },
+      {
+        "name": "api-health",
+        "status": 200,
+        "authenticated": null
+      },
+      {
+        "name": "api-ready",
+        "status": 200,
+        "authenticated": null
+      }
+    ],
+    "postgresComponents": 3,
+    "v5GlobalOptInAbsent": true,
+    "existingUserTemplateEnvironmentPreserved": true,
+    "nextAndProxyPreserved": true,
+    "existingPostgresPreserved": true,
+    "nextUserConfigPresent": true
+  },
+  "checks": {
+    "producer": {
+      "passed": 120
+    },
+    "consumer": {
+      "passed": 211,
+      "externalArtifactCasesInitiallySkipped": 9
+    },
+    "externalArtifactReplay": {
+      "passed": 9,
+      "deselected": 157
+    },
+    "v5MarkerStatic": {
+      "passed": 8
+    },
+    "verifierSourceLedger": {
+      "passed": 58,
+      "existingConditionalSkipped": 1
+    },
+    "newPublicationShellRegression": {
+      "passed": 1,
+      "seconds": 6.45
+    }
+  },
+  "failuresPreserved": [
+    "publication attempt 1: PresentationProfileError before new SVG identity was stamped; fixed by stamping before first flush",
+    "publication regression attempt 1: missing async pytest plugin; changed the new test to asyncio.run and reran only that node",
+    "native PPTX audit attempt 1: 6 passed, 3 per-point-label false negatives; helper corrected, same unchanged PPTX passed 9/9",
+    "Office attempt 1: existing PowerPoint process busy; full Office render remains unavailable"
+  ],
+  "evidenceFiles": [
+    {
+      "privateRelativePath": "publication-native-composition-attempt-2-process.json",
+      "sha256": "920c2a5a2da149f720603e8e13d79c6d38bbb56c7b633c9188c6b0f331c5f036"
+    },
+    {
+      "privateRelativePath": "native-pptx-nine-verification-attempt-1.json",
+      "sha256": "3be641bf77ab2ec3f69e7a9ad2d9144690fbaf23ea04728ba1e6b8f337a6a6de"
+    },
+    {
+      "privateRelativePath": "native-pptx-nine-verification-attempt-2.json",
+      "sha256": "f45066251a6fea7d8a84d154e959dabf695f988e94e2dddc3eb2665ce9954a22"
+    },
+    {
+      "privateRelativePath": "workspace-export-native-composition-attempt-1/audit-result.json",
+      "sha256": "cdedd46425cb8c485408e92a2fa40e7372a5a078f87652db74bb6fe53c19b1fc"
+    },
+    {
+      "privateRelativePath": "workspace-export-native-composition-attempt-1/structural-readback.json",
+      "sha256": "12ce9e051773bf6acb23ca8e65e170834096e9705cad9b7b8fd6ae55ce036883"
+    },
+    {
+      "privateRelativePath": "office-native-composition-attempt-1.json",
+      "sha256": "cb34683d5e1cc30381e0eec8c26d24f21008499941c08e975c3fc88b8a79880a"
+    },
+    {
+      "privateRelativePath": "final-http-health-after-publication.json",
+      "sha256": "09047ce0735d8c82286fe22897fd87cf6501d9dcd49507c2d608dd71cf204173"
+    },
+    {
+      "privateRelativePath": "final-managed-environment-and-processes.json",
+      "sha256": "50c724641ed3b18ffe43a796904cd9395dfc541371772217afd2210cae3222bf"
+    }
+  ],
+  "limitations": [
+    "Synthetic nine-case fixture, no provider-backed prompt-to-generation HTTP run",
+    "Bounded chart data/workbook/OOXML acceptance is separate from Office visual fidelity",
+    "Preserved-hidden-by-owned data is not claimed visually observable",
+    "physicalExposure, unilateralVisibility and perClusterFontAttributionVerified remain false",
+    "No full non-SVG behavioral suite, paid quality review, merge, push or deployment performed"
+  ]
+}

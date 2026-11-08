@@ -1,0 +1,33 @@
+# Session task: SVG template content sizing and bounded whitespace metrics
+
+## Controlling instructions
+
+The owner explicitly authorizes this independent Orca development session and multiple internal agents selected by difficulty. You are a session lead, not the top-level integrator. Read the global and nearest AGENTS.md, CLAUDE.md, and the absolute controlling brief `C:/project/PPT-agent/ppt-agent/docs/codex-brief-svg-freeze-quality-20261107.md`. This newer session spec overrides its former no-recursive-delegation sentence: you MUST use a bounded internal developer plus independent reviewer; no further coordinator hierarchy. The source checkout starts at the current main baseline; refresh status and preserve user changes. The root's uncommitted freeze policy may not exist in this worktree, so this explicit instruction controls over old deletion documents.
+
+All existing non-SVG engines, their entry points, stored data, dedicated tests and CI participation are FROZEN: do not delete, disable, move, rename, rewrite, skip, xfail or deselect them. Do not resurrect already removed engines. Shared code may change only with unchanged default/non-SVG behavior and directly relevant compatibility evidence. Existing legacy SVG snapshot behavior is also preserved. No source-page skeleton reuse, fixed slots or source text refill. No secrets/customer text in reports or fixtures.
+
+Use an internal implementation worker and a separate read-only reviewer with the models below, fresh task briefs, disjoint writable ownership and concise summaries. At most three active agents including you. The lead can contribute implementation in its OWN files. No duplicated work or simultaneous edits to one file. If the collaboration tool needs a fresh context for model selection, use it; never silently inherit an unsuitable model. No code/diff/document-body/raw-log dumps in commentary or final output. Report Korean progress concisely, source/comments/docs in English.
+
+Top-level root alone owns shared-file integration and local stack, DB, provider calls, auth, runtime, COM, Git merge/push and final artifact validation. Do NOT start servers, run live generations, use paid/judge calls, modify local app data or DB, disable auth, push, deploy, migrate, delete worktrees or edit the controlling root checkout. You may make a local commit containing ONLY your owned files, if useful for integration; do not stage other files.
+
+Reserved root-owned files: `services/svg_generation_admission.py`, `utils/get_env_concurrency.py`, `utils/get_env.py`, `tests/support/internal_env_names.py`, `services/verifier_revisions.py`, `tests/svg_unit_subset.txt`, CLAUDE.md, AGENTS.md and local-stack scripts. Paths without a prefix refer to `servers/fastapi/`. Do not edit another session's files. Ask the root through Orca `ask` when a necessary change crosses ownership; continue independent work meanwhile. Return a precise integration request with target symbol, required arguments/fields and compatibility proof.
+
+Root integration interfaces: default-off settings are `SVG_TEMPLATE_PICTURES` and `SVG_TEMPLATE_CONTENT_SIZING`. Read effective behavior from the admitted snapshot, not live env, in authoring/validation code. Missing keys mean disabled. Proposed snapshot booleans are `template_pictures` and `template_content_sizing`; only literal true enables the new path. Root will pin the associated policy revision and effective policy needed for replay. Agree any required extra fields through ask before committing an incompatible interface.
+
+Read only the target and directly connected code. Complete implementation, independent review, corrections and ONE smallest relevant check after implementation. Workers/reviewers should propose checks; you execute the selected check once. No automatic full suite/lint/build/typecheck/E2E/coverage. No repeated checks absent an intervening relevant correction. Use the shared `C:/project/PPT-agent/ppt-agent/servers/fastapi/.venv` if suitable; do not install a duplicate environment or npm dependencies. Add meaningful focused SVG tests to existing relevant files or one new owned test file, never to manufacture green status.
+
+Produce a concise English completion report under your worktree's `docs/session-results/` with outcome, owned changed paths, commit if any, exact check and result, review findings resolved/open, non-SVG preservation evidence, root integration requests and unmeasured items. Return its path through the supervised worker_done protocol. A required check failure is a failed/blocked result, not success. Do not settle for a plan. Preserve the workspace for integration.
+
+## Models for this session
+
+Lead gpt-6.1-sol / medium. Bounded prompt implementation gpt-6.1-terra / medium. Metric implementation/reviewer gpt-6.1-sol / high with disjoint files; rotate roles to keep at most three active agents. Use Terra high for later visual review only if root supplies actual artifacts.
+
+## Owned task and acceptance
+
+Own `services/svg_templates/body_composition.py`, directly relevant SVG body-composition tests, and NEW `scripts/svg_template_eval/content_sizing_metrics.py` plus its narrowly scoped tests if necessary. Do not edit evaluator-owned metrics.py/run_eval.py or picture-offer modules. Root owns `services/svg_templates/generation.py` wiring, env/snapshot admission, and the final evaluator hook.
+
+Implement content-sized body components behind an explicit content_sizing keyword defaulting to false, driven later by the frozen template_content_sizing snapshot flag. Missing/off must preserve existing prompt bytes literally. Retain the current free authoring contract: no copied page bodies, source text, fixed slots, layout enums or filled skeletons. Stop stretching tables/cards just to occupy the page, while preserving readability, source facts and reading order. Do not add a rejecting validator.
+
+The new pure measurement helper should measure card-internal unused space only where card/text containment is defensible and report body/page context or unavailable/uncertain evidence. Avoid treating every rectangle as a card, frame furniture as content, or smaller components as proof of higher density. Reuse available parsing/geometry rather than creating a renderer. Give root/evaluator an explicit integration contract; do not edit their files concurrently.
+
+Acceptance: old off-path prompt bytes remain unchanged; enabled guidance is content-sized and does not invent facts or reduce typography; synthetic measurements distinguish empty card interior from ordinary margin/frame without false certainty; root receives the exact template generation keyword and metrics hook. Visual improvement remains unmeasured until root's artifact/runtime phase.

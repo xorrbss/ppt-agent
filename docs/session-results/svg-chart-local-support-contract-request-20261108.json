@@ -1,0 +1,34 @@
+{
+  "schema": "svg-chart-local-support-contract-request/v1",
+  "status": "Proposed exact interface for root agreement; not admitted proof or runtime acceptance.",
+  "requirementsRevision": "svg-native-requirements/v5",
+  "marker": {
+    "manifestAlternativeKind": "marker-on-datum",
+    "fields": ["markerTargetId", "markerQid", "geometrySupportDigest", "requiresEntireBoundaryCoverage", "requiresOriginalContribution"],
+    "conditions": [
+      "Server family proof binds this actual marker to this exact datum anchor; distinct actual marker qid is later in DOM than the source curve.",
+      "Only the source datum curve obligation can use the marker; no other datum/category/value borrows it.",
+      "The entire target boundary native-alpha footprint is covered by this marker's native alpha and independently original contributing marker paint; a nonempty intersection alone is insufficient.",
+      "The source target retains its whole isolated native-alpha denominator and exact owned overlap accounting; altered foreign paint, hidden marker, or unknown glyph/primitive measurement cannot pass."
+    ],
+    "rendererWitnessField": "targets[].visibilityObligations[].markerBoundary",
+    "rendererWitnessFields": ["targetId", "supportId", "markerTargetId", "markerQid", "footprint", "originalContribution"],
+    "maskBasis": "Target native alpha. Footprint is target boundary intersect marker native alpha; originalContribution also intersects marker original contribution. Both must cover the whole target boundary footprint, with independent marker original contribution."
+  },
+  "stackValueGlyphs": {
+    "manifestAlternativeKind": "bound-stack-value-glyphs",
+    "fields": ["neighborDatumId", "neighborTargetId", "neighborSupportId", "geometrySupportDigest", "cumulativeValue", "grouping", "axisKey", "unitKey", "datumValueGlyphTargetIds", "neighborValueGlyphTargetIds", "datumInteriorSupportId", "neighborInteriorSupportId", "stackBaseline", "stackOuterTotal"],
+    "supportReferenceFields": ["datumId", "targetId", "supportId", "geometrySupportDigest"],
+    "conditions": [
+      "Alternative only for an exact adjacent stack seam already proved contiguous with a common scale, category, axis and unit; it does not exempt the whole datum.",
+      "Both complete numeric/unit labels have unique actual segment ownership assigned before number comparison; boundary-centered ambiguous labels, another category's label, title or axis text cannot substitute.",
+      "Both exact bound values and units are checked against the independently proved datum geometry; every required glyph character must have actual original contribution and complete font/material evidence.",
+      "Both declared interior-profile contribution regions have independent actual contribution; no glyph or neighboring datum substitutes for either region.",
+      "The category stack's actual first baseline and last outer-total boundaries terminate in original-boundary-contribution or the exact calibrated-value-line witness; no recursive bound-stack-value-glyphs support.",
+      "Visible series-name/order association remains separately required; identical legend swatches alone do not prove series ownership. Missing, hidden, swapped, repeated or extra labels and distorted source geometry remain strict."
+    ],
+    "rendererWitnessField": "targets[].visibilityObligations[].boundStackValueGlyphs",
+    "rendererWitnessFields": "Exact echo of the selected manifest alternative plus targetId and supportId. The consumer separately resolves every referenced actual glyph target, contribution-region measurement and baseline/total boundary witness; no summary boolean authorizes support.",
+    "newRasterMeasurement": false
+  }
+}

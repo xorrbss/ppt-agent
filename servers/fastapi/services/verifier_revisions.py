@@ -169,6 +169,12 @@ CONVERTER_LEDGER = VerifierRevisionLedger(
         # inventory; historical converter aliases keep their original recipe.
         # No conversion bytes or historical anchor inputs change.
         "ce6b9c85984462c188f37385abcb30f4e8df458a8e986dc172223582045ad591": "svg-pptx-converter/1",
+        # 2026-11-08 final integration: legitimate reproducible vendor patch for
+        # the optional V5 doughnut hole appearance; absent-field wire/XML samples
+        # retain the old 75 percent default. The generated manifest binds all 87
+        # rebuilt bytes; no superseded-manifest alias or historical preimage is
+        # changed. Bounded evidence is in the final source-state report.
+        "82c2b1c3b18a71ca0c6919fa43ec6132f347814886c5809441caf001a17ae228": "svg-pptx-converter/1",
     }),
 )
 
@@ -230,6 +236,18 @@ COMMON_HEADER_VERIFIER_LEDGER = VerifierRevisionLedger(
         # replay re-derives the saved v1 context encoding and still compares every
         # field; header measurement and verification are unchanged.
         "sha256:2d8c55610be61441571256dd905366acfc8491425f89cd600821198e9cf0ba8a": "svg-common-header-verifier/1",
+        # 2026-11-08 final integration: shared renderer dependency closure and
+        # exact-V5 free-page data-span authority. Header context/formulas and
+        # legacy numeric paths are unchanged; the current 24 HEAD parser-wire
+        # cases are bounded evidence. Latest actual absent-manifest renderer
+        # comparison remains pending, separately recorded in the report.
+        "sha256:8fa7c744b7d81233953c5833f4afff8f11149e062a7c2d6ec5e1bed64025f358": "svg-common-header-verifier/1",
+            # Exact admitted-subset variable-font nameID25 binding; legacy/static paths unchanged.
+            "sha256:fa334b37935ad6b4c80be221002323c3ea727802168165064bb1ab051a0451e9": "svg-common-header-verifier/1",
+            # Reviewed chart paint adapter performance fix; proof and legacy gates retained.
+            "sha256:45666ce705a9f1a41fdf0e2339189d30ea5731a1a83abbd2db8722e726f9a1b0": "svg-common-header-verifier/1",
+            # Reviewed V5 native layered-paint support and static marker visibility; legacy paths retained.
+            "sha256:b3a5aa367b8c8ede77a2c8b33c3c19d532eaf20876a7bf3e8496440e32513894": "svg-common-header-verifier/1",
     }),
 )
 
@@ -300,6 +318,14 @@ WHOLE_PAGE_VERIFIER_LEDGER = VerifierRevisionLedger(
         # Cover the already-executed font-subset helper in the current source
         # inventory without changing export verification or historical anchors.
         "67d5215fb1386032c3eeafda62ba95c9325b45abe79033813c68282042d14b3b": "svg-whole-page-verifier/1",
+        # 2026-11-08 final integration: native chart/polar appearance and preset
+        # execution closures, with new behavior requiring explicit fresh pins.
+        # Current HEAD parser/absent-wire XML samples and 36 preset checks with
+        # ten exact-HEAD SVG/receipt differentials bound legacy compatibility;
+        # the older 104-row corpus is not relabeled as fresh global proof.
+        "2bb40cac39ddf79d9a81a5db0becceb539d39e25233a6a1bb3b08e8b6ddf450f": "svg-whole-page-verifier/1",
+            # Reviewed V5 native layered-paint support and static marker visibility; legacy paths retained.
+            "0501cd4f5a8bc665e97374bbd7bc8bc2211feaa34626ce5b67d431d2f976ec20": "svg-whole-page-verifier/1",
     }),
 )
 
@@ -429,6 +455,20 @@ PARTIAL_RECOVERY_CODE_LEDGER = VerifierRevisionLedger(
         # seedless offers; saved v1 template contexts replay unchanged. Track
         # both drawing helpers now while preserving the historical preimage.
         "57aa07966d950e5dc470f9eba5b1ced173b6f5c4bde43332a4f9b88c6fbe5b49": "svg-partial-recovery-code/1",
+        # 2026-11-08 final integration: default-off fresh V5/picture/content-sizing
+        # pins isolate their new paths; stored legacy pins/offers stay authoritative.
+        # The 57 post-anchor dependencies retain all historical inputs. Current
+        # evidence is 24 HEAD parser-wire cases, bounded old native wire/XML
+        # absence samples and 36/10 preset checks; latest actual absent-render
+        # parity is pending. See the report rather than extending older 104/166
+        # results into claims about this final source or all exports.
+        "db959aa6cdb0ff323b99d641153a4d18f441ddbd3ad31c5fc3175f836424c69e": "svg-partial-recovery-code/1",
+            # Exact admitted-subset variable-font nameID25 binding; legacy/static paths unchanged.
+            "b46fbe0f342b19825687d44334e6da6e0abecd1b6fef92c90fccca6f74a6645e": "svg-partial-recovery-code/1",
+            # Reviewed chart paint adapter performance fix; proof and legacy gates retained.
+            "c7651890b9f5b0e6982e8c873431a6faa1aeb028fe3ae9b3c350a01842bf46e6": "svg-partial-recovery-code/1",
+            # Reviewed V5 native layered-paint support and static marker visibility; legacy paths retained.
+            "7e207cf8e8a46c4520beeb37ae7472fa417110690efdeac3d2abdcc90f17c44d": "svg-partial-recovery-code/1",
     }),
 )
 
@@ -472,6 +512,17 @@ PAGE_RENDER_CODE_LEDGER = VerifierRevisionLedger(
         # as the recovery entry: unpinned pages retain their historical bytes.
         # Both drawing helper files are now covered by the current inventory.
         "f5f97281424d071632bc81efa13c00abca135a19a75765b64687a04b9eb85bd5": "svg-page-render-code/1",
+        # Same final pinned-feature/preset closure and bounded compatibility
+        # reasons as the recovery entry. Authority exclusions, anchors and old
+        # keys remain unchanged. V5 capture/consumer evidence does not establish
+        # latest actual absent-render parity or final whole-export readiness.
+        "db764d70860c09b34b18d4a71baef943c56c51a8a4a51487c7a8b92926dd0053": "svg-page-render-code/1",
+            # Exact admitted-subset variable-font nameID25 binding; legacy/static paths unchanged.
+            "1dff1ddd35525d61ba752705fc74179e4d7ffbfedd6c23a5fe035590068173f7": "svg-page-render-code/1",
+            # Reviewed chart paint adapter performance fix; proof and legacy gates retained.
+            "1ea4c8823fe285d68a5381d0da4b3afe12a2c3caaa665a66b48dd817f6156846": "svg-page-render-code/1",
+            # Reviewed V5 native layered-paint support and static marker visibility; legacy paths retained.
+            "c15a6c05ea8ab8419188617ab7349805203a043c337fb5201769b4f697fe2b98": "svg-page-render-code/1",
     }),
 )
 

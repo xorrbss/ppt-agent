@@ -55,6 +55,7 @@ async def resolve_infographic_plan(
     roles: list[str],
     instructions: Optional[str] = None,
     vector_illustrations: bool = False,
+    template_picture_policy: Optional[dict] = None,
 ) -> Optional[AuthoredInfographicPlan]:
     """Decide this deck's figures once, from its own pages.
 
@@ -73,6 +74,22 @@ async def resolve_infographic_plan(
     if len(roles) != len(slides):
         raise ValueError("infographic plan roles must match the outline")
     brief = getattr(style, "brief", None)
+    if template_picture_policy is not None:
+        from services.generation_core.assets.vector_offer import validate_template_picture_policy
+
+        validate_template_picture_policy(template_picture_policy)
+        # Only the admitted SVG template path adds this guidance. The style is
+        # the frozen template projection supplied by the driver, never its text.
+        guidance = (
+            "Plan content-relevant vector pictures where they explain the slide: scenes, "
+            "small matched step pictures for process/cycle/timeline/roadmap figures, "
+            "before/after pairs, and percentage pictographs for gauge/KPI figures. "
+            "Keep labels and values faithful to the slide content and preserve quiet pages. "
+            "Do not add pictures to cover, section or closing pages. "
+            "Follow the frozen template palette and visual style; never copy source wording."
+        )
+        brief = (brief.strip() + "\n" if isinstance(brief, str) and brief.strip() else "") + guidance
+        vector_illustrations = True
     plan = await generate_infographic_plan(
         topic=getattr(brand, "topic", "") or "",
         language=getattr(brand, "language", None) or "Korean",

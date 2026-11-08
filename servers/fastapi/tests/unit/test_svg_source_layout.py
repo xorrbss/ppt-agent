@@ -141,7 +141,7 @@ def test_merged_table_cells_keep_values_structure_and_reading_order():
     assert _llm_source_content_view(content.replace(": ", ":", 1))[0] == content.replace(": ", ":", 1)
 
 
-@pytest.mark.parametrize("kind,payload", [("chart", {}), ("shape", {"preset": "star5"}),
+@pytest.mark.parametrize("kind,payload", [("chart", {}), ("shape", {"preset": "unknownPreset"}),
     ("shape", {"preset": "diamond", "geometry": {"rotationDegrees": 45}}),
     ("shape", {"preset": "diamond", "geometry": {"flipH": True}}),
     ("image", {"crop": {"left": .1}}), ("image", {"geometry": {"rotationDegrees": 90}})])
@@ -155,11 +155,35 @@ def test_image_only_pages_rejected_before_authoring():
         source_pages(manifest_for([("image", {"contentDigest": "sha256:image"})]))
 
 
-def test_parallelogram_preserves_shape_occurrence_as_static_polygon():
-    manifest = manifest_for([("text", {"text": "Title"}), ("shape", {"preset": "parallelogram"})])
+@pytest.mark.parametrize("preset", ["parallelogram", "rightArrow", "leftArrow", "upArrow", "downArrow",
+    "leftRightArrow", "upDownArrow", "chevron", "triangle", "pentagon", "hexagon", "star5",
+    "arc", "donut", "cloud", "sun", "cube", "flowChartDecision"])
+def test_presets_preserve_shape_occurrence_as_editable_svg(preset, tmp_path):
+    if preset == "rightArrow":
+        import os
+        import subprocess
+        import sys
+
+        probe = subprocess.run([sys.executable, "-B", "-c",
+            "from services.svg_source_preset_shapes import supports_source_preset; "
+            "assert supports_source_preset('rightArrow')"], cwd=tmp_path,
+            env={key: value for key, value in os.environ.items() if key not in {"PYTHONPATH", "PYTHONHOME"}},
+            capture_output=True, text=True, check=False)
+        assert probe.returncode == 0, probe.stderr
+    manifest = manifest_for([("text", {"text": "Title"}), ("shape", {"preset": preset})])
     result = assemble(manifest)
-    assert "polygon" in result.svg_content
+    root = ET.fromstring(result.svg_content)
+    if preset == "parallelogram":
+        assert root.find("{http://www.w3.org/2000/svg}polygon") is not None
+    else:
+        group = root.find("{http://www.w3.org/2000/svg}g")
+        paths = list(group)
+        assert paths and all(path.tag == "{http://www.w3.org/2000/svg}path" for path in paths)
+        assert all(path.get("d", "").startswith("M") for path in paths)
+        assert all(not any(command in path.get("d") for command in "ACQ") for path in paths)
     assert len([b for b in result.receipt["bindings"] if b["kind"] == "shape"]) == 1
+    assert verify_source_receipt(result.svg_content, result.receipt, manifest, 0)
+    assert assemble(manifest).svg_content == result.svg_content
 
 
 def test_diamond_preserves_all_occurrences_as_editable_polygons():
@@ -826,3 +850,85 @@ def test_compact_spacing_applies_only_inside_same_proven_parallel_group():
     layout = dict(min_gap=12,intra_group_gap=3)
     assert required_content_gap("p0:1","p0:2",layout,membership) == 3
     assert required_content_gap("p0:1","p0:5",layout,membership) == 12
+
+
+def test_straight_connector_preset_preserves_legacy_shape_role_rectangle():
+    manifest = manifest_for([("text", {"text": "Title"}),
+        ("shape", {"preset": "straightConnector1"})])
+    result = assemble(manifest)
+    root = ET.fromstring(result.svg_content)
+    binding = next(item for item in result.receipt["bindings"]
+        if item["source_id"] == "p0:1" and item["kind"] == "shape")
+    shape = next((node for node in root.iter() if node.get("id") == binding["element_id"]), None)
+    assert shape is not None and shape.get("id") == binding["element_id"]
+    assert shape.tag == "{http://www.w3.org/2000/svg}rect"
+    assert verify_source_receipt(result.svg_content, result.receipt, manifest, 0)
+
+
+@pytest.fixture(scope="module")
+def source_layout_baseline():
+    """Opt-in differential probe against an explicitly selected local Git revision."""
+    import os
+    from pathlib import Path
+    import subprocess
+    import sys
+    import types
+
+    revision = os.environ.get("SVG_SOURCE_LAYOUT_BASELINE_REVISION")
+    if not revision:
+        pytest.skip("Set SVG_SOURCE_LAYOUT_BASELINE_REVISION for the local compatibility probe")
+    repo = Path(__file__).resolve().parents[4]
+    path = "servers/fastapi/services/svg_source_layout.py"
+    source = subprocess.run(["git", "show", f"{revision}:{path}"], cwd=repo,
+        capture_output=True, check=True).stdout
+    name = "_svg_source_layout_compatibility_baseline"
+    module = types.ModuleType(name)
+    module.__file__ = str(repo / path)
+    previous = sys.modules.get(name)
+    sys.modules[name] = module
+    try:
+        exec(compile(source, f"{revision}:{path}", "exec"), module.__dict__)
+        yield module
+    finally:
+        if previous is None:
+            sys.modules.pop(name, None)
+        else:
+            sys.modules[name] = previous
+
+
+@pytest.mark.parametrize("preset,role", [
+    ("rect", "shape"), ("roundRect", "shape"), ("ellipse", "shape"),
+    ("line", "shape"), ("straightConnector1", "shape"),
+    ("parallelogram", "shape"), ("diamond", "shape"),
+    ("line", "connector"), ("straightConnector1", "connector"), (None, "shape"),
+])
+def test_legacy_source_layout_matches_selected_baseline(source_layout_baseline, preset, role):
+    import json
+
+    payload = {"preset": preset}
+    if preset is None:
+        payload["customGeometry"] = dict(version="numeric-custom-path/v1", width=100, height=100,
+            fill="norm", stroke=True, commands=[
+                dict(command="moveTo", points=[[0, 0]]),
+                dict(command="cubicBezTo", points=[[0, 100], [100, 100], [100, 0]]),
+                dict(command="quadBezTo", points=[[50, 20], [0, 0]]),
+                dict(command="close", points=[]),
+            ])
+    manifest = manifest_for([("text", {"text": "Title"}), ("shape", payload)])
+    blocks = list(manifest.units[0].blocks)
+    blocks[1] = blocks[1].model_copy(update={"semantic_role": role})
+    unit = manifest.units[0].model_copy(update={"blocks": tuple(blocks)})
+    manifest = manifest.model_copy(update={"units": (unit,)})
+    data = manifest.model_dump(mode="json", by_alias=True)
+    data.pop("manifestDigest")
+    manifest = manifest.model_copy(update={"manifest_digest": digest_json(data)})
+    plan = plan_for(manifest)
+    previous = source_layout_baseline.assemble_source_svg(manifest, 0, deepcopy(plan),
+        source_images={}, image_slots={}, min_font_size_px=12, style_digest="sha256:style")
+    current = assemble(manifest, deepcopy(plan))
+    assert current.svg_content.encode("utf-8") == previous.svg_content.encode("utf-8")
+    def receipt_bytes(receipt):
+        return json.dumps(receipt, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+    assert receipt_bytes(current.receipt) == receipt_bytes(previous.receipt)
+    assert source_layout_baseline.verify_source_receipt(previous.svg_content, previous.receipt, manifest, 0)
+    assert verify_source_receipt(previous.svg_content, previous.receipt, manifest, 0)

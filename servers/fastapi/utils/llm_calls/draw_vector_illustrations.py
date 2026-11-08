@@ -25,6 +25,7 @@ from utils.llm_provider import get_model
 from utils.llm_utils import generate_structured_with_schema_retries
 from utils.prompt_safety import format_untrusted_source_documents
 from utils.schema_utils import prepare_schema_for_validation
+from utils.structured_call_budget import StructuredProviderCallBudget
 
 LOGGER = logging.getLogger(__name__)
 
@@ -148,12 +149,20 @@ def parse_drawing_answer(content: object, request: DrawingRequest) -> dict[str, 
     return drawings
 
 
-async def draw_vector_illustrations(request: DrawingRequest) -> Optional[dict[str, str]]:
+async def draw_vector_illustrations(
+    request: DrawingRequest, *, call_budget: Optional[StructuredProviderCallBudget] = None,
+    call_timeout_seconds: Optional[float] = None,
+) -> Optional[dict[str, str]]:
     """Return ``{id: svg}`` for the drawings the model returned, or None when the call failed."""
     if not request.drawings:
         return {}
     try:
         schema = prepare_schema_for_validation(_Answer.model_json_schema(), strict=False)
+        bounded_kwargs = {}
+        if call_budget is not None:
+            bounded_kwargs["call_budget"] = call_budget
+        if call_timeout_seconds is not None:
+            bounded_kwargs["call_timeout_seconds"] = call_timeout_seconds
         content = await generate_structured_with_schema_retries(
             get_client(config=get_llm_config()),
             get_model(),
@@ -164,6 +173,7 @@ async def draw_vector_illustrations(request: DrawingRequest) -> Optional[dict[st
             validate_schema=True,
             validate_schema_max_loop_count=1,
             semantic_slot_prefix=request.semantic_slot,
+            **bounded_kwargs,
         )
         return parse_drawing_answer(content, request)
     except (ValueError, TypeError) as error:

@@ -119,6 +119,22 @@ def _entry(root: ET.Element, declaration: dict, *, width: float, height: float,
         anchor, payload, appearance = chart_object(
             raw, prims, canvas_texts=canvas_texts, revision=revision,
         )
+        from services.generation_core.drivers.svg.native_requirements import REQUIREMENTS_VERSION_V5
+        if revision == REQUIREMENTS_VERSION_V5 and payload["chartType"] == "donut":
+            from services.generation_core.drivers.svg.native_chart import _model_chart
+            from services.generation_core.drivers.svg.native_chart_evidence import _v5_scene
+            from services.generation_core.drivers.svg.chart_content_polar import prove_polar
+            # Match V5's content reader: the canonical source declaration and
+            # scene prove this ratio, independently of export-enriched payloads.
+            records, primitive_type = _v5_scene(root)
+            local = [record for record in records if group in record["ancestors"]]
+            canonical_prims = primitive_type(
+                tuple(record["shape"] for record in local if "shape" in record),
+                tuple(record["text"] for record in local if "text" in record), prims.tags,
+            )
+            geometry = prove_polar(raw, _model_chart(raw), canonical_prims)
+            if geometry.get("passed"):
+                appearance = {**(appearance or {}), "holeRatio": geometry["holeRatio"]}
         if payload.get("retainedAxisTitle"):
             payload["retainedAxisTitle"].update(
                 svgDigest=binding_digest,
