@@ -226,11 +226,22 @@ def _v5_scene(root, measurement=None, svg=None):
 
     def visit(node, parent_position, inherited, ancestors):
         tag = node.tag.rsplit("}", 1)[-1]
-        if tag in {"style", "defs", "clipPath", "mask", "filter"} or any(
-                key in node.attrib for key in ("style", "class", "clip-path", "mask", "filter",
+        if tag in {"defs", "title", "desc", "metadata"}:
+            # Never painted themselves. A <defs> resource can paint only through a
+            # reference: url() paints are refused below, and clip-path/mask/filter
+            # attributes stay refused, so nothing in it can reach the scene.
+            return
+        if tag in {"style", "clipPath", "mask", "filter"} or any(
+                key in node.attrib for key in ("style", "clip-path", "mask", "filter",
                     "writing-mode", "textLength", "lengthAdjust", "rotate", "baseline-shift",
                     "dominant-baseline", "alignment-baseline", "direction", "unicode-bidi")):
             raise NativeRejection("native_chart_content_svg_contract_invalid")
+        if "class" in node.attrib and has_stylesheet:
+            # A class attribute paints nothing without a stylesheet to select it.
+            raise NativeRejection("native_chart_content_svg_contract_invalid")
+        if any("url(" in (node.get(key) or "") for key in ("fill", "stroke")):
+            # A gradient or pattern paint is not a flat colour the proof can read.
+            raise NativeRejection("native_chart_content_paint_reference_unsupported")
         if node.get("display") not in (None, "inline") or node.get("visibility") not in (None, "visible"):
             raise NativeRejection("native_chart_content_hidden")
         position = _compose_transform(parent_position, _transform_of(node))
@@ -281,6 +292,7 @@ def _v5_scene(root, measurement=None, svg=None):
                                    "fill": shape.fill if signed_area else None,
                                    "stroke": shape.stroke if drawn else None}, subpaths=paths, closedSubpaths=closed_paths)
         records.append({"node": node, "ancestors": ancestors, "shape": shape, "order": order[node], "attrs": attrs})
+    has_stylesheet = any(node.tag.rsplit("}", 1)[-1] == "style" for node in root.iter())
     visit(root, (0, 0, 1), {}, ())
     return records, GroupPrimitives
 

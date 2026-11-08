@@ -1191,3 +1191,45 @@ def test_an_unprovable_second_chart_does_not_withdraw_the_first_charts_witness()
     manifest = build_chart_witness_manifest(page, svg, revision=V5)
     assert manifest is not None
     assert [chart["id"] for chart in manifest["charts"]] == ["native-chart-sales"]
+
+
+def _with_page_extras(*elements, root_class=False):
+    from services.generation_core.drivers.svg.native_chart_evidence import bound_declarations
+    original = _page()
+    kept, _ = bound_declarations(original, original["svg_content"])
+    root = ET.fromstring(original["svg_content"])
+    for index, element in enumerate(elements):
+        root.insert(index, ET.fromstring(element))
+    if root_class:
+        root.set("class", "slide")
+    svg = ET.tostring(root, encoding="unicode")
+    page = {"svg_content": svg}
+    bind_native_declarations(page, svg, kept)
+    return page
+
+
+@pytest.mark.parametrize("extras,root_class", [
+    (('<defs xmlns="http://www.w3.org/2000/svg"><linearGradient id="g1"><stop offset="0" stop-color="#fff"/>'
+      '</linearGradient></defs>',), False),
+    (('<rect xmlns="http://www.w3.org/2000/svg" class="decor" x="0" y="0" width="10" height="10" fill="#000"/>',),
+     False),
+    (('<title xmlns="http://www.w3.org/2000/svg">Slide</title>',), False),
+])
+def test_unrelated_non_painting_svg_features_keep_v5_chart_evidence(extras, root_class):
+    from services.generation_core.drivers.svg.native_chart_evidence import chart_drawing_evidence
+    page = _with_page_extras(*extras, root_class=root_class)
+    evidence = chart_drawing_evidence(page, page["svg_content"], revision=V5)
+    assert evidence["native-chart-sales"]["contentGeometry"]["passed"] is True
+
+
+@pytest.mark.parametrize("extras", [
+    ('<style xmlns="http://www.w3.org/2000/svg">.decor{fill:red}</style>',
+     '<rect xmlns="http://www.w3.org/2000/svg" class="decor" x="0" y="0" width="10" height="10"/>'),
+    ('<defs xmlns="http://www.w3.org/2000/svg"><linearGradient id="g1"/></defs>',
+     '<rect xmlns="http://www.w3.org/2000/svg" x="0" y="0" width="1280" height="720" fill="url(#g1)"/>'),
+])
+def test_stylesheets_and_reference_paints_still_refuse_the_v5_scene(extras):
+    # (A class on a chart's own ancestors stays refused by the shared V4/V5 group check.)
+    from services.generation_core.drivers.svg.native_chart_evidence import chart_drawing_evidence
+    page = _with_page_extras(*extras)
+    assert chart_drawing_evidence(page, page["svg_content"], revision=V5) == {}

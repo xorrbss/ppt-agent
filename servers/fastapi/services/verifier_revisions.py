@@ -384,6 +384,11 @@ WHOLE_PAGE_VERIFIER_LEDGER = VerifierRevisionLedger(
         # withdrawing every chart's witness on the page. V5 is default-off; V4 and legacy
         # evidence is unchanged.
         "9e5fe10f724bdf83ee609e619756f529ecb8dc5ef53f00fd7b8120caf505435d": "svg-whole-page-verifier/1",
+        # 2026-11-08 V5 scene scoping: <defs>/<title>/<desc>/<metadata> are skipped as
+        # non-painting (url() paints and clip-path/mask/filter stay refused), and a class
+        # attribute is refused only when the SVG has a stylesheet. V5 is default-off;
+        # V4 and legacy evidence is unchanged.
+        "cecda577a73f92754d019e34c5e24701bcf842df5af284485b9b57c43acaac0d": "svg-whole-page-verifier/1",
     }),
 )
 
@@ -558,6 +563,11 @@ PARTIAL_RECOVERY_CODE_LEDGER = VerifierRevisionLedger(
         # withdrawing every chart's witness on the page. V5 is default-off; V4 and legacy
         # evidence is unchanged.
         "867e9c69df1d29d76d353e09a5f1a4e3dca58b5b7df5630c895a12d3990f7d6e": "svg-partial-recovery-code/1",
+        # 2026-11-08 V5 scene scoping: <defs>/<title>/<desc>/<metadata> are skipped as
+        # non-painting (url() paints and clip-path/mask/filter stay refused), and a class
+        # attribute is refused only when the SVG has a stylesheet. V5 is default-off;
+        # V4 and legacy evidence is unchanged.
+        "25c77661f1fbc99d56d14f3b43339c37c6b983cf6351879b4a54721cca6bc7dd": "svg-partial-recovery-code/1",
     }),
 )
 
@@ -643,6 +653,11 @@ PAGE_RENDER_CODE_LEDGER = VerifierRevisionLedger(
         # withdrawing every chart's witness on the page. V5 is default-off; V4 and legacy
         # evidence is unchanged.
         "50c82c32111ea85ec64cbb2f50526eb9108aeb7e4dfa645a7d0461e9583f51cb": "svg-page-render-code/1",
+        # 2026-11-08 V5 scene scoping: <defs>/<title>/<desc>/<metadata> are skipped as
+        # non-painting (url() paints and clip-path/mask/filter stay refused), and a class
+        # attribute is refused only when the SVG has a stylesheet. V5 is default-off;
+        # V4 and legacy evidence is unchanged.
+        "33419649189c7e3045bb97ae2ad73eb1d5ffd659dc9a0f9e48343ca13ad3e9fc": "svg-page-render-code/1",
     }),
 )
 
