@@ -1,0 +1,36 @@
+{
+  "schema": "svg-chart-native-polar-overlap-contract-request/v1",
+  "status": "candidate-awaiting-chart-owner-generated-manifest",
+  "existingRule": "native-alpha-intersection-in-datum-support/v1",
+  "rendererChangeRequired": false,
+  "proofDenominator": "Entire target native-alpha footprint within exact datum support; never subtract owned overlap",
+  "independentSemanticRequirement": "Original-color contribution on actual outer-arc visibility obligation",
+  "serverProofPreconditions": [
+    "Same canonical proved pie/donut and value/unit basis; matching chart axisKey/unitKey where applicable; equal datum values are not required",
+    "Same canonical center/outer radii, and same donut inner radii/hole ratio",
+    "Distinct actual datum/qid sector shapes, no extra contours or interior chords",
+    "Disjoint actual canonical fill interiors and a shared radial boundary segment; merely touching at center is insufficient",
+    "Actual later DOM/qid paint order",
+    "Exact target datumId,targetQid,occluderQid,geometrySupport and geometrySupportDigest associations"
+  ],
+  "producerAction": "Extend only the trusted chart builder proof, regenerate semantic manifests/digests, then replay unchanged actual source through the same renderer acceptance scope. Do not hand-edit fixture relationships or add a same-role exemption.",
+  "review": "Independent Astra high source/contract review; not an acceptance result",
+  "observedFailures": [
+    {
+      "name": "donut",
+      "canonicalSvgDigest": "sha256:465ac80002e2ccf8164d6fb974dddcc58f79425e16517c9898e245d124243545",
+      "manifestDigest": "sha256:1aff5550caa0400920f86f06fa26754bf23bb3800206c10411f8d2c8dda3dc53",
+      "failingTargetId": "native-chart-sales/primitive/svg-4/native-chart-sales/s0/c0",
+      "alteredPixels": 59,
+      "receipt": "svg-chart-render-proof-20261108/donut-incomplete-proof.json"
+    },
+    {
+      "name": "separator-pie",
+      "canonicalSvgDigest": "sha256:af1c091a1be3685488d5fec586e1031e2bcbd564b5d277f0724ba20a0af31ef1",
+      "manifestDigest": "sha256:8b449424e192b7d596c87d3d0ce9d8beae77cbddd54555cecf2272a1673e8901",
+      "failingTargetId": "native-chart-sales/primitive/svg-4/native-chart-sales/s0/c0",
+      "alteredPixels": 209,
+      "receipt": "svg-chart-render-proof-20261108/separator-pie-incomplete-proof.json"
+    }
+  ]
+}

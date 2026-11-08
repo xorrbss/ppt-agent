@@ -1,0 +1,164 @@
+{
+  "schema": "svg-chart-render-source-inventory/v1",
+  "status": "twelve-sources-variable-font-identity-code-review-pending-no-new-capture",
+  "worktree": "C:\\Users\\ibiz\\orca\\workspaces\\ppt-agent\\svg-chart-render-proof-1108",
+  "baselineHead": "8d6d21fb8611fe6b6312fc2d4ba5186406aa05d6",
+  "pythonExecutable": "C:\\project\\PPT-agent\\ppt-agent\\servers\\fastapi\\.venv\\Scripts\\python.exe",
+  "pythonVersion": "3.11.15",
+  "files": [
+    {
+      "path": "servers/fastapi/services/svg_renderer.py",
+      "kind": "existing",
+      "rawSha256": "sha256:28004ae3d78cfec235a49d0fdc8bca11d5c71ad2a4aa50a6a18cd856b8457c30",
+      "lfSha256": "sha256:28004ae3d78cfec235a49d0fdc8bca11d5c71ad2a4aa50a6a18cd856b8457c30",
+      "headRawSha256": "sha256:95d3e8ee93a4c96d083ee25642e60a8b7427b6373a607426db9dfe0cc8e7ab0c",
+      "headLfSha256": "sha256:95d3e8ee93a4c96d083ee25642e60a8b7427b6373a607426db9dfe0cc8e7ab0c",
+      "exactHeadBytesEqual": false
+    },
+    {
+      "path": "servers/fastapi/utils/slide_capture.py",
+      "kind": "existing",
+      "rawSha256": "sha256:551e609f5c9440e9cf9204dead3adc56a93148b3814e2910185d59bb96ee2d17",
+      "lfSha256": "sha256:551e609f5c9440e9cf9204dead3adc56a93148b3814e2910185d59bb96ee2d17",
+      "headRawSha256": "sha256:1bbbd4b65634ed914388ee93819ce60f20144ce836c8c1d5bea53dbb089bfa29",
+      "headLfSha256": "sha256:1bbbd4b65634ed914388ee93819ce60f20144ce836c8c1d5bea53dbb089bfa29",
+      "exactHeadBytesEqual": false
+    },
+    {
+      "path": "servers/fastapi/utils/slide_capture_worker_client.py",
+      "kind": "existing",
+      "rawSha256": "sha256:3ba76e14e721e80efb9991707cc5e27839ac44c1ab35a9771d45e3599c434fd7",
+      "lfSha256": "sha256:3ba76e14e721e80efb9991707cc5e27839ac44c1ab35a9771d45e3599c434fd7",
+      "headRawSha256": "sha256:18f51bc5e0f03cbd73acd0a1dff34fb427461d5f4530e80ad46857192b422be9",
+      "headLfSha256": "sha256:18f51bc5e0f03cbd73acd0a1dff34fb427461d5f4530e80ad46857192b422be9",
+      "exactHeadBytesEqual": false
+    },
+    {
+      "path": "servers/fastapi/utils/renderer_isolation.py",
+      "kind": "existing",
+      "rawSha256": "sha256:d1dcfec9bd0e86929050e6d60c589e99a12d5f47a60d9df512071357563c353a",
+      "lfSha256": "sha256:d1dcfec9bd0e86929050e6d60c589e99a12d5f47a60d9df512071357563c353a",
+      "headRawSha256": "sha256:4384939d895d33cb29590f9cf048d9065a16359161e7a193f35d77df26c48bf9",
+      "headLfSha256": "sha256:4384939d895d33cb29590f9cf048d9065a16359161e7a193f35d77df26c48bf9",
+      "exactHeadBytesEqual": false
+    },
+    {
+      "path": "servers/fastapi/utils/authored_renderer_worker.py",
+      "kind": "existing",
+      "rawSha256": "sha256:302c66d1d987d76588fdb000fa7f618b2fb61a0bfd386e12e7346944310ce258",
+      "lfSha256": "sha256:302c66d1d987d76588fdb000fa7f618b2fb61a0bfd386e12e7346944310ce258",
+      "headRawSha256": "sha256:4b3cd2738245b67ddae3f15dc8e0ffbf81c4e4d0f8700bb70c781c556ca0ba7d",
+      "headLfSha256": "sha256:4b3cd2738245b67ddae3f15dc8e0ffbf81c4e4d0f8700bb70c781c556ca0ba7d",
+      "exactHeadBytesEqual": false
+    },
+    {
+      "path": "servers/fastapi/utils/authored_renderer_session.py",
+      "kind": "existing",
+      "rawSha256": "sha256:0c4a737f5f77aa4d134b02f0c64050c370cb9f30de22ac1696c7a5883be686dc",
+      "lfSha256": "sha256:0c4a737f5f77aa4d134b02f0c64050c370cb9f30de22ac1696c7a5883be686dc",
+      "headRawSha256": "sha256:499cfe64c51e7c297cf950bf34a6b8d6f3b2c451ed0af50208585356c1fe19e8",
+      "headLfSha256": "sha256:499cfe64c51e7c297cf950bf34a6b8d6f3b2c451ed0af50208585356c1fe19e8",
+      "exactHeadBytesEqual": false
+    },
+    {
+      "path": "servers/fastapi/utils/slide_capture_pipe_render.py",
+      "kind": "existing",
+      "rawSha256": "sha256:b6814b360e44762de716880cce446a746bb4da94f48c6b3eff8b0e883fa2178b",
+      "lfSha256": "sha256:b6814b360e44762de716880cce446a746bb4da94f48c6b3eff8b0e883fa2178b",
+      "headRawSha256": "sha256:b6814b360e44762de716880cce446a746bb4da94f48c6b3eff8b0e883fa2178b",
+      "headLfSha256": "sha256:b6814b360e44762de716880cce446a746bb4da94f48c6b3eff8b0e883fa2178b",
+      "exactHeadBytesEqual": true
+    },
+    {
+      "path": "servers/fastapi/utils/slide_capture_chart_adapter.py",
+      "kind": "new-private-helper",
+      "rawSha256": "sha256:1efaab400db8af599a75f133992cb3740e56c5605d8ae7ee112fe9926e0ace78",
+      "lfSha256": "sha256:1efaab400db8af599a75f133992cb3740e56c5605d8ae7ee112fe9926e0ace78",
+      "headRawSha256": null,
+      "headLfSha256": null,
+      "exactHeadBytesEqual": false
+    },
+    {
+      "path": "servers/fastapi/utils/slide_capture_chart_paint.py",
+      "kind": "new-private-helper",
+      "rawSha256": "sha256:7312a050e7fdd54d42852707aa81b7c611ab807f9ffbe07e00962403c1f345b4",
+      "lfSha256": "sha256:7312a050e7fdd54d42852707aa81b7c611ab807f9ffbe07e00962403c1f345b4",
+      "headRawSha256": null,
+      "headLfSha256": null,
+      "exactHeadBytesEqual": false
+    },
+    {
+      "path": "servers/fastapi/utils/slide_capture_chart_text.py",
+      "kind": "new-private-helper",
+      "rawSha256": "sha256:a985f73ee53721a74faa268a05dccf59d5790adca4903842a1d5d253f7db93b8",
+      "lfSha256": "sha256:a985f73ee53721a74faa268a05dccf59d5790adca4903842a1d5d253f7db93b8",
+      "headRawSha256": null,
+      "headLfSha256": null,
+      "exactHeadBytesEqual": false
+    },
+    {
+      "path": "servers/fastapi/utils/slide_capture_chart_support.py",
+      "kind": "new-private-helper",
+      "rawSha256": "sha256:bfb49aef2ff5843275d8adc0818ce23110d3f5a05c2092c70e94d4e7c363d466",
+      "lfSha256": "sha256:bfb49aef2ff5843275d8adc0818ce23110d3f5a05c2092c70e94d4e7c363d466",
+      "headRawSha256": null,
+      "headLfSha256": null,
+      "exactHeadBytesEqual": false
+    },
+    {
+      "path": "servers/fastapi/utils/slide_capture_chart_timing.py",
+      "kind": "new",
+      "rawSha256": "sha256:0b8fab590985666d6622aef97648e6c29bd5b9f52a555e82184caaf8e90dad9a",
+      "lfSha256": "sha256:0b8fab590985666d6622aef97648e6c29bd5b9f52a555e82184caaf8e90dad9a",
+      "headRawSha256": null,
+      "headLfSha256": null,
+      "exactHeadBytesEqual": false
+    }
+  ],
+  "originalPipeBytesEqualHead": true,
+  "legacyEvidenceScope": "Previously measured one actual HEAD absent PNG and all portable metrics; no universal historical parity claim",
+  "workerCheck": {
+    "status": "passed",
+    "receipt": "docs\\session-results\\svg-chart-render-proof-20261108\\worker-column\\check-receipt.json",
+    "receiptDigest": "sha256:701184624729315d8bff00f6ebd7f7139243afdd7cc328556ce9c1359cf05cd7",
+    "workerBudgetMeasured": true,
+    "scope": "One admitted actual-builder column, public service and real isolated worker",
+    "elapsedSeconds": 94.915439,
+    "requestTimeoutSeconds": 95,
+    "clientHardDeadlineSeconds": 120,
+    "priorAdmissionFailureReceipt": "docs\\session-results\\svg-chart-render-proof-20261108\\worker-column\\prelaunch-unsupported-font-family-check-receipt.json"
+  },
+  "acceptedForIntegration": false,
+  "remainingAcceptanceScope": "Root-owned final typed consumer materialized-vs-wrapper binding correction and immutable actual artifact replay; then actual six-type/composition default captures",
+  "productDefaultCheck": {
+    "status": "failed",
+    "receipt": "docs\\session-results\\svg-chart-render-proof-20261108\\worker-column-default\\post-duplicate-screenshot-timeout-check-receipt.json",
+    "receiptDigest": "sha256:724b3b6111bf97e0c37c0bb3b81117a9b796b6a4e2c10309ed7cc725139e0acf",
+    "elapsedSeconds": 85.2929301,
+    "requestTimeoutSeconds": 60,
+    "clientHardDeadlineSeconds": 85,
+    "timeoutArgumentOmitted": true
+  },
+  "actualDefaultCapture": {
+    "captureElapsedSeconds": 76.9594765,
+    "requestTimeoutSeconds": 60,
+    "clientHardDeadlineSeconds": 85,
+    "receipt": "docs\\session-results\\svg-chart-render-proof-20261108\\worker-column-default-bound\\check-receipt.json",
+    "receiptDigest": "sha256:754ef92207700d18f18509384565d44120dc250810006e0190f1f0383577f326",
+    "producerComplete": true,
+    "producerPaintRetained": true,
+    "sourceQualityPassed": true,
+    "finalV5ConsumerAccepted": false
+  },
+  "consumerReplayManifest": "docs\\session-results\\svg-chart-render-proof-20261108\\worker-column-default-bound\\consumer-replay-input-manifest.json",
+  "previousInventory": {
+    "path": "C:\\Users\\ibiz\\orca\\workspaces\\ppt-agent\\svg-chart-render-proof-1108\\docs\\session-results\\svg-chart-render-source-inventory-20261108.json",
+    "sha256": "sha256:7260eb83287aed031afef9a149ed0f4b301b870dc0ace93089bebcf7f1161ca2"
+  },
+  "boundedChange": {
+    "path": "servers/fastapi/utils/slide_capture_chart_paint.py",
+    "previousRawSha256": "sha256:5f63c69f5cf89f0cca9ba9c641eaf96500ccb01dd37393743a30741f95231790",
+    "basis": "actual font-only CDP790cf7d5 and independently approved exact fvar/name25 design; code review and ROOT unit check pending",
+    "originalFailedCapturePreserved": true
+  }
+}

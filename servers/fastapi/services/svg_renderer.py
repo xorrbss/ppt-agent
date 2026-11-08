@@ -561,7 +561,8 @@ async def render_svg_with_metrics(svg: str, *, width: int = DEFAULT_CANVAS_WIDTH
                                   system_furniture: dict | None = None,
                                   timeline_ink_probe: bool | None = None,
                                   font_manifest: dict | None = None,
-                                  fixed_glyph_preview: dict | None = None) -> SvgRenderResult:
+                                  fixed_glyph_preview: dict | None = None,
+                                  chart_witness_manifest: dict | None = None) -> SvgRenderResult:
     from utils.authored_font_policy import requested_font_floor_px
     from utils.slide_capture import render_html_to_png_with_metrics
     if readability_policy is not None and physical_canvas is not None:
@@ -586,6 +587,12 @@ async def render_svg_with_metrics(svg: str, *, width: int = DEFAULT_CANVAS_WIDTH
     if timeline_ink_probe is True:
         # Internal measurement option belongs to the derivative HTML, never SVG.
         wrapper = wrapper.replace("<body>", '<body class="codex-timeline-ink-v1">', 1)
+    if chart_witness_manifest is not None:
+        from utils.slide_capture_chart_paint import prepare_chart_capture_manifest
+        chart_witness_manifest = prepare_chart_capture_manifest(
+            chart_witness_manifest, canonical_svg=svg, wrapper_html=wrapper,
+            width_px=width, height_px=height,
+        )
     if (allow_image_only and materialized_svg is not None) or font_manifest is not None:
         from utils.slide_capture_worker_client import _render_html_in_isolated_worker
         from utils.slide_capture_result import RenderCapture
@@ -606,6 +613,7 @@ async def render_svg_with_metrics(svg: str, *, width: int = DEFAULT_CANVAS_WIDTH
                     "fixed_glyph_projection_digest": glyph_projection.projection_digest,
                     "fixed_glyph_font_css_digest": glyph_projection.trusted_font_css_digest}
                    if fixed_glyph_preview is not None else {}),
+                **({"chart_witness_manifest": chart_witness_manifest} if chart_witness_manifest is not None else {}),
             )
         capture = RenderCapture.from_payload(
             html_digest=source_digest(wrapper), png=png, browser_metrics=browser_metrics,
@@ -613,9 +621,17 @@ async def render_svg_with_metrics(svg: str, *, width: int = DEFAULT_CANVAS_WIDTH
         )
     else:
         capture = await render_html_to_png_with_metrics(wrapper, timeout=timeout,
-                width_px=width, height_px=height, deck_scope=deck_scope, fit=False)
+                width_px=width, height_px=height, deck_scope=deck_scope, fit=False,
+                **({"chart_witness_manifest": chart_witness_manifest} if chart_witness_manifest is not None else {}))
     # The copy of a large page's metrics is CPU-bound; keep it off the loop.
     metrics = await asyncio.to_thread(_portable_metrics, capture.browser_metrics)
+    metrics_digest = capture.metrics_digest
+    if chart_witness_manifest is not None:
+        from utils.slide_capture_result import RenderCapture
+        metrics_digest = RenderCapture.from_payload(
+            html_digest=capture.html_digest, png=capture.png,
+            browser_metrics=metrics, runtime_counters=capture.runtime_counters,
+        ).metrics_digest
     elements = metrics.get("elements") or []
     text = [item for item in elements if item.get("has_owned_text")]
     failures = []
@@ -725,7 +741,7 @@ async def render_svg_with_metrics(svg: str, *, width: int = DEFAULT_CANVAS_WIDTH
             "subset": default_font_subset_provenance(_svg_fragment(wrapper).group(1))}
     quality = {"contract_version": SVG_CONTRACT_VERSION, "renderer_version": SVG_RENDERER_VERSION,
                "source_digest": source_digest(svg), "png_digest": capture.png_digest,
-               "wrapper_digest": capture.html_digest, "metrics_digest": capture.metrics_digest,
+               "wrapper_digest": capture.html_digest, "metrics_digest": metrics_digest,
                "measurement_complete": measurement_complete,
                "geometry_passed": not failures, "passed": not failures,
                "verified": False, "semantic_review": "required", "failures": failures,

@@ -471,6 +471,7 @@ def encode_request(
     fixed_glyph_preview_ref: dict | None = None,
     fixed_glyph_display_digest: str | None = None,
     private_diagnostic_profile: str | None = None,
+    chart_witness_manifest: dict | None = None,
 ) -> bytes:
     wire = json.dumps(
         {
@@ -488,6 +489,7 @@ def encode_request(
             **({"fixed_glyph_preview_ref": fixed_glyph_preview_ref} if fixed_glyph_preview_ref is not None else {}),
             **({"fixed_glyph_display_digest": fixed_glyph_display_digest} if fixed_glyph_display_digest is not None else {}),
             **({"private_diagnostic_profile": private_diagnostic_profile} if private_diagnostic_profile is not None else {}),
+            **({"chart_witness_manifest": chart_witness_manifest} if chart_witness_manifest is not None else {}),
         },
         ensure_ascii=font_manifest is None and font_manifest_ref is None,
         separators=(",", ":"),

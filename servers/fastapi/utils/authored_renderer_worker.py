@@ -78,6 +78,7 @@ def _validate_request(value: Any) -> Mapping[str, Any]:
         "fixed_glyph_preview_ref",
         "fixed_glyph_display_digest",
         "private_diagnostic_profile",
+        "chart_witness_manifest",
     }:
         raise RendererPolicyError("renderer request has an invalid shape")
     if value.get("schema_version") != "authored-render-request/v1":
@@ -148,6 +149,15 @@ def _validate_request(value: Any) -> Mapping[str, Any]:
             or not 1 <= dimension <= 4096
         ):
             raise RendererPolicyError("renderer canvas dimensions are invalid")
+    if "chart_witness_manifest" in fields:
+        if not isinstance(value["chart_witness_manifest"], dict):
+            raise RendererPolicyError("renderer chart witness manifest invalid")
+        from utils.slide_capture_chart_paint import validate_manifest
+        validate_manifest(
+            value["chart_witness_manifest"], width_px=value.get("width_px", DEFAULT_CANVAS_WIDTH_PX),
+            height_px=value.get("height_px", DEFAULT_CANVAS_HEIGHT_PX),
+            **({"source_html": value["html"]} if "preserved_raster_svg" not in fields else {}),
+        )
     return value
 
 
@@ -307,21 +317,29 @@ async def _render(
     from utils import slide_capture
 
     source = str(request["html"])
+    proof_wrapper = source
     timeout = int(request["timeout"])
     width_px = int(request.get("width_px", DEFAULT_CANVAS_WIDTH_PX))
     height_px = int(request.get("height_px", DEFAULT_CANVAS_HEIGHT_PX))
     diagnostic_profile = request.get("private_diagnostic_profile")
+    chart_manifest = request.get("chart_witness_manifest")
     glyph_result = None
     if request.get("preserved_raster_svg") is not None:
         from services.svg_renderer import admit_preserved_raster_preview
-        admitted, _ = admit_preserved_raster_preview(
+        admitted, proof_wrapper = admit_preserved_raster_preview(
             source, request["preserved_raster_svg"], width=width_px, height=height_px,
             **({"system_furniture": request["system_furniture"]} if request.get("system_furniture") is not None else {}))
+        if chart_manifest is not None:
+            from utils.slide_capture_chart_paint import validate_manifest
+            validate_manifest(chart_manifest, source_html=proof_wrapper, width_px=width_px, height_px=height_px)
     else:
         try:
             admitted = admit_authored_html(source)
         except RendererPolicyError:
             admitted = admit_static_output_html(source)
+        if chart_manifest is not None:
+            from utils.slide_capture_chart_paint import validate_manifest
+            validate_manifest(chart_manifest, source_html=proof_wrapper, width_px=width_px, height_px=height_px)
         from services.svg_renderer import materialize_trusted_svg_fonts
         font_manifest = (request.get("font_manifest") if request.get("font_manifest_ref") is None
                          else _read_font_manifest(request["font_manifest_ref"], assets_root))
@@ -345,11 +363,13 @@ async def _render(
         png, metrics = await slide_capture._render_admitted_html_in_worker(
             admitted, timeout=timeout, width_px=width_px, height_px=height_px,
             private_diagnostic_profile=diagnostic_profile,
+            **({"chart_witness_manifest": chart_manifest} if chart_manifest is not None else {}),
         )
     else:
         png, metrics = session.render(
             admitted, timeout, width_px=width_px, height_px=height_px,
             private_diagnostic_profile=diagnostic_profile,
+            **({"chart_witness_manifest": chart_manifest} if chart_manifest is not None else {}),
         )
     metrics = dict(metrics)
     if glyph_result is not None:
@@ -378,6 +398,9 @@ async def _render(
                 "pngDigest": "sha256:" + hashlib.sha256(png).hexdigest(),
             })
     metrics["capabilityRegistry"] = capability_metadata(consumer="chromium")
+    if chart_manifest is not None:
+        from utils.slide_capture_chart_paint import finalize_chart_paint_proof
+        metrics = finalize_chart_paint_proof(metrics, png, chart_manifest, wrapper_html=proof_wrapper)
     response: dict[str, Any] = {
         "schema_version": RESPONSE_SCHEMA,
         "ok": True,

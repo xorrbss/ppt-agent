@@ -1,0 +1,1924 @@
+{
+  "x-digest-encodings": {
+    "digestFormat": "sha256: followed by lowercase 64-hex SHA-256",
+    "canonicalJson": "UTF-8 json.dumps(sort_keys=True,separators=(',',':'),ensure_ascii=False,allow_nan=False); no Unicode normalization",
+    "canonicalSvgDigest": "Exact original canonical SVG source UTF-8 bytes before font/furniture materialization",
+    "treeDerivativeDigest": "canonicalJson({schema:'svg-chart-node-tree/v1',nodes:[{qid,parentQid,tag,attributes,text,tail}]}); deterministic preorder svg-N; expanded XML namespace tags/attribute keys; omit only data-qid attribute; preserve exact text/tails",
+    "manifestDigest": "canonicalJson semantic manifest excluding manifestDigest and private captureContext; original semantic manifest has no captureContext",
+    "wrapperDigest": "Exact pre-font resolved wrapper HTML UTF-8 bytes",
+    "admittedRenderDigest": "Exact actual materialized admitted HTML UTF-8 bytes used by the browser",
+    "captureContextDigest": "canonicalJson private captureContext; canonicalJson(null) only for supported direct private synthetic callers without service captureContext, never a null optional manifest carrier",
+    "pngDigest": "Exact final emitted PNG bytes; PNG encoding bytes are significant",
+    "baseMetricsDigest": "Existing portable metrics NUL U+0000 to U+241F transformation, excluding only nativeChartPaintProof; UTF-8 json.dumps(sort_keys=True,separators=(',',':'),ensure_ascii=False,default=str)",
+    "maskDigest": "Full physical viewport row-major uint8 mask bytes, each byte exactly 0 or 255",
+    "textDigest": "Exact UTF-8 source/cluster text; UTF-16 code units determine range offsets, not hash bytes"
+  },
+  "type": "object",
+  "properties": {
+    "schema": {
+      "const": "svg-native-chart-paint-proof/v1"
+    },
+    "probeVersion": {
+      "const": "svg-chart-native-alpha-dual-paint/v1"
+    },
+    "paintDomain": {
+      "const": "captured-viewport/v1",
+      "description": "Native paint evidence covers exactly the measured viewport, device scale and final PNG. Existing source/offcanvas quality gates remain separate; offscreen theoretical ink is not attested."
+    },
+    "viewport": {
+      "type": "object",
+      "properties": {
+        "cssWidth": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "cssHeight": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "dpr": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "rasterWidth": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "rasterHeight": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        }
+      },
+      "required": [
+        "cssWidth",
+        "cssHeight",
+        "dpr",
+        "rasterWidth",
+        "rasterHeight"
+      ]
+    },
+    "materialIdentities": {
+      "type": "object",
+      "properties": {
+        "embeddedResources": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "mimeType": {
+                "type": "string"
+              },
+              "digest": {
+                "$ref": "#/$defs/digest"
+              }
+            },
+            "required": [
+              "mimeType",
+              "digest"
+            ]
+          }
+        }
+      },
+      "required": [
+        "embeddedResources"
+      ]
+    },
+    "complete": {
+      "type": "boolean"
+    },
+    "paintRetained": {
+      "type": "boolean"
+    },
+    "reason": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "targets": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/target"
+      }
+    },
+    "charts": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/chart"
+      }
+    },
+    "canonicalSvgDigest": {
+      "$ref": "#/$defs/digest"
+    },
+    "treeDerivativeDigest": {
+      "$ref": "#/$defs/digest"
+    },
+    "manifestDigest": {
+      "$ref": "#/$defs/digest"
+    },
+    "wrapperDigest": {
+      "$ref": "#/$defs/digest"
+    },
+    "admittedRenderDigest": {
+      "$ref": "#/$defs/digest"
+    },
+    "captureContextDigest": {
+      "$ref": "#/$defs/digest"
+    },
+    "pngDigest": {
+      "$ref": "#/$defs/digest"
+    },
+    "baseMetricsDigest": {
+      "$ref": "#/$defs/digest"
+    },
+    "supportGraphs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "complete": {
+            "type": "boolean"
+          },
+          "paintRetained": {
+            "type": "boolean"
+          },
+          "targets": {
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/supportTarget"
+            }
+          },
+          "equivalenceClasses": {
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/equivalenceResult"
+            }
+          },
+          "unproven": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "targetId": {
+                  "type": "string"
+                },
+                "reason": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "targetId",
+                "reason"
+              ]
+            }
+          },
+          "nativeComposition": {
+            "$ref": "#/$defs/nativeComposition"
+          }
+        },
+        "required": [
+          "complete",
+          "paintRetained",
+          "targets",
+          "equivalenceClasses",
+          "unproven"
+        ]
+      }
+    },
+    "jointNativePaint": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "classId": {
+            "type": "string"
+          },
+          "memberTargetIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "footprint": {
+            "$ref": "#/$defs/mask"
+          },
+          "originalContribution": {
+            "$ref": "#/$defs/mask"
+          },
+          "retained": {
+            "$ref": "#/$defs/mask"
+          },
+          "altered": {
+            "$ref": "#/$defs/mask"
+          },
+          "memberBoundaries": {
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/jointMemberBoundary"
+            }
+          }
+        },
+        "required": [
+          "classId",
+          "memberTargetIds",
+          "footprint",
+          "originalContribution",
+          "retained",
+          "altered",
+          "memberBoundaries"
+        ]
+      }
+    }
+  },
+  "required": [
+    "schema",
+    "probeVersion",
+    "paintDomain",
+    "viewport",
+    "materialIdentities",
+    "complete",
+    "paintRetained",
+    "targets",
+    "charts",
+    "canonicalSvgDigest",
+    "treeDerivativeDigest",
+    "manifestDigest",
+    "wrapperDigest",
+    "admittedRenderDigest",
+    "captureContextDigest",
+    "pngDigest",
+    "baseMetricsDigest"
+  ],
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:ppt-agent:svg-native-chart-paint-proof:v1",
+  "$defs": {
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[a-f0-9]{64}$"
+    },
+    "mask": {
+      "type": "object",
+      "properties": {
+        "maskDigest": {
+          "$ref": "#/$defs/digest"
+        },
+        "pixelCount": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "alphaSum": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "maskDigest",
+        "pixelCount",
+        "alphaSum"
+      ]
+    },
+    "range": {
+      "type": "object",
+      "properties": {
+        "qid": {
+          "type": "string"
+        },
+        "startUtf16": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "endUtf16": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "qid",
+        "startUtf16",
+        "endUtf16"
+      ]
+    },
+    "face": {
+      "type": "object",
+      "properties": {
+        "postScriptName": {
+          "type": "string"
+        },
+        "fontDigest": {
+          "$ref": "#/$defs/digest"
+        },
+        "glyphCount": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "isCustomFont": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "postScriptName",
+        "fontDigest",
+        "glyphCount",
+        "isCustomFont"
+      ]
+    },
+    "fontEvidence": {
+      "type": "object",
+      "properties": {
+        "complete": {
+          "type": "boolean"
+        },
+        "reason": {
+          "type": "string"
+        },
+        "runs": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "utf16Length": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "faces": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/face"
+                }
+              }
+            },
+            "required": [
+              "utf16Length",
+              "faces"
+            ]
+          }
+        }
+      },
+      "required": [
+        "complete"
+      ]
+    },
+    "cluster": {
+      "type": "object",
+      "properties": {
+        "startUtf16": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "endUtf16": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "members": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/range"
+          }
+        },
+        "ownedIntersection": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/range"
+          }
+        },
+        "sharedBoundary": {
+          "type": "boolean"
+        },
+        "membershipComplete": {
+          "type": "boolean"
+        },
+        "authorizationComplete": {
+          "type": "boolean"
+        },
+        "textDigest": {
+          "$ref": "#/$defs/digest"
+        },
+        "complete": {
+          "type": "boolean"
+        },
+        "observableReferencePixels": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "originalContribution": {
+          "$ref": "#/$defs/mask"
+        },
+        "maskDigest": {
+          "$ref": "#/$defs/digest"
+        },
+        "pixelCount": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "alphaSum": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "startUtf16",
+        "endUtf16",
+        "members",
+        "ownedIntersection",
+        "sharedBoundary",
+        "membershipComplete",
+        "authorizationComplete",
+        "textDigest",
+        "complete",
+        "observableReferencePixels",
+        "originalContribution",
+        "maskDigest",
+        "pixelCount",
+        "alphaSum"
+      ]
+    },
+    "target": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "chartId": {
+          "type": "string"
+        },
+        "qid": {
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "primitive",
+            "glyph-range"
+          ]
+        },
+        "datumIds": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "complete": {
+          "type": "boolean"
+        },
+        "paintRetained": {
+          "type": "boolean"
+        },
+        "reason": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "unresolvedRanges": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        },
+        "geometrySupport": {
+          "type": "object"
+        },
+        "ownedQids": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "ownedPaints": {
+          "type": "object",
+          "propertyNames": {
+            "pattern": "^svg-[0-9]+$"
+          },
+          "additionalProperties": {
+            "enum": [
+              "all",
+              "stroke"
+            ]
+          },
+          "description": "Exact paint authorization per owned qid. Typed native separator ownership retains stroke only; full native ownership wins when both are proved."
+        },
+        "ownedGlyphRanges": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        },
+        "startUtf16": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "endUtf16": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "offsetScope": {
+          "const": "owned-text-nodes"
+        },
+        "ownedTextDigest": {
+          "$ref": "#/$defs/digest"
+        },
+        "roles": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "foreignOccluderQids": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "clippedQids": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "regionRule": {
+          "const": "canonical-canvas-pixel-center-inclusive/v1"
+        },
+        "fontEvidence": {
+          "$ref": "#/$defs/fontEvidence"
+        },
+        "glyphs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/cluster"
+          }
+        },
+        "footprint": {
+          "$ref": "#/$defs/mask"
+        },
+        "jointPrimitiveFootprint": {
+          "$ref": "#/$defs/mask"
+        },
+        "retained": {
+          "$ref": "#/$defs/mask"
+        },
+        "altered": {
+          "$ref": "#/$defs/mask"
+        },
+        "ownedOverlap": {
+          "$ref": "#/$defs/mask"
+        },
+        "quantizedAtCapture": {
+          "$ref": "#/$defs/mask"
+        },
+        "unproven": {
+          "$ref": "#/$defs/mask"
+        },
+        "originalContribution": {
+          "$ref": "#/$defs/mask"
+        },
+        "ownedRelationships": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        },
+        "visibilityObligations": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/obligation"
+          }
+        },
+        "contributionRegions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/contributionRegion"
+          }
+        },
+        "sourceOverOriginalColor": {
+          "$ref": "#/$defs/sourceOverOriginalColor"
+        }
+      },
+      "required": [
+        "id",
+        "chartId",
+        "qid",
+        "kind",
+        "datumIds",
+        "complete",
+        "paintRetained",
+        "unresolvedRanges"
+      ],
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "complete": {
+                "const": true
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "footprint",
+              "retained",
+              "altered",
+              "ownedOverlap",
+              "quantizedAtCapture",
+              "unproven",
+              "originalContribution",
+              "foreignOccluderQids",
+              "clippedQids"
+            ]
+          }
+        }
+      ]
+    },
+    "datum": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "seriesIndex": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "categoryIndex": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "geometryRole": {
+          "type": "string"
+        },
+        "geometrySupport": {
+          "type": "object"
+        },
+        "primitivePaintExpected": {
+          "type": "boolean"
+        },
+        "targetIds": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "complete": {
+          "type": "boolean"
+        },
+        "paintRetained": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "id",
+        "seriesIndex",
+        "categoryIndex",
+        "geometryRole",
+        "geometrySupport",
+        "primitivePaintExpected",
+        "targetIds",
+        "complete",
+        "paintRetained"
+      ]
+    },
+    "chart": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "chartType": {
+          "enum": [
+            "bar",
+            "column",
+            "line",
+            "area",
+            "pie",
+            "donut"
+          ]
+        },
+        "datums": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/datum"
+          }
+        },
+        "targetIds": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "complete": {
+          "type": "boolean"
+        },
+        "paintRetained": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "id",
+        "chartType",
+        "datums",
+        "targetIds",
+        "complete",
+        "paintRetained"
+      ]
+    },
+    "obligation": {
+      "type": "object",
+      "properties": {
+        "supportId": {
+          "type": "string"
+        },
+        "complete": {
+          "type": "boolean"
+        },
+        "paintRetained": {
+          "type": "boolean"
+        },
+        "via": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "reason": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "boundaryPixels": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "supportedPixels": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "footprint": {
+          "$ref": "#/$defs/mask"
+        },
+        "originalContribution": {
+          "$ref": "#/$defs/mask"
+        },
+        "supportTargetId": {
+          "type": "string"
+        },
+        "classId": {
+          "type": "string"
+        },
+        "stackBoundaryContrast": {
+          "$ref": "#/$defs/stackBoundaryContrast"
+        },
+        "calibratedGridBoundary": {
+          "$ref": "#/$defs/calibratedGridBoundary"
+        },
+        "markerBoundary": {
+          "$ref": "#/$defs/markerBoundary"
+        },
+        "boundStackValueGlyphs": {
+          "$ref": "#/$defs/boundStackValueGlyphs"
+        },
+        "areaVisibilityTargetId": {
+          "type": "string"
+        },
+        "nativeCompositionPairId": {
+          "type": "string"
+        },
+        "nativeCompositionPairIds": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "uniqueItems": true
+        }
+      },
+      "required": [
+        "supportId",
+        "complete",
+        "paintRetained",
+        "via",
+        "reason",
+        "boundaryPixels",
+        "supportedPixels"
+      ],
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "via": {
+                "const": "shared-stack-interface"
+              }
+            },
+            "required": [
+              "via"
+            ]
+          },
+          "then": {
+            "required": [
+              "stackBoundaryContrast"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "via": {
+                "const": "calibrated-value-line"
+              }
+            },
+            "required": [
+              "via"
+            ]
+          },
+          "then": {
+            "required": [
+              "calibratedGridBoundary"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "via": {
+                "const": "marker-on-datum"
+              }
+            },
+            "required": [
+              "via"
+            ]
+          },
+          "then": {
+            "required": [
+              "markerBoundary"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "via": {
+                "const": "bound-stack-value-glyphs"
+              }
+            },
+            "required": [
+              "via"
+            ]
+          },
+          "then": {
+            "required": [
+              "boundStackValueGlyphs"
+            ]
+          }
+        }
+      ]
+    },
+    "contributionRegion": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "interior-profile",
+            "incident-sides"
+          ]
+        },
+        "footprint": {
+          "$ref": "#/$defs/mask"
+        },
+        "originalContribution": {
+          "$ref": "#/$defs/mask"
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "footprint",
+        "originalContribution"
+      ]
+    },
+    "supportTarget": {
+      "type": "object",
+      "properties": {
+        "targetId": {
+          "type": "string"
+        },
+        "complete": {
+          "type": "boolean"
+        },
+        "paintRetained": {
+          "type": "boolean"
+        },
+        "reason": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "obligations": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/obligation"
+          }
+        }
+      },
+      "required": [
+        "targetId",
+        "complete",
+        "paintRetained",
+        "reason",
+        "obligations"
+      ]
+    },
+    "equivalenceResult": {
+      "type": "object",
+      "properties": {
+        "classId": {
+          "type": "string"
+        },
+        "complete": {
+          "type": "boolean"
+        },
+        "paintRetained": {
+          "type": "boolean"
+        },
+        "via": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "reason": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "contributorTargetId": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "classId",
+        "complete",
+        "paintRetained",
+        "via",
+        "reason"
+      ]
+    },
+    "textProjection": {
+      "type": "object",
+      "properties": {
+        "ownerQid": {
+          "type": "string"
+        },
+        "textRootQid": {
+          "type": "string"
+        },
+        "rootTextDigest": {
+          "$ref": "#/$defs/digest"
+        },
+        "ownedTextDigest": {
+          "$ref": "#/$defs/digest"
+        },
+        "segments": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "rootStartUtf16": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "rootEndUtf16": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "ownedStartUtf16": {
+                "type": "integer",
+                "minimum": 0
+              }
+            },
+            "required": [
+              "rootStartUtf16",
+              "rootEndUtf16",
+              "ownedStartUtf16"
+            ]
+          }
+        }
+      },
+      "required": [
+        "ownerQid",
+        "textRootQid",
+        "rootTextDigest",
+        "ownedTextDigest",
+        "segments"
+      ]
+    },
+    "privateCaptureContext": {
+      "type": "object",
+      "properties": {
+        "schema": {
+          "const": "svg-chart-capture-context/v1"
+        },
+        "treeDerivativeDigest": {
+          "$ref": "#/$defs/digest"
+        },
+        "wrapperDigest": {
+          "$ref": "#/$defs/digest"
+        },
+        "viewport": {
+          "type": "object",
+          "properties": {
+            "cssWidth": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "cssHeight": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          "required": [
+            "cssWidth",
+            "cssHeight"
+          ]
+        },
+        "textProjection": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/textProjection"
+          }
+        }
+      },
+      "required": [
+        "schema",
+        "treeDerivativeDigest",
+        "wrapperDigest",
+        "viewport",
+        "textProjection"
+      ]
+    },
+    "jointMemberBoundary": {
+      "type": "object",
+      "properties": {
+        "datumId": {
+          "type": "string"
+        },
+        "targetId": {
+          "type": "string"
+        },
+        "supportId": {
+          "type": "string"
+        },
+        "geometrySupportDigest": {
+          "$ref": "#/$defs/digest"
+        },
+        "footprint": {
+          "$ref": "#/$defs/mask"
+        },
+        "originalContribution": {
+          "$ref": "#/$defs/mask"
+        },
+        "retained": {
+          "$ref": "#/$defs/mask"
+        },
+        "altered": {
+          "$ref": "#/$defs/mask"
+        }
+      },
+      "required": [
+        "datumId",
+        "targetId",
+        "supportId",
+        "geometrySupportDigest",
+        "footprint",
+        "originalContribution",
+        "retained",
+        "altered"
+      ],
+      "additionalProperties": false
+    },
+    "stackBoundaryContrast": {
+      "type": "object",
+      "properties": {
+        "targetId": {
+          "type": "string"
+        },
+        "supportId": {
+          "type": "string"
+        },
+        "neighborTargetId": {
+          "type": "string"
+        },
+        "neighborSupportId": {
+          "type": "string"
+        },
+        "datumInteriorSupportId": {
+          "type": "string"
+        },
+        "neighborInteriorSupportId": {
+          "type": "string"
+        },
+        "samplingRule": {
+          "const": "normal-interior-native-pair/v1"
+        },
+        "footprint": {
+          "$ref": "#/$defs/mask"
+        },
+        "normalInteriorPairs": {
+          "$ref": "#/$defs/mask"
+        },
+        "originalContribution": {
+          "$ref": "#/$defs/mask"
+        },
+        "samplePairs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/stackNormalSamplePair"
+          }
+        },
+        "nativeContrast": {
+          "$ref": "#/$defs/mask"
+        }
+      },
+      "required": [
+        "targetId",
+        "supportId",
+        "neighborTargetId",
+        "neighborSupportId",
+        "datumInteriorSupportId",
+        "neighborInteriorSupportId",
+        "samplingRule",
+        "footprint",
+        "normalInteriorPairs",
+        "originalContribution",
+        "samplePairs",
+        "nativeContrast"
+      ],
+      "additionalProperties": false
+    },
+    "calibratedGridBoundary": {
+      "type": "object",
+      "properties": {
+        "targetId": {
+          "type": "string"
+        },
+        "supportId": {
+          "type": "string"
+        },
+        "gridTargetId": {
+          "type": "string"
+        },
+        "gridQid": {
+          "type": "string"
+        },
+        "datumInteriorSupportId": {
+          "type": "string"
+        },
+        "datumSideSupportId": {
+          "type": "string"
+        },
+        "tickTargetIds": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "titleTargetIds": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "footprint": {
+          "$ref": "#/$defs/mask"
+        },
+        "originalContribution": {
+          "$ref": "#/$defs/mask"
+        }
+      },
+      "required": [
+        "targetId",
+        "supportId",
+        "gridTargetId",
+        "gridQid",
+        "datumInteriorSupportId",
+        "datumSideSupportId",
+        "tickTargetIds",
+        "titleTargetIds",
+        "footprint",
+        "originalContribution"
+      ],
+      "additionalProperties": false
+    },
+    "stackNormalSamplePair": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "enum": [
+            "adjacent-fill",
+            "native-divider"
+          ]
+        },
+        "boundaryPixel": {
+          "type": "array",
+          "prefixItems": [
+            {
+              "type": "integer",
+              "minimum": 0
+            },
+            {
+              "type": "integer",
+              "minimum": 0
+            }
+          ],
+          "items": false,
+          "minItems": 2,
+          "maxItems": 2
+        },
+        "negativeInteriorPixel": {
+          "type": "array",
+          "prefixItems": [
+            {
+              "type": "integer",
+              "minimum": 0
+            },
+            {
+              "type": "integer",
+              "minimum": 0
+            }
+          ],
+          "items": false,
+          "minItems": 2,
+          "maxItems": 2
+        },
+        "positiveInteriorPixel": {
+          "type": "array",
+          "prefixItems": [
+            {
+              "type": "integer",
+              "minimum": 0
+            },
+            {
+              "type": "integer",
+              "minimum": 0
+            }
+          ],
+          "items": false,
+          "minItems": 2,
+          "maxItems": 2
+        }
+      },
+      "required": [
+        "kind",
+        "boundaryPixel",
+        "negativeInteriorPixel",
+        "positiveInteriorPixel"
+      ],
+      "additionalProperties": false
+    },
+    "markerBoundary": {
+      "type": "object",
+      "properties": {
+        "targetId": {
+          "type": "string"
+        },
+        "supportId": {
+          "type": "string"
+        },
+        "markerTargetId": {
+          "type": "string"
+        },
+        "markerQid": {
+          "type": "string"
+        },
+        "footprint": {
+          "$ref": "#/$defs/mask"
+        },
+        "originalContribution": {
+          "$ref": "#/$defs/mask"
+        }
+      },
+      "required": [
+        "targetId",
+        "supportId",
+        "markerTargetId",
+        "markerQid",
+        "footprint",
+        "originalContribution"
+      ],
+      "additionalProperties": false
+    },
+    "stackEndpointReference": {
+      "type": "object",
+      "properties": {
+        "datumId": {
+          "type": "string"
+        },
+        "targetId": {
+          "type": "string"
+        },
+        "supportId": {
+          "type": "string"
+        },
+        "geometrySupportDigest": {
+          "$ref": "#/$defs/digest"
+        }
+      },
+      "required": [
+        "datumId",
+        "targetId",
+        "supportId",
+        "geometrySupportDigest"
+      ],
+      "additionalProperties": false
+    },
+    "boundStackValueGlyphs": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "const": "bound-stack-value-glyphs"
+        },
+        "targetId": {
+          "type": "string"
+        },
+        "supportId": {
+          "type": "string"
+        },
+        "neighborDatumId": {
+          "type": "string"
+        },
+        "neighborTargetId": {
+          "type": "string"
+        },
+        "neighborSupportId": {
+          "type": "string"
+        },
+        "cumulativeValue": {
+          "type": "string"
+        },
+        "grouping": {
+          "type": "string"
+        },
+        "axisKey": {
+          "type": "string"
+        },
+        "unitKey": {
+          "type": "string"
+        },
+        "datumInteriorSupportId": {
+          "type": "string"
+        },
+        "neighborInteriorSupportId": {
+          "type": "string"
+        },
+        "geometrySupportDigest": {
+          "$ref": "#/$defs/digest"
+        },
+        "datumValueGlyphTargetIds": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "string"
+          }
+        },
+        "neighborValueGlyphTargetIds": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "string"
+          }
+        },
+        "stackBaseline": {
+          "$ref": "#/$defs/stackEndpointReference"
+        },
+        "stackOuterTotal": {
+          "$ref": "#/$defs/stackEndpointReference"
+        }
+      },
+      "required": [
+        "kind",
+        "targetId",
+        "supportId",
+        "neighborDatumId",
+        "neighborTargetId",
+        "neighborSupportId",
+        "cumulativeValue",
+        "grouping",
+        "axisKey",
+        "unitKey",
+        "datumInteriorSupportId",
+        "neighborInteriorSupportId",
+        "geometrySupportDigest",
+        "datumValueGlyphTargetIds",
+        "neighborValueGlyphTargetIds",
+        "stackBaseline",
+        "stackOuterTotal"
+      ],
+      "additionalProperties": false
+    },
+    "sourceOverOriginalColor": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "rule": {
+          "const": "native-rgba-exact-source-over/v1"
+        },
+        "maskDigest": {
+          "$ref": "#/$defs/digest"
+        },
+        "pixelCount": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "alphaSum": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "rule",
+        "maskDigest",
+        "pixelCount",
+        "alphaSum"
+      ]
+    },
+    "nativeEncodedRaster": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "encoding": {
+          "const": "zlib-base64-u8/v1"
+        },
+        "width": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "height": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "sha256": {
+          "$ref": "#/$defs/digest"
+        },
+        "dataBase64": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "encoding",
+        "width",
+        "height",
+        "sha256",
+        "dataBase64"
+      ],
+      "$comment": "Dimensions must equal the actual trusted capture raster; bounded strict decoding, exact EOF/no extra bytes, domain and SHA are verified by the consumer. These fields never authorize allocation."
+    },
+    "nativeEncodedMask": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "maskDigest": {
+          "$ref": "#/$defs/digest"
+        },
+        "pixelCount": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "alphaSum": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "encodedRaster": {
+          "$ref": "#/$defs/nativeEncodedRaster"
+        }
+      },
+      "required": [
+        "maskDigest",
+        "pixelCount",
+        "alphaSum",
+        "encodedRaster"
+      ]
+    },
+    "nativeMaskBundle": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "nativeAlpha": {
+          "$ref": "#/$defs/nativeEncodedRaster"
+        },
+        "footprint": {
+          "$ref": "#/$defs/nativeEncodedMask"
+        },
+        "originalContribution": {
+          "$ref": "#/$defs/nativeEncodedMask"
+        },
+        "retained": {
+          "$ref": "#/$defs/nativeEncodedMask"
+        },
+        "ownedOverlap": {
+          "$ref": "#/$defs/nativeEncodedMask"
+        },
+        "altered": {
+          "$ref": "#/$defs/nativeEncodedMask"
+        },
+        "quantizedAtCapture": {
+          "$ref": "#/$defs/nativeEncodedMask"
+        },
+        "unproven": {
+          "$ref": "#/$defs/nativeEncodedMask"
+        }
+      },
+      "required": [
+        "nativeAlpha",
+        "footprint",
+        "originalContribution",
+        "retained",
+        "ownedOverlap",
+        "altered",
+        "quantizedAtCapture",
+        "unproven"
+      ]
+    },
+    "nativePairMaskBundle": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "nativeAlpha": {
+          "$ref": "#/$defs/nativeEncodedRaster"
+        },
+        "footprint": {
+          "$ref": "#/$defs/nativeEncodedMask"
+        },
+        "originalContribution": {
+          "$ref": "#/$defs/nativeEncodedMask"
+        },
+        "altered": {
+          "$ref": "#/$defs/nativeEncodedMask"
+        }
+      },
+      "required": [
+        "nativeAlpha",
+        "footprint",
+        "originalContribution",
+        "altered"
+      ]
+    },
+    "nativeAreaOccluder": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "targetId": {
+          "type": "string"
+        },
+        "datumId": {
+          "type": "string"
+        },
+        "qid": {
+          "type": "string"
+        },
+        "geometrySupportDigest": {
+          "$ref": "#/$defs/digest"
+        },
+        "relationDigest": {
+          "$ref": "#/$defs/digest"
+        },
+        "coverage": {
+          "$ref": "#/$defs/nativeEncodedMask"
+        }
+      },
+      "required": [
+        "targetId",
+        "datumId",
+        "qid",
+        "geometrySupportDigest",
+        "relationDigest",
+        "coverage"
+      ]
+    },
+    "nativeAreaTarget": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "native-area-owned-layer-preservation/v1"
+        },
+        "targetId": {
+          "type": "string"
+        },
+        "datumId": {
+          "type": "string"
+        },
+        "qid": {
+          "type": "string"
+        },
+        "geometrySupportDigest": {
+          "$ref": "#/$defs/digest"
+        },
+        "axisKey": {
+          "type": "string"
+        },
+        "unitKey": {
+          "type": "string"
+        },
+        "canvasMatrix": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "minItems": 6,
+          "maxItems": 6
+        },
+        "deviceScaleFactor": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "visibility": {
+          "enum": [
+            "visible-native-contribution",
+            "preserved-hidden-by-owned"
+          ]
+        },
+        "sourceVisible": {
+          "type": "boolean"
+        },
+        "nativeAlpha": {
+          "$ref": "#/$defs/nativeEncodedRaster"
+        },
+        "footprint": {
+          "$ref": "#/$defs/nativeEncodedMask"
+        },
+        "originalContribution": {
+          "$ref": "#/$defs/nativeEncodedMask"
+        },
+        "retained": {
+          "$ref": "#/$defs/nativeEncodedMask"
+        },
+        "ownedOverlap": {
+          "$ref": "#/$defs/nativeEncodedMask"
+        },
+        "altered": {
+          "$ref": "#/$defs/nativeEncodedMask"
+        },
+        "quantizedAtCapture": {
+          "$ref": "#/$defs/nativeEncodedMask"
+        },
+        "unproven": {
+          "$ref": "#/$defs/nativeEncodedMask"
+        },
+        "preserved": {
+          "$ref": "#/$defs/nativeEncodedMask"
+        },
+        "hidden": {
+          "$ref": "#/$defs/nativeEncodedMask"
+        },
+        "residual": {
+          "$ref": "#/$defs/nativeEncodedMask"
+        },
+        "occluders": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/nativeAreaOccluder"
+          }
+        }
+      },
+      "required": [
+        "kind",
+        "targetId",
+        "datumId",
+        "qid",
+        "geometrySupportDigest",
+        "axisKey",
+        "unitKey",
+        "canvasMatrix",
+        "deviceScaleFactor",
+        "visibility",
+        "sourceVisible",
+        "nativeAlpha",
+        "footprint",
+        "originalContribution",
+        "retained",
+        "ownedOverlap",
+        "altered",
+        "quantizedAtCapture",
+        "unproven",
+        "preserved",
+        "hidden",
+        "residual",
+        "occluders"
+      ]
+    },
+    "nativeCompositionRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "marker-on-datum",
+            "proved-polar-adjacency"
+          ]
+        },
+        "targetId": {
+          "type": "string"
+        },
+        "partnerTargetId": {
+          "type": "string"
+        },
+        "qids": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "minItems": 2,
+          "maxItems": 2
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "targetId",
+        "partnerTargetId",
+        "qids"
+      ]
+    },
+    "nativeCompositionJointPair": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "schema": {
+          "const": "native-composition-joint-pair/v1"
+        },
+        "request": {
+          "$ref": "#/$defs/nativeCompositionRequest"
+        },
+        "bindingDigest": {
+          "$ref": "#/$defs/digest"
+        },
+        "datumId": {
+          "type": "string"
+        },
+        "partnerDatumId": {
+          "type": "string"
+        },
+        "geometrySupportDigest": {
+          "$ref": "#/$defs/digest"
+        },
+        "partnerGeometrySupportDigest": {
+          "$ref": "#/$defs/digest"
+        },
+        "relationDigest": {
+          "$ref": "#/$defs/digest"
+        },
+        "canvasMatrix": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "minItems": 6,
+          "maxItems": 6
+        },
+        "deviceScaleFactor": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "pairMasks": {
+          "$ref": "#/$defs/nativePairMaskBundle"
+        },
+        "targetMasks": {
+          "$ref": "#/$defs/nativeMaskBundle"
+        },
+        "partnerMasks": {
+          "$ref": "#/$defs/nativeMaskBundle"
+        },
+        "regionDemand": {
+          "$ref": "#/$defs/nativeEncodedMask"
+        },
+        "coveredRegion": {
+          "$ref": "#/$defs/nativeEncodedMask"
+        },
+        "offTraceOriginalContribution": {
+          "$ref": "#/$defs/nativeEncodedMask"
+        },
+        "incidentSupportIds": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "capturePlanes": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "expectedResponse": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/nativeEncodedRaster"
+              },
+              "minItems": 3,
+              "maxItems": 3
+            },
+            "currentResponse": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/nativeEncodedRaster"
+              },
+              "minItems": 3,
+              "maxItems": 3
+            },
+            "referenceOriginal": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/nativeEncodedRaster"
+              },
+              "minItems": 3,
+              "maxItems": 3
+            },
+            "currentOriginal": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/nativeEncodedRaster"
+              },
+              "minItems": 3,
+              "maxItems": 3
+            },
+            "currentAbsent": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/nativeEncodedRaster"
+              },
+              "minItems": 3,
+              "maxItems": 3
+            }
+          },
+          "required": [
+            "expectedResponse",
+            "currentResponse",
+            "referenceOriginal",
+            "currentOriginal",
+            "currentAbsent"
+          ]
+        }
+      },
+      "required": [
+        "schema",
+        "request",
+        "bindingDigest",
+        "datumId",
+        "partnerDatumId",
+        "geometrySupportDigest",
+        "partnerGeometrySupportDigest",
+        "relationDigest",
+        "canvasMatrix",
+        "deviceScaleFactor",
+        "pairMasks",
+        "targetMasks",
+        "partnerMasks",
+        "regionDemand",
+        "coveredRegion",
+        "offTraceOriginalContribution",
+        "incidentSupportIds",
+        "capturePlanes"
+      ]
+    },
+    "nativeComposition": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "schema": {
+          "const": "native-composition-pixel-partition/v1"
+        },
+        "areaTargets": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/nativeAreaTarget"
+          }
+        },
+        "jointPairs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/nativeCompositionJointPair"
+          }
+        }
+      },
+      "required": [
+        "schema",
+        "areaTargets",
+        "jointPairs"
+      ]
+    }
+  },
+  "$comment": "Only browser_metrics.nativeChartPaintProof. Exact viewport/final PNG, not every zoom/PPTX. Mask hash: SHA256 row-major uint8 0/255 bytes. pixelCount: count255; alphaSum: target native alpha sum on mask. footprint partitions retained+altered+ownedOverlap+quantizedAtCapture+unproven. Quantized is zero response with exact original appearance, never exposed ink. Semantic targets and demanded joint glyph clusters additionally require originalContribution>0. Complete exhaustive observation differs from paintRetained. Semantic manifest hash excludes only own hash; captureContext is private transport binding separately hashed. Per-datum geometrySupport retained verbatim. Region rule uses canonical pixel-center coordinates via inverse SVG screen CTM; jointPrimitiveFootprint retains full qid footprint. Cluster masks come from native foreground range painting, never character rectangles. Proof schema provisional until implementation and focused Chromium acceptance pass. Diagnostic foregrounds are fixed RGB255 and noninitial RGB1; zero-response quantization additionally requires zero original-v-absent contribution at every classified pixel. Full owned text uses unchanged text/tspan foreground styles with descendant preservation; partial ranges use Chromium native Selection over original DOM UTF16 nodes, exact samepaint/shaping parity required. No character rectangles define ink. Support alternatives reference exact server-generated local overlap/contribution region IDs; graph roots terminate in actual original-colored native contribution, never cyclic borrowing. Private captureContext textProjection is derived only from the verified pre-font wrapper: exact text-root UTF16 intervals map original direct text/tails to canonical ownerqids. Actual root/owned text digests must match after authorized font-only tspan insertion; physical parents supply real paint/font while source owner IDs remain stable. Projection is inside captureContextDigest, never a second output proof alias. Selection pseudo opacity filtering is compensated by exact foreground alpha multiplication; samepaint pixels remain the authority. Exact sourceOverOriginalColor is a sufficient native-RGBA source-over reconstruction at appearance-mismatch pixels only: positive native alpha, zero owned alpha, unchanged exact dual response, positive actual original contribution, unique integer premultiplied unpremultiply round-trip and exact shared-alpha reconstruction over actual current-absent RGB. It supplies no error tolerance and does not alter causal-response errors or other gates. Typed nativeComposition uses exact encoded per-pixel partitions and strict later-order ownership DAGs. Hidden-by-owned is composition preservation, not a claim of visual observability. Native joint marker/polar pair evidence is checked only on independently derived full demanded regions or disjoint changed patches; full RGB/mask consistency remains checked, and every other target pixel retains its original strict classification. Original-color source-over provenance is not a free subset authority. Canonical mask projection removes the SVG root transform already applied by the V5 source scene, with DPR applied once.",
+  "x-witness-encoding": {
+    "jointNativePaint.memberBoundaries": "Exact per-member declared native boundary intersection with member and joint native footprints. All mask alphaSum values use that member target native alpha. Joint originalContribution is intersected with this exact member boundary.",
+    "visibilityObligations.stackBoundaryContrast": "Physical segment-normal profiles through strict geometric interiors on each side, away from endpoint/corner/external edges. Transparent geometric interiors are allowed for hollow/outlined native bars. normalInteriorPairs records valid candidate boundary pixels. originalContribution records actual signed fill-contrast or native-divider profile contrast attributable to the same native pair absent. samplePairs contains one unique record per contributing boundary pixel, so length equals originalContribution.pixelCount. All mask alphaSum values use demanding target native alpha. Both exact declared interior-profile contribution regions are independently required. nativeContrast additionally requires original-colored isolated native-pair RGBA contrast, excluding labels/images/backgrounds; final originalContribution intersects nativeContrast and actual original-color/pair-absent attribution. This additional native mask is necessary, never sufficient alone.",
+    "visibilityObligations.calibratedGridBoundary": "footprint is demanding native boundary intersect target/native grid footprints. originalContribution additionally intersects grid original-colored contribution. All masks use demanding target native alpha.",
+    "visibilityObligations.markerBoundary": "Explicit server manifest alternative only. footprint and independently original-contributing marker mask both cover the ENTIRE target native boundary footprint; any intersection is insufficient. Both alphaSum values use target native alpha; whole target denominator remains unchanged.",
+    "visibilityObligations.boundStackValueGlyphs": "Exact selected manifest alternative echo plus targetId/supportId, with no new raster. Only exact adjacent stack seam support. Consumer independently validates both unique complete value/unit glyph target sets, both contributing interior profiles, separate series association, and FIRST baseline/LAST total references ending only in original-boundary contribution or exact calibrated-grid witness. Never recursive or whole-datum exemption."
+  }
+}
