@@ -556,7 +556,10 @@ def apply_requested_native_quality(quality: dict, payload: dict, svg: str, conte
         series_units = [_series_name_unit(series["name"]) for series in own["series"]]
         if title_unit and any(unit and _unit_key(title_unit) != _unit_key(unit) for unit in series_units):
             return False
-        bindings = proof["contentGeometry"].get("valueLabelBindings", [])
+        # A proven share label's "%" states the datum's share of its whole
+        # (pie/donut/percent-stacked only), not the unit of the datum itself.
+        bindings = [binding for binding in proof["contentGeometry"].get("valueLabelBindings", [])
+                    if binding.get("valueMatch") != "share"]
         if expected is not None:
             declared_units = {_unit_key(unit) for unit in (title_unit, *series_units) if unit}
             expected_units = {_unit_key(label["unit"]) for label in expected.get("requiredUnitLabels", [])}

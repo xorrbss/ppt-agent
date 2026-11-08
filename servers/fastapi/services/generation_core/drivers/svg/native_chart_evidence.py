@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from collections import Counter
 from decimal import Decimal, InvalidOperation
+from fractions import Fraction
 import math
 import re
 from xml.etree import ElementTree as ET
@@ -14,6 +15,81 @@ from services.generation_core.drivers.svg.native_geometry import (
 )
 
 _VALUE = re.compile(r"([-+−]?)([₩$€£¥]?)\s*(\d{1,3}(?:,\d{3})+|\d+)(\.\d+)?\s*([%％A-Za-z가-힣/²³]*)")
+
+
+_V5_ANNOTATION = re.compile(r"(?:※|(?:단위|출처|자료|주|unit|source|note)(?=\s|[:：)]|$))\s*[:：)]?\s*",
+                            re.IGNORECASE)
+_V5_SHARE_UNITS = frozenset({"%", "％"})
+
+
+def _v5_half_up(value: Fraction, decimals: int) -> Fraction:
+    """Exact ROUND_HALF_UP (ties away from zero) of a rational to ``decimals``."""
+    scale = 10 ** decimals
+    magnitude = math.floor(abs(value) * scale + Fraction(1, 2))
+    return Fraction(magnitude if value >= 0 else -magnitude, scale)
+
+
+def _v5_label_match(number: Decimal, match, point: dict, chart: dict) -> str | None:
+    """How a drawn number denotes ``point``: exact, rounded or a share of its whole.
+
+    No tolerance: a rounded label must equal the datum quantized HALF_UP to the
+    label's own displayed decimals. A percent label may state a share only for
+    part-of-whole families (pie/donut of the series total, percent-stacked bars
+    of the category total), with the same exact quantization.
+    """
+    value = Decimal(str(point["value"]))
+    if number == value:
+        return "exact"
+    decimals = len(match[4]) - 1 if match[4] else 0
+    label = Fraction(number)
+    if _v5_half_up(Fraction(value), decimals) == label:
+        return "rounded"
+    if match[2] or match[5] not in _V5_SHARE_UNITS:
+        return None
+    if chart["chartType"] in {"pie", "donut"}:
+        whole = [Decimal(str(item)) for item in chart["series"][point["seriesIndex"]]["values"]]
+    elif chart["chartType"] in {"bar", "column"} and chart.get("grouping") == "percentStacked":
+        whole = [Decimal(str(series["values"][point["categoryIndex"]])) for series in chart["series"]]
+    else:
+        return None
+    total = sum((Fraction(item) for item in whole), Fraction(0))
+    if total <= 0 or any(item < 0 for item in whole):
+        return None
+    return "share" if _v5_half_up(Fraction(value) * 100 / total, decimals) == label else None
+
+
+def _v5_plot_box(prims, geometry: dict):
+    """The data/axis extent the proof already established (legends excluded)."""
+    indices = set(geometry.get("usedShapeIndices", []))
+    indices.update(index for index in geometry.get("furnitureShapeIndices", [])
+                   if 0 <= index < len(prims.shapes) and prims.shapes[index].tag in {"line", "polyline", "path"})
+    for point in geometry.get("points", []):
+        indices.update(index for index in (point.get("shapeIndex"), point.get("markerShapeIndex")) if index is not None)
+    boxes = [prims.shapes[index].box for index in indices if 0 <= index < len(prims.shapes)]
+    coordinates = [(point["x"], point["y"]) for point in geometry.get("points", [])
+                   if point.get("x") is not None and point.get("y") is not None]
+    if not boxes and not coordinates:
+        return None
+    x0 = min([box.x0 for box in boxes] + [x for x, _ in coordinates])
+    y0 = min([box.y0 for box in boxes] + [y for _, y in coordinates])
+    x1 = max([box.x1 for box in boxes] + [x for x, _ in coordinates])
+    y1 = max([box.y1 for box in boxes] + [y for _, y in coordinates])
+    return x0, y0, x1, y1
+
+
+def _v5_annotation(text, plot) -> str | None:
+    """A unit/source/note caption outside the plot that states no data number."""
+    content = normalize_text(text.text)
+    prefix = _V5_ANNOTATION.match(content)
+    if prefix is None or plot is None or re.search(r"\d", content):
+        return None
+    box = text.box()
+    x0, y0, x1, y1 = plot
+    if not (box.x1 <= x0 or box.x0 >= x1 or box.y1 <= y0 or box.y0 >= y1):
+        return None
+    word = prefix[0].strip(" :：)").lower()
+    return {"단위": "unit", "unit": "unit", "출처": "source", "source": "source",
+            "자료": "source"}.get(word, "note")
 
 
 def _overlaps(a, b) -> bool:
@@ -604,6 +680,17 @@ def _v5_content_geometry(root, group, raw, chart, prims, *, measurement=None, sv
     ticks = set(geometry.get("tickTextIndices", []))
     values = [(index, text, _VALUE.fullmatch(normalize_text(text.text))) for index, text in enumerate(prims.texts)
               if index not in ticks and normalize_text(text.text) not in title_labels]
+    # A digit-free unit/source/note caption outside the plot area is chart
+    # furniture, not a datum claim. It is reported so that export keeps it.
+    plot = _v5_plot_box(prims, geometry)
+    annotations = []
+    for index, text, match in values:
+        kind = _v5_annotation(text, plot) if match is None else None
+        if kind is not None:
+            annotations.append({"textIndex": index, "text": normalize_text(text.text), "kind": kind})
+    if annotations:
+        annotated = {item["textIndex"] for item in annotations}
+        values = [item for item in values if item[0] not in annotated]
     numbers = [(index, text, match) for index, text, match in values if match is not None]
     require = raw.get("valueLabels", {}).get("shown") is True or bool(numbers)
     remaining = list(numbers)
@@ -711,12 +798,15 @@ def _v5_content_geometry(root, group, raw, chart, prims, *, measurement=None, sv
                 label_owners[item[0]] = (point["seriesIndex"], category_index)
     for point in geometry.get("points", []):
         candidates = []
+        label_matches = {}
         for index, text, match in remaining:
             if label_owners and label_owners.get(index) != (point["seriesIndex"], point["categoryIndex"]):
                 continue
             number = Decimal(("-" if match[1] in ("-", "−") else "") + match[3].replace(",", "") + (match[4] or ""))
-            if number != Decimal(str(point["value"])):
+            label_match = _v5_label_match(number, match, point, chart)
+            if label_match is None:
                 continue
+            label_matches[index] = label_match
             box = text.box()
             x, y = point.get("x"), point.get("y")
             shape_index = point.get("shapeIndex")
@@ -762,11 +852,13 @@ def _v5_content_geometry(root, group, raw, chart, prims, *, measurement=None, sv
             remaining.remove(chosen)
             bindings.append({"seriesIndex": point["seriesIndex"], "categoryIndex": point["categoryIndex"],
                              "unit": chosen[2][2] + chosen[2][5], "textIndex": chosen[0],
-                             **({"segmentOwnershipProven": True} if chosen[0] in segment_owned_labels else {})})
+                             **({"segmentOwnershipProven": True} if chosen[0] in segment_owned_labels else {}),
+                             **({"valueMatch": label_matches[chosen[0]]}
+                                if label_matches[chosen[0]] != "exact" else {})})
     if remaining or any(match is None for _, _, match in values):
         return {"passed": False, "reason": "native_chart_content_text_unaccounted"}
     return {**geometry, "valueLabelsProven": True, "numericLabelsRequired": require,
-            "valueLabelBindings": bindings}
+            "valueLabelBindings": bindings, **({"annotations": annotations} if annotations else {})}
 
 
 def _visible_group(root: ET.Element, group: ET.Element) -> bool:

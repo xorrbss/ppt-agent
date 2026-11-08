@@ -72,11 +72,45 @@ def _categories(chart: dict, prims: GroupPrimitives):
     return selected, coordinates
 
 
+def _short_series_names(chart: dict) -> dict[int, str]:
+    """Drawn short names of axis-qualified series names, when unambiguous.
+
+    ``Revenue (left axis 0-200)`` is commonly drawn as ``Revenue`` in a legend
+    (the same short form ``native_chart._drawn_series_name`` accepts). A short
+    name that equals another series' exact or short name identifies nothing.
+    """
+    exact = [normalize_text(series["name"]) for series in chart["series"]]
+    short = [normalize_text(re.split(r"\s*\(", series["name"], maxsplit=1)[0]) for series in chart["series"]]
+    result = {}
+    for index, name in enumerate(short):
+        if (name and name != exact[index]
+                and sum(1 for other in (*exact, *short) if other == name) == 1):
+            result[index] = name
+    return result
+
+
+def _series_palette(series: dict) -> set:
+    colors = {paint(color) for color in series.get("pointColors") or []}
+    if series.get("color"):
+        colors.add(paint(series["color"]))
+    colors.discard(None)
+    return colors
+
+
 def _legend(chart: dict, prims: GroupPrimitives):
     colors, indices, positions, text_indices = {}, set(), {}, {}
+    short_names = _short_series_names(chart)
     for series_index, series in enumerate(chart["series"]):
         labels = [(index, text) for index, text in enumerate(prims.texts)
                   if normalize_text(" ".join(text.lines)) == normalize_text(series["name"])]
+        # A swatch beside a short drawn name is a legend only when its paint
+        # also names this series: a declared series colour, or (undeclared)
+        # the paint of another rectangle that can be this series' data.
+        short_only = not labels and series_index in short_names
+        if short_only:
+            labels = [(index, text) for index, text in enumerate(prims.texts)
+                      if normalize_text(" ".join(text.lines)) == short_names[series_index]]
+        palette = _series_palette(series) if short_only else set()
         candidates = []
         for index, shape in enumerate(prims.shapes):
             color = _color(shape) if shape.tag in {"rect", "circle", "ellipse"} else shape.stroke
@@ -88,6 +122,11 @@ def _legend(chart: dict, prims: GroupPrimitives):
                        and _color(other) and any(abs(x - cx) <= _EPS and abs(y - cy) <= _EPS
                                                 for x, y in other.vertices) for other in prims.shapes):
                     continue  # A datum marker beside an end-label is not a swatch.
+            if short_only and (shape.tag not in {"rect", "circle", "ellipse"} or not shape.fill
+                               or shape.fill_alpha <= 0 or (paint(color) not in palette if palette else not any(
+                                   other is not shape and other.tag == "rect" and _color(other) == color
+                                   for other in prims.shapes))):
+                continue
             for text_index, text in labels:
                 box = text.box()
                 gap = box.x0 - shape.box.x1
