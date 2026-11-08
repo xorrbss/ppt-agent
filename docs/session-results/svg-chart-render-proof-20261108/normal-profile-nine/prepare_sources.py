@@ -7,12 +7,15 @@ import hashlib
 import importlib.util
 import json
 import math
+import os
 from pathlib import Path
 import sys
 from xml.etree import ElementTree as ET
 
-ROOT = Path("C:/project/PPT-agent/ppt-agent")
-OWNER = Path("C:/Users/ibiz/orca/workspaces/ppt-agent/svg-chart-integrity-1107")
+ROOT = Path(__file__).resolve().parents[4]
+# The chart-integrity sources were developed in a separate worktree and are now
+# merged here; point SVG_CHART_PROOF_SOURCE_ROOT at another checkout to replay them.
+OWNER = Path(os.environ.get("SVG_CHART_PROOF_SOURCE_ROOT") or ROOT)
 HERE = Path(__file__).resolve().parent
 
 

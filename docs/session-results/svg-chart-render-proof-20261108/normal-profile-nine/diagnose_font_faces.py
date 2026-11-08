@@ -10,7 +10,7 @@ import sys
 import time
 import unicodedata
 
-ROOT = Path("C:/project/PPT-agent/ppt-agent")
+ROOT = Path(__file__).resolve().parents[4]
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(ROOT / "servers/fastapi"))
 

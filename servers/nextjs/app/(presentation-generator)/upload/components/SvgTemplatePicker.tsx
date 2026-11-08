@@ -15,6 +15,7 @@ import SvgTemplateReview from "./SvgTemplateReview";
 import SvgTemplateFontSubstitutions from "./SvgTemplateFontSubstitutions";
 import type { PresentationConfig } from "../type";
 import { templateSourceCanvasSelector } from "../../services/api/svg-template-canvas";
+import { beginEpochRequest } from "../utils/requestEpoch";
 
 export default function SvgTemplatePicker({ config, onConfigChange, sourceContentMode, hasCompanyMaster }: {
   config: PresentationConfig; onConfigChange: (key: keyof PresentationConfig, value: unknown) => void;
@@ -46,7 +47,7 @@ export default function SvgTemplatePicker({ config, onConfigChange, sourceConten
   const [busy, setBusy] = useState(false);
   const [draft, setDraft] = useState<SvgTemplateDraft | null>(null);
   const currentDraft = useRef(draft);
-  currentDraft.current = draft;
+  useEffect(() => { currentDraft.current = draft; }, [draft]);
   const [selectedFrames, setSelectedFrames] = useState<string[]>([]);
   const [reviewDirty, setReviewDirty] = useState(false);
   const [confirmed, setConfirmed] = useState(false);
@@ -59,6 +60,13 @@ export default function SvgTemplatePicker({ config, onConfigChange, sourceConten
   const ownerAlive = useRef(true);
   const [ownerInvalidated, setOwnerInvalidated] = useState(false);
   const live = (epoch: number) => ownerAlive.current && ownerEpoch.current === epoch;
+  // Every draft request takes a new draft epoch. Close, a newer draft request or a session
+  // change makes it stale: a stale response must not touch the draft panel, and a stale
+  // request's completion must not release the busy state that a newer request holds.
+  const beginDraftRequest = () => {
+    const owner = ownerEpoch.current;
+    return beginEpochRequest(draftEpoch, () => live(owner));
+  };
   useEffect(() => {
     ownerAlive.current = true;
     const invalidate = () => {
@@ -205,28 +213,26 @@ export default function SvgTemplatePicker({ config, onConfigChange, sourceConten
   };
   const openDraft = async (id: string) => {
     if (!ownerAlive.current) return;
-    const owner = ownerEpoch.current;
-    const epoch = ++draftEpoch.current;
+    const current = beginDraftRequest();
     setBusy(true);
-    try { const result = await SvgTemplatesApi.draft(id); if (!live(owner) || epoch !== draftEpoch.current) return; setDraft(result); setReviewDirty(false); setSelectedFrames(result.package?.frames.filter(frame => !frameReviewBlockReason(result, frame)).map(frame => frame.frame_id) ?? []); setConfirmed(false); }
-    catch { if (live(owner)) notify.error(t("openDraftFailed")); }
-    finally { if (live(owner)) setBusy(false); }
+    try { const result = await SvgTemplatesApi.draft(id); if (!current()) return; setDraft(result); setReviewDirty(false); setSelectedFrames(result.package?.frames.filter(frame => !frameReviewBlockReason(result, frame)).map(frame => frame.frame_id) ?? []); setConfirmed(false); }
+    catch { if (current()) notify.error(t("openDraftFailed")); }
+    finally { if (current()) setBusy(false); }
   };
   const register = async () => {
     if (!file || !name.trim() || busy || !ownerAlive.current || available !== true) return;
-    const owner = ownerEpoch.current;
-    const epoch = ++draftEpoch.current;
+    const current = beginDraftRequest();
     setBusy(true);
     try {
       const admission = await PresentationGenerationApi.uploadDoc([file], `svg-template:${crypto.randomUUID()}`);
-      if (!live(owner) || epoch !== draftEpoch.current) return;
+      if (!current()) return;
       const result = await SvgTemplatesApi.register({ name: name.trim(), referenceSnapshotId: admission.referenceSnapshotId, registrationMode: "framed" });
-      if (!live(owner) || epoch !== draftEpoch.current) return;
+      if (!current()) return;
       setReviewDirty(false);
       setDraft({ template: result.template, operationId: result.operationId, package: null });
       setRefresh(value => value + 1); setConfirmed(false);
-    } catch { if (live(owner)) notify.error(t("registerFailed")); }
-    finally { if (live(owner)) setBusy(false); }
+    } catch { if (current()) notify.error(t("registerFailed")); }
+    finally { if (current()) setBusy(false); }
   };
   const framePreview = (frame: NonNullable<SvgTemplateDraft["package"]>["frames"][number]) => {
     const url = frame.preview_url || draft?.source_previews?.[String(frame.source_page)];
@@ -306,29 +312,29 @@ export default function SvgTemplatePicker({ config, onConfigChange, sourceConten
       })}
       <SvgTemplateFontSubstitutions key={`fonts:${draft.operationId}:${draft.package?.digest ?? "pending"}`} draft={draft} busy={busy || reviewDirty} onApply={async fontSubstitutions => {
         if (!ownerAlive.current || available !== true) return false;
-        const owner = ownerEpoch.current;
+        const current = beginDraftRequest();
         setBusy(true);
         try {
           const result = await SvgTemplatesApi.review(draft.template.templateId, { operationId: draft.operationId, expectedHeadRevision: draft.template.pin?.revision ?? 0, frameReviews: [], fontSubstitutions });
-          if (!live(owner)) return false;
+          if (!current()) return false;
           setDraft({ template: { ...draft.template, registrationState: "analyzing" }, operationId: result.operationId, package: null });
           setConfirmed(false); setRefresh(value => value + 1);
           return true;
-        } catch (error) { if (live(owner)) throw error; return false; }
-        finally { if (live(owner)) setBusy(false); }
+        } catch (error) { if (current()) throw error; return false; }
+        finally { if (current()) setBusy(false); }
       }} />
       <SvgTemplateReview key={`${draft.operationId}:${draft.package?.digest ?? "pending"}`} draft={draft} busy={busy} onDirtyChange={dirty => { setReviewDirty(dirty); setConfirmed(false); }} onSave={async (frames, representativeFrameId) => {
         if (!ownerAlive.current || available !== true) return;
-        const owner = ownerEpoch.current;
+        const current = beginDraftRequest();
         setBusy(true);
         try {
           const result = await SvgTemplatesApi.review(draft.template.templateId, { operationId: draft.operationId, expectedHeadRevision: draft.template.pin?.revision ?? 0, frameReviews: frames, representativeFrameId });
-          if (!live(owner)) return;
+          if (!current()) return;
           setReviewDirty(false);
           setDraft({ template: { ...draft.template, registrationState: "analyzing" }, operationId: result.operationId, package: null });
           setConfirmed(false); setRefresh(value => value + 1);
-        } catch { if (live(owner)) notify.error(t("reviewSaveFailed")); }
-        finally { if (live(owner)) setBusy(false); }
+        } catch { if (current()) notify.error(t("reviewSaveFailed")); }
+        finally { if (current()) setBusy(false); }
       }} />
       {reviewDirty ? <p role="status" className="text-xs text-amber-800">{t("reviewDirty")}</p> : null}
       <p className="text-xs text-slate-500">{t("reviewGuide")}</p>

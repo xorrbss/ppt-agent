@@ -184,3 +184,16 @@ test("publish responses update only their current draft and leave superseding wo
   }
   }
 });
+
+test("a retried request restores its stored verbosity as an explicit choice", async () => {
+  const { requestVerbosity, restoredVerbosity } = await loadModule();
+  const allowed = ["concise", "standard", "text-heavy"];
+  const current = { verbosity: "standard", verbosityTouched: false };
+  const restored = { ...redesign, ...restoredVerbosity("concise", current, allowed) };
+  assert.deepEqual(restoredVerbosity("concise", current, allowed), { verbosity: "concise", verbosityTouched: true });
+  assert.equal(requestVerbosity(restored), "concise");
+  // A missing or unknown stored value keeps the current fields untouched.
+  assert.deepEqual(restoredVerbosity(undefined, current, allowed), current);
+  assert.deepEqual(restoredVerbosity("verbose", current, allowed), current);
+  assert.equal(requestVerbosity({ ...redesign, ...restoredVerbosity(null, current, allowed) }), undefined);
+});
