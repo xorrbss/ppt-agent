@@ -31,8 +31,12 @@ def _native_source_content(request, index, count, content):
 
 
 def _apply_preserved_v5_chart_quality(quality, payload, svg, content, *, revision, render_capture,
-                                      pt_per_px=None, request=None):
-    """Add final declared-chart evidence without replacing preservation gates."""
+                                      pt_per_px=None, request=None, paint_deferred=False):
+    """Add final declared-chart evidence without replacing preservation gates.
+
+    ``paint_deferred``: the render pass captured without a witness manifest,
+    so chart paint stays ``pending`` for post-publication verification.
+    """
     from services.generation_core.drivers.svg.native_declarations import bound_declarations
     from services.generation_core.drivers.svg.native_requirements import (
         REQUIREMENTS_VERSION_V5, apply_requested_native_quality,
@@ -48,7 +52,8 @@ def _apply_preserved_v5_chart_quality(quality, payload, svg, content, *, revisio
         from services.generation_core.drivers.svg.native_publish import canvas_point_per_px
         pt_per_px = canvas_point_per_px(request_canvas_metadata(request))
     apply_requested_native_quality(quality, payload, svg, content, pt_per_px=pt_per_px,
-        revision=revision, render_capture=render_capture, post_render=True, declared_chart_only=True)
+        revision=revision, render_capture=render_capture, post_render=True, declared_chart_only=True,
+        **({"paint_deferred": True} if paint_deferred else {}))
 
 
 def source_structural_visual_retry(ctx, payload, *, index):
@@ -827,16 +832,15 @@ async def _attempt_render(*, ctx, request, presentation_id, index, content, payl
 
                         source_font_kwargs["minimum_font_px"] = max(source_font_kwargs["minimum_font_px"],
                             svg_quality_font_floor(readability_policy))
-                from services.generation_core.drivers.svg.native_chart_evidence import chart_witness_render_kwargs
-                from services.generation_core.drivers.svg.native_requirements import requirements_revision
-                chart_render_kwargs = chart_witness_render_kwargs(payload, final, revision=requirements_revision(ctx.snapshot))
+                # The v5 chart paint proof is not part of this render: it needs
+                # far more than the render budget and runs after publication
+                # (chart_paint_verification). No witness manifest is sent.
                 render_request = functools.partial(render_svg_with_metrics, final, width=ctx.canvas.width_px,
                                                      height=ctx.canvas.height_px,
                                                      # Source instructions are resolved into the hard
                                                      # minimum above, including the 7px lower bound.
                                                      instructions=None if ctx.source_reflow else request.instructions,
                                                      **source_font_kwargs,
-                                                     **chart_render_kwargs,
                                                      **({"readability_policy": readability_policy} if readability_policy is not None else {}),
                                                      required_text=required_text,
                                                      **({"allow_image_only": True}
@@ -927,7 +931,7 @@ async def _attempt_render(*, ctx, request, presentation_id, index, content, payl
         apply_requested_native_quality(rendered.quality, payload, final, native_source,
             pt_per_px=canvas_point_per_px(request_canvas_metadata(request)),
             revision=requirements_revision(ctx.snapshot),
-            **({"render_capture": rendered, "post_render": True}
+            **({"render_capture": rendered, "post_render": True, "paint_deferred": True}
                if requirements_revision(ctx.snapshot) == REQUIREMENTS_VERSION_V5 else {}))
     elif ctx.source_reflow and payload.get("source_preservation", {}).get("whole_page_native_groups"):
         from services.authored_canvas import request_canvas_metadata
@@ -952,7 +956,7 @@ async def _attempt_render(*, ctx, request, presentation_id, index, content, payl
         from services.generation_core.drivers.svg.native_requirements import requirements_revision
         _apply_preserved_v5_chart_quality(rendered.quality, payload, final, content,
             revision=requirements_revision(ctx.snapshot),
-            request=request, render_capture=rendered)
+            request=request, render_capture=rendered, paint_deferred=True)
     if timeline_source:
         apply_timeline_ink_quality(rendered.quality, final, timeline_source,
                                   **({"allow_unlabeled": True} if profile["version"] in (6, 7, 8) else {}))

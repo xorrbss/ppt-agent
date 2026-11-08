@@ -492,7 +492,7 @@ def required_numeric_claims_with_native_charts(content: str, payload: dict, svg:
 
 def apply_requested_native_quality(quality: dict, payload: dict, svg: str, content: str, *, pt_per_px: float,
                                    revision: str | None = None, render_capture=None, post_render: bool = False,
-                                   declared_chart_only: bool = False) -> None:
+                                   declared_chart_only: bool = False, paint_deferred: bool = False) -> None:
     requirements = requested_native_data(content, revision)
     declared_charts = []
     if revision == REQUIREMENTS_VERSION_V5:
@@ -516,7 +516,8 @@ def apply_requested_native_quality(quality: dict, payload: dict, svg: str, conte
             chart_drawing_evidence, chart_projection_diagnostics, chart_value_differences,
         )
         evidence = chart_drawing_evidence(payload, svg, revision=revision,
-            **({"measurement": quality, "render_capture": render_capture, "post_render": post_render}
+            **({"measurement": quality, "render_capture": render_capture, "post_render": post_render,
+                **({"paint_deferred": True} if paint_deferred else {})}
                if revision == REQUIREMENTS_VERSION_V5 else {}))
         summary = chart_projection_diagnostics(summary, evidence)
         dropped_ids = {item.get("id") for item in (summary or {}).get("dropped", [])

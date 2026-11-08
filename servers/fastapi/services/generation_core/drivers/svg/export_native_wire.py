@@ -3,7 +3,11 @@
 The bundle's optional top-level ``nativeObjects`` is one entry per slide:
 
 * ``null`` -- the slide has no sidecar;
-* ``{"status": "valid", "sidecar": <native-objects/v1 wire>}``;
+* ``{"status": "valid", "sidecar": <native-objects/v1 wire>}``, optionally with
+  ``"chartPaintFallbacks": [{"id": .., "reason": ..}]`` -- svg-native-requirements/v5
+  charts without passed, current post-publication paint evidence; each stays
+  drawn and is recorded as fell back with its reason (absent for every other
+  revision, so earlier bundles are unchanged);
 * ``{"status": "invalid", "reason": <code>, "objects": [{"id": .., "kind": ..}]}``
   -- the stored sidecar failed validation. The export does not fail: every
   object it names (or the sidecar as one unit when none can be named) is
@@ -37,14 +41,18 @@ class PageNativeObjects:
     invalid_reason: str | None = None
     invalid_objects: tuple[tuple[str | None, str | None], ...] = ()
     source_chart_policy: dict | None = None
+    chart_paint_fallbacks: tuple[tuple[str, str], ...] = ()
 
 
 def _label(value: Any) -> str | None:
     return value[:_MAX_LABEL] if isinstance(value, str) else None
 
 
-def bundle_entry(content: Any) -> dict | None:
-    """The bundle entry for one slide's stored ``content`` (operation side)."""
+def bundle_entry(content: Any, *, chart_paint_fallbacks: list[dict] | None = None) -> dict | None:
+    """The bundle entry for one slide's stored ``content`` (operation side).
+
+    ``chart_paint_fallbacks`` (v5 only) names sidecar charts that must stay drawn.
+    """
     try:
         sidecar = slide_native_objects(content)
     except NativeObjectsError as error:
@@ -59,8 +67,28 @@ def bundle_entry(content: Any) -> dict | None:
         return None
     from services.svg_source_charts import source_chart_export_policy
     policy = source_chart_export_policy(content, sidecar)
+    fallbacks = _chart_paint_fallbacks(chart_paint_fallbacks, sidecar) if chart_paint_fallbacks else None
     return {"status": "valid", "sidecar": sidecar.to_wire(),
-            **({"sourceChartPolicy": policy} if policy is not None else {})}
+            **({"sourceChartPolicy": policy} if policy is not None else {}),
+            **({"chartPaintFallbacks": fallbacks} if fallbacks else {})}
+
+
+def _chart_paint_fallbacks(value: Any, sidecar: NativeObjects) -> list[dict]:
+    """Strict, sorted ``[{"id", "reason"}]`` naming distinct chart objects of ``sidecar``."""
+    charts = {item.id for item in sidecar.objects if item.kind == "chart"}
+    if not isinstance(value, list) or not 0 < len(value) <= _MAX_INVALID_OBJECTS:
+        raise ValueError(_BUNDLE_INVALID)
+    result, seen = [], set()
+    for item in value:
+        if (not isinstance(item, dict) or set(item) != {"id", "reason"}
+                or item["id"] not in charts or item["id"] in seen
+                or not isinstance(item["reason"], str) or not 0 < len(item["reason"]) <= _MAX_REASON):
+            raise ValueError(_BUNDLE_INVALID)
+        seen.add(item["id"])
+        result.append({"id": item["id"], "reason": item["reason"]})
+    if result != sorted(result, key=lambda entry: entry["id"]):
+        raise ValueError(_BUNDLE_INVALID)
+    return result
 
 
 def _parse_entry(entry: Any) -> PageNativeObjects:
@@ -68,7 +96,8 @@ def _parse_entry(entry: Any) -> PageNativeObjects:
         return PageNativeObjects()
     if not isinstance(entry, dict):
         raise ValueError(_BUNDLE_INVALID)
-    if entry.get("status") == "valid" and set(entry) in ({"status", "sidecar"}, {"status", "sidecar", "sourceChartPolicy"}):
+    if entry.get("status") == "valid" and set(entry) - {"chartPaintFallbacks"} in (
+            {"status", "sidecar"}, {"status", "sidecar", "sourceChartPolicy"}):
         try:
             sidecar = NativeObjects.from_wire(entry["sidecar"])
             policy = entry.get("sourceChartPolicy")
@@ -77,7 +106,15 @@ def _parse_entry(entry: Any) -> PageNativeObjects:
                 if policy is None:
                     raise ValueError("svg_source_chart_export_policy_invalid")
                 validate_source_chart_export_policy(policy, sidecar)
-            return PageNativeObjects(sidecar=sidecar, source_chart_policy=policy)
+            fallbacks = ()
+            if "chartPaintFallbacks" in entry:
+                fallbacks = tuple((item["id"], item["reason"])
+                                  for item in _chart_paint_fallbacks(entry["chartPaintFallbacks"], sidecar))
+                required = {record["id"] for record in (policy or {}).get("charts", [])}
+                if required & {chart_id for chart_id, _ in fallbacks}:
+                    raise ValueError(_BUNDLE_INVALID)
+            return PageNativeObjects(sidecar=sidecar, source_chart_policy=policy,
+                                     chart_paint_fallbacks=fallbacks)
         except NativeObjectsError as error:
             raise ValueError(_BUNDLE_INVALID) from error
     if entry.get("status") != "invalid" or set(entry) != {"status", "reason", "objects"}:

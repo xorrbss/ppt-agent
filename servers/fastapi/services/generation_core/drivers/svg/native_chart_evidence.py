@@ -796,8 +796,15 @@ def _visible_group(root: ET.Element, group: ET.Element) -> bool:
 
 
 def chart_drawing_evidence(payload: dict, svg: str, *, revision: str, measurement: dict | None = None,
-                           render_capture=None, post_render: bool = False) -> dict[str, dict]:
-    """Read only current bound chart groups; no drawing is inferred from JSON."""
+                           render_capture=None, post_render: bool = False,
+                           paint_deferred: bool = False) -> dict[str, dict]:
+    """Read only current bound chart groups; no drawing is inferred from JSON.
+
+    ``paint_deferred`` marks a render pass that captured without a chart
+    witness manifest: its paint evidence is the existing ``pending`` state and
+    is proven after publication (``chart_paint_verification``). The drawing's
+    content geometry is still read from this pass's measurement.
+    """
     record, current = bound_declarations(payload, svg)
     if not current or record is None:
         return {}
@@ -860,7 +867,7 @@ def chart_drawing_evidence(payload: dict, svg: str, *, revision: str, measuremen
     if revision == REQUIREMENTS_VERSION_V5:
         rendered = post_render or render_capture is not None or isinstance(measurement, dict) and any(key in measurement for key in (
             "measurement_complete", "browser_metrics", "source_digest", "wrapper_digest", "png_digest", "metrics_digest"))
-        if rendered:
+        if rendered and not paint_deferred:
             from services.generation_core.drivers.svg.chart_content_paint import validate_chart_content_paint
             manifest = chart_witness_render_kwargs(payload, svg, revision=revision).get("chart_witness_manifest")
             paint = validate_chart_content_paint(manifest, measurement, capture=render_capture)

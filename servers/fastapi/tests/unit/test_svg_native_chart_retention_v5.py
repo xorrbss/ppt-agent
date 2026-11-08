@@ -402,6 +402,10 @@ def test_v5_publication_inherits_v4_single_series_title_projection():
     before = deepcopy(page)
     kwargs = {"role": "content", "source": SOURCE, "pt_per_px": .75}
     current = svg_slide_content(page, revision=V5, **kwargs)
+    # v5 alone keeps the bound chart declarations for post-publication paint
+    # verification; the projection itself is v4's.
+    from services.generation_core.drivers.svg.chart_paint_verification import WITNESS_SOURCE_KEY
+    assert current.pop(WITNESS_SOURCE_KEY)["declarations"] == page["nativeDeclarations"]
     assert current == svg_slide_content(page, revision=V4, **kwargs)
     assert current["svgReceipt"]["nativeObjects"]["accepted"] == 1
     assert current["nativeObjects"]["objects"][0]["payload"]["series"][0]["values"] == [30, 60, 90]
