@@ -41,7 +41,7 @@ const GenerationGuardDialog: React.FC<GenerationGuardDialogProps> = ({
           {(prompt?.items ?? []).map((item) => (
             <li
               key={item.operationId}
-              className="flex items-center justify-between gap-3 rounded-lg border border-[#EDEEEF] px-3 py-2"
+              className="flex items-center justify-between gap-3 rounded-lg border border-surface px-3 py-2"
             >
               <span className="min-w-0 truncate">
                 {item.presentationTitle ?? item.sourceFileName ?? t("untitled")}
