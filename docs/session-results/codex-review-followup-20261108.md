@@ -176,3 +176,34 @@ Further commits, each reviewed before integration:
 - **CI gates:** ruff, structural layering, the svg subset check and the
   required-CI contract test pass. `check:notice` and `check:release-sbom` fail
   as described in the analysis document.
+
+## Owner-approved follow-up (same day)
+
+- **V5 paint proof moved off the render path** (`137c5e611`, `2913e073e`, plus
+  the preserved-source fix):
+  - Render records `pending`. `export.pptx` runs the unchanged proof, seals
+    digest-bound evidence in `slide.properties`, and exports a V5 chart
+    natively only with current passed evidence; otherwise the chart stays
+    drawn.
+  - Preserved source charts that must export natively keep the in-render
+    proof, so nothing is loosened.
+  - Chart-proof Chrome launches use frame-pacing flags.
+  - Known gaps: pages whose render inputs verification cannot reproduce, and
+    decks that went through the header-design operation, keep V5 charts drawn.
+    No real-Chrome end-to-end export was possible here.
+- **NOTICE/SBOM interim step** (`456602d53`): the CI step installs uv; the
+  policy allows reviewed per-platform licence digests; Linux is the canonical
+  generation platform. NOTICE and the SBOM were regenerated, and
+  `check:notice` and `check:release-sbom` pass. The end-state plan is in the
+  analysis document, section 5.
+- **V4/V5 disagreement measurement:** `svg-v4-v5-chart-disagreement-20261108.md`.
+  On the 4 real stored charts, V5 has 1 true catch (dual axis) and 1 false
+  rejection (unit caption).
+- **Public v2 admission tests** realigned with the free-composition change.
+- **Verification:**
+  - svg subset: only the 2 environment-dependent Chromium cases fail. One
+    earlier run showed a load flake in the header space probe that did not
+    reproduce.
+  - `test:next-ci`: everything passes up to the renderer batch, whose 2
+    failures are the frozen authored-hybrid Chrome cleanup ECONNRESET.
+  - Fake-LLM V5 generation and export completed.
