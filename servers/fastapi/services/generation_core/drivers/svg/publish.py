@@ -40,8 +40,8 @@ def svg_slide_content(payload: dict, *, role, source, pt_per_px: float,
     publication summary (``native_publish.page_native_objects``) does.
     """
     from services.svg_cached_author_render_lineage import approved_sidecars
-    from services.generation_core.drivers.svg.native_requirements import REQUIREMENTS_VERSION_V4
-    projection_kwargs = {"revision": revision} if revision == REQUIREMENTS_VERSION_V4 else {}
+    from services.generation_core.drivers.svg.native_requirements import REQUIREMENTS_VERSION_V4, REQUIREMENTS_VERSION_V5
+    projection_kwargs = {"revision": revision} if revision in (REQUIREMENTS_VERSION_V4, REQUIREMENTS_VERSION_V5) else {}
     sidecars = approved_sidecars(payload)
     native_objects, native_summary = ((source_native_objects, source_native_summary)
         if source_native_summary is not None else page_native_objects(
@@ -226,10 +226,10 @@ async def _publish(request, presentation_id, outline, language, session, job, sn
     for index, (payload, png) in enumerate(pages):
         native_kwargs = {}
         from services.generation_core.drivers.svg.native_requirements import (
-            REQUIREMENTS_VERSION_V4, requirements_revision,
+            REQUIREMENTS_VERSION_V4, REQUIREMENTS_VERSION_V5, requirements_revision,
         )
-        if requirements_revision(snapshot) == REQUIREMENTS_VERSION_V4:
-            native_kwargs["revision"] = REQUIREMENTS_VERSION_V4
+        if requirements_revision(snapshot) in (REQUIREMENTS_VERSION_V4, REQUIREMENTS_VERSION_V5):
+            native_kwargs["revision"] = requirements_revision(snapshot)
         if source_preservation and (payload.get("source_preservation") or {}).get("native_tables"):
             from services.svg_source_native_tables import source_table_native_objects
             native_objects, native_summary = source_table_native_objects(payload["svg_content"],

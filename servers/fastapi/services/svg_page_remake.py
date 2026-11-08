@@ -165,13 +165,28 @@ def _native_projection(svg, native, metadata, source, *, revision=None):
         raise ValueError("svg_page_remake_native_binding_invalid")
     scale = canvas_point_per_px(metadata)
     quality = {"passed": True, "failures": []}
-    if native is not None:
+    from services.generation_core.drivers.svg.native_requirements import REQUIREMENTS_VERSION_V4, REQUIREMENTS_VERSION_V5
+    if native is not None or revision == REQUIREMENTS_VERSION_V5:
         apply_requested_native_quality(quality, payload, svg, source, pt_per_px=scale, revision=revision)
         if quality.get("passed") is False:
             raise ValueError("svg_page_remake_requested_native_missing")
-    from services.generation_core.drivers.svg.native_requirements import REQUIREMENTS_VERSION_V4
     return page_native_objects(payload, pt_per_px=scale,
-        **({"revision": revision} if revision == REQUIREMENTS_VERSION_V4 else {}))
+        **({"revision": revision} if revision in (REQUIREMENTS_VERSION_V4, REQUIREMENTS_VERSION_V5) else {}))
+
+
+def _apply_v5_rendered_native_quality(quality, svg, native, metadata, source, revision, *, render_capture=None):
+    """Finish v5 chart visibility using the existing digest-bound render probe."""
+    from services.generation_core.drivers.svg.native_requirements import (
+        REQUIREMENTS_VERSION_V5, apply_requested_native_quality,
+    )
+    if revision != REQUIREMENTS_VERSION_V5:
+        return
+    from services.generation_core.drivers.svg.native_publish import canvas_point_per_px
+    apply_requested_native_quality(quality, {**(native or {}), "svg_content": svg}, svg, source,
+        pt_per_px=canvas_point_per_px(metadata), revision=revision, render_capture=render_capture, post_render=True)
+    from services.generation_core.quality.page_failure_kind import quality_keeps_content
+    if (quality.get("requestedNativeObjects") or {}).get("passed") is False and not quality_keeps_content(quality):
+        raise ValueError("svg_page_remake_requested_native_missing")
 
 
 async def preview_svg(presentation, slides, index, request, task, session):
@@ -341,15 +356,19 @@ async def preview_svg(presentation, slides, index, request, task, session):
         if assets is not None:
             placement = rebound_placement(final, assets[0], assets[1], revision=presentation.revision + 1)
             render_source = await materialize_rebound_svg(session, presentation, final, assets[0], placement, source_index)
+        from services.generation_core.drivers.svg.native_chart_evidence import chart_witness_render_kwargs
         render = await render_svg_with_metrics(final, width=canvas.width_px, height=canvas.height_px,
             readability_policy=readability_policy,
             materialized_svg=render_source if render_source != final else None,
             instructions=instruction,
+            **chart_witness_render_kwargs(native or {}, final, revision=_deck_requirements_revision(presentation)),
             **({"font_manifest": template_package(snapshot["svg_template"])["font_manifest"]} if template_page is not None else {}),
             **({"timeline_ink_probe": True} if v7_source else {}),
             **({"required_text": _required_numeric_claims(source)} if local_edit else {}),
             **({"system_furniture": furniture} if furniture is not None else {}),
             **physical_kwargs)
+        _apply_v5_rendered_native_quality(render.quality, final, native,
+            presentation_canvas_metadata(presentation.theme), source, _deck_requirements_revision(presentation), render_capture=render)
         if template_page is not None:
             from services.svg_templates.generation import apply_template_body_quality
             apply_template_body_quality(render.quality, final, snapshot, template_page)
@@ -521,15 +540,19 @@ async def publish_svg_candidate(session, presentation, slides, index, task, *, s
             width=canvas.width_px, height=canvas.height_px, source_manifest=source_contract,
             template_page_context=template_page)
     from services.svg_presentation_checkpoint import _required_numeric_claims
+    from services.generation_core.drivers.svg.native_chart_evidence import chart_witness_render_kwargs
     rendered = await render_svg_with_metrics(svg, width=canvas.width_px, height=canvas.height_px,
         readability_policy=readability_policy,
         materialized_svg=render_source if render_source != svg else None,
         instructions=data.get("instruction"),
+        **chart_witness_render_kwargs(native or {}, svg, revision=_deck_requirements_revision(presentation)),
         **({"font_manifest": template_package(frozen_snapshot["svg_template"])["font_manifest"]} if template_page is not None else {}),
         **({"required_text": _required_numeric_claims((target.content or {}).get("source", ""))} if local_edit else {}),
         **({"timeline_ink_probe": True} if _v7_source_profile(presentation.theme.get("svg", {}).get("styleSnapshot", {})) else {}),
         **({"system_furniture": furniture} if furniture is not None else {}),
         **physical_kwargs)
+    _apply_v5_rendered_native_quality(rendered.quality, svg, native,
+        presentation_canvas_metadata(presentation.theme), source, _deck_requirements_revision(presentation), render_capture=rendered)
     if template_page is not None:
         from services.svg_templates.generation import apply_template_body_quality
         apply_template_body_quality(rendered.quality, svg, frozen_snapshot, template_page)

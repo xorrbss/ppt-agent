@@ -1,0 +1,682 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "svg-chart-support-graph/v1",
+  "title": "Server-derived native chart support graph extensions",
+  "description": "Definitions used by the actual v5 manifest builder. Existing manifest fields remain unchanged. All coordinates are canonical SVG canvas coordinates, transformed by the exact captured SVG CTM. Regions only clip actual isolated native-alpha ink; they never create ink. Polar adjacency proves exact actual-fill topology with the existing rounded radial geometry contract; independent original outer-arc contribution remains required. Local alternatives never remove a target native-alpha denominator.",
+  "$defs": {
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "point": {
+      "type": "array",
+      "items": {
+        "type": "number"
+      },
+      "minItems": 2,
+      "maxItems": 2
+    },
+    "segment": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/point"
+      },
+      "minItems": 2,
+      "maxItems": 2
+    },
+    "ellipse": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "center": {
+          "$ref": "#/$defs/point"
+        },
+        "radii": {
+          "$ref": "#/$defs/point"
+        },
+        "startAngle": {
+          "type": "number"
+        },
+        "sweepAngle": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        }
+      },
+      "required": [
+        "center",
+        "radii",
+        "startAngle",
+        "sweepAngle"
+      ]
+    },
+    "alternative": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "equivalent-native-support"
+            },
+            "classId": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "classId"
+          ]
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "shared-stack-interface"
+            },
+            "neighborDatumId": {
+              "type": "string"
+            },
+            "neighborTargetId": {
+              "type": "string"
+            },
+            "neighborSupportId": {
+              "type": "string"
+            },
+            "geometrySupportDigest": {
+              "$ref": "#/$defs/digest"
+            },
+            "cumulativeValue": {
+              "type": "string"
+            },
+            "grouping": {
+              "enum": [
+                "stacked",
+                "percentStacked"
+              ]
+            },
+            "axisKey": {
+              "$ref": "#/$defs/digest"
+            },
+            "datumInteriorSupportId": {
+              "type": "string"
+            },
+            "neighborInteriorSupportId": {
+              "type": "string"
+            },
+            "requiresBothInteriorContribution": {
+              "const": true
+            },
+            "requiresBoundaryContrast": {
+              "const": true
+            }
+          },
+          "required": [
+            "kind",
+            "neighborDatumId",
+            "neighborTargetId",
+            "neighborSupportId",
+            "geometrySupportDigest",
+            "cumulativeValue",
+            "grouping",
+            "axisKey",
+            "datumInteriorSupportId",
+            "neighborInteriorSupportId",
+            "requiresBothInteriorContribution",
+            "requiresBoundaryContrast"
+          ]
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "calibrated-value-line"
+            },
+            "gridQid": {
+              "type": "string"
+            },
+            "gridTargetId": {
+              "type": "string"
+            },
+            "tickTargetIds": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "string"
+              }
+            },
+            "titleTargetIds": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "value": {
+              "type": "string"
+            },
+            "unitKey": {
+              "type": "string"
+            },
+            "axisKey": {
+              "$ref": "#/$defs/digest"
+            },
+            "datumInteriorSupportId": {
+              "type": "string"
+            },
+            "datumSideSupportId": {
+              "type": "string"
+            },
+            "requiresDatumInteriorContribution": {
+              "const": true
+            },
+            "requiresIncidentSideContribution": {
+              "const": true
+            }
+          },
+          "required": [
+            "kind",
+            "gridQid",
+            "gridTargetId",
+            "tickTargetIds",
+            "titleTargetIds",
+            "value",
+            "unitKey",
+            "axisKey",
+            "datumInteriorSupportId",
+            "datumSideSupportId",
+            "requiresDatumInteriorContribution",
+            "requiresIncidentSideContribution"
+          ]
+        },
+        {
+          "$ref": "#/$defs/markerAlternative"
+        },
+        {
+          "$ref": "#/$defs/boundStackValueGlyphsAlternative"
+        }
+      ]
+    },
+    "obligation": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "kind": {
+          "anyOf": [
+            {
+              "enum": [
+                "value-end",
+                "value-base",
+                "value-anchor",
+                "polar-outer-arc"
+              ]
+            },
+            {
+              "type": "string",
+              "pattern": "^incident-edge-[0-9]+$"
+            }
+          ]
+        },
+        "primitiveQid": {
+          "type": "string",
+          "pattern": "^svg-[0-9]+$"
+        },
+        "regionRule": {
+          "const": "native-alpha-boundary-neighborhood/v1"
+        },
+        "radiusPhysicalPixels": {
+          "const": 1
+        },
+        "segments": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/segment"
+          }
+        },
+        "ellipse": {
+          "$ref": "#/$defs/ellipse"
+        },
+        "alternatives": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/alternative"
+          }
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "primitiveQid",
+        "regionRule",
+        "radiusPhysicalPixels",
+        "segments",
+        "alternatives"
+      ]
+    },
+    "contributionRegion": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "interior-profile",
+            "incident-sides"
+          ]
+        },
+        "primitiveQid": {
+          "type": "string",
+          "pattern": "^svg-[0-9]+$"
+        },
+        "segments": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/segment"
+          }
+        },
+        "regionRule": {
+          "const": "native-alpha-boundary-neighborhood/v1"
+        },
+        "radiusPhysicalPixels": {
+          "const": 1
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "primitiveQid",
+        "segments",
+        "regionRule",
+        "radiusPhysicalPixels"
+      ]
+    },
+    "equivalenceClass": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "axisKey": {
+          "$ref": "#/$defs/digest"
+        },
+        "unitKey": {
+          "type": "string"
+        },
+        "categoryIndex": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "value": {
+          "type": "string"
+        },
+        "requiresJointOriginalContribution": {
+          "const": true
+        },
+        "members": {
+          "type": "array",
+          "minItems": 2,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "datumId": {
+                "type": "string"
+              },
+              "targetId": {
+                "type": "string"
+              },
+              "supportId": {
+                "type": "string"
+              },
+              "geometrySupportDigest": {
+                "$ref": "#/$defs/digest"
+              }
+            },
+            "required": [
+              "datumId",
+              "targetId",
+              "supportId",
+              "geometrySupportDigest"
+            ]
+          }
+        }
+      },
+      "required": [
+        "id",
+        "axisKey",
+        "unitKey",
+        "categoryIndex",
+        "value",
+        "requiresJointOriginalContribution",
+        "members"
+      ]
+    },
+    "localOverlap": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "datumId": {
+          "type": "string"
+        },
+        "targetQid": {
+          "type": "string"
+        },
+        "occluderQid": {
+          "type": "string"
+        },
+        "geometrySupportDigest": {
+          "$ref": "#/$defs/digest"
+        },
+        "regionRule": {
+          "enum": [
+            "native-alpha-intersection-in-datum-support/v1",
+            "native-separator-stroke-intersection-in-datum-support/v1"
+          ]
+        },
+        "occluderPaint": {
+          "enum": [
+            "all",
+            "stroke"
+          ]
+        },
+        "boundarySegments": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/segment"
+          }
+        },
+        "geometrySupport": {
+          "type": "object",
+          "properties": {
+            "anchor": {
+              "type": "object",
+              "properties": {
+                "x": {
+                  "type": "number"
+                },
+                "y": {
+                  "type": "number"
+                }
+              },
+              "additionalProperties": false
+            },
+            "categoryStrip": {
+              "type": "object",
+              "properties": {
+                "minimumX": {
+                  "type": [
+                    "number",
+                    "null"
+                  ]
+                },
+                "maximumX": {
+                  "type": [
+                    "number",
+                    "null"
+                  ]
+                }
+              },
+              "required": [
+                "minimumX",
+                "maximumX"
+              ],
+              "additionalProperties": false
+            },
+            "baseline": {
+              "type": [
+                "number",
+                "null"
+              ]
+            }
+          },
+          "additionalProperties": false
+        },
+        "neighborDatumId": {
+          "type": "string"
+        },
+        "neighborGeometrySupportDigest": {
+          "$ref": "#/$defs/digest"
+        },
+        "axisKey": {
+          "$ref": "#/$defs/digest"
+        },
+        "unitKey": {
+          "type": "string"
+        },
+        "polarTopology": {
+          "$ref": "#/$defs/polarTopology"
+        }
+      },
+      "required": [
+        "datumId",
+        "targetQid",
+        "occluderQid",
+        "geometrySupportDigest",
+        "regionRule",
+        "geometrySupport"
+      ],
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "regionRule": {
+                "const": "native-separator-stroke-intersection-in-datum-support/v1"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "occluderPaint",
+              "boundarySegments"
+            ]
+          }
+        }
+      ]
+    },
+    "stackEndpointReference": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "datumId": {
+          "type": "string"
+        },
+        "targetId": {
+          "type": "string"
+        },
+        "supportId": {
+          "type": "string"
+        },
+        "geometrySupportDigest": {
+          "$ref": "#/$defs/digest"
+        }
+      },
+      "required": [
+        "datumId",
+        "targetId",
+        "supportId",
+        "geometrySupportDigest"
+      ]
+    },
+    "markerAlternative": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "marker-on-datum"
+        },
+        "markerTargetId": {
+          "type": "string"
+        },
+        "markerQid": {
+          "type": "string"
+        },
+        "geometrySupportDigest": {
+          "$ref": "#/$defs/digest"
+        },
+        "requiresEntireBoundaryCoverage": {
+          "const": true
+        },
+        "requiresOriginalContribution": {
+          "const": true
+        }
+      },
+      "required": [
+        "kind",
+        "markerTargetId",
+        "markerQid",
+        "geometrySupportDigest",
+        "requiresEntireBoundaryCoverage",
+        "requiresOriginalContribution"
+      ]
+    },
+    "boundStackValueGlyphsAlternative": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "bound-stack-value-glyphs"
+        },
+        "neighborDatumId": {
+          "type": "string"
+        },
+        "neighborTargetId": {
+          "type": "string"
+        },
+        "neighborSupportId": {
+          "type": "string"
+        },
+        "geometrySupportDigest": {
+          "$ref": "#/$defs/digest"
+        },
+        "cumulativeValue": {
+          "type": "string"
+        },
+        "grouping": {
+          "enum": [
+            "stacked",
+            "percentStacked"
+          ]
+        },
+        "axisKey": {
+          "$ref": "#/$defs/digest"
+        },
+        "unitKey": {
+          "type": "string"
+        },
+        "datumValueGlyphTargetIds": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "neighborValueGlyphTargetIds": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "uniqueItems": true
+        },
+        "datumInteriorSupportId": {
+          "type": "string"
+        },
+        "neighborInteriorSupportId": {
+          "type": "string"
+        },
+        "stackBaseline": {
+          "$ref": "#/$defs/stackEndpointReference"
+        },
+        "stackOuterTotal": {
+          "$ref": "#/$defs/stackEndpointReference"
+        }
+      },
+      "required": [
+        "kind",
+        "neighborDatumId",
+        "neighborTargetId",
+        "neighborSupportId",
+        "geometrySupportDigest",
+        "cumulativeValue",
+        "grouping",
+        "axisKey",
+        "unitKey",
+        "datumValueGlyphTargetIds",
+        "neighborValueGlyphTargetIds",
+        "datumInteriorSupportId",
+        "neighborInteriorSupportId",
+        "stackBaseline",
+        "stackOuterTotal"
+      ]
+    },
+    "polarTopology": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "shapeIndices": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "minItems": 2,
+          "maxItems": 2,
+          "uniqueItems": true
+        },
+        "categoryIndices": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "minItems": 2,
+          "maxItems": 2,
+          "uniqueItems": true
+        },
+        "sharedRadialSegments": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/segment"
+          },
+          "minItems": 1
+        },
+        "fillInteriorsDisjoint": {
+          "const": true
+        },
+        "contourTopologyChecked": {
+          "const": true
+        },
+        "center": {
+          "$ref": "#/$defs/point"
+        },
+        "radii": {
+          "$ref": "#/$defs/point"
+        },
+        "holeRatio": {
+          "type": "number",
+          "minimum": 0,
+          "exclusiveMaximum": 1
+        }
+      },
+      "required": [
+        "shapeIndices",
+        "categoryIndices",
+        "sharedRadialSegments",
+        "fillInteriorsDisjoint",
+        "contourTopologyChecked",
+        "center",
+        "radii",
+        "holeRatio"
+      ]
+    }
+  }
+}

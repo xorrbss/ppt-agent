@@ -1,0 +1,108 @@
+{
+  "schema": "svg-chart-legacy-byte-parity/v1",
+  "baselineCommit": "8d6d21fb8611fe6b6312fc2d4ba5186406aa05d6",
+  "revisions": [
+    "unpinned",
+    "v2",
+    "v3",
+    "v4"
+  ],
+  "baseline": {
+    "sha256": "0a2eb5b3483d0aa8972044eaa8140ce4e813f6d9273e3c1ef87441647034b4a7",
+    "rows": 104,
+    "bytes": 160906
+  },
+  "current": {
+    "sha256": "0a2eb5b3483d0aa8972044eaa8140ce4e813f6d9273e3c1ef87441647034b4a7",
+    "rows": 104,
+    "bytes": 160906
+  },
+  "comparedFiles": [
+    "services/generation_core/drivers/svg/native_requirements.py",
+    "services/generation_core/drivers/svg/native_chart_evidence.py",
+    "services/generation_core/drivers/svg/native_chart.py",
+    "services/generation_core/drivers/svg/native_declarations.py",
+    "services/generation_core/drivers/svg/publish.py",
+    "services/generation_core/drivers/svg/render.py",
+    "services/generation_core/drivers/svg/prose_chart_literal.py",
+    "services/svg_page_remake.py"
+  ],
+  "passed": true,
+  "sourceStates": {
+    "whole_page": {
+      "baseline": {
+        "raw": "5e01fe7847eae665ec34c2607300f82d8853d2db33431e8bebc2c12d857c550a",
+        "reviewed_key": "67d5215fb1386032c3eeafda62ba95c9325b45abe79033813c68282042d14b3b",
+        "anchor": "2ed110c10e9ac4c0668d4c6b905556f8ba1fdc6cfd93b436476f5025281294fa"
+      },
+      "current": {
+        "raw": "4047fcaf89236282a543dfab5c40c640096d72d2dee6efd517ba128eea410f66",
+        "reviewed_key": "88e89901af5c95b9ee968c52d90264da51959cc501be2170b5813b180879835b",
+        "anchor": "2ed110c10e9ac4c0668d4c6b905556f8ba1fdc6cfd93b436476f5025281294fa"
+      },
+      "baselineResolved": "2ed110c10e9ac4c0668d4c6b905556f8ba1fdc6cfd93b436476f5025281294fa",
+      "currentResolved": "4047fcaf89236282a543dfab5c40c640096d72d2dee6efd517ba128eea410f66",
+      "requiresRootReview": true,
+      "changedSources": [
+        "services/generation_core/drivers/svg/native_chart.py"
+      ]
+    },
+    "common_header": {
+      "baseline": {
+        "raw": "sha256:016f2da5d690f534ceb22083b0fa7904c45ba04e548c6504535cc4fbad4df508",
+        "reviewed_key": "sha256:2d8c55610be61441571256dd905366acfc8491425f89cd600821198e9cf0ba8a",
+        "anchor": "sha256:aa3fed253c857188c3f7602c3626bd397058cdf05e67f9dea550bb9b886d6e7e"
+      },
+      "current": {
+        "raw": "sha256:a0134c46b572382758cc00e3d62e7926d48e000ab424a5bfc0b4730e311b8a7f",
+        "reviewed_key": "sha256:0f5379564db0fe5834f35845058b8bd07bd0765d5b5638a400ffdacb208407f5",
+        "anchor": "sha256:aa3fed253c857188c3f7602c3626bd397058cdf05e67f9dea550bb9b886d6e7e"
+      },
+      "baselineResolved": "sha256:aa3fed253c857188c3f7602c3626bd397058cdf05e67f9dea550bb9b886d6e7e",
+      "currentResolved": "sha256:a0134c46b572382758cc00e3d62e7926d48e000ab424a5bfc0b4730e311b8a7f",
+      "requiresRootReview": true,
+      "changedSources": [
+        "services/generation_core/drivers/svg/render.py"
+      ]
+    },
+    "partial_recovery": {
+      "baseline": {
+        "raw": "57a6b1af95dba46e5833b1227e8e7ae16ad240c61ca6d8e3905b6029e5b52f20",
+        "reviewed_key": "57aa07966d950e5dc470f9eba5b1ced173b6f5c4bde43332a4f9b88c6fbe5b49",
+        "anchor": "cc594e17c5e3661e7e366d8286fe0412909e3ed78357fd2ba5afda85c1ef4e64"
+      },
+      "current": {
+        "raw": "cbfbb9c617eccd212254d3672f5bb8824043f40db6a87d4586f776f417391816",
+        "reviewed_key": "dc54ef05d8a27b85b16b431f5e711b00798f30128acec52bf74ccc5467f23d72",
+        "anchor": "cc594e17c5e3661e7e366d8286fe0412909e3ed78357fd2ba5afda85c1ef4e64"
+      },
+      "baselineResolved": "cc594e17c5e3661e7e366d8286fe0412909e3ed78357fd2ba5afda85c1ef4e64",
+      "currentResolved": "cbfbb9c617eccd212254d3672f5bb8824043f40db6a87d4586f776f417391816",
+      "requiresRootReview": true,
+      "changedSources": [
+        "services/generation_core/drivers/svg/render.py",
+        "services/generation_core/drivers/svg/native_declarations.py"
+      ]
+    },
+    "page_render": {
+      "baseline": {
+        "raw": "191c9c651c853df1b694b5362b9fbf3509f50349e1dc4e995d575007b6ec8714",
+        "reviewed_key": "f5f97281424d071632bc81efa13c00abca135a19a75765b64687a04b9eb85bd5",
+        "anchor": "0372263e010f7a40cde1274bb6b4456f4d8e61a59179763bd100df5257dff9bd"
+      },
+      "current": {
+        "raw": "5f0ae2c91d9ea57154fbd67550f9414a47b1a86d5096a27711fb76dd5a569e9c",
+        "reviewed_key": "ef19cf908ccf9623908ad54583072398bc2de469fdf8402dcd75f70099d3b7a1",
+        "anchor": "0372263e010f7a40cde1274bb6b4456f4d8e61a59179763bd100df5257dff9bd"
+      },
+      "baselineResolved": "0372263e010f7a40cde1274bb6b4456f4d8e61a59179763bd100df5257dff9bd",
+      "currentResolved": "5f0ae2c91d9ea57154fbd67550f9414a47b1a86d5096a27711fb76dd5a569e9c",
+      "requiresRootReview": true,
+      "changedSources": [
+        "services/generation_core/drivers/svg/render.py",
+        "services/generation_core/drivers/svg/native_declarations.py"
+      ]
+    }
+  },
+  "sourceStateBaselineNote": "Git baseline bytes with checkout EOL modeled from each current source; normalized reviewed keys are checkout independent."
+}
