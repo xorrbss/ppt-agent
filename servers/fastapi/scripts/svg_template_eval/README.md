@@ -232,7 +232,7 @@ and, per key, whether it came from the `template` or the `global` flags), and th
 
 Every run record carries its `cell` (`<input>__<template id>`). `decide`:
 
-1. averages the completed runs of each cell (a failed run is left out, a cell in one result only is warned about and left out);
+1. reports every recorded attempt and its outcome, then averages available completed-deck scores within explicitly matched cells;
 2. takes B - A per cell, which cancels the large differences between inputs and templates that unpaired means would carry
    into the comparison (a page-heavy input has more fallbacks for both variants);
 3. takes the overall difference as the mean of the cell differences, so every cell weighs the same whatever its run count;
@@ -243,8 +243,8 @@ Every run record carries its `cell` (`<input>__<template id>`). `decide`:
 | Metric | Threshold | Better is | Why |
 |---|---|---|---|
 | `judge_<axis>`, `judge_overall` | 0.2 | higher | the judge's own movement between calls of the same deck |
-| `fallback_pages` | 0.5 | lower | a count of pages out of ten: less than half a page is not a change |
-| `first_try_ok` | 0.5 | higher | likewise |
+| `fallback_rate` | 0.05 | lower | fallback pages divided by actual measured pages, pooled within each cell |
+| `first_try_ok_rate` | 0.05 | higher | accepted first drafts divided by actual measured pages, pooled within each cell |
 | everything else (`tables`, `flow_shapes`, `words_kept`, ...) | none | | counts of what exists, not a quality |
 
 The thresholds are a floor against noise, not a significance test: with few cells (three inputs x one template) a
@@ -259,3 +259,38 @@ about 386 characters over a page where the real template carries about 816, whic
 whatever the change (docs/template-a-visuals-progress-20261105.md). Measure density and visuals changes with the
 sized set (`--inputs data_report_ko_sized,dense_proposal_ko_sized,structured_proposal_ko_sized,unstructured_report_ko_sized`);
 results of the two sets are not comparable. A matrix without `--inputs` now runs both sets.
+
+## Result integrity (schema 2)
+
+The existing `runs`, `summary`, `completed_runs` and `requested_runs` fields remain readable.
+`summary` describes completed decks only; `accounting` separately exposes all recorded attempts, failures,
+unknown outcomes, authorized retries, completion rates and page-rate numerators/denominators. Missing checkpoints,
+exports or judge observations remain unavailable. `compare` and `decide` expose comparison coverage and block a
+global improvement claim when completion regresses or evidence is incomplete. Their threshold rule is a descriptive
+heuristic, without statistical confidence. Raw first-draft/fallback counts and numeric-token retention are descriptive.
+Structured category/value/unit/series evidence is compared only when supplied; no prose or geometry proof is inferred.
+Template phrase matches are leakage candidates; a zero count does not prove absence of leakage.
+
+Every dispatched attempt is saved before the POST, and its task ID is saved before polling. Generation completion
+is saved before measurement. `matrix --resume` retains every prior record and fills only unattempted slots;
+`--resume --retry-failed` explicitly authorizes failed-slot replacements and links each retry with `retry_of`.
+Unknown outcomes block the cell until reconciled. `recover` retains existing records and every exact-request-matched
+durable job, including failed jobs and decks with missing PPTX exports; it never dispatches a generation.
+Without prior saved records, pre-job rejection/transport history cannot be reconstructed and is reported as unavailable.
+Recovery does not infer historical runtime identity from the current invocation or relaunch failed measurements.
+
+`--identity-manifest` on `run`/`matrix` accepts sanitized, operator-verified identities as
+`{"default": {...}, "cells": {"<cell>": {...}}}`. Each identity can contain `code_revision`,
+`generation_config_sha256`, `policy_revision`, `policy_sha256`, `input_sha256`, `request_sha256` and
+`template_pin_sha256`. The first four describe the actual backend/admitted policy and are stored on each run as
+`evaluation_identity`; they are never inferred from the harness checkout or live environment. The four condition
+digests are stored as `condition_identity`. Matrix fixture/source/request/template digests are computed locally only
+for repository-owned fictional inputs; arbitrary request/customer text and credentials are not hashed or stored.
+For arbitrary `run` requests, the operator supplies their sanitized source/request/pin digests. Missing runtime or
+condition identity blocks comparison verdicts, including for legacy files. Runtime code/policy revisions may differ
+between A and B; generation configuration must match explicitly. Judge comparison additionally binds actual settings,
+image-byte hashes, implementation identity, version and served models; mixed/fallback served-model evidence blocks it.
+`runner_identity` hashes evaluator sources only and makes no claim that backend services loaded them.
+
+The content-sizing metric is supplied by the separate `content_sizing_metrics.svg_content_sizing` module;
+its per-SVG hook is reserved for root integration, retaining availability, units and body-bound provenance.

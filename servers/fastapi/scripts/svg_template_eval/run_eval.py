@@ -26,10 +26,12 @@ from __future__ import annotations
 
 import argparse
 import collections
+import hashlib
 import json
 import os
 import sys
 import time
+import uuid
 import zipfile
 from io import BytesIO
 from pathlib import Path
@@ -37,13 +39,90 @@ from pathlib import Path
 import httpx
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from metrics import package_objects, retention, summarize, svg_structure, template_text_leaks  # noqa: E402
-from recovery import (atomic_write_json, load_existing, map_job_to_cell, newest_per_cell,  # noqa: E402
-                      plan_resume)
+from metrics import (attempt_accounting, normalized_page_metrics, package_objects, retention,  # noqa: E402
+                     structured_data_integrity, summarize, svg_structure, template_text_leaks)
+from recovery import atomic_write_json, load_existing  # noqa: E402
 
 API = "/api/v1/ppt"
 DEFAULT_DSN = "postgresql://postgres@127.0.0.1:5433/chap"
 _TERMINAL_BAD = {"error", "failed", "cancelled"}
+RESULT_SCHEMA_VERSION = 2
+
+
+def _digest(value) -> str:
+    return hashlib.sha256(json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode()).hexdigest()
+
+
+def _manifest_identity(args: argparse.Namespace, cell: str | None) -> dict:
+    """Operator-verified runtime identity, never inferred from this runner's checkout or live environment."""
+    path = getattr(args, "identity_manifest", None)
+    if not path:
+        return {}
+    manifest = json.loads(Path(path).read_text(encoding="utf-8"))
+    identity = manifest.get("cells", {}).get(cell or "default", manifest.get("default", {}))
+    allowed = ("code_revision", "generation_config_sha256", "policy_revision", "policy_sha256", "input_sha256",
+               "request_sha256", "template_pin_sha256")
+    return {key: identity[key] for key in allowed if isinstance(identity.get(key), str) and identity[key]
+            or key == "policy_revision" and isinstance(identity.get(key), int) and not isinstance(identity[key], bool)}
+
+
+def _condition_identity(args: argparse.Namespace, payload: dict, cell: str | None,
+                        synthetic_input: str | None = None) -> dict:
+    identity = _manifest_identity(args, cell)
+    result = {key: identity[key] for key in
+              ("input_sha256", "request_sha256", "template_pin_sha256", "generation_config_sha256") if key in identity}
+    # Matrix inputs are repository-owned fictional fixtures. Arbitrary request/customer text is never hashed here.
+    if synthetic_input is not None:
+        result["input_sha256"] = hashlib.sha256(synthetic_input.encode()).hexdigest()
+        result["request_sha256"] = _digest(payload)
+        result["template_pin_sha256"] = _digest(payload.get("svgTemplatePin") or payload.get("svg_template_pin") or {})
+    return result
+
+
+def _judge_identity(judge, judged: dict) -> str | None:
+    """Bind actual image bytes, settings, implementation and served models without storing image/customer data."""
+    if not judged.get("served_models") or judged.get("mixed_models"):
+        return None
+    images = {key: [hashlib.sha256(data).hexdigest() for _, data in getattr(judge, key, [])]
+              for key in ("high", "low", "context")}
+    return _digest({"settings": _safe_judge_settings(judge), "images": images, "served_models": judged["served_models"],
+                    "implementation": hashlib.sha256(Path(__file__).with_name("judge.py").read_bytes()).hexdigest()})
+
+
+def _safe_judge_settings(judge) -> dict:
+    return {key: value for key, value in judge.settings().items()
+            if key not in {"anchor_high", "anchor_low", "anchor_labels", "reference_pages"}}
+
+
+def _resume_plan(existing: list[dict], cell_ids: list[str], count: int, retry_failed: bool = False
+                 ) -> dict[str, tuple[int, int]]:
+    """A quota of attempts; rerunning failures requires a separate explicit authorization flag."""
+    todo = {}
+    for cell in cell_ids:
+        records = [item for item in existing if (item.get("cell") or "default") == cell]
+        if any(item.get("completed") not in (True, False) for item in records):
+            continue  # The POST/task outcome must first be reconciled; never duplicate uncertain provider work.
+        consumed = sum(item.get("completed") is True for item in records) if retry_failed else len(records)
+        remaining = max(0, count - consumed)
+        if remaining:
+            todo[cell] = (max((item.get("run", 0) for item in records), default=0) + 1, remaining)
+    return todo
+
+
+def _canonical_request(payload: dict) -> dict | None:
+    """Compare complete public DTOs across wire aliases/defaults and persisted server-only fields."""
+    from models.generate_presentation_request import GeneratePresentationRequest
+
+    try:
+        request = GeneratePresentationRequest.model_validate({key: value for key, value in payload.items()
+                                                               if not key.startswith("_internal_")})
+        # This deterministic template admission default is persisted after the initial DTO dump.
+        # Other header defaults depend on the admitted policy and are never read from live env here.
+        if request.svg_template_mode == "template-redesign" and request.common_header_mode is None:
+            request.common_header_mode = "free"
+        return request.model_dump(mode="json")
+    except (ValueError, TypeError):
+        return None
 
 
 def _db(dsn: str):
@@ -54,16 +133,19 @@ def _db(dsn: str):
     return psycopg.connect(dsn, autocommit=True)
 
 
-def _generate(client: httpx.Client, payload: dict, timeout: float) -> tuple[dict | None, str, float]:
+def _generate(client: httpx.Client, payload: dict, timeout: float, on_task=None) -> tuple[dict | None, str, float]:
     started = time.time()
     response = client.post(f"{API}/presentation/generate/async", json=payload)
     if response.status_code >= 400:
-        hint = (" (probably the template's stored files are gone: register it again, ideally into a fresh database"
-                " and app-data directory; see README)" if response.status_code == 500 else "")
-        return None, f"rejected HTTP {response.status_code}{hint}", 0.0
+        if response.status_code >= 500 or response.status_code == 408:
+            return None, "outcome_unknown", time.time() - started
+        return None, f"rejected HTTP {response.status_code}", time.time() - started
     task = response.json()["id"]
+    if on_task is not None:
+        on_task(task)
     while True:
         status = client.get(f"{API}/presentation/status/{task}").json()
+        status["evaluation_task_id"] = task
         state = status.get("status")
         if state not in {"pending", "running", "processing", "queued"}:
             return status, state, time.time() - started
@@ -123,14 +205,29 @@ def measure_deck(conn, presentation_id: str) -> dict:
                            "order by slide_index", (job[0],))
             checkpoints = cursor.fetchall()
     svg = (theme or {}).get("svg") or {}
-    vision = (svg.get("advisory") or {}).get("vision") or {}
-    excluded = vision.get("unreviewedPages") if vision.get("reason") == "mandatory_evidence_invalid" else []
     first_try, causes = 0, collections.Counter()
-    for _, checkpoint in checkpoints:
+    attempts_available = set()
+    fallback_available, fallback_indexes = set(), set()
+    slide_indexes = {index for index, content in slides if content}
+    for index, checkpoint in checkpoints:
+        checkpoint = checkpoint or {}
+        terminal = checkpoint.get("terminal") or {}
+        outcome = terminal.get("outcome") or ""
+        if index in slide_indexes and (isinstance((checkpoint.get("quality") or {}).get("passed"), bool) or outcome):
+            fallback_available.add(index)
+            if "fallback" in outcome or "placeholder" in outcome:
+                fallback_indexes.add(index)
         attempts = (checkpoint or {}).get("attempts") or []
-        if len(attempts) <= 1:
+        if index not in slide_indexes or not attempts:
+            continue
+        if isinstance((checkpoint.get("quality") or {}).get("passed"), bool) or outcome:
+            attempts_available.add(index)
+        attempt = attempts[0]
+        if (len(attempts) == 1 and not terminal and (checkpoint.get("quality") or {}).get("passed") is True
+                and not attempt.get("validation_error") and not (attempt.get("receipt") or {}).get("validation_error")
+                and not (attempt.get("receipt") or {}).get("template_fallback")):
             first_try += 1
-        else:
+        elif len(attempts) > 1:
             code = (attempts[1].get("attempt_cause") or {}).get("code")
             if code:
                 causes[code.split(":", 1)[-1]] += 1
@@ -139,7 +236,11 @@ def measure_deck(conn, presentation_id: str) -> dict:
               ("polygon", "path", "line", "polyline", "rect", "text", "icons", "pictures", "arrow_glyphs", "flow_shapes")}
     pages = len(slides)
     return {"pages": pages, "pages_reviewed_ok": pages - len(svg.get("reviewPages") or []),
-            "fallback_pages": len(excluded or []), "first_try_ok": first_try, "retried_pages": len(checkpoints) - first_try,
+            "fallback_pages": len(fallback_indexes) if len(fallback_available) == pages and pages else None,
+            "fallback_evidence_pages": len(fallback_available),
+            "first_try_ok": first_try if len(attempts_available) == pages and pages else None,
+            "attempt_evidence_pages": len(attempts_available),
+            "retried_pages": sum(len((checkpoint or {}).get("attempts") or []) > 1 for _, checkpoint in checkpoints),
             "pages_with_flow_shapes": sum(1 for item in structures if item["polygon"] or item["line"] or item["path"]),
             **totals, "repair_causes": dict(causes),
             "_texts": " ".join(text for item in structures for text in item["texts"])}
@@ -204,24 +305,34 @@ def _deck_record(client: httpx.Client | None, conn, judge, args: argparse.Namesp
     texts = record.pop("_texts")
     if source is not None:
         kept = retention(source, texts)
-        record["words_kept"], record["numbers_kept"] = (round(kept["words"], 3), round(kept["numbers"], 3))
+        record["words_kept"], record["numbers_kept"] = (
+            round(kept["words"], 3) if kept["words"] is not None else None,
+            round(kept["numbers"], 3) if kept["numbers"] is not None else None)
+    record["data_integrity"] = structured_data_integrity(None, None)
+    record.update(normalized_page_metrics(record))
     if template is not None:
         leaks = template_text_leaks(template, texts, source or "")
         record["template_text_leak_ngrams"], record["template_text_leak_figures"] = leaks["ngrams"], leaks["figures"]
     if parts is None and args.pptx and client is not None:
-        parts = _export_parts(client, data["presentation_id"], data.get("export_operation_id"), 240)
+        try:
+            parts = _export_parts(client, data["presentation_id"], data.get("export_operation_id"), 240)
+        except Exception as error:
+            record["export_error_type"] = type(error).__name__
+    record["pptx_evidence"] = "available" if parts else "unavailable"
     record.update(package_objects(parts) if parts else {})
     if judge is not None:
-        from judge import judge_presentation, print_deck, run_fields
+        from judge import judge_presentation, run_fields
 
         renders = Path(args.judge_renders) / cell if args.judge_renders and cell else (
             Path(args.judge_renders) if args.judge_renders else None)
-        judged = judge_presentation(conn, data["presentation_id"], judge, renders)
-        print_deck(f"{tag}run {number} judge", judged)
-        record.update(run_fields(judged), judge=judged)
-        if selection is not None:
-            record["judge_anchors"] = {"references": selection["references"], "anchor_high": judge.anchor_names["high"],
-                                       "anchor_low": judge.anchor_names["low"], "sources": selection["sources"]}
+        try:
+            judged = judge_presentation(conn, data["presentation_id"], judge, renders)
+            # Persist scores/usage but never judge prose, reasons, anchor names or customer-derived labels.
+            record.update(run_fields(judged), judge={key: judged[key] for key in
+                          ("cost_estimate_usd", "served_models", "mixed_models", "usage") if key in judged},
+                          judge_identity=_judge_identity(judge, judged))
+        except Exception as error:
+            record["judge_error_type"] = type(error).__name__
     record.update(run=number, completed=True, seconds=round(seconds),
                   gate_passed=(data.get("quality_pages") or {}).get("passed"),
                   gate_flagged=(data.get("quality_pages") or {}).get("flagged"),
@@ -235,37 +346,82 @@ def _deck_record(client: httpx.Client | None, conn, judge, args: argparse.Namesp
 
 def _sample_runs(client: httpx.Client, conn, judge, args: argparse.Namespace, payload: dict, source: str | None,
                  cell: str | None, selection: dict | None = None, first: int = 1, count: int | None = None,
-                 on_run=None, template: str | None = None) -> list[dict]:
+                 on_run=None, template: str | None = None, condition: dict | None = None,
+                 retry_records: list[dict] | None = None) -> list[dict]:
     """``count`` (default ``args.runs``) generations of one request numbered from ``first``, each measured; every
     record carries ``cell`` when given. ``on_run(runs_so_far)`` is called after each run (to save progress)."""
     runs: list[dict] = []
     for number in range(first, first + (args.runs if count is None else count)):
         tag = f"{cell} " if cell else ""
-        status, state, seconds = _generate(client, payload, args.timeout)
         extra = {"cell": cell} if cell else {}
-        if state != "completed":
-            detail = (status or {}).get("error") or state
-            print(f"{tag}run {number}: {state} {detail}", flush=True)
-            runs.append({"run": number, "completed": False, "state": str(state), **extra})
-        else:
-            runs.append(_deck_record(client, conn, judge, args, status["data"], source, cell, selection, number,
-                                     seconds, tag, template=template))
+        record = {"run": number, "attempt_id": uuid.uuid4().hex, "completed": None, "state": "dispatching",
+                  "condition_identity": condition or _condition_identity(args, payload, cell),
+                  "evaluation_identity": _manifest_identity(args, cell),
+                  "expected_pages": payload.get("n_slides"), **extra}
+        if retry_records:
+            previous = retry_records.pop(0)
+            record["retry_of"] = previous.get("attempt_id") or f"legacy:{cell or 'default'}:{previous.get('run')}"
+            record["retry_authorization"] = "explicit --retry-failed"
+        runs.append(record)
+        if on_run is not None:
+            on_run(runs)  # Durable record before a POST can spend or become uncertain.
+
+        def task_started(task_id):
+            record.update(task_id=task_id, state="running")
+            if on_run is not None:
+                on_run(runs)
+
+        try:
+            status, state, seconds = _generate(client, payload, args.timeout, on_task=task_started)
+            record.update(seconds=round(seconds), state=str(state))
+            if state == "completed":
+                data = status["data"]
+                record.update(completed=True, presentation_id=data["presentation_id"], measurement_status="pending")
+                if on_run is not None:
+                    on_run(runs)  # Generation completion survives export/judge/measurement failure.
+                try:
+                    record.update(_deck_record(client, conn, judge, args, data, source, cell, selection, number,
+                                               seconds, tag, template=template), measurement_status="available")
+                except Exception as error:
+                    record.update(measurement_status="failed", measurement_error_type=type(error).__name__)
+            elif state in _TERMINAL_BAD or str(state).startswith("rejected HTTP"):
+                record["completed"] = False
+            else:
+                record["state"] = "outcome_unknown"
+        except Exception as error:
+            record.update(state="outcome_unknown", error_type=type(error).__name__)
+        print(f"{tag}run {number}: {record['state']}; generation completed={record['completed']}", flush=True)
         if on_run is not None:
             on_run(runs)
+        if record.get("completed") is None:
+            break
     return runs
 
 
 def _write_result(args: argparse.Namespace, judge, runs: list[dict], requested: int, judges: dict | None = None,
                   quiet: bool = False, **extra) -> dict:
     done = [item for item in runs if item.get("completed")]
-    result = {"label": args.label, "runs": runs, "summary": summarize(done),
+    accounting = attempt_accounting(runs, requested)
+    summary = summarize(done)
+    for key in ("first_try_ok_rate", "fallback_rate"):
+        rate = accounting[key]
+        if rate["value"] is not None:
+            available = [normalized_page_metrics(item)[key] for item in done if key in normalized_page_metrics(item)]
+            summary[key] = {"mean": round(rate["value"], 6), "min": min(available), "max": max(available),
+                            "n": rate["available_runs"], "numerator": rate["numerator"], "pages": rate["pages"],
+                            "aggregation": "pooled actual pages"}
+    result = {"schema_version": RESULT_SCHEMA_VERSION, "label": args.label, "runs": runs, "summary": summary,
+              "accounting": accounting,
+              "runner_identity": {"scope": "evaluation harness only; backend loading unverified",
+                  "source_sha256": {name: hashlib.sha256(Path(__file__).with_name(name).read_bytes()).hexdigest()
+                                    for name in ("run_eval.py", "metrics.py", "decide.py", "request_builder.py", "recovery.py", "judge.py")}},
               "completed_runs": len(done), "requested_runs": requested, **extra}
     if judge is not None:
-        costs = [item["judge"]["cost_estimate_usd"] for item in done if "judge" in item]
-        result.update(judge_settings=judge.settings(),
+        costs = [(item.get("judge") or {}).get("cost_estimate_usd") for item in done]
+        result.update(judge_settings=_safe_judge_settings(judge),
                       judge_cost_estimate_usd=None if None in costs else round(sum(costs), 4))
     if judges:
-        result["judge_settings_by_template"] = {name: item.settings() for name, item in judges.items()}
+        result["judge_settings_by_template"] = {name: _safe_judge_settings(item) for name, item in judges.items()}
     atomic_write_json(Path(args.out) / f"{args.label}.json", result)
     if not quiet:
         print_summary(result)
@@ -277,6 +433,8 @@ def _client(args: argparse.Namespace) -> httpx.Client:
 
 
 def run(args: argparse.Namespace) -> None:
+    if (Path(args.out) / f"{args.label}.json").exists():
+        raise SystemExit("Result already exists; use a new label to preserve attempt history")
     payload = json.loads(Path(args.payload).read_text(encoding="utf-8"))
     source = Path(args.source).read_text(encoding="utf-8") if args.source else None
     conn = _db(args.dsn)
@@ -284,9 +442,9 @@ def run(args: argparse.Namespace) -> None:
     with _client(args) as client:
         runs = _sample_runs(client, conn, judge, args, payload, source, None,
                             on_run=lambda so_far: _write_result(args, judge, so_far, args.runs, quiet=True,
-                                                                payload=args.payload),
+                                                                cells=["default"]),
                             template=template_text(args.template_text))
-    _write_result(args, judge, runs, args.runs, payload=args.payload)
+    _write_result(args, judge, runs, args.runs, cells=["default"])
 
 
 def matrix(args: argparse.Namespace) -> None:
@@ -301,9 +459,8 @@ def matrix(args: argparse.Namespace) -> None:
                                         args.judge_anchor_low)
     if args.dry_run:
         for cell in cells:
-            print(cell["cell"], json.dumps({k: v for k, v in cell["payload"].items() if k != "content"},
-                                           ensure_ascii=False))
-            print("   judge", json.dumps(cell["judge"], ensure_ascii=False) if cell["judge"] else "none")
+            print(f"{cell['cell']}: requested pages={cell['payload'].get('n_slides')}; "
+                  f"judge={'selected' if cell['judge'] else 'none'}")
         return
     conn = _db(args.dsn)
     cache: dict = {}
@@ -320,8 +477,18 @@ def matrix(args: argparse.Namespace) -> None:
     if args.resume:
         existing = load_existing(Path(args.out) / f"{args.label}.json", args.label)
         if existing:
-            kept, todo = plan_resume(existing.get("runs", []), ids, args.runs)
-            print(f"resume: {len(kept)} completed runs kept, cells still to run: {sorted(todo) or 'none'}", flush=True)
+            kept = list(existing.get("runs", []))
+            for cell in cells:
+                current = _condition_identity(args, cell["payload"], cell["cell"], input_source_text(cell["input"]))
+                for item in kept:
+                    previous = item.get("condition_identity") or {}
+                    if item.get("cell") == cell["cell"] and any(previous[key] != current[key]
+                                                                 for key in previous.keys() & current.keys()):
+                        raise SystemExit("Resume conditions differ; use a new label to preserve history")
+            todo = _resume_plan(kept, ids, args.runs, getattr(args, "retry_failed", False))
+            print(f"resume: {len(kept)} attempt records kept, cells still to run: {sorted(todo) or 'none'}", flush=True)
+    elif (Path(args.out) / f"{args.label}.json").exists():
+        raise SystemExit("Result already exists; use --resume or a new label to preserve attempt history")
     runs: list[dict] = list(kept)
 
     def save(extra_runs: list[dict], quiet: bool = True) -> None:
@@ -333,9 +500,12 @@ def matrix(args: argparse.Namespace) -> None:
                 continue
             start, count = todo[cell["cell"]]
             source = input_source_text(cell['input'])
+            failures = [item for item in kept if item.get("cell") == cell["cell"] and item.get("completed") is False]
             runs += _sample_runs(client, conn, _make_judge_for(args, cell["judge"], cache), args, cell["payload"],
                                  source, cell["cell"], cell["judge"], first=start, count=count, on_run=save,
-                                 template=template_text(cell["spec"].get("template_text")))
+                                 template=template_text(cell["spec"].get("template_text")),
+                                 condition=_condition_identity(args, cell["payload"], cell["cell"], source),
+                                 retry_records=failures if getattr(args, "retry_failed", False) else None)
     save([], quiet=False)
 
 
@@ -365,7 +535,7 @@ def _pptx_from_store(conn, app_dir: Path, presentation_id: str, operation_id: st
 
 
 def recover(args: argparse.Namespace) -> None:
-    """Rebuild the result file of a matrix whose process died, from the completed decks in the database."""
+    """Reconcile stored attempts without erasing failures, excluding missing exports, or dispatching a retry."""
     from request_builder import build_cells, input_source_text, judge_selection, list_inputs, load_template_spec
 
     names = [name.strip() for name in args.inputs.split(",")] if args.inputs else list_inputs()
@@ -374,7 +544,6 @@ def recover(args: argparse.Namespace) -> None:
     for cell in cells:
         cell["judge"] = judge_selection(cell["spec"], args.judge_references, args.judge_anchor_high,
                                         args.judge_anchor_low)
-    inputs = {name: input_source_text(name) for name in names}
     conn = _db(args.dsn)
     after = args.after
     if args.after_dsn:
@@ -387,42 +556,66 @@ def recover(args: argparse.Namespace) -> None:
         after = datetime.datetime.fromisoformat(after)
     with conn.cursor() as cursor:
         cursor.execute(
-            "select j.presentation_id::text, j.request_payload, t.data, p.created_at, t.created_at, t.updated_at"
-            " from presentation_generation_jobs j join async_presentation_generation_tasks t on t.id = j.task_id"
-            " join presentations p on p.id = j.presentation_id"
-            " where j.state = 'published' and t.status = 'completed' order by p.created_at")
+            "select j.presentation_id::text, j.request_payload, t.data, j.created_at, t.created_at, t.updated_at,"
+            " j.task_id, j.state, t.status from presentation_generation_jobs j"
+            " left join async_presentation_generation_tasks t on t.id = j.task_id order by j.created_at")
         rows = cursor.fetchall()
-    candidates = []
-    for pid, payload, data, created, task_created, task_updated in rows:
-        cell = map_job_to_cell(payload, cells, inputs)
-        if cell and isinstance(data, dict) and data.get("presentation_id") == pid:
-            candidates.append({"cell": cell, "created_at": created, "data": data,
-                               "seconds": (task_updated - task_created).total_seconds()})
-    chosen = newest_per_cell(candidates, after)
-    print(f"recover: {len(rows)} completed decks, cutoff {after}, matched cells {sorted(chosen)}", flush=True)
+    existing = load_existing(Path(args.out) / f"{args.label}.json", args.label)
     cache: dict = {}
     judges: dict = {}
-    runs: list[dict] = []
+    runs: list[dict] = list((existing or {}).get("runs", []))
     ids = [cell["cell"] for cell in cells]
-    for cell in cells:
-        judge = _make_judge_for(args, cell["judge"], cache)
-        if judge is not None:
-            judges.setdefault(cell["template"], judge)
-        item = chosen.get(cell["cell"])
-        if not item:
-            print(f"{cell['cell']}: nothing to recover", flush=True)
-            continue
-        parts = _pptx_from_store(conn, args.app_dir, item["data"]["presentation_id"],
-                                 item["data"].get("export_operation_id")) if args.app_dir else None
-        if args.app_dir and not parts and not args.allow_no_pptx:
-            print(f"{cell['cell']}: deck {item['data']['presentation_id']} has no finished PPTX export; left out "
-                  "(--allow-no-pptx keeps it without PPTX objects)", flush=True)
-            continue
-        runs.append(_deck_record(None, conn, judge, args, item["data"], inputs[cell["input"]], cell["cell"],
-                                 cell["judge"], 1, item["seconds"], f"{cell['cell']} ", parts))
+    matched = 0
+
+    def save():
         _write_result(args, next(iter(judges.values()), None), runs, args.runs * len(cells), judges=judges,
-                      cells=ids, quiet=True)
-    _write_result(args, next(iter(judges.values()), None), runs, args.runs * len(cells), judges=judges, cells=ids)
+                      cells=ids, quiet=True, recovery_history="all matching durable jobs; pre-job failures may be unavailable")
+
+    for pid, payload, data, created, task_created, task_updated, task_id, job_state, task_state in rows:
+        if after is not None and created <= after:
+            continue
+        canonical = _canonical_request(payload)
+        matches = [cell for cell in cells if canonical is not None and _canonical_request(cell["payload"]) == canonical]
+        if len(matches) != 1:
+            continue
+        cell = matches[0]
+        previous = next((item for item in runs if item.get("task_id") == str(task_id)
+                         or (pid and item.get("presentation_id") == pid)), None)
+        if previous and (previous.get("completed") is False or previous.get("completed") is True
+                         and previous.get("measurement_status") != "pending"):
+            continue
+        record = previous if previous is not None else {
+            "run": max((item.get("run", 0) for item in runs if item.get("cell") == cell["cell"]), default=0) + 1,
+            "attempt_id": f"task:{task_id}", "cell": cell["cell"], "task_id": str(task_id), "recovered": True,
+            # Historical runtime identities cannot be inferred from today's harness invocation.
+            "evaluation_identity": {}, "condition_identity": {}, "expected_pages": payload.get("n_slides")}
+        if previous is None:
+            runs.append(record)
+        matched += 1
+        seconds = (task_updated - task_created).total_seconds() if task_created and task_updated else 0
+        completed = task_state == "completed" and isinstance(data, dict) and data.get("presentation_id") == pid
+        record.update(completed=True if completed else (False if task_state in _TERMINAL_BAD
+                                                        or job_state in _TERMINAL_BAD else None),
+                      state=task_state or job_state, seconds=seconds)
+        if completed:
+            record.update(presentation_id=pid, measurement_status="pending")
+        save()
+        if not completed:
+            continue
+        try:
+            judge = _make_judge_for(args, cell["judge"], cache)
+            if judge is not None:
+                judges.setdefault(cell["template"], judge)
+            parts = _pptx_from_store(conn, args.app_dir, pid, data.get("export_operation_id")) if args.app_dir else None
+            record.update(_deck_record(None, conn, judge, args, data, input_source_text(cell["input"]), cell["cell"],
+                                       cell["judge"], record["run"], seconds, parts=parts,
+                                       template=template_text(cell["spec"].get("template_text"))),
+                          measurement_status="available")
+        except Exception as error:
+            record.update(measurement_status="failed", measurement_error_type=type(error).__name__)
+        save()
+    save()
+    print(f"recover: retained {len(runs)} attempt records, reconciled {matched}; no generation dispatched", flush=True)
 
 
 def decide_command(args: argparse.Namespace) -> None:
@@ -443,6 +636,14 @@ def decide_command(args: argparse.Namespace) -> None:
 
 def print_summary(result: dict) -> None:
     print(f"\n== {result['label']}: {result['completed_runs']}/{result['requested_runs']} runs completed")
+    accounting = result.get("accounting") or attempt_accounting(result.get("runs", []), result.get("requested_runs"))
+    print(f"   attempts {accounting['attempted_runs']}; failed {accounting['failed_runs']}; "
+          f"unknown {accounting['unknown_outcome_runs']}; retries {accounting['retry_attempts']}; "
+          f"completion rate {accounting['completion_rate']}")
+    for key in ("first_try_ok_rate", "fallback_rate"):
+        item = accounting[key]
+        print(f"   {key}: {item['value']} ({item['numerator']}/{item['pages']} measured pages; "
+              f"{item['missing_runs']} completed decks missing evidence)")
     for key, value in result["summary"].items():
         if key in {"run", "seconds", "pages"} or key.startswith("_"):
             continue
@@ -450,20 +651,10 @@ def print_summary(result: dict) -> None:
 
 
 def compare(args: argparse.Namespace) -> None:
-    left, right = (json.loads(Path(path).read_text(encoding="utf-8")) for path in (args.a, args.b))
-    keys = sorted(set(left["summary"]) | set(right["summary"]))
-    print(f"{'metric':<26}{left['label'][:18]:>20}{right['label'][:18]:>20}   (mean over completed runs)")
-    for key in keys:
-        if key in {"run", "pages"}:
-            continue
-        a, b = left["summary"].get(key), right["summary"].get(key)
-        print(f"{key:<26}{(a['mean'] if a else '-'):>20}{(b['mean'] if b else '-'):>20}")
-    print(f"{'runs completed':<26}{left['completed_runs']:>20}{right['completed_runs']:>20}")
-    from decide import judge_versions
+    from decide import decide, format_table
 
-    versions = [sorted(judge_versions(result)) for result in (left, right)]
-    if len(set(versions[0]) | set(versions[1])) > 1:
-        print(f"warning: judge versions differ ({versions[0]} vs {versions[1]}); judge_* rows are not comparable")
+    left, right = (json.loads(Path(path).read_text(encoding="utf-8")) for path in (args.a, args.b))
+    print(format_table(decide(left, right), left.get("label", "A"), right.get("label", "B")))
 
 
 def main() -> None:
@@ -474,6 +665,7 @@ def main() -> None:
     run_parser.add_argument("--runs", type=int, default=3)
     run_parser.add_argument("--label", required=True)
     run_parser.add_argument("--out", default="eval-results")
+    run_parser.add_argument("--identity-manifest", help="sanitized operator-verified runtime/source identity JSON")
     run_parser.add_argument("--source", help="source text, to measure how much of it the deck kept")
     run_parser.add_argument("--template-text", help="the template's own deck (.pptx) or text (.txt), local only:"
                                                     " counts template wording that reached the deck")
@@ -496,8 +688,11 @@ def main() -> None:
     matrix_parser.add_argument("--runs", type=int, default=3, help="runs per cell")
     matrix_parser.add_argument("--label", required=True)
     matrix_parser.add_argument("--out", default="eval-results")
+    matrix_parser.add_argument("--identity-manifest", help="sanitized operator-verified runtime/source identity JSON")
     matrix_parser.add_argument("--resume", action="store_true",
-                               help="load the existing result file of this label and run only the cells still short")
+                               help="preserve all attempts and fill only unattempted slots; uncertain outcomes block a cell")
+    matrix_parser.add_argument("--retry-failed", action="store_true",
+                               help="with --resume, explicitly authorize failed-slot retries with retained lineage")
     matrix_parser.add_argument("--dry-run", action="store_true", help="print the cells' requests and stop")
     matrix_parser.add_argument("--pptx", action="store_true")
     matrix_parser.add_argument("--base", default="http://127.0.0.1:8000")
@@ -518,8 +713,7 @@ def main() -> None:
     recover_parser.add_argument("--app-dir", help="the backend's app-data directory: PPTX objects are read from its "
                                                   "local artifact store (omit to skip them)")
     recover_parser.add_argument("--allow-no-pptx", action="store_true",
-                                help="keep decks whose PPTX export never finished (default: leave them out so a "
-                                     "resume generates them again)")
+                                help="compatibility flag; incomplete exports are now always retained as missing evidence")
     recover_parser.add_argument("--after-dsn", help="database this one was cloned from: only decks newer than its "
                                                     "newest presentation count")
     recover_parser.add_argument("--after", help="ISO timestamp: only decks created after it count")
@@ -539,6 +733,10 @@ def main() -> None:
     compare_parser.add_argument("b")
     compare_parser.set_defaults(handler=compare)
     args = parser.parse_args()
+    if getattr(args, "retry_failed", False) and not getattr(args, "resume", False):
+        parser.error("--retry-failed requires --resume")
+    if hasattr(args, "runs") and args.runs < 1:
+        parser.error("--runs must be positive")
     args.handler(args)
 
 
