@@ -15,6 +15,9 @@ import unicodedata
 from xml.etree import ElementTree as ET
 
 from services.generation_core.drivers.svg.fallback import _text_em
+from utils.svg_uniform_transform import (
+    UniformTransformUnsupported, compose_uniform_transform, parse_uniform_transform,
+)
 
 SVG_NS = "{http://www.w3.org/2000/svg}"
 _INHERITED = ("fill", "stroke", "fill-opacity", "stroke-opacity", "stroke-width", "font-weight",
@@ -160,45 +163,17 @@ def inherit(attrs: dict, node: ET.Element) -> dict:
 
 
 def _compose_transform(parent, child):
-    dx, dy, scale = parent
-    tx, ty, factor = child
-    result = (dx + scale*tx, dy + scale*ty, scale*factor)
-    if not all(math.isfinite(value) for value in result) or result[2] <= 0:
-        raise NativeRejection("native_group_transform_unsupported")
-    return result
+    try:
+        return compose_uniform_transform(parent, child)
+    except UniformTransformUnsupported:
+        raise NativeRejection("native_group_transform_unsupported") from None
 
 
 def _transform_of(node):
-    value = node.get("transform")
-    if not value:
-        return (0.0, 0.0, 1.0)
-    result, end = (0.0, 0.0, 1.0), 0
-    for match in re.finditer(r"([A-Za-z]+)\s*\(([^()]*)\)", value):
-        if value[end:match.start()].strip():
-            raise NativeRejection("native_group_transform_unsupported")
-        raw = match[2].strip()
-        if raw.startswith(",") or raw.endswith(",") or re.search(r",\s*,", raw):
-            raise NativeRejection("native_group_transform_unsupported")
-        tokens = re.split(r"[\s,]+", raw) if raw else []
-        if not tokens or any(not re.fullmatch(r"[-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][-+]?\d+)?", token) for token in tokens):
-            raise NativeRejection("native_group_transform_unsupported")
-        numbers = [float(token) for token in tokens]
-        if not all(math.isfinite(number) for number in numbers):
-            raise NativeRejection("native_group_transform_unsupported")
-        name = match[1]
-        if name == "translate" and len(numbers) in {1, 2}:
-            child = (numbers[0], numbers[1] if len(numbers) == 2 else 0.0, 1.0)
-        elif name == "scale" and len(numbers) in {1, 2} and (len(numbers) == 1 or numbers[0] == numbers[1]) and numbers[0] > 0:
-            child = (0.0, 0.0, numbers[0])
-        elif name == "matrix" and len(numbers) == 6 and numbers[1] == 0 and numbers[2] == 0 and numbers[0] == numbers[3] and numbers[0] > 0:
-            child = (numbers[4], numbers[5], numbers[0])
-        else:
-            raise NativeRejection("native_group_transform_unsupported")
-        result = _compose_transform(result, child)
-        end = match.end()
-    if not end or value[end:].strip():
-        raise NativeRejection("native_group_transform_unsupported")
-    return result
+    try:
+        return parse_uniform_transform(node.get("transform"))
+    except UniformTransformUnsupported:
+        raise NativeRejection("native_group_transform_unsupported") from None
 
 
 def tag_of(node: ET.Element) -> str:

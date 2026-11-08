@@ -156,6 +156,7 @@ _POST_ANCHOR_CODE_FILES = (
     "services/generation_core/drivers/svg/native_requirements.py",
     "services/generation_core/drivers/svg/prose_chart_literal.py",
     "services/generation_core/drivers/svg/native_geometry.py",
+    "utils/svg_uniform_transform.py",
     "services/generation_core/drivers/svg/chart_content_cartesian.py",
     "services/generation_core/drivers/svg/chart_content_polar.py",
     "services/generation_core/drivers/svg/chart_content_paint.py",

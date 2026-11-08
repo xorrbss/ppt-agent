@@ -149,15 +149,46 @@ def _runtime_issues(runs_a: list[dict], runs_b: list[dict]) -> list[str]:
     return []
 
 
+def _superseded_failures(runs: list[dict]) -> set[int]:
+    """Indexes of failed attempts an authorized ``--retry-failed`` attempt completed.
+
+    The failure stays in the attempt accounting; only the completion decision
+    treats the slot as recovered, so an authorized retry can yield a comparable
+    result instead of always reading as a regression.
+    """
+    recovered = {run.get("retry_of") for run in runs if run.get("completed") is True and run.get("retry_of")}
+    superseded = set()
+    for index, run in enumerate(runs):
+        if run.get("completed") is not False:
+            continue
+        identities = {run.get("attempt_id"), f"legacy:{run.get('cell') or 'default'}:{run.get('run')}"}
+        if identities & recovered:
+            superseded.add(index)
+    return superseded
+
+
+def _effective_completion(runs: list[dict]) -> tuple[float | None, int, int]:
+    """(completion rate, failed, unknown) after recovered failures are set aside."""
+    superseded = _superseded_failures(runs)
+    effective = [run for index, run in enumerate(runs) if index not in superseded]
+    completed = sum(run.get("completed") is True for run in effective)
+    failed = sum(run.get("completed") is False for run in effective)
+    unknown = sum(run.get("completed") is not True and run.get("completed") is not False for run in effective)
+    return (completed / len(effective) if effective else None), failed, unknown
+
+
 def _completion_status(a: dict, b: dict, accounting_a: dict, accounting_b: dict) -> str:
-    rate_a, rate_b = accounting_a["completion_rate"], accounting_b["completion_rate"]
+    (rate_a, _, _), (rate_b, _, _) = (_effective_completion(a.get("runs", [])),
+                                      _effective_completion(b.get("runs", [])))
     if rate_a is not None and rate_b is not None and rate_b < rate_a:
         return "completion regressed"
     for result, accounting in ((a, accounting_a), (b, accounting_b)):
-        if not accounting["attempted_runs"] or accounting["failed_runs"] or accounting["unknown_outcome_runs"]:
+        _, failed, unknown = _effective_completion(result.get("runs", []))
+        if not accounting["attempted_runs"] or failed or unknown:
             return "incomplete evidence"
         requested = result.get("requested_runs")
-        slots = {(_cell(run), run.get("run")) for run in result.get("runs", [])}
+        slots = {(_cell(run), run.get("run")) for run in result.get("runs", [])
+                 if run.get("completed") is True}
         if isinstance(requested, int) and not isinstance(requested, bool) and len(slots) < requested:
             return "incomplete evidence"
     return "complete"

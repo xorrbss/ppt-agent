@@ -21,3 +21,19 @@ export function requestVerbosity(
   if (templateRedesign && !config.verbosityTouched) return undefined;
   return config.verbosity ?? undefined;
 }
+
+/**
+ * Verbosity fields restored from a stored generation request. A stored value was
+ * the request's explicit verbosity, so it is restored as a user choice
+ * (`verbosityTouched`); otherwise the current fields are kept.
+ */
+export function restoredVerbosity<T extends string>(
+  stored: unknown,
+  current: { verbosity: T; verbosityTouched?: boolean },
+  allowed: readonly T[],
+): { verbosity: T; verbosityTouched?: boolean } {
+  if (typeof stored === "string" && (allowed as readonly string[]).includes(stored)) {
+    return { verbosity: stored as T, verbosityTouched: true };
+  }
+  return { verbosity: current.verbosity, verbosityTouched: current.verbosityTouched };
+}

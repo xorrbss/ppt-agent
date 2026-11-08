@@ -23,6 +23,7 @@ export default function SelectedStyleSummary({
   onChange,
 }: SelectedStyleSummaryProps) {
   const t = useTranslations("upload");
+  const tTemplate = useTranslations("svgTemplatePicker");
   const svgTemplateSelection = useSelector((state: RootState) => state.pptGenUpload.svgTemplateSelection);
   const selectedStyleId = useSelector(
     (state: RootState) => state.pptGenUpload.authoredStyle,
@@ -69,7 +70,7 @@ export default function SelectedStyleSummary({
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex min-w-0 items-center gap-4">
           <div className="w-28 shrink-0 overflow-hidden rounded-xl border border-slate-200 bg-slate-50 sm:w-36">
-            {svgTemplateSelection ? <span className="flex aspect-video items-center justify-center text-xs text-slate-500">내 PPT 템플릿</span> : <AuthoredStylePreview style={selectedStyle} compact />}
+            {svgTemplateSelection ? <span className="flex aspect-video items-center justify-center text-xs text-slate-500">{tTemplate("summaryPreviewLabel")}</span> : <AuthoredStylePreview style={selectedStyle} compact />}
           </div>
           <div className="min-w-0">
             <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">
@@ -82,7 +83,7 @@ export default function SelectedStyleSummary({
               {svgTemplateSelection?.name ?? (loading ? t("simplifyStyleLoading") : selectedStyle.name)}
             </h2>
             <p className="mt-1 line-clamp-2 text-sm leading-5 text-slate-500">
-              {svgTemplateSelection ? (svgTemplateSelection.kind === "framed" ? "내 템플릿 · 양식 포함" : "내 템플릿 · 스타일") : selectedStyle.description}
+              {svgTemplateSelection ? (svgTemplateSelection.kind === "framed" ? tTemplate("summaryKindFramed") : tTemplate("summaryKindStyle")) : selectedStyle.description}
             </p>
           </div>
         </div>

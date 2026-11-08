@@ -172,3 +172,19 @@ def test_historical_page_contexts_remain_usable_without_changing_their_proof(mon
     assert current["schema_version"] == "svg-template-page/v2"
     with pytest.raises(ValueError, match="svg_template_page_context_invalid"):
         generation.template_page_context({}, 0, 1, source, saved_context=preserved)
+
+
+def test_a_move_is_checked_against_the_template_frame_at_both_positions(monkeypatch):
+    """A v1 context keeps its saved frame, so the move itself must not change the frame."""
+    from types import SimpleNamespace
+    from services.svg_templates import generation
+
+    frames = [frame("c", "cover"), frame("b", "body", CHAPTER)]
+
+    def page_frame(snapshot, index, count, role=None, chapter=None):
+        return SimpleNamespace(frame_id=automatic_frame_id(frames, index, chapter))
+
+    monkeypatch.setattr(generation, "page_frame", page_frame)
+    assert generation.same_frame_after_move({}, 3, 6, 4, 6)
+    assert not generation.same_frame_after_move({}, 3, 6, 0, 6)  # body page to the cover position
+    assert not generation.same_frame_after_move({}, 0, 6, 2, 6)  # cover page into the body

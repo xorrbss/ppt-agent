@@ -67,7 +67,7 @@ def test_mask_statistics_recomputed_from_exact_alpha_bytes():
 
 def encoded_mask(raw, alpha=b"\xff" * 4):
     return {"maskDigest": sha256_prefixed(raw), "pixelCount": raw.count(255),
-            "alphaSum": sum(a for a, selected in zip(alpha, raw) if selected), "encodedRaster": raster(raw)}
+            "alphaSum": sum(a for a, selected in zip(alpha, raw, strict=False) if selected), "encodedRaster": raster(raw)}
 
 
 def area_fixture():
@@ -317,7 +317,8 @@ def marker_fixture():
                           "originalContribution": encoded_mask(pair_alpha, pair_alpha), "altered": encoded_mask(empty, pair_alpha)},
                regionDemand=encoded_mask(demand, target_alpha), coveredRegion=encoded_mask(demand, target_alpha),
                offTraceOriginalContribution=encoded_mask(marker_original, marker_alpha))
-    stats = lambda raw: {key: value for key, value in encoded_mask(raw, target_alpha).items() if key != "encodedRaster"}
+    def stats(raw):
+        return {key: value for key, value in encoded_mask(raw, target_alpha).items() if key != "encodedRaster"}
     records[0]["visibilityObligations"] = [
         {"supportId": anchor["id"], "via": "marker-joint-original-contribution/v1",
          "nativeCompositionPairId": request["id"], "footprint": stats(demand), "originalContribution": stats(empty),
@@ -388,8 +389,8 @@ def multi_polar_fixture():
             "segments": [[[0, 1], [2, 1]]], "regionRule": "native-alpha-boundary-neighborhood/v1",
             "radiusPhysicalPixels": 1, "alternatives": []}
     chart["datums"][0]["geometrySupport"]["visibilityObligations"] = [spec]
-    for index, (row, partner, local, patch) in enumerate(zip(rows, records[1:], records[0]["ownedRelationships"],
-                                                           (b"\xff\0\0\0", b"\0\0\0\xff"))):
+    for _index, (row, partner, local, patch) in enumerate(zip(rows, records[1:], records[0]["ownedRelationships"],
+                                                           (b"\xff\0\0\0", b"\0\0\0\xff"), strict=False)):
         row["targetMasks"]["altered"] = encoded_mask(all_changed)
         row["targetMasks"]["retained"] = encoded_mask(retained)
         row["regionDemand"] = encoded_mask(patch)
@@ -403,7 +404,8 @@ def multi_polar_fixture():
         fields = {"kind": "proved-polar-adjacency", "targetId": records[0]["id"],
                   "partnerTargetId": partner["id"], "qids": ["svg-1", partner["qid"]]}
         row["request"] = {"id": "native-pair/" + consumer._digest({**fields, "bindingDigest": row["bindingDigest"]})[7:], **fields}
-    stats = lambda raw: {key: value for key, value in encoded_mask(raw).items() if key != "encodedRaster"}
+    def stats(raw):
+        return {key: value for key, value in encoded_mask(raw).items() if key != "encodedRaster"}
     records[0]["retained"] = stats(retained)
     records[0]["ownedOverlap"] = stats(all_changed)
     records[0]["visibilityObligations"] = [{"supportId": spec["id"], "via": "polar-adjacency-joint-original-contribution/v1",

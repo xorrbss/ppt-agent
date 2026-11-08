@@ -26,12 +26,16 @@ def _observed_codex_client(monkeypatch, terminal=None, failure=None, http_failur
     from llmai.shared import ChatGPTClientConfig
     import llmai.chatgpt.client as sdk
 
-    events = [SimpleNamespace(type="response.output_text.delta", item_id="item", delta="partial")]
+    events = [
+        SimpleNamespace(type="response.created", response=SimpleNamespace(id="resp_fixture")),
+        SimpleNamespace(type="response.output_text.delta", item_id="item", output_index=0,
+                        content_index=0, delta="partial"),
+    ]
     if terminal is not None:
         events.append(SimpleNamespace(
             type=terminal, code="server_error", message="private-provider-message",
             response=SimpleNamespace(
-                status=terminal.removeprefix("response."), output=[],
+                id="resp_fixture", status=terminal.removeprefix("response."), output=[],
                 error=SimpleNamespace(code="server_error", message="private-provider-message"),
                 incomplete_details=(SimpleNamespace(reason="max_output_tokens")
                                     if terminal == "response.incomplete" else None),

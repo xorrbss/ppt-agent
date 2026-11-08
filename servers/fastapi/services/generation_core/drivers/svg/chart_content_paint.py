@@ -67,8 +67,14 @@ def _decode_native_raster(record, size, *, binary=False):
     _require(len(raw) == expected and decoder.eof and not decoder.unused_data and not decoder.unconsumed_tail,
              "native_raster_decoded_size_invalid")
     _require(sha256_prefixed(raw) == record["sha256"], "native_raster_digest_mismatch")
-    _require(not binary or all(value in (0, 255) for value in raw), "native_mask_domain_invalid")
+    # bytes.translate deletes every 0 and 255 byte; anything left is outside the domain.
+    _require(not binary or not raw.translate(None, b"\x00\xff"), "native_mask_domain_invalid")
     return Image.frombytes("L", tuple(size), raw)
+
+
+def masked_alpha_sum(alpha, raw):
+    from utils.slide_capture_chart_support import masked_alpha_sum as _masked_alpha_sum
+    return _masked_alpha_sum(alpha, raw)
 
 
 def _decode_native_mask(record, alpha, size):
@@ -77,7 +83,7 @@ def _decode_native_mask(record, alpha, size):
     mask = _decode_native_raster(record["encodedRaster"], size, binary=True)
     raw = mask.tobytes()
     expected = {"maskDigest": sha256_prefixed(raw), "pixelCount": raw.count(255),
-                "alphaSum": sum(value for value, selected in zip(alpha.tobytes(), raw) if selected)}
+                "alphaSum": masked_alpha_sum(alpha, raw)}
     _require(_same({key: record[key] for key in expected}, expected), "native_mask_statistics_mismatch")
     return mask
 
@@ -85,7 +91,7 @@ def _decode_native_mask(record, alpha, size):
 def _native_mask_stats(mask, alpha):
     raw = mask.tobytes()
     return {"maskDigest": sha256_prefixed(raw), "pixelCount": raw.count(255),
-            "alphaSum": sum(value for value, selected in zip(alpha.tobytes(), raw) if selected)}
+            "alphaSum": masked_alpha_sum(alpha, raw)}
 
 
 def _native_equal(actual, expected, reason):
@@ -350,7 +356,7 @@ def _native_composition(chart, graph, proof, records, projection):
                 footprint = _strip(footprint, other_support, matrix, dpr)
             _native_equal(masks["footprint"], footprint, "native_joint_footprint_mismatch")
             _require(footprint.getbbox(), "native_joint_footprint_empty")
-            for key, mask in masks.items():
+            for mask in masks.values():
                 _native_subset(mask, footprint, "native_joint_mask_outside_footprint")
             if name != "pairMasks":
                 union = Image.new("L", size)
@@ -564,7 +570,8 @@ def _runtime_tree_digest(wrapper):
     nodes = list(root.iter())
     parents = {child: node for node in nodes for child in node}
     indexes = {node: index for index, node in enumerate(nodes)}
-    qid = lambda node: f"svg-{indexes[node]}"
+    def qid(node):
+        return f"svg-{indexes[node]}"
     rows = [{"qid": qid(node), "parentQid": qid(parents[node]) if node in parents else None,
              "tag": node.tag, "attributes": {key: value for key, value in node.attrib.items() if key != "data-qid"},
              "text": node.text or "", "tail": node.tail or ""} for node in nodes]
@@ -584,7 +591,7 @@ def _text_projection(wrapper, *, owned_text=None):
             continue
         owners, offset = {}, 0
 
-        def piece(owner, value):
+        def piece(owner, value, *, owners=owners):
             nonlocal offset
             value = value or ""
             length = len(value.encode("utf-16-le")) // 2
@@ -752,7 +759,7 @@ def _targets(manifest):
             owners = [datum["id"]] if datum is not None else []
             owned, ranges, local, owned_paints = [], [], [], {}
 
-            def own(source_qid, paint):
+            def own(source_qid, paint, *, owned=owned, owned_paints=owned_paints):
                 owned.append(source_qid)
                 if owned_paints.get(source_qid) != "all":
                     owned_paints[source_qid] = paint
@@ -905,14 +912,14 @@ def _glyphs(record, pixels, embedded_fonts, *, owned_text):
 def _chart_links(manifest, proof, targets):
     observed = proof.get("charts")
     _require(isinstance(observed, list) and len(observed) == len(manifest["charts"]), "chart_links_mismatch")
-    for chart, row in zip(manifest["charts"], observed):
+    for chart, row in zip(manifest["charts"], observed, strict=False):
         chart_targets = [target for target in targets if target["chartId"] == chart["id"]]
         _association(row, {"id": chart["id"], "chartType": chart["chartType"],
                            "targetIds": [target["id"] for target in chart_targets]}, "chart_links_mismatch")
         _require(row.get("complete") is True and row.get("paintRetained") is True, "chart_paint_unproven")
         datums = row.get("datums")
         _require(isinstance(datums, list) and len(datums) == len(chart["datums"]), "datum_links_mismatch")
-        for datum, item in zip(chart["datums"], datums):
+        for datum, item in zip(chart["datums"], datums, strict=False):
             linked = [target["id"] for target in chart_targets if datum["id"] in target["datumIds"]]
             _association(item, {"id": datum["id"], "seriesIndex": datum["seriesIndex"],
                                 "categoryIndex": datum["categoryIndex"], "geometryRole": datum["geometryRole"],
@@ -1121,8 +1128,9 @@ def _alternative_support(chart, graph, proof, records, record, specification, ob
                      if item.get("id") == member.get("supportId") and item.get("primitiveQid") == target["qid"]]
             _require(len(specs) == 1, "support_class_identity_mismatch")
             member_specs.append(specs[0])
-        identity = lambda item: ("incident-edge" if item["kind"].startswith("incident-edge") else item["kind"],
-                                 sorted(sorted(segment) for segment in item["segments"]), item.get("ellipse"))
+        def identity(item):
+            return ("incident-edge" if item["kind"].startswith("incident-edge") else item["kind"],
+                                         sorted(sorted(segment) for segment in item["segments"]), item.get("ellipse"))
         _require(all(_same(identity(item), identity(member_specs[0])) for item in member_specs), "support_class_identity_mismatch")
         if resolution.get("via") == "contributing-native-member":
             roots = [item for item in members if item["targetId"] == resolution.get("contributorTargetId")]
@@ -1150,7 +1158,7 @@ def _alternative_support(chart, graph, proof, records, record, specification, ob
         _subset_mask(joint.get("originalContribution"), joint["footprint"], pixels, "support_joint_witness_unproven", ink=True)
         boundaries = joint.get("memberBoundaries")
         _require(isinstance(boundaries, list) and len(boundaries) == len(members), "support_joint_boundary_unproven")
-        for member, boundary in zip(members, boundaries):
+        for member, boundary in zip(members, boundaries, strict=False):
             _association(boundary, member, "support_joint_identity_mismatch")
             target = by_id[member["targetId"]]
             rows = [item for item in target.get("visibilityObligations", []) if item.get("supportId") == member["supportId"]]
@@ -1277,7 +1285,7 @@ def _direct_support_graphs(manifest, proof, records, pixels, *, projection=None)
     for joint in joints:
         _association(joint, {"memberTargetIds": [item["targetId"] for item in declared_classes[joint["classId"]]["members"]]},
                      "support_joint_identity_mismatch")
-    for chart, graph in zip(manifest["charts"], graphs):
+    for chart, graph in zip(manifest["charts"], graphs, strict=False):
         _require(isinstance(graph, dict) and graph.get("complete") is True
                  and graph.get("paintRetained") is True and graph.get("unproven") == [], "support_graph_unproven")
         chart_records = [record for record in records if record["chartId"] == chart["id"]]
@@ -1288,9 +1296,9 @@ def _direct_support_graphs(manifest, proof, records, pixels, *, projection=None)
         expected_classes = chart["compositionGroup"].get("equivalenceClasses", [])
         _require(isinstance(classes, list) and len(classes) == len(expected_classes)
                  and all(isinstance(row, dict) and row.get("classId") == expected["id"]
-                         for row, expected in zip(classes, expected_classes)), "support_class_association_mismatch")
+                         for row, expected in zip(classes, expected_classes, strict=False)), "support_class_association_mismatch")
         _require(isinstance(resolved, list) and len(resolved) == len(chart_records), "support_target_association_mismatch")
-        for record, result in zip(chart_records, resolved):
+        for record, result in zip(chart_records, resolved, strict=False):
             _association(result, {"targetId": record["id"], "complete": True, "paintRetained": True,
                                   "reason": None}, "support_target_association_mismatch")
             support = record.get("geometrySupport", {})
@@ -1309,7 +1317,7 @@ def _direct_support_graphs(manifest, proof, records, pixels, *, projection=None)
             expected_regions = [region for region in regions if region.get("primitiveQid") == record["qid"]]
             observed_regions = record.get("contributionRegions", [])
             _require(isinstance(observed_regions, list) and len(observed_regions) == len(expected_regions), "support_region_association_mismatch")
-            for specification, region in zip(expected_regions, observed_regions):
+            for specification, region in zip(expected_regions, observed_regions, strict=False):
                 _association(region, {"id": specification["id"], "kind": specification["kind"]}, "support_region_association_mismatch")
                 footprint = _mask(region.get("footprint"), pixels)
                 contribution = _mask(region.get("originalContribution"), pixels)
@@ -1317,7 +1325,7 @@ def _direct_support_graphs(manifest, proof, records, pixels, *, projection=None)
                          and contribution[1] <= footprint[1] <= record["footprint"]["alphaSum"]
                          and contribution[0] <= record["originalContribution"]["pixelCount"]
                          and contribution[1] <= record["originalContribution"]["alphaSum"], "support_region_mask_invalid")
-            for specification, obligation in zip(expected, obligations):
+            for specification, obligation in zip(expected, obligations, strict=False):
                 kind = specification.get("kind")
                 _require(isinstance(specification.get("id"), str) and specification["id"]
                          and isinstance(kind, str) and (kind in {"value-end", "value-base", "value-anchor", "polar-outer-arc"}
@@ -1426,7 +1434,7 @@ def validate_chart_content_paint(manifest, quality, *, capture=None) -> dict:
         observed = proof.get("targets")
         _require(isinstance(observed, list) and len(observed) == len(targets), "target_association_mismatch")
         pixels = int(raster_width) * int(raster_height)
-        for expected, record in zip(targets, observed):
+        for expected, record in zip(targets, observed, strict=False):
             _association(record, expected, "target_association_mismatch")
             _require(record.get("complete") is True, "target_incomplete")
             _require(record.get("paintRetained") is True, "target_paint_not_retained")
@@ -1469,5 +1477,6 @@ def validate_chart_content_paint(manifest, quality, *, capture=None) -> dict:
                 **({"nativeCompositionVerified": True, "unilateralVisibilityVerified": False} if has_composition else {}), **binding}
     except _Unproven as error:
         return {"passed": False, "reason": "chart_content_paint_" + str(error)}
-    except (KeyError, TypeError, ValueError, OverflowError, InvalidOperation, UnicodeError, RecursionError, ET.ParseError):
+    except (KeyError, IndexError, ZeroDivisionError, TypeError, ValueError, OverflowError, InvalidOperation,
+            UnicodeError, RecursionError, ET.ParseError):
         return {"passed": False, "reason": "chart_content_paint_carrier_invalid"}

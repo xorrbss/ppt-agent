@@ -34,6 +34,7 @@ _FILES = (
     "services/generation_core/drivers/svg/export_chart_style.py",
     "services/generation_core/drivers/svg/native_chart.py",
     "services/generation_core/drivers/svg/native_geometry.py",
+    "utils/svg_uniform_transform.py",
     "services/svg_contract.py",
     "services/source_content/manifest_store.py",
     "services/source_content/contracts.py",

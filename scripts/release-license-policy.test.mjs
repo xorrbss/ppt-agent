@@ -4,7 +4,14 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 
-import { concludePackageLicense } from "./release-license-policy.mjs";
+import {
+  concludePackageLicense,
+  exactResolution,
+  licensePolicy,
+  pythonLicenseIndex,
+  resolvePythonLicense,
+  reviewedLicenseDigests,
+} from "./release-license-policy.mjs";
 
 function fixtureRoot(context) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "release-license-policy-"));
@@ -84,5 +91,86 @@ test("copyleft package version and corresponding-source marker are exact", (cont
       changedRoot,
     ),
     /source offer is missing/,
+  );
+});
+
+const DIGEST_A = "a".repeat(64);
+const DIGEST_B = "b".repeat(64);
+const DIGEST_C = "c".repeat(64);
+
+function digestPolicy(resolution) {
+  return {
+    exactMetadataResolutions: [
+      { name: "Demo_Pkg", version: "1.0.0", licenseConcluded: "MIT", ...resolution },
+    ],
+  };
+}
+
+function installed(...digests) {
+  return { licenseFiles: digests.map((sha256, index) => ({ path: `LICENSE-${index}`, sha256 })) };
+}
+
+test("exact resolutions accept the legacy single digest and a reviewed digest list", () => {
+  const single = digestPolicy({ licenseFileSha256: DIGEST_A });
+  assert.equal(exactResolution("demo-pkg", "1.0.0", installed(DIGEST_A), single), "MIT");
+  assert.throws(
+    () => exactResolution("demo-pkg", "1.0.0", installed(DIGEST_B), single),
+    /reviewed license file changed/,
+  );
+
+  const list = digestPolicy({ licenseFileSha256s: [DIGEST_A, DIGEST_B] });
+  assert.equal(exactResolution("demo-pkg", "1.0.0", installed(DIGEST_A), list), "MIT");
+  assert.equal(exactResolution("demo-pkg", "1.0.0", installed(DIGEST_B), list), "MIT");
+  assert.throws(
+    () => exactResolution("demo-pkg", "1.0.0", installed(DIGEST_C), list),
+    /reviewed license file changed/,
+  );
+  assert.equal(exactResolution("other", "1.0.0", installed(DIGEST_C), list), null);
+  assert.equal(exactResolution("demo-pkg", "2.0.0", installed(DIGEST_C), list), null);
+});
+
+test("a resolution without well-formed digests fails closed", () => {
+  assert.throws(() => reviewedLicenseDigests({ name: "x", version: "1" }), /needs reviewed SHA-256/);
+  assert.throws(
+    () => reviewedLicenseDigests({ name: "x", version: "1", licenseFileSha256s: ["nothex"] }),
+    /needs reviewed SHA-256/,
+  );
+  assert.deepEqual(
+    reviewedLicenseDigests({ name: "x", version: "1", licenseFileSha256: DIGEST_A, licenseFileSha256s: [DIGEST_B] }),
+    [DIGEST_A, DIGEST_B],
+  );
+});
+
+test("the policy lists both reviewed digests for the platform-dependent wheels", () => {
+  const byName = new Map(licensePolicy.exactMetadataResolutions.map((item) => [item.name, item]));
+  assert.ok(reviewedLicenseDigests(byName.get("caio")).includes(
+    "c79de288bfd6d645a0c668a9e64672ad15f4f0279af216d8dcf20b9699603329",
+  ));
+  assert.equal(reviewedLicenseDigests(byName.get("caio")).length, 2);
+  assert.equal(reviewedLicenseDigests(byName.get("py-rust-stemmers")).length, 2);
+  assert.equal(reviewedLicenseDigests(byName.get("docutils")).length, 1);
+});
+
+test("packages installed on one platform only resolve from reviewed PyPI metadata elsewhere", () => {
+  const empty = pythonLicenseIndex([]);
+  for (const [name, version, expression] of [
+    ["colorama", "0.4.6", "BSD-3-Clause"],
+    ["pywin32", "311", "PSF-2.0"],
+    ["pywin32-ctypes", "0.2.3", "BSD-3-Clause"],
+    ["tzdata", "2026.2", "Apache-2.0"],
+    ["win32-setctime", "1.2.0", "MIT"],
+    ["jeepney", "0.9.0", "MIT"],
+    ["secretstorage", "3.5.0", "BSD-3-Clause"],
+    ["uvloop", "0.22.1", "MIT"],
+  ]) {
+    assert.equal(resolvePythonLicense(name, version, empty).expression, expression, name);
+  }
+  assert.throws(
+    () => resolvePythonLicense("colorama", "9.9.9", empty),
+    /installed license metadata is missing/,
+  );
+  assert.throws(
+    () => resolvePythonLicense("unlisted-package", "1.0.0", empty),
+    /installed license metadata is missing/,
   );
 });

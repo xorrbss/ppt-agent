@@ -2,8 +2,8 @@
 from __future__ import annotations
 
 from collections import Counter
-from copy import deepcopy
 from decimal import Decimal, InvalidOperation
+from fractions import Fraction
 import math
 import re
 from xml.etree import ElementTree as ET
@@ -15,6 +15,81 @@ from services.generation_core.drivers.svg.native_geometry import (
 )
 
 _VALUE = re.compile(r"([-+−]?)([₩$€£¥]?)\s*(\d{1,3}(?:,\d{3})+|\d+)(\.\d+)?\s*([%％A-Za-z가-힣/²³]*)")
+
+
+_V5_ANNOTATION = re.compile(r"(?:※|(?:단위|출처|자료|주|unit|source|note)(?=\s|[:：)]|$))\s*[:：)]?\s*",
+                            re.IGNORECASE)
+_V5_SHARE_UNITS = frozenset({"%", "％"})
+
+
+def _v5_half_up(value: Fraction, decimals: int) -> Fraction:
+    """Exact ROUND_HALF_UP (ties away from zero) of a rational to ``decimals``."""
+    scale = 10 ** decimals
+    magnitude = math.floor(abs(value) * scale + Fraction(1, 2))
+    return Fraction(magnitude if value >= 0 else -magnitude, scale)
+
+
+def _v5_label_match(number: Decimal, match, point: dict, chart: dict) -> str | None:
+    """How a drawn number denotes ``point``: exact, rounded or a share of its whole.
+
+    No tolerance: a rounded label must equal the datum quantized HALF_UP to the
+    label's own displayed decimals. A percent label may state a share only for
+    part-of-whole families (pie/donut of the series total, percent-stacked bars
+    of the category total), with the same exact quantization.
+    """
+    value = Decimal(str(point["value"]))
+    if number == value:
+        return "exact"
+    decimals = len(match[4]) - 1 if match[4] else 0
+    label = Fraction(number)
+    if _v5_half_up(Fraction(value), decimals) == label:
+        return "rounded"
+    if match[2] or match[5] not in _V5_SHARE_UNITS:
+        return None
+    if chart["chartType"] in {"pie", "donut"}:
+        whole = [Decimal(str(item)) for item in chart["series"][point["seriesIndex"]]["values"]]
+    elif chart["chartType"] in {"bar", "column"} and chart.get("grouping") == "percentStacked":
+        whole = [Decimal(str(series["values"][point["categoryIndex"]])) for series in chart["series"]]
+    else:
+        return None
+    total = sum((Fraction(item) for item in whole), Fraction(0))
+    if total <= 0 or any(item < 0 for item in whole):
+        return None
+    return "share" if _v5_half_up(Fraction(value) * 100 / total, decimals) == label else None
+
+
+def _v5_plot_box(prims, geometry: dict):
+    """The data/axis extent the proof already established (legends excluded)."""
+    indices = set(geometry.get("usedShapeIndices", []))
+    indices.update(index for index in geometry.get("furnitureShapeIndices", [])
+                   if 0 <= index < len(prims.shapes) and prims.shapes[index].tag in {"line", "polyline", "path"})
+    for point in geometry.get("points", []):
+        indices.update(index for index in (point.get("shapeIndex"), point.get("markerShapeIndex")) if index is not None)
+    boxes = [prims.shapes[index].box for index in indices if 0 <= index < len(prims.shapes)]
+    coordinates = [(point["x"], point["y"]) for point in geometry.get("points", [])
+                   if point.get("x") is not None and point.get("y") is not None]
+    if not boxes and not coordinates:
+        return None
+    x0 = min([box.x0 for box in boxes] + [x for x, _ in coordinates])
+    y0 = min([box.y0 for box in boxes] + [y for _, y in coordinates])
+    x1 = max([box.x1 for box in boxes] + [x for x, _ in coordinates])
+    y1 = max([box.y1 for box in boxes] + [y for _, y in coordinates])
+    return x0, y0, x1, y1
+
+
+def _v5_annotation(text, plot) -> str | None:
+    """A unit/source/note caption outside the plot that states no data number."""
+    content = normalize_text(text.text)
+    prefix = _V5_ANNOTATION.match(content)
+    if prefix is None or plot is None or re.search(r"\d", content):
+        return None
+    box = text.box()
+    x0, y0, x1, y1 = plot
+    if not (box.x1 <= x0 or box.x0 >= x1 or box.y1 <= y0 or box.y0 >= y1):
+        return None
+    word = prefix[0].strip(" :：)").lower()
+    return {"단위": "unit", "unit": "unit", "출처": "source", "source": "source",
+            "자료": "source"}.get(word, "note")
 
 
 def _overlaps(a, b) -> bool:
@@ -80,7 +155,7 @@ def _v5_scene(root, measurement=None, svg=None):
     letter-spacing and positive uniform-transform spelling without changing
     any renderer or earlier native-object output.
     """
-    from dataclasses import dataclass, replace
+    from dataclasses import dataclass
     from services.generation_core.drivers.svg.native_geometry import (
         Box, DrawnText, DrawnTextRun, GroupPrimitives, Shape, _compose_transform,
         _transform_of, paint, shape_of, transform_shape,
@@ -115,7 +190,7 @@ def _v5_scene(root, measurement=None, svg=None):
     records = []
 
     def text_record(node, position, attrs):
-        fragments, lines = [], []
+        fragments = []
         cursor = [float(node.get("x", 0)), float(node.get("y", 0))]
         chunks, chunk = {}, 0
         def emit(content, style, transform):
@@ -188,14 +263,22 @@ def _v5_scene(root, measurement=None, svg=None):
                         or member.get("occluded_fraction", 0) > 0):
                     raise NativeRejection("native_chart_content_hidden")
                 from services.generation_core.drivers.svg.source_paint_occlusion import _complete_glyphs
-                clusters = [cluster for fragment in member.get("text_ink_fragments", [])
-                            for cluster in fragment.get("glyphInkClusters", [])
-                            if cluster.get("basis") == "isolated-matching-advance" and _ink_rect(cluster) is not None]
+                # The renderer reports a fragment whose ink it could not measure as
+                # null: the glyph measurement is then incomplete and the estimated
+                # text box is used, exactly as without a measurement.
+                raw_fragments = member.get("text_ink_fragments") or []
+                ink_fragments = [fragment for fragment in raw_fragments if isinstance(fragment, dict)]
+                if len(ink_fragments) != len(raw_fragments):
+                    complete_glyphs = False
+                clusters = [cluster for fragment in ink_fragments
+                            for cluster in fragment.get("glyphInkClusters") or []
+                            if isinstance(cluster, dict) and cluster.get("basis") == "isolated-matching-advance"
+                            and _ink_rect(cluster) is not None]
                 if not _complete_glyphs(member, clusters):
                     complete_glyphs = False
-                for fragment in member.get("text_ink_fragments", []):
+                for fragment in ink_fragments:
                     rect = _ink_rect(fragment)
-                    clusters = fragment.get("glyphInkClusters") or []
+                    clusters = [cluster for cluster in fragment.get("glyphInkClusters") or [] if isinstance(cluster, dict)]
                     for cluster in clusters:
                         ink = _ink_rect(cluster)
                         if ink is not None:
@@ -227,11 +310,22 @@ def _v5_scene(root, measurement=None, svg=None):
 
     def visit(node, parent_position, inherited, ancestors):
         tag = node.tag.rsplit("}", 1)[-1]
-        if tag in {"style", "defs", "clipPath", "mask", "filter"} or any(
-                key in node.attrib for key in ("style", "class", "clip-path", "mask", "filter",
+        if tag in {"defs", "title", "desc", "metadata"}:
+            # Never painted themselves. A <defs> resource can paint only through a
+            # reference: url() paints are refused below, and clip-path/mask/filter
+            # attributes stay refused, so nothing in it can reach the scene.
+            return
+        if tag in {"style", "clipPath", "mask", "filter"} or any(
+                key in node.attrib for key in ("style", "clip-path", "mask", "filter",
                     "writing-mode", "textLength", "lengthAdjust", "rotate", "baseline-shift",
                     "dominant-baseline", "alignment-baseline", "direction", "unicode-bidi")):
             raise NativeRejection("native_chart_content_svg_contract_invalid")
+        if "class" in node.attrib and has_stylesheet:
+            # A class attribute paints nothing without a stylesheet to select it.
+            raise NativeRejection("native_chart_content_svg_contract_invalid")
+        if any("url(" in (node.get(key) or "") for key in ("fill", "stroke")):
+            # A gradient or pattern paint is not a flat colour the proof can read.
+            raise NativeRejection("native_chart_content_paint_reference_unsupported")
         if node.get("display") not in (None, "inline") or node.get("visibility") not in (None, "visible"):
             raise NativeRejection("native_chart_content_hidden")
         position = _compose_transform(parent_position, _transform_of(node))
@@ -282,6 +376,7 @@ def _v5_scene(root, measurement=None, svg=None):
                                    "fill": shape.fill if signed_area else None,
                                    "stroke": shape.stroke if drawn else None}, subpaths=paths, closedSubpaths=closed_paths)
         records.append({"node": node, "ancestors": ancestors, "shape": shape, "order": order[node], "attrs": attrs})
+    has_stylesheet = any(node.tag.rsplit("}", 1)[-1] == "style" for node in root.iter())
     visit(root, (0, 0, 1), {}, ())
     return records, GroupPrimitives
 
@@ -370,8 +465,8 @@ def _v5_paint_at(record, x, y):
                 vertices = ((box.x0, box.y0), (box.x1, box.y0), (box.x1, box.y1), (box.x0, box.y1), (box.x0, box.y0))
             if shape.tag in {"path", "polygon"} and vertices:
                 vertices = (*vertices, vertices[0])
-            segments = ([(a, b) for path in shape.subpaths for a, b in zip(path, path[1:])]
-                        if getattr(shape, "subpaths", ()) else list(zip(vertices, vertices[1:])))
+            segments = ([(a, b) for path in shape.subpaths for a, b in zip(path, path[1:], strict=False)]
+                        if getattr(shape, "subpaths", ()) else list(zip(vertices, vertices[1:], strict=False)))
             for a, b in segments:
                 dx, dy = b[0] - a[0], b[1] - a[1]
                 denominator = dx * dx + dy * dy
@@ -593,6 +688,17 @@ def _v5_content_geometry(root, group, raw, chart, prims, *, measurement=None, sv
     ticks = set(geometry.get("tickTextIndices", []))
     values = [(index, text, _VALUE.fullmatch(normalize_text(text.text))) for index, text in enumerate(prims.texts)
               if index not in ticks and normalize_text(text.text) not in title_labels]
+    # A digit-free unit/source/note caption outside the plot area is chart
+    # furniture, not a datum claim. It is reported so that export keeps it.
+    plot = _v5_plot_box(prims, geometry)
+    annotations = []
+    for index, text, match in values:
+        kind = _v5_annotation(text, plot) if match is None else None
+        if kind is not None:
+            annotations.append({"textIndex": index, "text": normalize_text(text.text), "kind": kind})
+    if annotations:
+        annotated = {item["textIndex"] for item in annotations}
+        values = [item for item in values if item[0] not in annotated]
     numbers = [(index, text, match) for index, text, match in values if match is not None]
     require = raw.get("valueLabels", {}).get("shown") is True or bool(numbers)
     remaining = list(numbers)
@@ -626,7 +732,7 @@ def _v5_content_geometry(root, group, raw, chart, prims, *, measurement=None, sv
                     return {"passed": False, "reason": "native_chart_content_value_binding_unproven"}
                 positions = [(item[1].box().x0 + item[1].box().x1) / 2 if horizontal
                              else (item[1].box().y0 + item[1].box().y1) / 2 for item in labels]
-                if any(abs(a - b) <= 1e-7 for a, b in zip(positions, positions[1:])):
+                if any(abs(a - b) <= 1e-7 for a, b in zip(positions, positions[1:], strict=False)):
                     return {"passed": False, "reason": "native_chart_content_value_binding_unproven"}
                 for point, item in zip(points, labels, strict=True):
                     label_owners[item[0]] = (point["seriesIndex"], category)
@@ -700,12 +806,15 @@ def _v5_content_geometry(root, group, raw, chart, prims, *, measurement=None, sv
                 label_owners[item[0]] = (point["seriesIndex"], category_index)
     for point in geometry.get("points", []):
         candidates = []
+        label_matches = {}
         for index, text, match in remaining:
             if label_owners and label_owners.get(index) != (point["seriesIndex"], point["categoryIndex"]):
                 continue
             number = Decimal(("-" if match[1] in ("-", "−") else "") + match[3].replace(",", "") + (match[4] or ""))
-            if number != Decimal(str(point["value"])):
+            label_match = _v5_label_match(number, match, point, chart)
+            if label_match is None:
                 continue
+            label_matches[index] = label_match
             box = text.box()
             x, y = point.get("x"), point.get("y")
             shape_index = point.get("shapeIndex")
@@ -751,11 +860,13 @@ def _v5_content_geometry(root, group, raw, chart, prims, *, measurement=None, sv
             remaining.remove(chosen)
             bindings.append({"seriesIndex": point["seriesIndex"], "categoryIndex": point["categoryIndex"],
                              "unit": chosen[2][2] + chosen[2][5], "textIndex": chosen[0],
-                             **({"segmentOwnershipProven": True} if chosen[0] in segment_owned_labels else {})})
+                             **({"segmentOwnershipProven": True} if chosen[0] in segment_owned_labels else {}),
+                             **({"valueMatch": label_matches[chosen[0]]}
+                                if label_matches[chosen[0]] != "exact" else {})})
     if remaining or any(match is None for _, _, match in values):
         return {"passed": False, "reason": "native_chart_content_text_unaccounted"}
     return {**geometry, "valueLabelsProven": True, "numericLabelsRequired": require,
-            "valueLabelBindings": bindings}
+            "valueLabelBindings": bindings, **({"annotations": annotations} if annotations else {})}
 
 
 def _visible_group(root: ET.Element, group: ET.Element) -> bool:
@@ -785,8 +896,15 @@ def _visible_group(root: ET.Element, group: ET.Element) -> bool:
 
 
 def chart_drawing_evidence(payload: dict, svg: str, *, revision: str, measurement: dict | None = None,
-                           render_capture=None, post_render: bool = False) -> dict[str, dict]:
-    """Read only current bound chart groups; no drawing is inferred from JSON."""
+                           render_capture=None, post_render: bool = False,
+                           paint_deferred: bool = False) -> dict[str, dict]:
+    """Read only current bound chart groups; no drawing is inferred from JSON.
+
+    ``paint_deferred`` marks a render pass that captured without a chart
+    witness manifest: its paint evidence is the existing ``pending`` state and
+    is proven after publication (``chart_paint_verification``). The drawing's
+    content geometry is still read from this pass's measurement.
+    """
     record, current = bound_declarations(payload, svg)
     if not current or record is None:
         return {}
@@ -841,20 +959,27 @@ def chart_drawing_evidence(payload: dict, svg: str, *, revision: str, measuremen
                     measurement=measurement, svg=svg,
                     native_group_ids={item.get("id") for item in record.get("objects", []) if isinstance(item, dict)})
             evidence[group_id] = proof
-        except (NativeRejection, TypeError, ValueError, AttributeError):
+        except (NativeRejection, TypeError, ValueError, AttributeError, KeyError, IndexError, ZeroDivisionError):
+            # An internal slip in reading one chart rejects that chart; it never
+            # aborts publication of the page.
             continue
     from services.generation_core.drivers.svg.native_requirements import REQUIREMENTS_VERSION_V5
     if revision == REQUIREMENTS_VERSION_V5:
         rendered = post_render or render_capture is not None or isinstance(measurement, dict) and any(key in measurement for key in (
             "measurement_complete", "browser_metrics", "source_digest", "wrapper_digest", "png_digest", "metrics_digest"))
-        if rendered:
+        if rendered and not paint_deferred:
             from services.generation_core.drivers.svg.chart_content_paint import validate_chart_content_paint
             manifest = chart_witness_render_kwargs(payload, svg, revision=revision).get("chart_witness_manifest")
             paint = validate_chart_content_paint(manifest, measurement, capture=render_capture)
+            witnessed = {chart.get("id") for chart in (manifest or {}).get("charts", [])}
         else:
             paint = {"passed": False, "status": "pending", "reason": "native_chart_capture_not_measured"}
-        for proof in evidence.values():
-            proof["paintEvidence"] = dict(paint)
+            witnessed = None
+        for group_id, proof in evidence.items():
+            # A chart the manifest could not cover gets its own failure instead of
+            # sharing (or spoiling) the page's paint result.
+            proof["paintEvidence"] = (dict(paint) if witnessed is None or group_id in witnessed else
+                                      {"passed": False, "reason": "native_chart_witness_unavailable"})
     return evidence
 
 
@@ -914,9 +1039,17 @@ def chart_witness_render_kwargs(payload: dict, svg: str, *, revision: str) -> di
     """Keep the optional renderer argument entirely absent on legacy paths."""
     try:
         manifest = build_chart_witness_manifest(payload, svg, revision=revision)
-    except (NativeRejection, ET.ParseError, TypeError, ValueError, KeyError, AttributeError):
+    except (NativeRejection, ET.ParseError, TypeError, ValueError, KeyError, AttributeError, IndexError,
+            ZeroDivisionError):
         manifest = None
     return {"chart_witness_manifest": manifest} if manifest is not None else {}
+
+
+def _bar_cross_segment(box, position, horizontal_bar):
+    """The segment across a bar at ``position`` (x for horizontal bars, y for columns)."""
+    if horizontal_bar:
+        return [[position, box.y0], [position, box.y1]]
+    return [[box.x0, position], [box.x1, position]]
 
 
 def build_chart_witness_manifest(payload: dict, svg: str, *, revision: str) -> dict | None:
@@ -942,7 +1075,8 @@ def build_chart_witness_manifest(payload: dict, svg: str, *, revision: str) -> d
     nodes = list(root.iter())
     indexes = {node: index for index, node in enumerate(nodes)}
     parents = {child: parent for parent in nodes for child in parent}
-    qid = lambda node: f"svg-{indexes[node]}"
+    def qid(node):
+        return f"svg-{indexes[node]}"
     tree = [{"qid": qid(node), "parentQid": qid(parents[node]) if node in parents else None,
              "tag": node.tag, "attributes": dict(node.attrib), "text": node.text or "", "tail": node.tail or ""}
             for node in nodes]
@@ -957,7 +1091,9 @@ def build_chart_witness_manifest(payload: dict, svg: str, *, revision: str) -> d
     for declaration in declarations:
         found = find_group(root, declaration.get("id"))
         if found is None:
-            return None
+            # One unbound or unprovable chart leaves only itself without a witness;
+            # the other charts on the page keep their paint proof.
+            continue
         group = found[0]
         chart = _model_chart(declaration["raw"])
         local = [record for record in scene if group in record["ancestors"]]
@@ -970,7 +1106,7 @@ def build_chart_witness_manifest(payload: dict, svg: str, *, revision: str) -> d
         geometry = _v5_content_geometry(root, group, declaration["raw"], chart, prims, svg=svg,
                                        native_group_ids=native_ids, check_visibility=False)
         if geometry.get("passed") is not True:
-            return None
+            continue
         chart_id = declaration["id"]
         datums, glyphs, relationships = [], [], []
         primitive_qids = set()
@@ -978,32 +1114,28 @@ def build_chart_witness_manifest(payload: dict, svg: str, *, revision: str) -> d
         datum_ids = {(point["seriesIndex"], point["categoryIndex"]):
                      f"{chart_id}/s{point['seriesIndex']}/c{point['categoryIndex']}" for point in geometry["points"]}
 
-        def boundary_support(point, shape, target_qid):
+        def boundary_support(point, shape, target_qid, *, chart=chart, geometry=geometry, datum_ids=datum_ids):
             """Actual numeric-determining boundaries, never a fabricated ink box."""
             if shape is None or point.get("geometryAnchorOnly"):
                 return []
             datum_id = datum_ids[point["seriesIndex"], point["categoryIndex"]]
-            def obligation(suffix, segments=None, ellipse=None):
+            def make_obligation(suffix, segment_list=None, ellipse=None):
                 return {"id": f"{datum_id}/{suffix}", "kind": suffix, "primitiveQid": target_qid,
                         "regionRule": "native-alpha-boundary-neighborhood/v1", "radiusPhysicalPixels": 1,
-                        "segments": segments or [], **({"ellipse": ellipse} if ellipse else {}), "alternatives": []}
+                        "segments": segment_list or [], **({"ellipse": ellipse} if ellipse else {}), "alternatives": []}
             if chart["chartType"] in {"bar", "column"}:
-                box = shape.box
-                if chart["chartType"] == "bar":
-                    line = lambda coordinate: [[coordinate, box.y0], [coordinate, box.y1]]
-                    endpoint = point["x"]
-                else:
-                    line = lambda coordinate: [[box.x0, coordinate], [box.x1, coordinate]]
-                    endpoint = point["y"]
-                result = [obligation("value-end", [line(endpoint)])]
+                horizontal_bar = chart["chartType"] == "bar"
+                endpoint = point["x"] if horizontal_bar else point["y"]
+                result = [make_obligation("value-end", [_bar_cross_segment(shape.box, endpoint, horizontal_bar)])]
                 if point.get("baseline") is not None:
-                    result.append(obligation("value-base", [line(point["baseline"])]))
+                    result.append(make_obligation("value-base",
+                        [_bar_cross_segment(shape.box, point["baseline"], horizontal_bar)]))
                 return result
             paths = getattr(shape, "subpaths", ()) or (shape.vertices,)
             closed = getattr(shape, "closedSubpaths", ())
             edges = [(a, b) for index, path in enumerate(paths) if len(path) >= 2
                      for a, b in zip(path, (*path[1:], path[0]) if (shape.fill or shape.tag == "polygon"
-                         or index < len(closed) and closed[index]) else path[1:]) if a != b]
+                         or index < len(closed) and closed[index]) else path[1:], strict=False) if a != b]
             if chart["chartType"] in {"line", "area"}:
                 # The family proof already verifies every actual top edge and
                 # its full domain. Canonical category-local pieces remove only
@@ -1011,30 +1143,30 @@ def build_chart_witness_manifest(payload: dict, svg: str, *, revision: str) -> d
                 row = sorted((other for other in geometry["points"] if other["seriesIndex"] == point["seriesIndex"]),
                              key=lambda other: other["categoryIndex"])
                 category_index = point["categoryIndex"]
-                result = [obligation("value-anchor", [[ [point["x"], point["y"]], [point["x"], point["y"]] ]])]
+                result = [make_obligation("value-anchor", [[ [point["x"], point["y"]], [point["x"], point["y"]] ]])]
                 for left, right in ((category_index - 1, category_index), (category_index, category_index + 1)):
                     if left < 0 or right >= len(row):
                         continue
                     a, b = row[left], row[right]
                     midpoint = [(a["x"] + b["x"]) / 2, (a["y"] + b["y"]) / 2]
                     segment = [midpoint, [b["x"], b["y"]]] if right == category_index else [[a["x"], a["y"]], midpoint]
-                    result.append(obligation(f"incident-edge-{len(result)}", [segment]))
+                    result.append(make_obligation(f"incident-edge-{len(result)}", [segment]))
                 return result
             cx, cy = geometry["center"]
             rx, ry = geometry["radii"]
             if shape.tag in {"circle", "ellipse"}:
-                return [obligation("polar-outer-arc", ellipse={"center": [cx, cy], "radii": [rx, ry],
+                return [make_obligation("polar-outer-arc", ellipse={"center": [cx, cy], "radii": [rx, ry],
                     "startAngle": 0, "sweepAngle": 2 * math.pi})]
             outer = [[list(a), list(b)] for a, b in edges
                      if all(abs(math.hypot((x - cx) / rx, (y - cy) / ry) - 1) <= max(1e-4, .05 / min(rx, ry)) for x, y in (a, b))]
-            return [obligation("polar-outer-arc", outer)] if outer else []
+            return [make_obligation("polar-outer-arc", outer)] if outer else []
 
-        def add_glyph(text_index, role, owners):
+        def add_glyph(text_index, role, owners, *, texts=texts):
             if text_index is None or not 0 <= text_index < len(texts):
                 return []
             return add_record_glyph(texts[text_index], role, owners)
 
-        def add_record_glyph(record, role, owners):
+        def add_record_glyph(record, role, owners, *, glyph_targets=glyph_targets, glyphs=glyphs):
             text_node = record["node"]
             targets = []
             for node in text_node.iter():
@@ -1142,10 +1274,11 @@ def build_chart_witness_manifest(payload: dict, svg: str, *, revision: str) -> d
         from decimal import Decimal
         data_qids = {value for datum in datums for value in datum["primitiveQids"]}
         points_by_id = {datum_ids[point["seriesIndex"], point["categoryIndex"]]: point for point in geometry["points"]}
-        datums_by_id = {datum["id"]: datum for datum in datums}
-        primitive_target = lambda datum_id, source_qid: f"{chart_id}/primitive/{source_qid}/{datum_id}"
-        glyph_target = lambda glyph, span: f"{chart_id}/glyph/{glyph['qid']}/{span['start']}/{span['length']}"
-        def unit_key(datum):
+        def primitive_target(datum_id, source_qid, *, chart_id=chart_id):
+            return f"{chart_id}/primitive/{source_qid}/{datum_id}"
+        def glyph_target(glyph, span, *, chart_id=chart_id):
+            return f"{chart_id}/glyph/{glyph['qid']}/{span['start']}/{span['length']}"
+        def unit_key(datum, *, chart=chart, declaration=declaration, geometry=geometry):
             name, title = chart["series"][datum["seriesIndex"]]["name"], chart.get("title", "")
             units = {_unit_key(binding["unit"]) for binding in geometry.get("valueLabelBindings", [])
                      if binding["seriesIndex"] == datum["seriesIndex"] and binding["categoryIndex"] == datum["categoryIndex"]
@@ -1237,7 +1370,7 @@ def build_chart_witness_manifest(payload: dict, svg: str, *, revision: str) -> d
                             owned = {(binding["seriesIndex"], binding["categoryIndex"])
                                      for binding in geometry.get("valueLabelBindings", [])
                                      if binding.get("segmentOwnershipProven") is True}
-                            def value_glyph_ids(owner):
+                            def value_glyph_ids(owner, *, glyphs=glyphs):
                                 return [glyph_target(glyph, span) for glyph in glyphs
                                         if glyph["role"] == "value" and glyph["datumIds"] == [owner["id"]]
                                         for span in glyph["ranges"]]
@@ -1352,6 +1485,8 @@ def build_chart_witness_manifest(payload: dict, svg: str, *, revision: str) -> d
                 "id": f"{chart_id}/composition", "primitiveQids": sorted(primitive_qids, key=lambda value: int(value[4:])),
                 "glyphTargets": glyph_targets, "relationships": relationships,
                 "equivalenceClasses": equivalence_classes}})
+    if not charts:
+        return None
     manifest = {"schema": "svg-native-chart-witness/v1", "requirementsRevision": revision,
         "canonicalSvgDigest": source_digest(svg),
         "treeDerivativeDigest": canonical_json_digest({"schema": "svg-chart-node-tree/v1", "nodes": tree}),

@@ -17,6 +17,33 @@ The PPTX lands in `<app-data>/public-artifacts/` (content-addressed). Set
 above the density floor (no expansion call); leave it unset to exercise the
 density-expansion path.
 
+## Chart fixtures (V5 measurement)
+
+`FAKE_LLM_CHART_FIXTURES=1` (default unset: behaviour unchanged) makes slide N
+(2 <= N <= 8, never the last slide) carry the N-2th real-builder native chart
+example from `tests/unit/fixtures/svg_chart_paint_native_examples_v1.json`
+(column, coincident-line, stacked-column, donut, fixed-column, separator-pie,
+marker-line). The outline puts the example's requested source text (including its
+`chart:` line) in the slide content, and the SVG author returns the example's
+canonical drawing with its `data-native-chart` declaration re-attached, which the
+pipeline extracts and binds exactly as for a real model. Use 9 slides to get all
+seven (1 cover, 7 charts, 1 closing); fixtures need the 1280x720 canvas.
+
+```bash
+SVG_NATIVE_CHART_INTEGRITY_V5=on FAKE_LLM_CHART_FIXTURES=1 FAKE_OUTLINE_LONG=1 \
+  scripts/fake_llm_e2e/run_backend.sh /tmp/fake-charts &
+scripts/fake_llm_e2e/run_generation.sh 9
+```
+
+The v5 chart paint proof runs inside `export.pptx` and is budgeted (about three
+charts per export of ~600 s), so a deck with more charts needs another export
+to verify the rest: `scripts/fake_llm_e2e/run_export.sh <presentation-id>`.
+Fixtures adapt the builder output to the svg contract: 10px value labels are
+enlarged to 13px, and the example's descriptive line (e.g. "hole size 0.7") is
+drawn as a caption so the requested-text check finds it. Without
+`SVG_NATIVE_CHART_INTEGRITY_V5=on` the v4 rules apply and most fixtures fail
+admission (they draw no value text).
+
 ## What is fake, and why
 
 - **LLM clients** (`fake_llm_backend.py`): `llmai.get_client` returns

@@ -250,3 +250,24 @@ def test_actual_runtime_identity_is_required_but_can_differ_between_variants():
     b["runs"][0]["evaluation_identity"]["generation_config_sha256"] = "unrelated-config"
     assert decide_mod.decide(a, b)["tables"]["comparison_issues"]["x"] == [
         "runtime configuration identity disagrees with condition"]
+
+
+def test_an_authorized_retry_that_completes_supersedes_its_failure_for_the_decision():
+    a = _result("a", {"x": [{"judge_overall": 3}, {"judge_overall": 3}]})
+    b = _result("b", {"x": [{"judge_overall": 4}, {}, {"judge_overall": 4}]})
+    b["runs"][1].update(completed=False, attempt_id="failed-attempt")
+    b["runs"][2].update(retry_of="failed-attempt", retry_authorization="explicit --retry-failed")
+    b["requested_runs"] = 2
+    report = decide_mod.decide(a, b)
+    assert report["_comparison"]["status"] == "comparable"
+    # The failure itself stays visible in the attempt accounting.
+    assert report["_comparison"]["accounting_b"]["failed_runs"] == 1
+    assert report["_comparison"]["accounting_b"]["retry_attempts"] == 1
+
+
+def test_a_retry_that_fails_again_does_not_recover_the_slot():
+    a = _result("a", {"x": [{"judge_overall": 3}, {"judge_overall": 3}]})
+    b = _result("b", {"x": [{"judge_overall": 4}, {}, {}]})
+    b["runs"][1].update(completed=False, attempt_id="failed-attempt")
+    b["runs"][2].update(completed=False, attempt_id="retry-attempt", retry_of="failed-attempt")
+    assert decide_mod.decide(a, b)["_comparison"]["status"] == "completion regressed"

@@ -336,6 +336,7 @@ tests/unit/test_svg_chart_fidelity.py
 tests/unit/test_svg_chart_label_units.py
 tests/unit/test_svg_chart_paint_carrier.py
 tests/unit/test_svg_chart_paint_chromium.py
+tests/unit/test_svg_chart_paint_verification_v5.py
 tests/unit/test_svg_checkpoint_bootstrap.py
 tests/unit/test_svg_checkpoint_progress_contract.py
 tests/unit/test_svg_checkpoint_recovery_contract.py
@@ -378,6 +379,7 @@ tests/unit/test_svg_image_pipeline.py
 tests/unit/test_svg_live4_subset_review_replay.py
 tests/unit/test_svg_native_chart_guidance_v4.py
 tests/unit/test_svg_native_chart_integrity_admission.py
+tests/unit/test_svg_native_chart_label_rules_v5.py
 tests/unit/test_svg_native_chart_marker_visibility_v5.py
 tests/unit/test_svg_native_chart_numeric_authority_v5.py
 tests/unit/test_svg_native_chart_probe.py

@@ -45,6 +45,19 @@ def _pipe_bindings() -> dict[str, Any]:
     }
 
 
+def _chart_proof_chrome_pipe(chrome: str, profile_path: pathlib.Path) -> Any:
+    """A private single-use Chrome for the chart paint proof, frame pacing unlimited.
+
+    Only the manifest-bearing capture launches through this factory; every
+    other render keeps the default ``_ChromePipe`` argv byte for byte.
+    """
+
+    from utils import slide_capture
+    from utils.slide_capture_pipe import CHART_PROOF_CHROME_ARGS
+
+    return slide_capture._ChromePipe(chrome, profile_path, extra_args=CHART_PROOF_CHROME_ARGS)
+
+
 def render_admitted_html_over_pipe(
     admitted: AdmittedHtml, timeout: int, *,
     width_px: int = DEFAULT_CANVAS_WIDTH_PX, height_px: int = DEFAULT_CANVAS_HEIGHT_PX,
@@ -53,8 +66,10 @@ def render_admitted_html_over_pipe(
 ) -> tuple[bytes, Mapping[str, Any] | None]:
     """Render one admitted document in a private, single-use Chrome process."""
 
+    bindings = _pipe_bindings()
     if chart_witness_manifest is not None:
         from utils.slide_capture_chart_adapter import render_admitted_html_over_pipe as render_one
+        bindings["chrome_pipe"] = _chart_proof_chrome_pipe
     else:
         from utils.slide_capture_pipe_render import render_admitted_html_over_pipe as render_one
 
@@ -62,7 +77,7 @@ def render_admitted_html_over_pipe(
         admitted, timeout, width_px=width_px, height_px=height_px,
         private_diagnostic_profile=private_diagnostic_profile,
         **({"chart_witness_manifest": chart_witness_manifest} if chart_witness_manifest is not None else {}),
-        **_pipe_bindings(),
+        **bindings,
     )
 
 
@@ -143,7 +158,10 @@ class RendererChromiumSession:
             from utils.slide_capture_pipe_render import render_admitted_html_over_pipe as render_one
 
         bindings = dict(_pipe_bindings())
-        bindings["chrome_pipe"] = self._chrome_pipe
+        # The chart paint proof runs in its own frame-pacing-unlimited Chrome;
+        # the session's retained Chromium keeps the default launch argv.
+        bindings["chrome_pipe"] = (_chart_proof_chrome_pipe if chart_witness_manifest is not None
+                                   else self._chrome_pipe)
         result = render_one(
             admitted, timeout, width_px=width_px, height_px=height_px,
             private_diagnostic_profile=private_diagnostic_profile,

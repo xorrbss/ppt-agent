@@ -197,7 +197,7 @@ def test_reusable_chrome_failure_cleans_page_without_killing_parallel_sibling(
             targets.append(target_id)
             return Context(target_id)
 
-        def get(self, url):
+        def get(self, url, **_kwargs):
             closed_targets.append(url.rsplit("/", 1)[-1])
             return Context()
 

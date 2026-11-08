@@ -124,6 +124,8 @@ def test_external_worker_owns_migrations_runner_and_shutdown(monkeypatch, tmp_pa
     worker.register_operation_handlers.assert_called_once_with(controller="generation", registry=registry)
     profile = get_public_worker_profile("generation")
     assert profile.operation_kinds == (
+        "svg.template.analyze",
+        "svg.template.prepare",
         "presentation.generate",
         "raster.analysis",
         "quality.review",
@@ -164,6 +166,8 @@ def test_external_worker_owns_migrations_runner_and_shutdown(monkeypatch, tmp_pa
     worker.start_workspace_worker_metrics_exporter.assert_awaited_once_with()
     worker.start_workspace_operation_runner.assert_awaited_once_with(
         allowed_kinds=(
+            "svg.template.analyze",
+            "svg.template.prepare",
             "presentation.generate",
             "raster.analysis",
             "quality.review",

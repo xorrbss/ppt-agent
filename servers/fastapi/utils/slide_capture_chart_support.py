@@ -21,7 +21,16 @@ from utils.hashing import canonical_json_bytes, sha256_prefixed
 def mask_record(mask, alpha):
     """The single canonical codec for every chart diagnostic mask receipt."""
     return {"maskDigest": sha256_prefixed(mask.tobytes()), "pixelCount": mask.histogram()[255],
-            "alphaSum": sum(a for a, covered in zip(alpha.tobytes(), mask.tobytes()) if covered)}
+            "alphaSum": masked_alpha_sum(alpha, mask.tobytes())}
+
+
+def masked_alpha_sum(alpha, mask_bytes):
+    """Sum of alpha bytes where the mask byte is non-zero (pairs truncated to the shorter)."""
+    import numpy as np
+    alpha_values = np.frombuffer(alpha.tobytes(), dtype=np.uint8)
+    covered = np.frombuffer(mask_bytes, dtype=np.uint8)
+    length = min(alpha_values.size, covered.size)
+    return int(alpha_values[:length][covered[:length] != 0].sum(dtype=np.int64))
 
 
 def encode_native_raster(image):
@@ -81,7 +90,7 @@ def _roots(coefficients):
     for point in points:
         if evaluate(point) == 0:
             result.append(point)
-    for left,right in zip(points,points[1:]):
+    for left,right in zip(points,points[1:], strict=False):
         low,high=evaluate(left),evaluate(right)
         if not (low<0<high or high<0<low):
             continue
@@ -274,11 +283,15 @@ def _stack_normal_profiles(obligation,canvas_matrix,dpr,target_bounds,neighbor_b
             raise ValueError("stack_boundary_segment_invalid")
         (x0,y0),(x1,y1)=map(transform,segment)
         if y0==y1 and x0!=x1:
-            horizontal=True;coordinate=y0;start,end=sorted((x0,x1))
+            horizontal=True
+            coordinate=y0
+            start,end=sorted((x0,x1))
             tangent_axis,normal_axis=0,1
             tangent_length,normal_length=footprint.width,footprint.height
         elif x0==x1 and y0!=y1:
-            horizontal=False;coordinate=x0;start,end=sorted((y0,y1))
+            horizontal=False
+            coordinate=x0
+            start,end=sorted((y0,y1))
             tangent_axis,normal_axis=1,0
             tangent_length,normal_length=footprint.height,footprint.width
         else:
@@ -325,8 +338,10 @@ def stack_boundary_contrast(obligation,canvas_matrix,dpr,target_bounds,neighbor_
     native_contrast=Image.new("L",footprint.size,0)
     contributed=Image.new("L",footprint.size,0)
     samples={}
-    signed=lambda first,second:tuple(a-b for a,b in zip(first,second))
-    nonzero=lambda value:any(component!=0 for component in value)
+    def signed(first, second):
+        return tuple(a-b for a,b in zip(first,second, strict=False))
+    def nonzero(value):
+        return any(component!=0 for component in value)
     def observe(pixel):
         original=original_rgb.getpixel(pixel)
         absent=pair_absent_rgb.getpixel(pixel)
@@ -338,7 +353,7 @@ def stack_boundary_contrast(obligation,canvas_matrix,dpr,target_bounds,neighbor_
         candidates.putpixel(boundary,255)
         if boundary in samples:
             continue
-        def pixel(depth):
+        def pixel(depth, *, boundary=boundary, horizontal=horizontal):
             return (boundary[0],depth) if horizontal else (depth,boundary[1])
         negative=observe(pixel(negative_profile[0]))
         positive=observe(pixel(positive_profile[0]))
@@ -346,14 +361,14 @@ def stack_boundary_contrast(obligation,canvas_matrix,dpr,target_bounds,neighbor_
         actual_boundary=original_rgb.getpixel(boundary)
         absent_boundary=pair_absent_rgb.getpixel(boundary)
         boundary_changed=actual_boundary!=absent_boundary
-        def native_pair(negative,positive):
+        def native_pair(negative,positive, *, native_boundary=native_boundary):
             return (positive["native"]!=negative["native"] or native_boundary[3]>0 and
                     native_boundary!=negative["native"] and native_boundary!=positive["native"])
-        def divider_side(state):
+        def divider_side(state, *, absent_boundary=absent_boundary, actual_boundary=actual_boundary, native_boundary=native_boundary):
             difference=signed(actual_boundary,state["original"])
             return (native_boundary!=state["native"] and nonzero(difference) and
                     difference!=signed(absent_boundary,state["absent"]))
-        def kind_for(negative,positive):
+        def kind_for(negative,positive, *, boundary_changed=boundary_changed, native_boundary=native_boundary):
             if not boundary_changed:
                 return None
             difference=signed(positive["original"],negative["original"])
@@ -396,12 +411,13 @@ def stack_boundary_contrast(obligation,canvas_matrix,dpr,target_bounds,neighbor_
                             ("original","native","effect"))
                 counts=[Counter(tuple(state[key] for key in keys) for state in negatives) for keys in dimensions]
                 for candidate in positives:
-                    equal=[count[tuple(candidate[key] for key in keys)] for count,keys in zip(counts,dimensions)]
+                    equal=[count[tuple(candidate[key] for key in keys)] for count,keys in zip(counts,dimensions, strict=False)]
                     eligible=len(negatives)-sum(equal[:3])+sum(equal[3:6])-equal[6]
                     if eligible:
                         negative=next(state for state in negatives if state["original"]!=candidate["original"] and
                                       state["native"]!=candidate["native"] and state["effect"]!=candidate["effect"])
-                        positive=candidate;kind="adjacent-fill"
+                        positive=candidate
+                        kind="adjacent-fill"
                         break
                 if kind is None and native_boundary[3]>0:
                     # Divider-to-each-interior attribution is separable; there
@@ -826,7 +842,7 @@ def resolve_chart_support(chart,records,masks,joint_evidence):
     by_id={record["id"]:record for record in records
            if record.get("chartId")==chart_id or str(record.get("id","")).startswith(chart_id+"/")}
     datums={datum["id"]:datum for datum in chart["datums"]}
-    relationships=chart["compositionGroup"].get("relationships",[])
+    chart["compositionGroup"].get("relationships",[])
     observations={}
     errors={}
     semantic_reasons={"original_color_semantic_contribution_empty","reference_observable_contribution_empty"}
@@ -1026,9 +1042,10 @@ def resolve_chart_support(chart,records,masks,joint_evidence):
             keys.append(key)
         if valid:
             first=obligations[keys[0]]
-            identity=lambda obligation: (
-                "incident-edge" if obligation.get("kind","").startswith("incident-edge") else obligation.get("kind"),
-                sorted(sorted(segment) for segment in obligation.get("segments",[])), obligation.get("ellipse"))
+            def identity(obligation):
+                return (
+                            "incident-edge" if obligation.get("kind","").startswith("incident-edge") else obligation.get("kind"),
+                            sorted(sorted(segment) for segment in obligation.get("segments",[])), obligation.get("ellipse"))
             if any(identity(obligations[key])!=identity(first) for key in keys):
                 valid=False
         class_members[identifier]=set(keys)
@@ -1215,7 +1232,7 @@ def resolve_chart_support(chart,records,masks,joint_evidence):
                                     raise ValueError("stack_boundary_normal_sample_invalid")
                                 coordinates.append(tuple(value))
                             pixel,negative,positive=coordinates
-                            def valid_depths(profile):
+                            def valid_depths(profile, *, negative=negative, pixel=pixel, positive=positive):
                                 negative_limits,positive_limits,horizontal=profile
                                 tangent=0 if horizontal else 1
                                 normal=1-tangent

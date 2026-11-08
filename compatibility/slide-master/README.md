@@ -98,6 +98,10 @@ registered superseded manifest only while that manifest's `files` map equals
 the current one (whose bytes `converter_digest()` has just verified);
 `tests/unit/test_svg_converter_digest_aliases.py` proves the identity and
 fails once an entry no longer applies. Adapter files are never aliased.
+
+That alias was voided on 2026-11-08, when `b392c58f7` patched the executed
+`svg_to_pptx/native_objects/chart_data.py` for the V5 doughnut hole size: the
+entry was removed, and proofs pinning an earlier converter digest no longer verify.
 The alias checks live in files of the whole-page verifier inventory, so adding
 them re-pinned `whole_page_verifier_digest()` once, as any verifier edit does:
 in-flight v4 bundles and completed-identity reuse are recomputed, while stored

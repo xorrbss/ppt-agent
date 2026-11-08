@@ -484,14 +484,15 @@ def required_numeric_claims_with_native_charts(content: str, payload: dict, svg:
         for start, end in excluded:
             masked[start:end] = " " * (end - start)
         return _required_numeric_claims("".join(masked))
-    except (ValueError, TypeError, KeyError, AttributeError, InvalidOperation, RecursionError):
+    except (ValueError, TypeError, KeyError, IndexError, ZeroDivisionError, AttributeError, InvalidOperation,
+            RecursionError):
         # Parsing or association uncertainty keeps every original text claim.
         return legacy
 
 
 def apply_requested_native_quality(quality: dict, payload: dict, svg: str, content: str, *, pt_per_px: float,
                                    revision: str | None = None, render_capture=None, post_render: bool = False,
-                                   declared_chart_only: bool = False) -> None:
+                                   declared_chart_only: bool = False, paint_deferred: bool = False) -> None:
     requirements = requested_native_data(content, revision)
     declared_charts = []
     if revision == REQUIREMENTS_VERSION_V5:
@@ -515,7 +516,8 @@ def apply_requested_native_quality(quality: dict, payload: dict, svg: str, conte
             chart_drawing_evidence, chart_projection_diagnostics, chart_value_differences,
         )
         evidence = chart_drawing_evidence(payload, svg, revision=revision,
-            **({"measurement": quality, "render_capture": render_capture, "post_render": post_render}
+            **({"measurement": quality, "render_capture": render_capture, "post_render": post_render,
+                **({"paint_deferred": True} if paint_deferred else {})}
                if revision == REQUIREMENTS_VERSION_V5 else {}))
         summary = chart_projection_diagnostics(summary, evidence)
         dropped_ids = {item.get("id") for item in (summary or {}).get("dropped", [])
@@ -554,18 +556,28 @@ def apply_requested_native_quality(quality: dict, payload: dict, svg: str, conte
         series_units = [_series_name_unit(series["name"]) for series in own["series"]]
         if title_unit and any(unit and _unit_key(title_unit) != _unit_key(unit) for unit in series_units):
             return False
-        bindings = proof["contentGeometry"].get("valueLabelBindings", [])
+        # A proven share label's "%" states the datum's share of its whole
+        # (pie/donut/percent-stacked only), not the unit of the datum itself.
+        bindings = [binding for binding in proof["contentGeometry"].get("valueLabelBindings", [])
+                    if binding.get("valueMatch") != "share"]
         if expected is not None:
             declared_units = {_unit_key(unit) for unit in (title_unit, *series_units) if unit}
             expected_units = {_unit_key(label["unit"]) for label in expected.get("requiredUnitLabels", [])}
             if not declared_units <= expected_units:
                 return False
+            # A proof for a different chart (another series count) cannot match; check
+            # that first so a unit binding never indexes past the expected series.
+            if not v5_chart_matches(proof, expected):
+                return False
+            expected_series_list = expected.get("series", [expected])
             for binding in bindings:
                 unit = _unit_key(binding["unit"])
                 if not unit:
                     continue
                 series_index = binding["seriesIndex"]
-                expected_series = expected.get("series", [expected])[series_index]
+                if not 0 <= series_index < len(expected_series_list):
+                    return False
+                expected_series = expected_series_list[series_index]
                 own_units = {_unit_key(label["unit"]) for label in expected.get("requiredUnitLabels", [])
                              if "seriesName" not in label or label["seriesName"] == expected_series.get("name")}
                 if unit not in own_units:

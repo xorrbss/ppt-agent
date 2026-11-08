@@ -7,10 +7,35 @@ import {
   fetchTimeoutSignal,
 } from "./fetch-timeout-signal.ts";
 
+/**
+ * Waits for `signal` to abort, failing if it has not within `limitMs`.
+ *
+ * AbortSignal.timeout uses an unref'd timer, so awaiting only the signal lets
+ * the test process's event loop drain and node:test cancels the test (and
+ * every test after it) with "Promise resolution is still pending". The ref'd
+ * guard timer keeps the loop alive and turns a missing abort into a failure.
+ */
+async function abortWithin(signal: AbortSignal, limitMs = 5_000): Promise<void> {
+  let guard: ReturnType<typeof setTimeout> | undefined;
+  try {
+    await Promise.race([
+      once(signal, "abort"),
+      new Promise<never>((_resolve, reject) => {
+        guard = setTimeout(
+          () => reject(new Error(`signal did not abort within ${limitMs}ms`)),
+          limitMs,
+        );
+      }),
+    ]);
+  } finally {
+    clearTimeout(guard);
+  }
+}
+
 test("a bare timeout signal aborts with TimeoutError after the deadline", async () => {
   const signal = fetchTimeoutSignal(20);
   assert.equal(signal.aborted, false);
-  await once(signal, "abort");
+  await abortWithin(signal);
   assert.equal(signal.aborted, true);
   assert.equal((signal.reason as { name?: string }).name, "TimeoutError");
 });
@@ -28,7 +53,7 @@ test("a parent abort cancels before the deadline and keeps its reason", async ()
 test("the deadline still fires when the parent never aborts", async () => {
   const parent = new AbortController();
   const signal = fetchTimeoutSignal(20, parent.signal);
-  await once(signal, "abort");
+  await abortWithin(signal);
   assert.equal((signal.reason as { name?: string }).name, "TimeoutError");
 });
 

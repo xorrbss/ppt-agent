@@ -35,13 +35,10 @@ import json
 from pathlib import Path
 
 #: superseded vendor MANIFEST.json SHA-256 -> reason it was superseded.
-SUPERSEDED_VENDOR_MANIFESTS = {
-    "9ab2ba71a6386d6d52b80fb11a53c3af3d9654df74fa30e5a1f19192975c9a16": (
-        "E3 2026-11-05: rebuilt by compatibility/slide-master/rebuild.py after the "
-        "chart-furniture.16 and native-fixed-text.1 patch files were recorded; "
-        "only presentonPatches, patches and the serialization changed"
-    ),
-}
+#: Empty since 2026-11-08: the E3 manifest ``9ab2ba71...`` was voided when
+#: ``b392c58f7`` patched the executed vendored ``chart_data.py`` (see the README in
+#: ``svg_converter_superseded_manifests``).
+SUPERSEDED_VENDOR_MANIFESTS: dict[str, str] = {}
 SUPERSEDED_MANIFEST_ROOT = Path(__file__).resolve().parent / "svg_converter_superseded_manifests"
 #: Manifest keys that execute nothing and may differ between aliased manifests.
 PROVENANCE_KEYS = frozenset({"presentonPatches", "patches"})

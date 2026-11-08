@@ -12,7 +12,7 @@ import sys
 import threading
 from unittest.mock import patch
 
-ROOT = Path("C:/project/PPT-agent/ppt-agent")
+ROOT = Path(__file__).resolve().parents[4]
 sys.path.insert(0, str(ROOT / "servers/fastapi"))
 MODES = ("alpha", "owned-alpha", "reference-original", "reference-white", "reference-black",
          "current-white", "current-black", "current-absent")

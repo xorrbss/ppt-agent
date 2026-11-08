@@ -134,10 +134,20 @@ def _cdp_pipe_file_actions(
     return actions
 
 
+# Frame pacing only, for the native chart paint proof capture (see
+# docs/session-results/svg-v5-plane-budget-options-20261108.md, option 1):
+# raster content is unchanged, only when compositor frames are produced. The
+# default render path never receives these arguments.
+CHART_PROOF_CHROME_ARGS = ("--disable-frame-rate-limit", "--disable-gpu-vsync")
+
+
 class _ChromePipe:
     """Minimal null-delimited CDP transport with no listening network socket."""
 
-    def __init__(self, chrome: str, profile_path: pathlib.Path) -> None:
+    def __init__(self, chrome: str, profile_path: pathlib.Path, *,
+                 extra_args: tuple[str, ...] = ()) -> None:
+        if not set(extra_args) <= set(CHART_PROOF_CHROME_ARGS):
+            raise ValueError("chrome pipe extra arguments are not admitted")
         child_read, parent_write_raw = os.pipe()
         parent_read_raw, child_write = os.pipe()
         self._buffer = bytearray()
@@ -157,6 +167,7 @@ class _ChromePipe:
             "--no-default-browser-check",
             "--hide-scrollbars",
             "--force-device-scale-factor=1",
+            *extra_args,
             "data:,",
         ]
         kwargs: dict[str, Any] = {

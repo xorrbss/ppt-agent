@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
 import { Button } from "@/components/ui/button";
 import { isGenerationStalled, minutesSince } from "../../services/api/generation-activity-model";
+import { getPublicHeader } from "../../services/api/header";
 import { GENERATION_RESUMABLE_STATUSES, isGenerationFailureStatus } from "../workspace/generationFailure";
 import GenerationFailurePanel from "./GenerationFailurePanel";
 import DraftSlideGrid from "./DraftSlideGrid";
@@ -59,7 +60,7 @@ export default function DraftCheckpointPreview({ presentationId }: { presentatio
     const controller = new AbortController();
     setLoadFailed(false);
     void fetch(`/api/v1/ppt/presentation/${encodeURIComponent(presentationId)}/draft-preview`, {
-      credentials: "same-origin", cache: "no-store", signal: controller.signal,
+      headers: getPublicHeader(), credentials: "same-origin", cache: "no-store", signal: controller.signal,
     }).then(async (response) => {
       if (response.status === 404) return null;
       if (!response.ok) throw new Error("draft_preview_unavailable");

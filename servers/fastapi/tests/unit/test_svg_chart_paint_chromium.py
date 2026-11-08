@@ -5,7 +5,6 @@ import base64
 import io
 import json
 from pathlib import Path
-import re
 import subprocess
 import sys
 import unicodedata
@@ -269,7 +268,7 @@ def test_shared_line_receipt_preserves_each_datum_category_strip():
     _png, metrics = _render(wrapper, manifest)
     targets = [row for row in metrics[PROOF_KEY]["targets"] if row["kind"] == "primitive"]
     assert [row["datumIds"] for row in targets] == [["datum-0"], ["datum-1"]]
-    assert all(row["geometrySupport"] == datum["geometrySupport"] for row, datum in zip(targets, chart["datums"]))
+    assert all(row["geometrySupport"] == datum["geometrySupport"] for row, datum in zip(targets, chart["datums"], strict=False))
     assert targets[0]["altered"]["pixelCount"] == 0
     assert targets[1]["altered"]["pixelCount"] > 0
     assert targets[1]["paintRetained"] is False

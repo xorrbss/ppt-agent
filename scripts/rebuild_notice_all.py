@@ -1,4 +1,18 @@
 #!/usr/bin/env python3
+"""Rebuild (or --check) the repository NOTICE from the installed dependency trees.
+
+CANONICAL GENERATION PLATFORM: Linux (the Bitbucket CI image and the shipped
+Docker image). NOTICE is built from installed dist-info and node_modules, which
+differ per OS (platform wheels such as Pillow/numpy bundle different library
+texts, and Windows-only or Linux-only packages are installed on one side only).
+Regenerate only on Linux, from clean installs, and never commit a NOTICE
+produced on Windows or macOS:
+
+    npm ci && npm ci --prefix servers/nextjs
+    (cd servers/fastapi && uv sync --frozen)
+    npm run generate:notice          # then, in this order:
+    npm run generate:release-sbom    # the SBOM binds sha256(NOTICE)
+"""
 import json
 import os
 import re

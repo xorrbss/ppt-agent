@@ -153,6 +153,7 @@ _RENDERER_POST_ANCHOR = frozenset({
     "utils/authored_qid_namespace.py",
     "utils/authored_dom_tags.py",
     "utils/slide_capture_chart_timing.py",
+    "utils/svg_uniform_transform.py",
 })
 _PRESET_POST_ANCHOR = frozenset({
     "services/svg_source_preset_shapes.py",
@@ -195,6 +196,7 @@ _EXPECTED_POST_ANCHOR = {
         "services/generation_core/drivers/svg/native_declarations.py",
         "services/svg_text_overlap.py",
         "services/generation_core/authoring/author_slide_svg.py",
+        "utils/svg_uniform_transform.py",
     }),
     "partial-recovery-code": _RECOVERY_POST_ANCHOR,
     "page-render-code": _RECOVERY_POST_ANCHOR,
@@ -204,11 +206,11 @@ _EXPECTED_POST_ANCHOR = {
 def test_reviewed_post_anchor_dependency_groups_are_exact_and_disjoint():
     groups = [_PICTURE_POST_ANCHOR, _CHART_POST_ANCHOR,
               _RENDERER_POST_ANCHOR, _PRESET_POST_ANCHOR]
-    assert [len(group) for group in groups] == [8, 20, 17, 12]
-    assert sum(map(len, groups)) == len(_RECOVERY_POST_ANCHOR) == 57
+    assert [len(group) for group in groups] == [8, 20, 18, 12]
+    assert sum(map(len, groups)) == len(_RECOVERY_POST_ANCHOR) == 58
     assert {name: len(paths) for name, paths in _EXPECTED_POST_ANCHOR.items()} == {
-        "converter": 1, "common-header": 18, "whole-page": 32,
-        "partial-recovery-code": 57, "page-render-code": 57,
+        "converter": 1, "common-header": 19, "whole-page": 33,
+        "partial-recovery-code": 58, "page-render-code": 58,
     }
     assert len(recovery._POST_ANCHOR_CODE_FILES) == len(set(recovery._POST_ANCHOR_CODE_FILES))
     assert set(recovery._POST_ANCHOR_CODE_FILES) == _RECOVERY_POST_ANCHOR

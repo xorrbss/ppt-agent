@@ -9,6 +9,8 @@ EXPECTED_ROUTE_MAP = {
     "slide.regenerate.batch.preview": ("generation", "WorkspaceBatchRemakePreviewOperationHandler"),
     "slide.regenerate.batch": ("generation", "WorkspaceBatchRemakeOperationHandler"),
     "template.apply": ("generation", "WorkspaceAuthoredTemplateOperationHandler"),
+    "svg.template.analyze": ("generation", "SvgTemplateOperationHandler"),
+    "svg.template.prepare": ("generation", "SvgTemplateOperationHandler"),
     "design.apply": ("generation", "WorkspaceAuthoredTemplateOperationHandler"),
     "presentation.slides.reorder": ("generation", "WorkspaceSlideOrderOperationHandler"),
     "export.pptx": ("export", "WorkspaceExportOperationHandler"),

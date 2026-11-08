@@ -5,22 +5,29 @@ import math
 from functools import lru_cache
 from pathlib import Path
 import sys
+import threading
 
 from services.source_content.pptx_custom_geometry import flatten_custom_geometry
+
+
+_REGISTRY_IMPORT_LOCK = threading.Lock()
 
 
 @lru_cache(maxsize=1)
 def _preset_registry():
     # Isolated workers run outside the checkout. The editable backend package
-    # excludes vendor, so use the converter's canonical pptx_shapes import.
+    # excludes vendor, so use the converter's canonical pptx_shapes import. The
+    # temporary sys.path entry is process-global; the lock keeps concurrent first
+    # calls from interleaving their insert/remove.
     vendor_root = str(Path(__file__).resolve().parents[1] / "vendor" / "slide_master")
-    sys.path.insert(0, vendor_root)
-    try:
-        from pptx_shapes import get_preset_registry
+    with _REGISTRY_IMPORT_LOCK:
+        sys.path.insert(0, vendor_root)
+        try:
+            from pptx_shapes import get_preset_registry
 
-        return get_preset_registry()
-    finally:
-        sys.path.remove(vendor_root)
+            return get_preset_registry()
+        finally:
+            sys.path.remove(vendor_root)
 
 
 def supports_source_preset(preset):

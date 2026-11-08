@@ -5,6 +5,9 @@ import os
 import time
 import uuid
 
+#: Interval between PowerPoint ownership polls.
+_POLL_INTERVAL_SECONDS = .05
+
 
 def process_identity(pid: int):
     if os.name != "nt" or pid <= 0:
@@ -67,7 +70,7 @@ def claim_empty_powerpoint(application, *, started_at, identity_reader=None, inc
                     return identity
                 break
             pythoncom.PumpWaitingMessages()
-            time.sleep(.05)
+            time.sleep(_POLL_INTERVAL_SECONDS)
         raise ValueError("svg_template_powerpoint_ownership_unproven")
     finally:
         application.Caption = original

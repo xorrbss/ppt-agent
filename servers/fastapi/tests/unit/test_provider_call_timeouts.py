@@ -336,8 +336,8 @@ def test_guarded_resource_checks_the_wall_on_every_event():
 def test_wall_cap_leaves_phases_deadline_and_max_retries_unchanged(timeout_seconds):
     without = _ChatGPTClient()
     with_wall = _ChatGPTClient()
-    call_without = _authored_call(without, timeout_seconds=timeout_seconds)
-    call_with = _authored_call(with_wall, timeout_seconds=timeout_seconds, wall_timeout_seconds=893.0)
+    call_without = _authored_call(without, timeout_seconds=timeout_seconds, clock=lambda: 0.0)
+    call_with = _authored_call(with_wall, timeout_seconds=timeout_seconds, wall_timeout_seconds=893.0, clock=lambda: 0.0)
     call_without()
     call_with()
     assert with_wall._client.cloned_options == without._client.cloned_options

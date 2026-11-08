@@ -48,6 +48,9 @@ class UserMessageKey(StrEnum):
     RASTER_ANALYSIS_REDESIGN = "raster.analysis.redesign"
     RASTER_ANALYSIS_REGIONS = "raster.analysis.regions"
     RASTER_ANALYSIS_REDESIGN_ELAPSED = "raster.analysis.redesign.elapsed"
+
+    # SVG user template registration.
+    SVG_TEMPLATE_ANALYSIS_CHECKING = "svg_template.analysis.checking"
     RASTER_ANALYSIS_REGIONS_ELAPSED = "raster.analysis.regions.elapsed"
     RASTER_ANALYSIS_PERSISTING = "raster.analysis.persisting"
 
@@ -118,6 +121,7 @@ _FALLBACK_TEXT: dict[UserMessageKey, str] = {
     UserMessageKey.GENERATION_SAVING_SLIDES: "Saving the generated slides.",
     UserMessageKey.GENERATION_WRITING_SLIDES: "Writing slides · {completed}/{total} slides",
     UserMessageKey.GENERATION_WRITING_SLIDES_STAGED: "Writing slides · {completed}/{total} slides · {stage}",
+    UserMessageKey.SVG_TEMPLATE_ANALYSIS_CHECKING: "Checking the template material.",
     UserMessageKey.RASTER_ANALYSIS_PRESERVE: "Preserving the source screens in order.",
     UserMessageKey.RASTER_ANALYSIS_REDESIGN: "Rebuilding the source screens into editable text and tables.",
     UserMessageKey.RASTER_ANALYSIS_REGIONS: "Analysing the source page screens and text regions.",

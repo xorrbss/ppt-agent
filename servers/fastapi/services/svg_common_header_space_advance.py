@@ -53,6 +53,9 @@ import sys
 from models.canvas_defaults import DEFAULT_CANVAS_WIDTH_PX
 from utils.hashing import canonical_json_digest
 
+#: Wall-clock bound for one header space-advance probe render.
+_PROBE_RENDER_TIMEOUT_SECONDS = 90
+
 logger = logging.getLogger(__name__)
 
 PROBE_VERSION = "svg-common-header-space-probe/v1"
@@ -221,7 +224,7 @@ async def ensure_space_advance_measurement() -> None:
     try:
         for family, weight in PROBE_FACES:
             svg, rows, height = _probe_svg(family, weight)
-            rendered = await render_svg_with_metrics(svg, width=_PROBE_WIDTH_PX, height=height, timeout=90)
+            rendered = await render_svg_with_metrics(svg, width=_PROBE_WIDTH_PX, height=height, timeout=_PROBE_RENDER_TIMEOUT_SECONDS)
             entry, rejected = _face_from_metrics(family, weight, rendered.quality, rows)
             if entry is None:
                 logger.warning("svg common header space probe rejected %s %s: %s", family, weight, rejected)

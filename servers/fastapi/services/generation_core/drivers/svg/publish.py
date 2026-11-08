@@ -82,9 +82,14 @@ def svg_slide_content(payload: dict, *, role, source, pt_per_px: float,
                               "cached_author_render"}}
     if native_summary:
         receipt["nativeObjects"] = native_summary
+    # v5 only: the bound chart declarations the post-publication paint
+    # verification rebuilds its witness manifest from.
+    from services.generation_core.drivers.svg.chart_paint_verification import WITNESS_SOURCE_KEY, witness_source
+    witness = witness_source(payload, payload.get("svg_content"), revision=revision)
     return {"__svg__": True, "role": role, "source": source,
             **({"svgAssetManifest": payload["svgAssetManifest"]} if payload.get("svgAssetManifest") else {}),
             **({NATIVE_OBJECTS_KEY: native_objects} if native_objects else {}),
+            **({WITNESS_SOURCE_KEY: witness} if witness is not None else {}),
             "svgReceipt": receipt}
 
 

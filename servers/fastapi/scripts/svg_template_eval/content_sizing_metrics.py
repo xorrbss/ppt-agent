@@ -51,6 +51,71 @@ def _rect(node):
     return _bounds((node.get("x", "0"), node.get("y", "0"), node.get("width"), node.get("height")))
 
 
+_PATH_TOKEN = re.compile(r"[A-Za-z]|[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?")
+_POINTS_SPLIT = re.compile(r"[\s,]+")
+
+
+def _points_box(coordinates):
+    if len(coordinates) < 2 or len(coordinates) % 2:
+        return None
+    xs, ys = coordinates[0::2], coordinates[1::2]
+    # A zero-width or zero-height stroke (a straight rule) still occupies its line.
+    width, height = max(xs) - min(xs), max(ys) - min(ys)
+    return _bounds((min(xs), min(ys), max(width, 1e-6), max(height, 1e-6)))
+
+
+def _shape_box(node, tag):
+    """A conservative bounding box for simple shapes, or None when it cannot be bounded."""
+    try:
+        if tag == "line":
+            values = [_number(node.get(key, "0")) for key in ("x1", "y1", "x2", "y2")]
+            return None if None in values else _points_box(values)
+        if tag in {"circle", "ellipse"}:
+            cx, cy = _number(node.get("cx", "0")), _number(node.get("cy", "0"))
+            rx = _number(node.get("r") if tag == "circle" else node.get("rx"))
+            ry = rx if tag == "circle" else _number(node.get("ry"))
+            if None in (cx, cy, rx, ry) or rx <= 0 or ry <= 0:
+                return None
+            return _bounds((cx - rx, cy - ry, 2 * rx, 2 * ry))
+        if tag in {"polygon", "polyline"}:
+            values = [_number(token) for token in _POINTS_SPLIT.split(node.get("points", "").strip()) if token]
+            return None if None in values else _points_box(values)
+        if tag == "path":
+            # Absolute commands only: every vertex and Bezier control point is an
+            # explicit coordinate, and a Bezier curve lies within its control hull.
+            # Relative commands and arcs are not bounded here.
+            tokens = _PATH_TOKEN.findall(node.get("d", ""))
+            if not tokens or any(token.isalpha() and token not in "MLHVCSQTZ" for token in tokens):
+                return None
+            xs, ys, command, pending = [], [], None, []
+            for token in tokens:
+                if token.isalpha():
+                    if pending:
+                        return None
+                    command = token
+                    continue
+                value = _number(token)
+                if value is None or command is None:
+                    return None
+                if command == "H":
+                    xs.append(value)
+                elif command == "V":
+                    ys.append(value)
+                else:
+                    pending.append(value)
+                    if len(pending) == 2:
+                        xs.append(pending[0])
+                        ys.append(pending[1])
+                        pending = []
+            if pending or not xs or not ys:
+                return None
+            return _points_box([coordinate for pair in zip(
+                [min(xs), max(xs)], [min(ys), max(ys)], strict=True) for coordinate in pair])
+    except (TypeError, ValueError):
+        return None
+    return None
+
+
 def _area(box):
     return box[2] * box[3]
 
@@ -273,6 +338,12 @@ def svg_content_sizing(svg: str, *, body_bounds=None) -> dict:
                 boxes = [box]
             else:
                 error = error or "missing_or_invalid_shape_bounds"
+        elif tag in {"line", "circle", "ellipse", "polygon", "polyline", "path"}:
+            box = _shape_box(node, tag)
+            if box:
+                boxes = [box]
+            else:
+                error = error or "unsupported_geometry"
         elif tag not in {"svg", "g"}:
             error = error or "unsupported_geometry"
         records[node] = {"tag": tag, "attrs": attrs, "boxes": boxes, "error": error}
@@ -318,7 +389,9 @@ def svg_content_sizing(svg: str, *, body_bounds=None) -> dict:
                 "candidate_evidence": evidence, "bounds": box, "status": "unavailable",
                 "reasons": [], "content_count": 0, "content_envelope_bounds": None,
                 "unused_envelope_share": None}
-        reasons, content = list(errors), []
+        # A card is judged on its own subtree and on geometry that can reach it;
+        # an unrelated page-level limitation does not make every card unavailable.
+        reasons, content = [], []
         stroke = _number(record["attrs"].get("stroke-width", "1")) if record["attrs"].get("stroke", "none") != "none" else 0
         if box is None or stroke is None or stroke < 0:
             reasons.append("unsupported_card_geometry")
@@ -336,6 +409,10 @@ def svg_content_sizing(svg: str, *, body_bounds=None) -> dict:
         if interior and any(member not in owned and any(_intersects(b, interior) for b in item["boxes"])
                             for member, item in records.items()):
             reasons.append("external_geometry_overlaps_card")
+        if any(member not in owned and item["error"] and not item["boxes"] and item["tag"] not in {"svg", "g"}
+               for member, item in records.items()):
+            # Geometry that could not be bounded might cover the card.
+            reasons.append("unbounded_external_geometry")
         for member in scope.iter():
             if member not in records:
                 continue

@@ -575,13 +575,17 @@ def _export_source_digest(svgs, notes, source_assets, source_preservation, sourc
     return source_digest
 
 
-def _native_object_entries(slides):
+def _native_object_entries(slides, *, chart_paint_fallbacks=None):
     """Each slide's NativeObjects sidecar as a bundle entry; ``None`` when no
     slide has one (identity digests then stay what they were without them).
     An invalid stored sidecar does not fail the export: its objects are
-    recorded as fallbacks by the worker's export scene."""
+    recorded as fallbacks by the worker's export scene. ``chart_paint_fallbacks``
+    (v5 decks only, one list per slide) names charts that stay drawn because
+    their post-publication paint evidence is missing, stale or failed."""
     from services.generation_core.drivers.svg.export_native_wire import bundle_entry
-    entries = [bundle_entry(slide.content) for slide in slides]
+    entries = [bundle_entry(slide.content, **({"chart_paint_fallbacks": chart_paint_fallbacks[index]}
+                                              if chart_paint_fallbacks and chart_paint_fallbacks[index] else {}))
+               for index, slide in enumerate(slides)]
     return entries if any(entry is not None for entry in entries) else None
 
 
@@ -1145,7 +1149,24 @@ async def execute_svg_workspace_export(context, *, presentation, admission, sess
     source_preservation = ([((slide.content or {}).get("svgReceipt") or {}).get("source_preservation")
                             for slide in slides]
                            if measured_source_preservation is not None else None)
-    native_objects = _native_object_entries(slides) if fmt == "pptx" else None
+    chart_paint_fallbacks = None
+    from services.generation_core.drivers.svg.native_requirements import REQUIREMENTS_VERSION_V5
+    from services.svg_chart_paint_verification import deck_requirements_revision
+    if fmt == "pptx" and deck_requirements_revision(presentation) == REQUIREMENTS_VERSION_V5:
+        # svg-native-requirements/v5 only: the post-publication chart paint
+        # verification. Every other revision skips it and its bundle is unchanged.
+        from services.svg_chart_paint_verification import deck_chart_paint_fallbacks
+        try:
+            verification_grant = await load_public_export_deadline_grant(session_factory, operation_id=claim.operation_id)
+        except PublicExportOperationError:
+            verification_grant = None
+        chart_paint_fallbacks = await deck_chart_paint_fallbacks(session_factory, presentation=presentation,
+            slides=slides, remaining_seconds=verification_grant.remaining_seconds if verification_grant else None,
+            between=context.raise_if_cancelled)
+        stages.lap("chart_paint_verification")
+    native_objects = (_native_object_entries(slides, **({"chart_paint_fallbacks": chart_paint_fallbacks}
+                                                        if chart_paint_fallbacks is not None else {}))
+                      if fmt == "pptx" else None)
     # Canonical JSON + sha256 over every page's source is pure CPU on plain data.
     source_digest = await asyncio.to_thread(_export_source_digest, svgs, notes, source_assets,
         source_preservation, source_manifest, native_objects, manifest_encoding)

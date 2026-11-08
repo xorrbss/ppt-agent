@@ -18,6 +18,7 @@ from __future__ import annotations
 import asyncio
 import importlib.util
 from pathlib import Path
+import sqlite3
 import uuid
 
 import pytest
@@ -434,10 +435,15 @@ def test_admission_against_a_database_behind_the_code_writes_nothing(
         lambda _session: PublicResourceLease,
     )
     database_path = tmp_path / "public-admission-before-v5.db"
-    command.upgrade(
-        _alembic_config(f"sqlite:///{database_path.as_posix()}"),
-        V5_REVISION,
-    )
+    # Upgrade the schema to head (the ORM seeds below need every current
+    # column) and then take the current default policy row away, which is
+    # exactly the "database behind the code" state admission must refuse.
+    command.upgrade(_alembic_config(f"sqlite:///{database_path.as_posix()}"), "head")
+    with sqlite3.connect(database_path) as connection:
+        connection.execute(
+            "DELETE FROM public_policy_profiles WHERE version = ?",
+            (PUBLIC_DEFAULT_POLICY_VERSION,),
+        )
 
     async def scenario() -> None:
         engine, maker = await _async_database(database_path)

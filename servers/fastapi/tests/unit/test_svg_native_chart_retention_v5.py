@@ -402,6 +402,10 @@ def test_v5_publication_inherits_v4_single_series_title_projection():
     before = deepcopy(page)
     kwargs = {"role": "content", "source": SOURCE, "pt_per_px": .75}
     current = svg_slide_content(page, revision=V5, **kwargs)
+    # v5 alone keeps the bound chart declarations for post-publication paint
+    # verification; the projection itself is v4's.
+    from services.generation_core.drivers.svg.chart_paint_verification import WITNESS_SOURCE_KEY
+    assert current.pop(WITNESS_SOURCE_KEY)["declarations"] == page["nativeDeclarations"]
     assert current == svg_slide_content(page, revision=V4, **kwargs)
     assert current["svgReceipt"]["nativeObjects"]["accepted"] == 1
     assert current["nativeObjects"]["objects"][0]["payload"]["series"][0]["values"] == [30, 60, 90]
@@ -1174,3 +1178,82 @@ def test_marker_alternative_is_explicit_same_datum_complete_boundary_contract():
             assert marker["geometrySupportDigest"] == datum["geometrySupport"]["geometryDigest"]
             assert marker["requiresEntireBoundaryCoverage"] is True
             assert marker["requiresOriginalContribution"] is True
+
+
+def test_an_unprovable_second_chart_does_not_withdraw_the_first_charts_witness():
+    from services.generation_core.drivers.svg.native_chart_evidence import build_chart_witness_manifest
+    from services.generation_core.drivers.svg.native_chart_evidence import bound_declarations
+    original = _page()
+    kept, _ = bound_declarations(original, original["svg_content"])
+    root = ET.fromstring(original["svg_content"])
+    raw = {"chartType": "column", "categories": ["X", "Y"], "series": [{"name": "Empty", "values": [5, 7]}]}
+    ET.SubElement(root, NS + "g", {"id": "native-chart-empty", "data-native-chart": json.dumps(raw)})
+    added = extract_native_declarations(root)
+    svg = ET.tostring(root, encoding="unicode")
+    page = {"svg_content": svg}
+    bind_native_declarations(page, svg, {**added, "objects": [*kept["objects"], *added["objects"]]})
+    manifest = build_chart_witness_manifest(page, svg, revision=V5)
+    assert manifest is not None
+    assert [chart["id"] for chart in manifest["charts"]] == ["native-chart-sales"]
+
+
+def _with_page_extras(*elements, root_class=False):
+    from services.generation_core.drivers.svg.native_chart_evidence import bound_declarations
+    original = _page()
+    kept, _ = bound_declarations(original, original["svg_content"])
+    root = ET.fromstring(original["svg_content"])
+    for index, element in enumerate(elements):
+        root.insert(index, ET.fromstring(element))
+    if root_class:
+        root.set("class", "slide")
+    svg = ET.tostring(root, encoding="unicode")
+    page = {"svg_content": svg}
+    bind_native_declarations(page, svg, kept)
+    return page
+
+
+@pytest.mark.parametrize("extras,root_class", [
+    (('<defs xmlns="http://www.w3.org/2000/svg"><linearGradient id="g1"><stop offset="0" stop-color="#fff"/>'
+      '</linearGradient></defs>',), False),
+    (('<rect xmlns="http://www.w3.org/2000/svg" class="decor" x="0" y="0" width="10" height="10" fill="#000"/>',),
+     False),
+    (('<title xmlns="http://www.w3.org/2000/svg">Slide</title>',), False),
+])
+def test_unrelated_non_painting_svg_features_keep_v5_chart_evidence(extras, root_class):
+    from services.generation_core.drivers.svg.native_chart_evidence import chart_drawing_evidence
+    page = _with_page_extras(*extras, root_class=root_class)
+    evidence = chart_drawing_evidence(page, page["svg_content"], revision=V5)
+    assert evidence["native-chart-sales"]["contentGeometry"]["passed"] is True
+
+
+@pytest.mark.parametrize("extras", [
+    ('<style xmlns="http://www.w3.org/2000/svg">.decor{fill:red}</style>',
+     '<rect xmlns="http://www.w3.org/2000/svg" class="decor" x="0" y="0" width="10" height="10"/>'),
+    ('<defs xmlns="http://www.w3.org/2000/svg"><linearGradient id="g1"/></defs>',
+     '<rect xmlns="http://www.w3.org/2000/svg" x="0" y="0" width="1280" height="720" fill="url(#g1)"/>'),
+])
+def test_stylesheets_and_reference_paints_still_refuse_the_v5_scene(extras):
+    # (A class on a chart's own ancestors stays refused by the shared V4/V5 group check.)
+    from services.generation_core.drivers.svg.native_chart_evidence import chart_drawing_evidence
+    page = _with_page_extras(*extras)
+    assert chart_drawing_evidence(page, page["svg_content"], revision=V5) == {}
+
+
+def test_unmeasured_ink_fragments_fall_back_to_estimated_text_boxes():
+    """The renderer reports text whose ink it could not measure as a null fragment
+    (seen live on a marker-line chart); that must not crash the V5 scene reader."""
+    from services.generation_core.drivers.svg.native_chart_evidence import chart_drawing_evidence
+    from services.svg_contract import source_digest
+    page = _page()
+    svg = page["svg_content"]
+    root = ET.fromstring(svg)
+    texts = [f"svg-{index}" for index, node in enumerate(root.iter()) if node.tag == NS + "text"]
+    measurement = {
+        "measurement_complete": True, "source_digest": source_digest(svg), "wrapper_digest": "sha256:wrapper",
+        "browser_metrics": {"source_digest": "sha256:wrapper", "elements": [
+            {"qid": qid, "tag": "text", "has_owned_text": True, "text_ink_fragments": [None]} for qid in texts]},
+    }
+    measured = chart_drawing_evidence(page, svg, revision=V5, measurement=measurement)
+    static = chart_drawing_evidence(page, svg, revision=V5)
+    assert measured["native-chart-sales"]["contentGeometry"]["passed"] is True
+    assert measured["native-chart-sales"]["contentGeometry"] == static["native-chart-sales"]["contentGeometry"]

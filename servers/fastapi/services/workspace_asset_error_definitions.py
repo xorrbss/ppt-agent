@@ -67,6 +67,11 @@ ASSET_ERROR_DEFINITIONS = (
         status_code=409,
     ),
     definition(
+        "workspace_asset_retained_by_template",
+        "The attachment is used by a template and cannot be changed.",
+        status_code=409,
+    ),
+    definition(
         "workspace_asset_transition_invalid",
         "The requested attachment state transition is invalid.",
         status_code=409,

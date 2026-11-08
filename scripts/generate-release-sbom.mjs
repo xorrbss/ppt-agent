@@ -1,5 +1,12 @@
 #!/usr/bin/env node
 
+// CANONICAL GENERATION PLATFORM: Linux (the Bitbucket CI image and the shipped
+// Docker image). The SBOM embeds sha256(NOTICE) and sha256(policy), and the
+// installed Python licence files differ per platform wheel, so regenerate it
+// only on Linux from clean installs (`npm ci`, `npm ci --prefix servers/nextjs`,
+// `uv sync --frozen` in servers/fastapi), and only after NOTICE was regenerated
+// with `npm run generate:notice`. Do not commit output produced on Windows.
+
 import assert from "node:assert/strict";
 import crypto from "node:crypto";
 import fs from "node:fs";

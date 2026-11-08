@@ -176,7 +176,15 @@ test("timeouts map to 504 by default and to the route's own envelope on request"
   await withFetch(
     (_url, init) =>
       new Promise((_resolve, reject) => {
-        init.signal?.addEventListener("abort", () => reject(init.signal?.reason));
+        // A real in-flight fetch holds a socket that keeps the event loop
+        // alive. AbortSignal.timeout's timer is unref'd, so without a stand-in
+        // handle the test process drains and node:test cancels this test (and
+        // every later one in the file) before the deadline fires.
+        const inFlight = setInterval(() => {}, 1_000);
+        init.signal?.addEventListener("abort", () => {
+          clearInterval(inFlight);
+          reject(init.signal?.reason);
+        });
       }),
     async () => {
       const response = await proxyToFastApi(incoming({}), "/slow", { timeoutMs: 20 });

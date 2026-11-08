@@ -12,6 +12,10 @@ import uuid
 
 from services.svg_templates.frame_fonts import artifact_digest, bytes_digest
 
+#: Bounds for the isolated source-PDF capture child.
+_CAPTURE_TIMEOUT_SECONDS = 60
+_CHILD_EXIT_TIMEOUT_SECONDS = 5
+
 MAX_PDF_BYTES = 64 * 1024 * 1024
 _TYPELIB = "{91493440-5A91-11CF-8700-00AA0060263B}"
 _PRESENTATION = "{9149349D-5A91-11CF-8700-00AA0060263B}"
@@ -197,7 +201,7 @@ def capture_source_pdf(source_path, package, *, operation_id, owner_id, tenant_i
             _require(win32job.IsProcessInJob(handle, job))
         finally:
             handle.Close()
-        child.communicate(input=b"capture\n", timeout=60)
+        child.communicate(input=b"capture\n", timeout=_CAPTURE_TIMEOUT_SECONDS)
         receipt_path = directory / "child-receipt.json"
         _require(child.returncode == 0 and receipt_path.is_file() and receipt_path.stat().st_size <= 2 * 1024**2)
         receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
@@ -233,7 +237,7 @@ def capture_source_pdf(source_path, package, *, operation_id, owner_id, tenant_i
             if child is not None:
                 if child.poll() is None:
                     child.kill()
-                child.wait(timeout=5)
+                child.wait(timeout=_CHILD_EXIT_TIMEOUT_SECONDS)
         except BaseException as error:
             cleanup_failures.append(_diagnostic(error, "wait_owned_child"))
         try:

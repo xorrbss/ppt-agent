@@ -9,6 +9,7 @@ import { AUTH_SESSION_EXPIRED_EVENT } from "../../../services/api/api-error-hand
 import { useSearchParams } from "next/navigation";
 import { DashboardApi, type PresentationGenerationInfo } from "../../../services/api/dashboard";
 import { LanguageType, ToneType, VerbosityType, type PresentationConfig } from "../../type";
+import { restoredVerbosity } from "../../utils/requestVerbosity";
 
 const ATTEMPT_PROMPT_HANDOFF_PREFIX = "presenton.previous-attempt-prompt.v1:";
 
@@ -123,7 +124,9 @@ export function usePreviousGenerationAttempt(
         slides: settings.n_slides > 0 ? String(settings.n_slides) : current.slides,
         language: Object.values(LanguageType).includes(settings.language as LanguageType) ? settings.language as LanguageType : current.language,
         tone: Object.values(ToneType).includes(settings.tone as ToneType) ? settings.tone as ToneType : current.tone,
-        verbosity: Object.values(VerbosityType).includes(settings.verbosity as VerbosityType) ? settings.verbosity as VerbosityType : current.verbosity,
+        // A stored verbosity was that request's explicit choice; keep it explicit so a
+        // template-redesign retry does not fall back to the backend's text-heavy default.
+        ...restoredVerbosity(settings.verbosity, current, Object.values(VerbosityType)),
         instructions: settings.instructions ?? "",
         includeTableOfContents: settings.include_table_of_contents,
         includeTitleSlide: settings.include_title_slide,

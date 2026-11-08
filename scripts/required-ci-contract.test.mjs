@@ -188,6 +188,13 @@ test("chat-first deployment configuration is required by the Bitbucket CI suite"
     pipeline,
     /name: Run shared Next\.js CI Node suite[\s\S]*npm ci --prefix servers\/nextjs[\s\S]*npm run test:next-ci/u,
   );
+  // test:next-ci runs check:notice and check:release-sbom, which shell out to
+  // uv, so the step must provision python/uv and sync the locked environment
+  // before it.
+  assert.match(
+    pipeline,
+    /name: Run shared Next\.js CI Node suite[\s\S]*python3 -m venv \.bitbucket-uv[\s\S]*uv==0\.11\.17[\s\S]*uv sync --frozen --directory servers\/fastapi[\s\S]*export PATH="\$BITBUCKET_CLONE_DIR\/\.bitbucket-uv\/bin:\$PATH"[\s\S]*npm run test:next-ci/u,
+  );
   // The shared Node suite must be in both required step lists; other required
   // steps (e.g. the authored release-readiness check) may precede it.
   assert.match(

@@ -175,7 +175,7 @@ def main() -> int:
     parser.add_argument("--runtime-inventory", type=Path, required=True)
     parser.add_argument("--consumer-lf-sha256", required=True)
     parser.add_argument("--output", type=Path, required=True)
-    parser.add_argument("--only", choices=["column"])
+    parser.add_argument("--only", choices=['column', 'coincident-line', 'stacked-column', 'donut', 'fixed-column', 'separator-pie', 'marker-line', 'horizontal-bar', 'signed-zero-multiseries-area'])
     parser.add_argument("--reuse-manifest", type=Path)
     args = parser.parse_args()
     output, pin_dir = args.output.resolve(), args.pin_dir.resolve()

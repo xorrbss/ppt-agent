@@ -175,6 +175,29 @@ CONVERTER_LEDGER = VerifierRevisionLedger(
         # rebuilt bytes; no superseded-manifest alias or historical preimage is
         # changed. Bounded evidence is in the final source-state report.
         "82c2b1c3b18a71ca0c6919fa43ec6132f347814886c5809441caf001a17ae228": "svg-pptx-converter/1",
+        # 2026-11-08 lint-gate repair of the #149 chart sources: explicit zip(strict=False),
+        # lambda -> def, closure loop variables bound as keyword defaults, dead bindings
+        # removed, and the uniform transform parser moved to utils.svg_uniform_transform
+        # (same results and rejection codes), which joins the source inventories that
+        # hold native_geometry/slide_capture_chart_paint. No behaviour changed.
+        "c10ad72ceb1d38e619b722c650fae23293663088d473a201474c95f5e8983a1a": "svg-pptx-converter/1",
+        # 2026-11-08 V5 hardening (default-off V5 paths and failure handling only): bar
+        # layout search capped at 4096 candidates (larger ambiguities are refused, not
+        # searched), v5_proven checks the chart match before indexing series, an
+        # unrepresentable doughnut hole falls back to raster at export instead of failing
+        # the deck, V5 readers also turn IndexError/KeyError/ZeroDivisionError into
+        # rejections, chart capture errors stop costing an author repair, the context-id
+        # inequality (not promised by CDP) is dropped, masks are vectorized with exact
+        # integer/float parity, and unreadable fonts leave a proof incomplete. Stored
+        # V4 and legacy evidence is unchanged.
+        "5f216f163c2bd855aba4b8257e74a3be9e9d3f3aba8a17747efe4c4567f34a6c": "svg-pptx-converter/1",
+        # 2026-11-08 V5 chart paint proof moved off the render path (default-off V5 only): the
+        # unchanged proof and validator run in export.pptx for freely composed V5 charts and
+        # seal digest-bound evidence in slide.properties; unverified charts export drawn.
+        # Preserved source charts that must export natively keep their in-render proof.
+        # Chart-proof Chrome launches add frame-pacing flags; the default argv is unchanged.
+        # V4, earlier revisions and non-SVG paths are unchanged; no stored V5 proofs exist.
+        "611d90f3c7fa580ea98fc1df2ad62ca21eb074ae3fab74f1b2aab973fdbe959c": "svg-pptx-converter/1",
     }),
 )
 
@@ -248,6 +271,36 @@ COMMON_HEADER_VERIFIER_LEDGER = VerifierRevisionLedger(
             "sha256:45666ce705a9f1a41fdf0e2339189d30ea5731a1a83abbd2db8722e726f9a1b0": "svg-common-header-verifier/1",
             # Reviewed V5 native layered-paint support and static marker visibility; legacy paths retained.
             "sha256:b3a5aa367b8c8ede77a2c8b33c3c19d532eaf20876a7bf3e8496440e32513894": "svg-common-header-verifier/1",
+        # 2026-11-08 lint-gate repair of the #149 chart sources: explicit zip(strict=False),
+        # lambda -> def, closure loop variables bound as keyword defaults, dead bindings
+        # removed, and the uniform transform parser moved to utils.svg_uniform_transform
+        # (same results and rejection codes), which joins the source inventories that
+        # hold native_geometry/slide_capture_chart_paint. No behaviour changed.
+        "sha256:f75cf143e2dd63465adfaf86f7ff5fa999561eb71ddd314fd9b7047407589569": "svg-common-header-verifier/1",
+        # 2026-11-08 V5 hardening (default-off V5 paths and failure handling only): bar
+        # layout search capped at 4096 candidates (larger ambiguities are refused, not
+        # searched), v5_proven checks the chart match before indexing series, an
+        # unrepresentable doughnut hole falls back to raster at export instead of failing
+        # the deck, V5 readers also turn IndexError/KeyError/ZeroDivisionError into
+        # rejections, chart capture errors stop costing an author repair, the context-id
+        # inequality (not promised by CDP) is dropped, masks are vectorized with exact
+        # integer/float parity, and unreadable fonts leave a proof incomplete. Stored
+        # V4 and legacy evidence is unchanged.
+        "sha256:b816323be5451aa00c7b340daf376565ad12cb36140ca2fbf515e0d4772646ce": "svg-common-header-verifier/1",
+        # 2026-11-08 V5 capture speed, no proof change: lossless PNG screenshots with
+        # optimizeForSpeed (identical decoded pixels) and numpy mask statistics with
+        # exact parity to the byte loops they replace.
+        "sha256:570ea9ac5a2335c149ce82a7c443035a16b3c992af3af2321610863337cf7391": "svg-common-header-verifier/1",
+        # 2026-11-08 repository lint tests: bare timeout/poll literals named as module
+        # constants with the same values; no behaviour changed.
+        "sha256:2437145fd9981f189fc88b935805fa8c830be5a9e61deb0a3e81f9167f9d6e39": "svg-common-header-verifier/1",
+        # 2026-11-08 V5 chart paint proof moved off the render path (default-off V5 only): the
+        # unchanged proof and validator run in export.pptx for freely composed V5 charts and
+        # seal digest-bound evidence in slide.properties; unverified charts export drawn.
+        # Preserved source charts that must export natively keep their in-render proof.
+        # Chart-proof Chrome launches add frame-pacing flags; the default argv is unchanged.
+        # V4, earlier revisions and non-SVG paths are unchanged; no stored V5 proofs exist.
+        "sha256:69a1a1959c3697d7e4bd1b9155ebeba4a4563b2fd1564c26f2556d99686d1e6e": "svg-common-header-verifier/1",
     }),
 )
 
@@ -326,6 +379,58 @@ WHOLE_PAGE_VERIFIER_LEDGER = VerifierRevisionLedger(
         "2bb40cac39ddf79d9a81a5db0becceb539d39e25233a6a1bb3b08e8b6ddf450f": "svg-whole-page-verifier/1",
             # Reviewed V5 native layered-paint support and static marker visibility; legacy paths retained.
             "0501cd4f5a8bc665e97374bbd7bc8bc2211feaa34626ce5b67d431d2f976ec20": "svg-whole-page-verifier/1",
+        # 2026-11-08 lint-gate repair of the #149 chart sources: explicit zip(strict=False),
+        # lambda -> def, closure loop variables bound as keyword defaults, dead bindings
+        # removed, and the uniform transform parser moved to utils.svg_uniform_transform
+        # (same results and rejection codes), which joins the source inventories that
+        # hold native_geometry/slide_capture_chart_paint. No behaviour changed.
+        "568dc168020b969dc9610dd49911e02f9fb2dfed70d535039e4936be35d0ea5d": "svg-whole-page-verifier/1",
+        # 2026-11-08 V5 hardening (default-off V5 paths and failure handling only): bar
+        # layout search capped at 4096 candidates (larger ambiguities are refused, not
+        # searched), v5_proven checks the chart match before indexing series, an
+        # unrepresentable doughnut hole falls back to raster at export instead of failing
+        # the deck, V5 readers also turn IndexError/KeyError/ZeroDivisionError into
+        # rejections, chart capture errors stop costing an author repair, the context-id
+        # inequality (not promised by CDP) is dropped, masks are vectorized with exact
+        # integer/float parity, and unreadable fonts leave a proof incomplete. Stored
+        # V4 and legacy evidence is unchanged.
+        "7ba5494102fb78e6950c9933f8fe27f851d4e999785d97e20004a28f13938f03": "svg-whole-page-verifier/1",
+        # 2026-11-08 robustness: template_picture_style turns malformed projection data into
+        # ValueError (the existing style-unavailable path), the preset registry import is
+        # serialized by a lock, and the offer receipt's budget meaning is documented. No
+        # output for valid inputs changed.
+        "7d5042de89c4b9568366943a51d42bfc905472d7cca6c1d51e496b5402fbd331": "svg-whole-page-verifier/1",
+        # 2026-11-08 V5 per-chart witness isolation: an unbound or statically unprovable chart
+        # is left out of the witness manifest (and gets its own paint failure) instead of
+        # withdrawing every chart's witness on the page. V5 is default-off; V4 and legacy
+        # evidence is unchanged.
+        "9e5fe10f724bdf83ee609e619756f529ecb8dc5ef53f00fd7b8120caf505435d": "svg-whole-page-verifier/1",
+        # 2026-11-08 V5 scene scoping: <defs>/<title>/<desc>/<metadata> are skipped as
+        # non-painting (url() paints and clip-path/mask/filter stay refused), and a class
+        # attribute is refused only when the SVG has a stylesheet. V5 is default-off;
+        # V4 and legacy evidence is unchanged.
+        "cecda577a73f92754d019e34c5e24701bcf842df5af284485b9b57c43acaac0d": "svg-whole-page-verifier/1",
+        # 2026-11-08 V5 capture speed, no proof change: lossless PNG screenshots with
+        # optimizeForSpeed (identical decoded pixels) and numpy mask statistics with
+        # exact parity to the byte loops they replace.
+        "1247bee2ae8175e4132bb85b2ede679451c882e9bf3c7baed8fa1cd89c035d14": "svg-whole-page-verifier/1",
+        # 2026-11-08 V5 chart paint proof moved off the render path (default-off V5 only): the
+        # unchanged proof and validator run in export.pptx for freely composed V5 charts and
+        # seal digest-bound evidence in slide.properties; unverified charts export drawn.
+        # Preserved source charts that must export natively keep their in-render proof.
+        # Chart-proof Chrome launches add frame-pacing flags; the default argv is unchanged.
+        # V4, earlier revisions and non-SVG paths are unchanged; no stored V5 proofs exist.
+        "12cc5a2279b80d00c9ada261977fad45bc27dd6422b69ce9058140a3fcca3f02": "svg-whole-page-verifier/1",
+        # 2026-11-08 exact V5 label rules (default-off V5 only): ROUND_HALF_UP rounded value
+        # labels and share labels (pie/donut/percentStacked) compared exactly, prefixed
+        # digit-free captions outside the plot area classified as annotations (kept as
+        # drawn text on export), and short-name legend swatches classified as legend.
+        # Pages V5 passed before keep byte-identical evidence; V4 and earlier unchanged.
+        "fdafa91d8814919b92504c517d8608728392cb9b81b4930612e80cb76f40d477": "svg-whole-page-verifier/1",
+        # 2026-11-08 V5 scene reader: a null text_ink_fragments entry (ink the renderer could
+        # not measure) marks the glyph measurement incomplete and uses the estimated text
+        # box, instead of raising and rejecting the chart. V5-only; V4 unchanged.
+        "01c1677ec29d33843a78fec36abc6e346c4dd9b2aaf8cc55601c54ba7fd48214": "svg-whole-page-verifier/1",
     }),
 )
 
@@ -469,6 +574,66 @@ PARTIAL_RECOVERY_CODE_LEDGER = VerifierRevisionLedger(
             "c7651890b9f5b0e6982e8c873431a6faa1aeb028fe3ae9b3c350a01842bf46e6": "svg-partial-recovery-code/1",
             # Reviewed V5 native layered-paint support and static marker visibility; legacy paths retained.
             "7e207cf8e8a46c4520beeb37ae7472fa417110690efdeac3d2abdcc90f17c44d": "svg-partial-recovery-code/1",
+        # 2026-11-08 lint-gate repair of the #149 chart sources: explicit zip(strict=False),
+        # lambda -> def, closure loop variables bound as keyword defaults, dead bindings
+        # removed, and the uniform transform parser moved to utils.svg_uniform_transform
+        # (same results and rejection codes), which joins the source inventories that
+        # hold native_geometry/slide_capture_chart_paint. No behaviour changed.
+        "9234dab38481247127cdeed6451798043bb13a324759cbb0f9194c717f0f9a77": "svg-partial-recovery-code/1",
+        # 2026-11-08 same_frame_after_move: a page move is also refused when the template
+        # chooses a different frame for the new position (v1 contexts replay their saved
+        # frame). It only refuses more reorders; page render, recovery and stored proofs
+        # are unchanged.
+        "10c8a0020f58e06501c992b572039994f89a2321c3de81fbd1d9f333ec3ecf81": "svg-partial-recovery-code/1",
+        # 2026-11-08 V5 hardening (default-off V5 paths and failure handling only): bar
+        # layout search capped at 4096 candidates (larger ambiguities are refused, not
+        # searched), v5_proven checks the chart match before indexing series, an
+        # unrepresentable doughnut hole falls back to raster at export instead of failing
+        # the deck, V5 readers also turn IndexError/KeyError/ZeroDivisionError into
+        # rejections, chart capture errors stop costing an author repair, the context-id
+        # inequality (not promised by CDP) is dropped, masks are vectorized with exact
+        # integer/float parity, and unreadable fonts leave a proof incomplete. Stored
+        # V4 and legacy evidence is unchanged.
+        "09150788f26c372d033b53e787fd792ba01d7e1a3d951334dbe5c16504d0986d": "svg-partial-recovery-code/1",
+        # 2026-11-08 robustness: template_picture_style turns malformed projection data into
+        # ValueError (the existing style-unavailable path), the preset registry import is
+        # serialized by a lock, and the offer receipt's budget meaning is documented. No
+        # output for valid inputs changed.
+        "2390350e5558c3acd408097dce811245d3d6fe33385ac09b4b6a269810328376": "svg-partial-recovery-code/1",
+        # 2026-11-08 V5 per-chart witness isolation: an unbound or statically unprovable chart
+        # is left out of the witness manifest (and gets its own paint failure) instead of
+        # withdrawing every chart's witness on the page. V5 is default-off; V4 and legacy
+        # evidence is unchanged.
+        "867e9c69df1d29d76d353e09a5f1a4e3dca58b5b7df5630c895a12d3990f7d6e": "svg-partial-recovery-code/1",
+        # 2026-11-08 V5 scene scoping: <defs>/<title>/<desc>/<metadata> are skipped as
+        # non-painting (url() paints and clip-path/mask/filter stay refused), and a class
+        # attribute is refused only when the SVG has a stylesheet. V5 is default-off;
+        # V4 and legacy evidence is unchanged.
+        "25c77661f1fbc99d56d14f3b43339c37c6b983cf6351879b4a54721cca6bc7dd": "svg-partial-recovery-code/1",
+        # 2026-11-08 V5 capture speed, no proof change: lossless PNG screenshots with
+        # optimizeForSpeed (identical decoded pixels) and numpy mask statistics with
+        # exact parity to the byte loops they replace.
+        "564299af476ee6c10f61612502cf29281ba5e2acd38335c8c2960c7837d581e1": "svg-partial-recovery-code/1",
+        # 2026-11-08 repository lint tests: bare timeout/poll literals named as module
+        # constants with the same values; no behaviour changed.
+        "58d7befea47942dced7e6ed8aa5a9b9861b5e3e7697b226281df4044a36aec61": "svg-partial-recovery-code/1",
+        # 2026-11-08 V5 chart paint proof moved off the render path (default-off V5 only): the
+        # unchanged proof and validator run in export.pptx for freely composed V5 charts and
+        # seal digest-bound evidence in slide.properties; unverified charts export drawn.
+        # Preserved source charts that must export natively keep their in-render proof.
+        # Chart-proof Chrome launches add frame-pacing flags; the default argv is unchanged.
+        # V4, earlier revisions and non-SVG paths are unchanged; no stored V5 proofs exist.
+        "11bbfd050fb794d35c03ca898e0bd71e40fa69a8812519f55b9d574eee65820b": "svg-partial-recovery-code/1",
+        # 2026-11-08 exact V5 label rules (default-off V5 only): ROUND_HALF_UP rounded value
+        # labels and share labels (pie/donut/percentStacked) compared exactly, prefixed
+        # digit-free captions outside the plot area classified as annotations (kept as
+        # drawn text on export), and short-name legend swatches classified as legend.
+        # Pages V5 passed before keep byte-identical evidence; V4 and earlier unchanged.
+        "836eec60ba1a9879c3585ad94bd5bda0adf382e44674cde206102cafeaa8c6cf": "svg-partial-recovery-code/1",
+        # 2026-11-08 V5 scene reader: a null text_ink_fragments entry (ink the renderer could
+        # not measure) marks the glyph measurement incomplete and uses the estimated text
+        # box, instead of raising and rejecting the chart. V5-only; V4 unchanged.
+        "8eeebe12a360eec2b5ffe5e8396980796485b25db7648033ba9064e5d5ecdd30": "svg-partial-recovery-code/1",
     }),
 )
 
@@ -523,6 +688,66 @@ PAGE_RENDER_CODE_LEDGER = VerifierRevisionLedger(
             "1ea4c8823fe285d68a5381d0da4b3afe12a2c3caaa665a66b48dd817f6156846": "svg-page-render-code/1",
             # Reviewed V5 native layered-paint support and static marker visibility; legacy paths retained.
             "c15a6c05ea8ab8419188617ab7349805203a043c337fb5201769b4f697fe2b98": "svg-page-render-code/1",
+        # 2026-11-08 lint-gate repair of the #149 chart sources: explicit zip(strict=False),
+        # lambda -> def, closure loop variables bound as keyword defaults, dead bindings
+        # removed, and the uniform transform parser moved to utils.svg_uniform_transform
+        # (same results and rejection codes), which joins the source inventories that
+        # hold native_geometry/slide_capture_chart_paint. No behaviour changed.
+        "596080684783c7d173b3646deda6215d8ecb8575cd29fc3646d498bb30996a1c": "svg-page-render-code/1",
+        # 2026-11-08 same_frame_after_move: a page move is also refused when the template
+        # chooses a different frame for the new position (v1 contexts replay their saved
+        # frame). It only refuses more reorders; page render, recovery and stored proofs
+        # are unchanged.
+        "293aa2011edce74b1a1944cda80d2894a5340d9cc2a5a31467e001a65719d541": "svg-page-render-code/1",
+        # 2026-11-08 V5 hardening (default-off V5 paths and failure handling only): bar
+        # layout search capped at 4096 candidates (larger ambiguities are refused, not
+        # searched), v5_proven checks the chart match before indexing series, an
+        # unrepresentable doughnut hole falls back to raster at export instead of failing
+        # the deck, V5 readers also turn IndexError/KeyError/ZeroDivisionError into
+        # rejections, chart capture errors stop costing an author repair, the context-id
+        # inequality (not promised by CDP) is dropped, masks are vectorized with exact
+        # integer/float parity, and unreadable fonts leave a proof incomplete. Stored
+        # V4 and legacy evidence is unchanged.
+        "4de79a055753a475c2dcdfca205c10106a02dbeb970d323ece4adc68c5ddf4d7": "svg-page-render-code/1",
+        # 2026-11-08 robustness: template_picture_style turns malformed projection data into
+        # ValueError (the existing style-unavailable path), the preset registry import is
+        # serialized by a lock, and the offer receipt's budget meaning is documented. No
+        # output for valid inputs changed.
+        "1aa3299244b8c6b7fafda80dc6d35d8ac16b90a9b33f94999b42204225a43691": "svg-page-render-code/1",
+        # 2026-11-08 V5 per-chart witness isolation: an unbound or statically unprovable chart
+        # is left out of the witness manifest (and gets its own paint failure) instead of
+        # withdrawing every chart's witness on the page. V5 is default-off; V4 and legacy
+        # evidence is unchanged.
+        "50c82c32111ea85ec64cbb2f50526eb9108aeb7e4dfa645a7d0461e9583f51cb": "svg-page-render-code/1",
+        # 2026-11-08 V5 scene scoping: <defs>/<title>/<desc>/<metadata> are skipped as
+        # non-painting (url() paints and clip-path/mask/filter stay refused), and a class
+        # attribute is refused only when the SVG has a stylesheet. V5 is default-off;
+        # V4 and legacy evidence is unchanged.
+        "33419649189c7e3045bb97ae2ad73eb1d5ffd659dc9a0f9e48343ca13ad3e9fc": "svg-page-render-code/1",
+        # 2026-11-08 V5 capture speed, no proof change: lossless PNG screenshots with
+        # optimizeForSpeed (identical decoded pixels) and numpy mask statistics with
+        # exact parity to the byte loops they replace.
+        "a5caec9a42896023d3c8f465c47b64171c26e041d014f7674e9281e86bd9c1e0": "svg-page-render-code/1",
+        # 2026-11-08 repository lint tests: bare timeout/poll literals named as module
+        # constants with the same values; no behaviour changed.
+        "fa9cdd4becdc96548c6eba1a7972ab7203f70f6c9e551c19a6619d84f543e3c0": "svg-page-render-code/1",
+        # 2026-11-08 V5 chart paint proof moved off the render path (default-off V5 only): the
+        # unchanged proof and validator run in export.pptx for freely composed V5 charts and
+        # seal digest-bound evidence in slide.properties; unverified charts export drawn.
+        # Preserved source charts that must export natively keep their in-render proof.
+        # Chart-proof Chrome launches add frame-pacing flags; the default argv is unchanged.
+        # V4, earlier revisions and non-SVG paths are unchanged; no stored V5 proofs exist.
+        "4fc28d1478d21aa67ae46bb59a48712df82e32de0e03a9f35b0a0f9d1fe4c5a3": "svg-page-render-code/1",
+        # 2026-11-08 exact V5 label rules (default-off V5 only): ROUND_HALF_UP rounded value
+        # labels and share labels (pie/donut/percentStacked) compared exactly, prefixed
+        # digit-free captions outside the plot area classified as annotations (kept as
+        # drawn text on export), and short-name legend swatches classified as legend.
+        # Pages V5 passed before keep byte-identical evidence; V4 and earlier unchanged.
+        "e81a5267b695b6aba4c10c16537cfea80afeea02b96d8c79eea35cfb308774fd": "svg-page-render-code/1",
+        # 2026-11-08 V5 scene reader: a null text_ink_fragments entry (ink the renderer could
+        # not measure) marks the glyph measurement incomplete and uses the estimated text
+        # box, instead of raising and rejecting the chart. V5-only; V4 unchanged.
+        "55c2ed63713a2cef2f43855c9b723aca30210272a90bcfb2bc41765cfbc51576": "svg-page-render-code/1",
     }),
 )
 

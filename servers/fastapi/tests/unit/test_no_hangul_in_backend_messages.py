@@ -47,7 +47,16 @@ _ALLOWED_HANGUL_MODULES: frozenset[str] = frozenset(
         "utils/llm_calls/author_infographic_plan.py",
         "utils/llm_calls/author_slide_brief.py",
         "utils/llm_calls/author_slide_rules.py",
+        "services/generation_core/authoring/author_rules_v10.py",  # Korean width rules the author reads
+        "services/generation_core/drivers/svg/visual_intent.py",  # intent rules and source-section headings it parses
         # --- Korean linguistic heuristics and language-detection tables ---
+        "services/generation_core/assets/icon_pack/concepts.py",  # Korean particles/suffixes for icon concept matching
+        "services/ppt_writing_policy.py",  # Hangul word-boundary regexes and duration unit suffixes
+        "services/generation_core/drivers/svg/native_requirements.py",  # Korean unit suffixes in numeric parsing
+        "services/generation_core/drivers/svg/timeline_ink_guard.py",  # the day suffix of timeline captions
+        "services/source_images/extract_documents.py",  # Korean caption/heading style names in DOCX
+        "services/svg_common_header_space_advance.py",  # a Hangul glyph class for space-advance measurement
+        "services/svg_templates/frame_fonts.py",  # Hangul sample glyphs for font metrics
         "services/authored_quality_ocr.py",
         "services/authored_source_images.py",
         "services/authored_vnext/deck_ir/product_adapter.py",

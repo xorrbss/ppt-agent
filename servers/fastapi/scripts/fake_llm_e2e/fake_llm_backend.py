@@ -16,6 +16,8 @@ import os
 import re
 import sys
 import threading
+from html import escape as _xml_escape
+from pathlib import Path
 
 sys.path.insert(0, os.getcwd())  # run from servers/fastapi
 CALLS: list[str] = []
@@ -102,6 +104,81 @@ def _schema_of(kwargs):
     return schema
 
 
+# FAKE_LLM_CHART_FIXTURES=1: content slides carry the real-builder native chart
+# examples (the same fixtures test_svg_chart_paint_chromium.py renders). Slide N
+# (2 <= N <= 1 + number of examples, never the last slide) gets example
+# N-2: the outline puts that example's requested source text in the slide content
+# (so its chart data counts as requested source data) and the SVG author returns
+# the example's canonical drawing with its ``data-native-chart`` declaration put
+# back on the group (the pipeline extracts and binds it, as for a real model).
+_CHART_FIXTURE_PATH = (Path(__file__).resolve().parents[2] / "tests" / "unit" / "fixtures"
+                       / "svg_chart_paint_native_examples_v1.json")
+_CHART_FIXTURES: list[dict] | None = None
+
+
+def _chart_fixtures_enabled() -> bool:
+    return os.environ.get("FAKE_LLM_CHART_FIXTURES") == "1"
+
+
+def _chart_fixtures() -> list[dict]:
+    global _CHART_FIXTURES
+    if _CHART_FIXTURES is None:
+        _CHART_FIXTURES = json.loads(_CHART_FIXTURE_PATH.read_text(encoding="utf-8"))["examples"]
+    return _CHART_FIXTURES
+
+
+_CHART_SLIDES: dict[int, dict] = {}  # slide number -> example, filled by the outline call
+
+
+def _chart_fixture_for(number: int, total: int | None = None) -> dict | None:
+    """The example slide ``number`` carries. With ``total`` (outline time) it
+    decides and records the assignment; later calls read the record."""
+    if not _chart_fixtures_enabled():
+        return None
+    if total is None:
+        return _CHART_SLIDES.get(number)
+    examples = _chart_fixtures()
+    if not 2 <= number <= 1 + len(examples) or number >= total:
+        return None
+    _CHART_SLIDES[number] = examples[number - 2]
+    return examples[number - 2]
+
+
+def _chart_svg(example: dict, number: int, width: int, height: int) -> str:
+    """The example's canonical SVG with its native declaration re-attached.
+
+    Fixtures are authored on the mandatory 1280x720 canvas; another canvas is
+    refused rather than silently rescaled (a rescale would change the data
+    geometry the paint proof checks).
+    """
+    if (width, height) != (1280, 720):
+        raise RuntimeError(f"chart fixtures need a 1280x720 canvas, deck asks for {width}x{height}")
+    svg = example["canonicalSvg"]
+    declarations = example["nativeDeclarations"]["objects"]
+    for declaration in declarations:
+        marker = f'<g id="{declaration["id"]}"'
+        if svg.count(marker) != 1:
+            raise RuntimeError(f"fixture {example['name']}: group {declaration['id']} not found exactly once")
+        attribute = _xml_escape(json.dumps(declaration["raw"], ensure_ascii=False), quote=True)
+        svg = svg.replace(marker, f"{marker} data-native-chart=\"{attribute}\"", 1)
+    # The builder's value labels are 10px, below the svg body-text floor (12px
+    # and 9.5pt physical): enlarge them, keeping the label centred on its anchor.
+    def _enlarge(match):
+        size, baseline = float(match["size"]), float(match["y"])
+        return match[0].replace(f'y="{match["y"]}"', f'y="{baseline + 0.375 * (13 - size):g}"').replace(
+            f'font-size="{match["size"]}"', 'font-size="13"')
+    svg = re.sub(r'<text [^>]*?y="(?P<y>[^"]+)"[^>]*?font-size="(?P<size>\d+(?:\.\d+)?)"[^>]*>',
+                 lambda m: _enlarge(m) if float(m["size"]) < 13 else m[0], svg)
+    # The request's descriptive lines ("Donut chart, hole size 0.7.") must be drawn:
+    # the requested-text check wants every literal of the source on the page.
+    caption = " ".join(line for line in example["requestedSource"]["content"].splitlines()
+                       if not line.lower().startswith("chart:"))
+    extra = (f'<text x="102" y="64" font-family="Arial" font-size="32" font-weight="700" '
+             f'fill="#1b2230">검증 슬라이드 {number}</text>'
+             f'<text x="102" y="690" font-family="Arial" font-size="16" fill="#1b2230">{_xml_escape(caption)}</text>')
+    return svg.replace("</svg>", extra + "</svg>", 1)
+
+
 def _outline(schema, prompt: str) -> dict:
     slides_schema = schema["properties"]["slides"]
     match = re.search(r"(\d+)\s*(?:slides|장)", prompt)
@@ -110,10 +187,14 @@ def _outline(schema, prompt: str) -> dict:
     item_schema = slides_schema.get("items", {})
     defs = schema.get("$defs", schema.get("definitions", {}))
     slides = []
+    _CHART_SLIDES.clear()
     for number in range(1, count + 1):
         item = _instance(item_schema, defs) or {}
         filler = LONG_FILLER if os.environ.get("FAKE_OUTLINE_LONG") == "1" else ""
         item["content"] = f"# 검증 슬라이드 {number}\n- 첫째 요점 {number}\n- 둘째 요점 {number}" + filler
+        example = _chart_fixture_for(number, count)
+        if example is not None:
+            item["content"] = f"# 검증 슬라이드 {number}\n{example['requestedSource']['content']}" + filler
         if "title" in item:
             item["title"] = f"검증 슬라이드 {number}"
         slides.append(item)
@@ -154,7 +235,7 @@ def _infographic_plan(prompt: str) -> dict:
                 labels.append(label)
             if len(labels) == 3:
                 break
-        if role in _PLAN_NON_FIGURE_ROLES or len(labels) < 3:
+        if role in _PLAN_NON_FIGURE_ROLES or len(labels) < 3 or _chart_fixture_for(index) is not None:
             slides.append({"index": index, "archetype": "none", "weight": "quiet", "nodes": []})
             continue
         slides.append({
@@ -175,6 +256,10 @@ def _svg(prompt: str) -> str:
         width, height = int(size.group(1)), int(size.group(2))
     title = re.search(r"검증 슬라이드 (\d+)", prompt)
     number = title.group(1) if title else "1"
+    example = _chart_fixture_for(int(number))
+    if example is not None:
+        _log(f"svg_author:chart:{example['name']}")
+        return _chart_svg(example, int(number), width, height)
     lines = [f"검증 슬라이드 {number}", f"첫째 요점 {number}", f"둘째 요점 {number}"]
     texts = "".join(
         f'<text x="{int(width * 0.08)}" y="{int(height * (0.22 + 0.16 * i))}" '
