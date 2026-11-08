@@ -51,6 +51,8 @@ def test_external_export_controller_claims_only_export_operations(monkeypatch) -
     assert worker.external_workspace_operation_kinds("ppt-core") == (
         "export.pptx",
         "export.pdf",
+        # The deferred v5 chart paint verification runs the export's capture proof.
+        "svg.chart.verify",
     )
     with pytest.raises(
         RuntimeError,

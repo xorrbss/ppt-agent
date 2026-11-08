@@ -348,6 +348,19 @@ _MAX_TOOL_SUMMARY_LENGTH = 500
 # these out of the general event allowlist prevents an unrelated handler from
 # publishing fields that only make sense for another operation's result card.
 _SAFE_RESULT_PAYLOAD_KEYS_BY_KIND: dict[str, frozenset[str]] = {
+    "svg.chart.verify": frozenset(
+        {
+            "outcome",
+            "round",
+            "charts_passed",
+            "charts_failed",
+            "charts_passed_total",
+            "pages_unverified",
+            "pages_remaining",
+            "next_operation_id",
+            "refresh_export_operation_id",
+        }
+    ),
     "raster.analysis": frozenset(
         {
             "review_operation_id",

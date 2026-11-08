@@ -43,6 +43,7 @@ export const KNOWN_OPERATION_TYPES = [
   "quality.review",
   "export.pptx",
   "export.pdf",
+  "svg.chart.verify",
 ] as const;
 
 export type KnownOperationType = (typeof KNOWN_OPERATION_TYPES)[number];

@@ -15,6 +15,7 @@ EXPECTED_ROUTE_MAP = {
     "presentation.slides.reorder": ("generation", "WorkspaceSlideOrderOperationHandler"),
     "export.pptx": ("export", "WorkspaceExportOperationHandler"),
     "export.pdf": ("export", "WorkspaceExportOperationHandler"),
+    "svg.chart.verify": ("export", "SvgChartPaintVerificationOperationHandler"),
     "presentation.delete": ("embedded", "PresentationDeletionOperationHandler"),
     "presentation.edit": ("embedded", "PresentationChatOperationHandler"),
     "slide.edit": ("embedded", "PresentationChatOperationHandler"),

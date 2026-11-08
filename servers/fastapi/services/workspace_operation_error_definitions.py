@@ -90,6 +90,7 @@ _GROUPS = (
         "authored_vnext_regenerate_body_contract_invalid",
         "batch_remake_preview_request_invalid",
         "page_remake_preview_request_invalid",
+        "svg_chart_verify_payload_invalid",
         "svg_export_source_required",
         "svg_font_embedding_pptx_only",
         "svg_quality_policy_invalid",
