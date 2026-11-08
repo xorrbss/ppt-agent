@@ -718,6 +718,8 @@ def svg_author_rules(style_snapshot: dict, body_floor: float, *, new_copy: bool 
         source_grounded=quality_policy is not None and quality_policy["version"] == 2,
         requirements_revision=requirements_revision(style_snapshot),
     )
+    from services.generation_core.drivers.svg.server_chart import server_chart_rule
+    native_rules += server_chart_rule(style_snapshot)
     author_rules = SVG_NEW_COPY_AUTHOR_RULES if new_copy else SVG_AUTHOR_RULES
     if (source_preserved
             and style_snapshot.get("source_authoring_contract") == {"version": "svg-source-whole-page/v1"}):

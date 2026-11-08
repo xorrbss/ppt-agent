@@ -333,6 +333,13 @@ def pin_svg_style(request: object) -> dict:
                 frozen[SNAPSHOT_REVISION_KEY] = (
                     REQUIREMENTS_VERSION_V5 if get_svg_native_chart_integrity_v5_env()
                     else ADMITTED_REQUIREMENTS_REVISION)
+                from utils.get_env_concurrency import get_svg_server_charts_env
+                if get_svg_server_charts_env():
+                    # Bar/column charts drawn by the server from the declaration
+                    # (server_chart.py), pinned like the revision above.
+                    from services.generation_core.drivers.svg.server_chart import (
+                        SERVER_CHART_REVISION, SNAPSHOT_KEY as SERVER_CHART_KEY)
+                    frozen[SERVER_CHART_KEY] = SERVER_CHART_REVISION
                 from services.generation_core.drivers.svg.icon_flatten import (
                     ASSET_PROJECTION_CURRENT, ASSET_PROJECTION_KEY,
                 )

@@ -212,6 +212,27 @@ def extract_native_declarations(root: ET.Element) -> dict | None:
             from services.generation_core.drivers.svg.native_table import fold_wrapped_cell_lines
 
             fold_wrapped_cell_lines(node, raw)
+        if kind == "chart" and "data-chart-render" in node.attrib:
+            # A server-rendered placeholder: drawn here, in place, so every replay of a
+            # raw response draws the identical tree (server_chart.py).
+            from services.generation_core.drivers.svg.server_chart import (
+                BOX_ATTRIBUTE, RENDER_ATTRIBUTE, SERVER_CHART_REVISION, ServerChartUnsupported,
+                render_server_chart,
+            )
+            if node.get(RENDER_ATTRIBUTE) != "server":
+                node.attrib.pop(RENDER_ATTRIBUTE, None)
+                node.attrib.pop(BOX_ATTRIBUTE, None)
+                _drop(dropped, node, kind, "server_chart_render_invalid")
+                continue
+            try:
+                render_server_chart(root, node, raw)
+            except ServerChartUnsupported as error:
+                node.attrib.pop(RENDER_ATTRIBUTE, None)
+                node.attrib.pop(BOX_ATTRIBUTE, None)
+                _drop(dropped, node, kind, str(error))
+                continue
+            objects.append({"id": node.get("id"), "kind": kind, "raw": raw, "render": SERVER_CHART_REVISION})
+            continue
         objects.append({"id": node.get("id"), "kind": kind, "raw": raw})
     return {"objects": objects, "dropped": dropped}
 

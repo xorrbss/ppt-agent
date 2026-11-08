@@ -305,6 +305,11 @@ COMMON_HEADER_VERIFIER_LEDGER = VerifierRevisionLedger(
         # gains title/shared-scale/axis-beneath-bars sentences); V4 and earlier prompt
         # bytes and the common-header verifier behaviour are unchanged.
         "sha256:b734900b117bf44e6a80e8be6e583365b38ca9eb276d4778c70be9114c3ade6d": "svg-common-header-verifier/1",
+        # 2026-11-08: server-rendered chart prototype (SVG_SERVER_CHARTS, default off).
+        # A placeholder marked data-chart-render="server" is drawn from its declaration
+        # inside extract_native_declarations, and its values must occur in the source.
+        # Raw responses without the marker (every stored deck) are unchanged.
+        "sha256:59436a56947d3238163e32efaa26ccf600d1bc1498eaff173a5acb2e458a7d61": "svg-common-header-verifier/1",
     }),
 )
 
@@ -450,6 +455,11 @@ WHOLE_PAGE_VERIFIER_LEDGER = VerifierRevisionLedger(
         # and consumer); v5 author guidance asks for axes beneath bars. V4 and earlier
         # revisions are unchanged.
         "333c627fddd7c6b4d5f3a8d7c052f27f6a834de6fb6c1bf110001e3990579ae4": "svg-whole-page-verifier/1",
+        # 2026-11-08: server-rendered chart prototype (SVG_SERVER_CHARTS, default off).
+        # A placeholder marked data-chart-render="server" is drawn from its declaration
+        # inside extract_native_declarations, and its values must occur in the source.
+        # Raw responses without the marker (every stored deck) are unchanged.
+        "acadc5ae08f322954423f7c4d6404f6fa6b30dff1ee7913684f7ce57c249a573": "svg-whole-page-verifier/1",
     }),
 )
 
@@ -663,6 +673,11 @@ PARTIAL_RECOVERY_CODE_LEDGER = VerifierRevisionLedger(
         # and consumer); v5 author guidance asks for axes beneath bars. V4 and earlier
         # revisions are unchanged.
         "2377b41e5958078a28ae9344236fae353e885a7696d6d96dc48e4c8f1dcceb05": "svg-partial-recovery-code/1",
+        # 2026-11-08: server-rendered chart prototype (SVG_SERVER_CHARTS, default off).
+        # A placeholder marked data-chart-render="server" is drawn from its declaration
+        # inside extract_native_declarations, and its values must occur in the source.
+        # Raw responses without the marker (every stored deck) are unchanged.
+        "631f0ea4d491ef06ff0739dedf82e91c7645ba3e078df2e280b005363ceac86e": "svg-partial-recovery-code/1",
     }),
 )
 
@@ -787,6 +802,11 @@ PAGE_RENDER_CODE_LEDGER = VerifierRevisionLedger(
         # and consumer); v5 author guidance asks for axes beneath bars. V4 and earlier
         # revisions are unchanged.
         "8c2aec90a1a0f93d069c7353a0e9afc01bf4780a7286300d892b34af7a097cc7": "svg-page-render-code/1",
+        # 2026-11-08: server-rendered chart prototype (SVG_SERVER_CHARTS, default off).
+        # A placeholder marked data-chart-render="server" is drawn from its declaration
+        # inside extract_native_declarations, and its values must occur in the source.
+        # Raw responses without the marker (every stored deck) are unchanged.
+        "e5a36a0d7c05a6d8d5d836e86cc3d39323046a4e75742764b7b7a8939cbd9410": "svg-page-render-code/1",
     }),
 )
 

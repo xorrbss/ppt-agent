@@ -334,6 +334,17 @@ def get_svg_native_chart_integrity_v5_env(settings: RuntimeSettings | None = Non
     return value in {"on", "true", "1"}
 
 
+def get_svg_server_charts_env(settings: RuntimeSettings | None = None) -> bool:
+    """Server-rendered bar/column charts for fresh SVG admissions (``SVG_SERVER_CHARTS``); default off.
+
+    Admission freezes the policy into the style snapshot; existing decks never
+    consult this process setting.
+    """
+    from utils.get_env import get_setting_env
+    value = (get_setting_env("SVG_SERVER_CHARTS", settings) or "").strip().lower()
+    return value in {"on", "true", "1"}
+
+
 def get_svg_template_pictures_env(settings: RuntimeSettings | None = None) -> bool:
     """Enable vector pictures for fresh template-redesign admissions; default off.
 
