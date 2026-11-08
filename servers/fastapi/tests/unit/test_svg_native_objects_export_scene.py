@@ -412,6 +412,49 @@ def test_raster_grid_projects_to_the_converter_payload_the_grid_draws(monkeypatc
     assert all("line_spacing" not in paragraph and "space_before" not in paragraph
                for paragraph in explicit_cell["paragraphs"])
     assert [p["runs"] for p in explicit_cell["paragraphs"]] == [p["runs"] for p in cell["paragraphs"]]
+
+    # A declared paragraph that wraps over two drawn lines stays ONE hard paragraph
+    # whose drawn wrap is a soft line break; the cell keeps exactly its two paragraphs
+    # and every drawn baseline. The declared rows come from the source table (as on a
+    # source-preserving deck), so the item reuses the drawn group with the source text.
+    import copy
+    wrapped_body = ('<g id="native-table-paragraphs">'
+        '<rect x="90" y="60" width="610" height="50" fill="#F1F5F9"/>'
+        '<rect x="90" y="110" width="610" height="320" fill="#FFFFFF"/>'
+        '<text x="114" y="95" font-family="Noto Sans KR" font-size="22" fill="#111111">확인 사항</text>'
+        '<text x="114" y="160" font-family="Noto Sans KR" font-size="24" fill="#111111">'
+        '<tspan x="114" y="160">첫 문단</tspan><tspan x="114" y="252">두 번째</tspan>'
+        '<tspan x="114" y="354" fill="#2563EB" font-weight="700">문단 길게</tspan></text></g>')
+    wrapped_svg = _svg(wrapped_body)
+    wrapped_root = ET.fromstring(wrapped_svg)
+    wrapped_item = copy.copy(spaced_item)
+    wrapped_payload = deepcopy(spaced_item.payload)
+    wrapped_payload["rows"][1][0]["text"] = "첫 문단\n두 번째 문단 길게"
+    object.__setattr__(wrapped_item, "payload", wrapped_payload)
+    object.__setattr__(wrapped_item, "binding_digest", native_binding_digest(wrapped_svg))
+    wrapped = converter_payload(wrapped_item, pt_per_px=EMU_PER_PX / 12700)
+    apply_drawn_table_style(wrapped, wrapped_item, wrapped_root)
+    wrapped_cell = wrapped["rows"][1][0]
+    assert [[(run["text"], run.get("break_before", False)) for run in p["runs"]]
+            for p in wrapped_cell["paragraphs"]] == [[("첫 문단", False)], [("두 번째", False), ("문단 길게", True)]]
+    assert wrapped_cell["paragraphs"][1]["runs"][-1]["color"] == "#2563EB"
+    # Baselines 160 | 252, 354: the second paragraph's own drawn pitch (102) is its
+    # exact line spacing and the gap before it keeps the drawn 92 between paragraphs.
+    assert [(p["line_spacing"], p["space_before"]) for p in wrapped_cell["paragraphs"]] == [
+        (30, 0), (102, pytest.approx(92 - 6 - 102 * 4 / 5))]
+    assert wrapped_cell["padding"] == {"top": 26, "bottom": pytest.approx(430 - 354 - 102 / 5)}
+    assert len(_table_cell_paragraphs(wrapped_cell)) == 2
+    wrapped_dir = tmp_path / "paragraph-wrapped-native"
+    wrapped_dir.mkdir()
+    wrapped_readback, wrapped_deck = _convert(wrapped_dir, [wrapped_svg], [_sidecar(wrapped_item.to_wire())])
+    assert wrapped_readback["nativeObjects"] == {"offered": 1, "native": 1, "fellBack": 0, "reasons": []}
+    wrapped_table = next(shape.table for shape in _shapes(wrapped_deck.slides[0].shapes) if shape.has_table)
+    wrapped_native = wrapped_table.cell(1, 0)
+    assert [p.text for p in wrapped_native.text_frame.paragraphs] == ["첫 문단", "두 번째\v문단 길게"]
+    assert [len(p._p.xpath("a:br")) for p in wrapped_native.text_frame.paragraphs] == [0, 1]
+    assert [int(p._p.xpath("a:pPr/a:lnSpc/a:spcPts")[0].get("val"))
+            for p in wrapped_native.text_frame.paragraphs] == [round(v * EMU_PER_PX / 127) for v in (30, 102)]
+    assert str(wrapped_native.text_frame.paragraphs[1].runs[-1].font.color.rgb) == "2563EB"
     for field in ("line_spacing", "space_before"):
         invalid_values = [-1, float("nan"), float("inf"), True, None, 1e10]
         if field == "line_spacing":

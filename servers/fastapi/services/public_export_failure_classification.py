@@ -59,6 +59,11 @@ NON_RETRYABLE_PUBLIC_EXPORT_MARKERS = (
     # would repeat the whole preparation only to fail identically.
     "evidence_too_large",
     "evidence_invalid",
+    # Likewise the worker's projection and source-preservation readback of a
+    # given bundle are deterministic: three attempts of the same rejection
+    # only repeat the preparation (op 31214a0a, 2026-10-21).
+    "projection_invalid",
+    "readback_invalid",
 )
 RETRYABLE_PUBLIC_EXPORT_FAILURE_CODE = "presentation_export_failed"
 
@@ -83,6 +88,25 @@ def public_export_failure_is_non_retryable(code: str) -> bool:
     return any(marker in code for marker in NON_RETRYABLE_PUBLIC_EXPORT_MARKERS)
 
 
+def _is_terminal_asset_policy_error(error: BaseException) -> bool:
+    """Honour the asset gateway's own typed retry decision for local 4xx refusals.
+
+    ``AssetGatewayError`` already states whether a refusal is transient
+    (``asset_not_ready``, a canonicalization conflict, ...).  A non-retryable
+    client-class refusal is a pure function of the stored rows and bytes, so
+    retrying the export would only repeat it.
+    """
+
+    from services.assets.contracts import AssetGatewayError
+
+    return (
+        isinstance(error, AssetGatewayError)
+        and error.retryable is False
+        and isinstance(error.status_code, int)
+        and 400 <= error.status_code < 500
+    )
+
+
 def classified_public_export_error(
     error: BaseException,
     *,
@@ -92,7 +116,7 @@ def classified_public_export_error(
 
     code = public_export_error_code(error)
     merged = dict(detail) if isinstance(detail, Mapping) else {}
-    if public_export_failure_is_non_retryable(code):
+    if public_export_failure_is_non_retryable(code) or _is_terminal_asset_policy_error(error):
         return NonRetryableWorkspaceOperationError(code, detail=merged or None)
     merged["reason_code"] = (
         code if _REASON_CODE_SHAPE.match(code) else type(error).__name__

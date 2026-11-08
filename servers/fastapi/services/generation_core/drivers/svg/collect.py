@@ -21,8 +21,9 @@ still one file.
 from __future__ import annotations
 
 import asyncio
+from contextlib import nullcontext
 from copy import deepcopy
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 
 INTERNAL_SVG_STAGE_PLAN_KEY = "_internal_svg_stage_plan"
@@ -153,8 +154,14 @@ async def _stage_checkpoint(job, checkpoint, plan, stages):
     return progress
 
 
-async def _collect_stages(ctx, plan, tracked_page, job, checkpoint, read_png, run_advisory, review_stage=None):
-    """Only the current partition is scheduled; accepted reviews survive resume."""
+async def _collect_stages(ctx, plan, tracked_page, job, checkpoint, read_png, run_advisory, review_stage=None,
+                          page_failures=None):
+    """Only the current partition is scheduled; accepted reviews survive resume.
+
+    A page-local failure returns a marker, not an exception: it does not stop
+    the partition's already approved siblings, and the partition then fails
+    closed before any review, so the next partition never starts.
+    """
     progress = await _stage_preflight(plan, job, checkpoint, ctx.count)
     stages = deepcopy(progress.get("stages", []))
     pages_by_index = {}
@@ -200,6 +207,7 @@ async def _collect_stages(ctx, plan, tracked_page, job, checkpoint, read_png, ru
         errors = [result for result in results if isinstance(result, BaseException)]
         if errors:
             raise errors[0]
+        _raise_isolated_pages(results, page_failures)
         pages_by_index.update(zip(indices, results, strict=True))
         page_digests = [_digest({"svg": p.get("svg_content"), "png": p.get("png_sha256")}) for p, _ in results]
         if any(p.get("quality", {}).get("passed") is not True for p, _ in results):
@@ -269,7 +277,7 @@ from services.generation_core.drivers.svg import author, render
 from services.generation_core.drivers.svg import quality as deck_quality
 from services.generation_core.drivers.svg import timing
 from services import svg_outline_spans
-from services.generation_core.drivers.svg.terminal import rescue_terminal_page
+from services.generation_core.drivers.svg.terminal import is_exhausted_page, rescue_terminal_page
 from services.svg_presentation_checkpoint import _collect_pages_or_fail, _digest, _provider_attempt_count as _legacy_provider_attempt_count, _provider_attempt_limit as _legacy_provider_attempt_limit
 from services.svg_presentation_prepare import _prepare_generation
 
@@ -282,6 +290,37 @@ class _RunState:
     cached_author_render_manifest_hash: str | None = None
     terminal_drain_enabled: bool = False
     hard_deadline_at: datetime | None = None
+    # Page-local failure isolation. An exhausted page no terminal policy
+    # rescued is recorded here (index -> error) instead of becoming the job
+    # fatal; it freezes dispatch for the rest of this run. After the freeze no
+    # new provider dispatch is approved: only pages whose dispatch was approved
+    # before it (``dispatch_approved``) may dispatch again, within their own
+    # attempt limit. The durable record is the page's ``fail_stage`` row.
+    page_failures: dict = field(default_factory=dict)
+    dispatch_frozen: bool = False
+    dispatch_approved: set = field(default_factory=set)
+
+
+@dataclass(frozen=True)
+class _IsolatedPage:
+    """A page that ended without a result under a dispatch freeze.
+
+    ``unstarted`` pages were stopped at dispatch approval and wrote no failure
+    (at most the sealed ``dispatch.stopped`` witness of a call admission had
+    already reserved); the others are recorded page-local failures.
+    Never a page result: the deck fails closed before any deck stage sees it.
+    """
+    index: int
+    unstarted: bool
+
+
+def _raise_isolated_pages(results, page_failures):
+    """Fail closed with the lowest-index page-local error if any page is isolated."""
+    if not any(isinstance(result, _IsolatedPage) for result in results):
+        return
+    if page_failures:
+        raise page_failures[min(page_failures)]
+    raise RuntimeError("svg_page_dispatch_frozen_without_failure")
 
 
 async def _drain_leaf_tasks(tasks, state):
@@ -299,7 +338,42 @@ async def _drain_leaf_tasks(tasks, state):
     await asyncio.gather(*tasks, return_exceptions=True)
 
 
+def _svg_prompt_cache_key(presentation_id, job):
+    """The provider prompt-cache lane of one durable deck attempt, or ``None``.
+
+    Scoped to the current owner and tenant, the deck, and the frozen request
+    digest (which covers the frozen style snapshot), so no other owner, deck
+    or request shares the lane. It is a routing hint for the provider's own
+    prefix cache; the full prompt is still sent and nothing generated is
+    reused. ``AUTHORED_PROMPT_CACHE_KEY_ENABLED`` switches it off with the
+    authored lanes.
+    """
+    from utils.hashing import canonical_json_sha256
+    from utils.llm_calls.author_prompt_cache_key import CACHE_KEY_CHARS
+    from utils.owner_context import get_current_owner_id, get_current_tenant_id
+
+    request_sha256 = getattr(job, "request_sha256", None) if job is not None else None
+    owner_id = get_current_owner_id()
+    if not isinstance(request_sha256, str) or not request_sha256 or owner_id is None:
+        return None
+    digest = canonical_json_sha256({"schema": "svg-prompt-cache-lane/v1", "owner_id": str(owner_id),
+        "tenant_id": get_current_tenant_id(), "presentation_id": str(presentation_id),
+        "request_sha256": request_sha256})
+    return f"svg-{digest[:CACHE_KEY_CHARS]}"
+
+
 async def _generate(request, presentation_id, outline, language, session, job, *, stage_plan=None, review_stage=None):
+    from utils.llm_calls.author_prompt_cache_key import set_prompt_cache_key
+
+    # Page tasks copy this context when created, so every author call of this
+    # deck attempt (pages, header representatives, recovery repairs) carries
+    # the lane and nothing outside the attempt does.
+    with set_prompt_cache_key(_svg_prompt_cache_key(presentation_id, job)):
+        return await _generate_deck(request, presentation_id, outline, language, session, job,
+                                    stage_plan=stage_plan, review_stage=review_stage)
+
+
+async def _generate_deck(request, presentation_id, outline, language, session, job, *, stage_plan=None, review_stage=None):
     from services import svg_presentation_service as _facade
     async_session_maker = _facade.async_session_maker
     checkpoint = _facade._checkpoint
@@ -343,14 +417,24 @@ async def _generate(request, presentation_id, outline, language, session, job, *
     state = _RunState(terminal_drain_enabled=bool(stage_plan is None and (
         recovery_policy or getattr(ctx, "partial_recovery_manifest", None))))
     if job is not None and job.workspace_operation_id is not None:
+        from sqlalchemy import select
         from models.sql.workspace import WorkspaceOperation
         from services.svg_cached_author_render_recovery import REVISIONS
 
-        operation = await session.get(WorkspaceOperation, job.workspace_operation_id)
+        # Metadata only: project the two payload keys read below instead of
+        # decoding the operation's whole (possibly archival) request payload.
+        operation = (await session.execute(select(
+            WorkspaceOperation.deadline_at,
+            WorkspaceOperation.request_payload["recovery_revision"].label("recovery_revision"),
+            WorkspaceOperation.request_payload["svg_cached_author_render_manifest_hash"].label(
+                "svg_cached_author_render_manifest_hash"),
+        ).where(WorkspaceOperation.id == job.workspace_operation_id))).mappings().one_or_none()
         if state.terminal_drain_enabled and operation is not None:
             from utils.datetime_utils import as_utc
-            state.hard_deadline_at = as_utc(operation.deadline_at)
-        operation_payload = (operation.request_payload or {}) if operation is not None else {}
+            state.hard_deadline_at = as_utc(operation["deadline_at"])
+        operation_payload = ({key: operation[key] for key in (
+            "recovery_revision", "svg_cached_author_render_manifest_hash")
+            if operation[key] is not None} if operation is not None else {})
         if operation_payload.get("recovery_revision") in REVISIONS:
             if stage_plan is not None:
                 raise _stage_error("svg_cached_author_render_stage_plan_forbidden")
@@ -402,9 +486,31 @@ async def _generate(request, presentation_id, outline, language, session, job, *
     async def tracked_page(index):
         try:
             return await _page(ctx, request, presentation_id, outline, language, job, index, state, hooks)
+        except author.PageDispatchFrozen:
+            return _IsolatedPage(index, unstarted=True)
         except AuthoredStageError as error:
             if state.fatal_error is error:
                 raise
+            if state.fatal_error is None and is_exhausted_page(error, index):
+                # Page-local: ``_page`` re-raises an exhausted page only after
+                # ``rescue_terminal_page`` declined it. Record and freeze in
+                # this synchronous region, before the first await, so no
+                # sibling dispatch can be approved in between; the job fatal
+                # stays unset so already approved siblings finish and persist.
+                try:
+                    state.page_failures[index] = error
+                    state.dispatch_frozen = True
+                    if job is not None:
+                        from services.authored_checkpoint_service import fail_stage
+                        await fail_stage(job_id=job.id, slide_index=index, stage=error.stage,
+                            attempt_token=job.attempt_token, error=error,
+                            request_id=getattr(request, "_request_id", None),
+                            fencing_token=getattr(job, "_workspace_fencing_token", None))
+                except Exception:
+                    # Recording failed: the existing global path (fatal + drain/cancel).
+                    state.fatal_error = state.fatal_error or error
+                    raise
+                return _IsolatedPage(index, unstarted=False)
             state.fatal_error = state.fatal_error or error
             if job is not None and error.code != "authored_attempt_lost":
                 from services.authored_checkpoint_service import fail_stage
@@ -425,12 +531,14 @@ async def _generate(request, presentation_id, outline, language, session, job, *
     try:
         if stage_plan is None:
             pages = await asyncio.gather(*tasks) if state.terminal_drain_enabled else await _collect_pages_or_fail(tasks)
+            _raise_isolated_pages(pages, state.page_failures)
             if recovery_policy:
                 from services.generation_core.drivers.svg.quality_recovery import recover_screen_pages
                 pages = await recover_screen_pages(ctx, request, presentation_id, outline, job,
                     pages, state, hooks, _attempt_loop)
         else:
-            pages, stage_advisory = await _collect_stages(ctx, stage_plan, tracked_page, job, checkpoint, read_png, _facade.run_vision_advisory, review_stage)
+            pages, stage_advisory = await _collect_stages(ctx, stage_plan, tracked_page, job, checkpoint, read_png, _facade.run_vision_advisory, review_stage,
+                                                          page_failures=state.page_failures)
         if state.fatal_error is not None:
             raise state.fatal_error
     except BaseException as error:
@@ -441,6 +549,9 @@ async def _generate(request, presentation_id, outline, language, session, job, *
             for task in tasks:
                 task.cancel()
             await asyncio.gather(*tasks, return_exceptions=True)
+        # A global error during the freeze keeps its own classification. The
+        # operation retry decision reads the persisted exhausted-page rows
+        # (``fail_stage``) instead, so no automatic retry re-buys the deck.
         raise
     timing.settle_page_loop(request)
     timing.enter_deck_stage(request, "quality")
@@ -501,6 +612,7 @@ def _cache_remeasurement_approval(ctx, job, saved):
 
 def _verify_protected_cache(saved, png, witness, input_digest, index, *, metrics_digest=None):
     from services.svg_classification_remeasurement import author_witness_digest
+    from services.svg_presentation_checkpoint import quality_browser_metrics
     from utils.hashing import sha256_hex
 
     quality = saved.get("quality") or {}
@@ -512,7 +624,7 @@ def _verify_protected_cache(saved, png, witness, input_digest, index, *, metrics
             and str(quality.get("source_digest", "")).removeprefix("sha256:") == witness.get("source_sha256")
             and str(quality.get("png_digest", "")).removeprefix("sha256:") == witness.get("png_sha256")
             and quality.get("measurement_complete") is True and quality.get("geometry_passed") is True
-            and _digest(quality.get("browser_metrics")) == (metrics_digest or witness.get("browser_metrics_digest"))
+            and _digest(quality_browser_metrics(quality)) == (metrics_digest or witness.get("browser_metrics_digest"))
             and not saved.get("inflight")):
         raise AuthoredStageError(slide_index=index, stage="render", code="svg_cache_remeasurement_invalid", retryable=False)
 
@@ -1007,11 +1119,16 @@ async def _attempt_loop(ctx, request, presentation_id, index, content, payload, 
                         code="svg_repair_budget_exhausted", retryable=False)
                 await ensure_recovery_authority(job, hooks)
             provider_ordinal = ordinal + len(payload.get("provider_failures", [])) + 1
-            with timing.observe_stage(request, "repair" if ordinal > 0 else "author"):
-                author_result = await author.attempt_author(
-                    ctx=ctx, request=request, index=index, content=content, role=role, count=ctx.count,
-                    payload=payload, ordinal=ordinal, provider_ordinal=provider_ordinal, job=job,
-                    state=state, checkpoint=hooks.checkpoint, async_session_maker=hooks.async_session_maker)
+            # The page keeps its in-flight permit; the provider permit spans
+            # only the author attempt (including its overload cooldown), so
+            # renders and persists of other pages proceed meanwhile.
+            permits = getattr(ctx, "provider_permits", None)
+            async with (permits.slot(repair=ordinal > 0) if permits is not None else nullcontext()):
+                with timing.observe_stage(request, "repair" if ordinal > 0 else "author"):
+                    author_result = await author.attempt_author(
+                        ctx=ctx, request=request, index=index, content=content, role=role, count=ctx.count,
+                        payload=payload, ordinal=ordinal, provider_ordinal=provider_ordinal, job=job,
+                        state=state, checkpoint=hooks.checkpoint, async_session_maker=hooks.async_session_maker)
             if author_result.retry:
                 continue
             svg = author_result.svg

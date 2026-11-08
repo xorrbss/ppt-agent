@@ -166,12 +166,17 @@ async def read_svg_slide_assets(session, presentation, slide, *, _source_verifie
 class _PublicationSourceVerification:
     """Share only successful ancestor reads until this publication's final check."""
 
-    def __init__(self, session, presentation):
+    def __init__(self, session, presentation, *, use_source_snapshot=False, source_snapshot_slides=None):
         self.session, self.presentation = session, presentation
         self.transaction = None
         # Successful proofs only, for this one preparation; never a process-wide cache.
         self.sources = {}
         self.verify_calls = 0
+        # svg-source-input-snapshot/v1 proofs; same holder lifetime as ``sources``.
+        self.use_source_snapshot = use_source_snapshot
+        self.source_snapshot_slides = source_snapshot_slides
+        self.snapshot_proofs = {}
+        self.snapshot_counters = None
 
     async def verify(self, session, presentation, source, pointer, owner, tenant):
         from utils.hashing import canonical_json_sha256
@@ -185,6 +190,19 @@ class _PublicationSourceVerification:
         self.transaction = transaction
         key = (str(presentation.id), presentation.revision, str(owner), str(tenant),
                str(source.presentation_id), source.digest, canonical_json_sha256(pointer))
+        if key in self.snapshot_proofs:
+            return True
+        if key not in self.sources and self.use_source_snapshot:
+            from services.svg_source_input_snapshot import (
+                SourceInputSnapshotCounters, consume_source_input_snapshot)
+            if self.snapshot_counters is None:
+                self.snapshot_counters = SourceInputSnapshotCounters()
+            # Raises on a present but invalid snapshot; None keeps the legacy proof below.
+            proof = await consume_source_input_snapshot(session, presentation, source, pointer, owner, tenant,
+                slides=self.source_snapshot_slides, counters=self.snapshot_counters)
+            if proof is not None:
+                self.snapshot_proofs[key] = proof
+                return True
         if key not in self.sources:
             # This source's owned historical proof, held only for revalidate().
             proofs = {}
@@ -197,6 +215,22 @@ class _PublicationSourceVerification:
     async def revalidate(self):
         from utils.owner_context import get_current_owner_id, get_current_tenant_id
 
+        for key, proof in self.snapshot_proofs.items():
+            from services.svg_source_input_snapshot import (
+                SourceInputSnapshotRejected, recheck_source_input_snapshot)
+            if (self.session.get_transaction() is not self.transaction
+                    or key[:4] != (str(self.presentation.id), self.presentation.revision,
+                        str(get_current_owner_id()), str(get_current_tenant_id()))):
+                raise ValueError("svg_asset_revision_binding_invalid")
+            try:
+                await recheck_source_input_snapshot(self.session, self.presentation, proof,
+                                                    counters=self.snapshot_counters)
+            except SourceInputSnapshotRejected as error:
+                raise ValueError("svg_asset_revision_binding_invalid") from error
+        if self.snapshot_counters is not None:
+            logging.getLogger(__name__).info(
+                "SVG inherited source snapshot: %s legacy_sources=%s",
+                self.snapshot_counters.as_dict(), len(self.sources))
         for key, (source, pointer, owner, tenant, proofs) in self.sources.items():
             # Every outside binding reruns; the lineage proof is re-fenced, not re-derived.
             if (self.session.get_transaction() is not self.transaction
@@ -210,6 +244,42 @@ class _PublicationSourceVerification:
             logging.getLogger(__name__).info(
                 "SVG inherited source revalidated: verify_calls=%s distinct_sources=%s",
                 self.verify_calls, len(self.sources))
+
+    async def bootstrap_source_snapshots(self, context):
+        """Persist one derived svg-source-input-snapshot/v1 per legacy-proven source.
+
+        Runs only after ``revalidate`` re-fenced this export's own legacy proofs, under the
+        export's live fence (``context``), so no second history walk happens here. The
+        original producer and its rows are untouched; the derived pointer names this export
+        operation and is consumed only once that operation has succeeded. Never fails the
+        export: a snapshot that cannot be written stays absent and the legacy path remains.
+        """
+        if not self.use_source_snapshot or not self.sources:
+            return 0
+        from services.svg_source_input_snapshot import (
+            SourceInputSnapshotCounters, bootstrap_derived_source_input_snapshot)
+        if self.snapshot_counters is None:
+            self.snapshot_counters = SourceInputSnapshotCounters()
+        written = 0
+        for key, (source, pointer, _owner, _tenant, _proofs) in self.sources.items():
+            async def proven(*_args, _key=key):
+                # Proven by verify() and re-fenced by revalidate() in this transaction.
+                return _key in self.sources
+            try:
+                async with self.session.begin_nested():
+                    created = await bootstrap_derived_source_input_snapshot(
+                        self.session, presentation=self.presentation, source=source, pointer=pointer,
+                        context=context, slides=self.source_snapshot_slides, legacy_verify=proven,
+                        counters=self.snapshot_counters)
+            except Exception:  # noqa: BLE001 - an absent snapshot keeps the legacy export proof
+                logging.getLogger(__name__).warning(
+                    "svg_source_input_snapshot_bootstrap_not_written presentation=%s", self.presentation.id,
+                    exc_info=True)
+                continue
+            written += created is not None
+        logging.getLogger(__name__).info("SVG inherited source snapshot bootstrap: written=%s %s",
+                                         written, self.snapshot_counters.as_dict())
+        return written
 
 
 async def refresh_svg_page_numbers(session, presentation, *, operation_id=None, attempt_token=None,

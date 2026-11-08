@@ -1365,6 +1365,7 @@ def test_partial_recovery_page_input_digest_matches_new_and_legacy_svg_inputs():
         authored_outline={"slides": [{"content": "Page one"}]},
         svg_style_snapshot={"digest": "frozen-style"},
         total_slides=1,
+        request_payload={},
     )
     page_assets = {"asset-1": {"sha256": "frozen-asset"}}
     page_input = {
@@ -1405,6 +1406,7 @@ def test_partial_recovery_page_input_digest_matches_new_and_legacy_svg_inputs():
     assert contract["title_slot_lines"] == 2
     style = {"tokens": {}, "common_header": contract}
     frozen = SimpleNamespace(svg_style_snapshot=style, total_slides=2,
+        request_payload={"common_header_mode": "uniform"},
         authored_outline={"slides": [
             {"content": slide.content, "title": slide.title, "common_header": binding}
             for slide, binding in zip(outline.slides, bindings)
@@ -1416,7 +1418,7 @@ def test_partial_recovery_page_input_digest_matches_new_and_legacy_svg_inputs():
         assert initial == _expected_page_input_digest(current, frozen, index, page_assets)
     broken = deepcopy(frozen)
     broken.authored_outline["slides"][0]["content"] = "원본과 다른 내용"
-    with pytest.raises(ValueError, match="svg_common_header"):
+    with pytest.raises(ValueError, match="svg_partial_recovery_header_binding_invalid"):
         _expected_page_input_digest(current, broken, 0, page_assets)
     body = '<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720" viewBox="0 0 1280 720"><rect x="64" y="400" width="200" height="60" fill="#2563EB"/></svg>'
     first = finalize_svg(body, index=0, n=2, style_snapshot=style, header_page=bindings[0])
@@ -4075,6 +4077,35 @@ def test_partial_recovery_descendant_manifest_uses_current_episode_author_calls(
             current_calls.append(Row(**{**vars(current_calls[-1]), "id": uuid.uuid4(),
                 "state": "uncertain", "outcome": "unknown", "actual_cost_microunits": None}))
             usage_rows.append(Row(**{**vars(usage_rows[-1]), "id": uuid.uuid4()}))
+    if mode == "mixed_unmapped_call":
+        # A first (non-lineage) operation whose page was stopped by a dispatch
+        # freeze inside admission: the sealed before-stream stop proves the page
+        # unstarted only when it accounts for every logical call of the page.
+        from functools import partial
+
+        stopped_diagnostics = {"streamStage": "before_stream", "failureKind": "dispatch_stopped"}
+        stop = {**terminal_identity, "ordinal": 1, "terminal_event": "dispatch.stopped",
+                "diagnostics": stopped_diagnostics}
+        stop["receipt_digest"] = recovery.digest(stop)
+        stopped = dict(input_digest="frozen-page-1", inflight=None, attempts=[], svg_content=None,
+            provider_terminal_responses={"1": stop}, provider_diagnostics=[dict(ordinal=1,
+                code="public_provider_dispatch_stopped", diagnostics=stopped_diagnostics)])
+        first_job = Row(**{**vars(job), "request_payload": {
+            key: value for key, value in payload.items() if key != recovery.LINEAGE_KEY}})
+        stop_call = Row(**{**vars(current_calls[0]), "id": uuid.uuid4(), "slide_index": 1,
+            "state": "unavailable", "outcome": "failed", "actual_cost_microunits": None})
+        extra_call = Row(**{**vars(stop_call), "id": uuid.uuid4(), "state": "uncertain", "outcome": "unknown"})
+        assert recovery._unresolved_provider_call(stop_call)
+        undispatched = partial(recovery._undispatched_episode_page, stopped, first_job, operation, owner,
+                               "fixture", attempt_token="fixture-attempt")
+        assert undispatched(page_calls=[stop_call]) is True
+        assert undispatched(page_calls=[stop_call, extra_call]) is False
+        assert undispatched(page_calls=[extra_call]) is False
+        assert recovery._undispatched_episode_page(stopped, first_job, operation, owner, "fixture") is False
+        assert undispatched(page_calls=[stop_call], attempt_token="other-attempt") is False
+        assert undispatched(page_calls=[Row(**{**vars(stop_call), "actual_cost_microunits": 1})]) is False
+        # The lineage episode rule is unchanged.
+        assert recovery._undispatched_episode_page(stopped, job, operation, owner, "fixture") is True
 
     class Session:
         sync_session = SimpleNamespace(get_transaction=lambda: "fixture-transaction")

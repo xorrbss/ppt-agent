@@ -452,7 +452,10 @@ async def _quality_first_deck_advisory(ctx, pages, *, job, read_png, run_advisor
         try:
             if ordinal < len(groups):
                 await reservations_ready.wait()
-            semaphore = getattr(ctx, "semaphore", None)
+            # Group reviews are provider calls: a pipelined deck bounds them by
+            # its provider permits (the author concurrency the page gate had).
+            permits = getattr(ctx, "provider_permits", None)
+            semaphore = permits.slot(repair=False) if permits is not None else getattr(ctx, "semaphore", None)
             if semaphore is not None:
                 async with semaphore:
                     vision = await dispatch()

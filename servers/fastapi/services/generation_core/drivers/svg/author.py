@@ -24,6 +24,7 @@ from services.authored_checkpoint_errors import AuthoredStageError
 from services.generation_core.drivers.svg.native_declarations import bind_native_declarations
 from services.provider_usage_instrumentation import provider_usage_scope
 from services.svg_presentation_checkpoint import _provider_attempt_count
+from utils.provider_overload import ProviderOutcomeError
 
 _LOCAL_ESCALATION_REASONS = {
     "layout_candidate_unavailable", "layout_overflow_unresolved",
@@ -57,6 +58,43 @@ class AuthorAttempt:
     """Result of one author attempt; ``payload`` is mutated in place."""
     svg: str | None
     retry: bool = False
+
+
+_DISPATCH_STOPPED = {"streamStage": "before_stream", "failureKind": "dispatch_stopped"}
+
+
+class PageDispatchFrozen(ProviderOutcomeError):
+    """A sibling's page-local failure froze dispatch before this page's first approval.
+
+    Nothing was dispatched for it and no failure record is written; the page
+    stays unstarted. Stopped before admission it takes no reservation and
+    writes nothing. Stopped at ``before_dispatch`` (inside admission, after the
+    reservation) it is the existing ``public_provider_dispatch_stopped``
+    before-stream outcome with its sealed ``dispatch.stopped`` witness, the
+    same proof the terminal-drain stop writes. ``collect.tracked_page`` turns
+    it into a marker either way.
+    """
+
+    def __init__(self, index):
+        super().__init__("public_provider_dispatch_stopped", recovery_allowed=False,
+                         diagnostics=_DISPATCH_STOPPED)
+        self.slide_index = index
+
+
+def _approve_dispatch(state, index) -> bool:
+    """Approve one provider dispatch of ``index`` unless dispatch is frozen.
+
+    Synchronous on purpose: the freeze check and the approval record share one
+    region, so a freeze set by a sibling can never fall between them. A page
+    approved before the freeze keeps its approval for its remaining attempts.
+    """
+    approved = getattr(state, "dispatch_approved", None)
+    if approved is None:
+        return True
+    if getattr(state, "dispatch_frozen", False):
+        return index in approved
+    approved.add(index)
+    return True
 
 
 async def attempt_author(*, ctx, request, index, content, role, count, payload, ordinal,
@@ -203,10 +241,31 @@ async def attempt_author(*, ctx, request, index, content, role, count, payload, 
             payload["local_layout"] = {"model_calls": 0, "status": "resolved"}
         await checkpoint(job, index, payload=payload)
 
+    # A frozen, never-approved page stops before provider admission, so it
+    # takes no reservation; ``before_dispatch`` below stays the authoritative
+    # check for a freeze that lands while admission is awaited.
+    if (local_authored is None and getattr(state, "dispatch_frozen", False)
+            and index not in getattr(state, "dispatch_approved", ())):
+        raise PageDispatchFrozen(index)
     observer_ready = False
 
     async def before_dispatch(provider_ordinal=provider_ordinal):
         nonlocal observer_ready
+        # Dispatch freeze first, after the permit wait and before any inflight
+        # witness or the drain check: no dispatch is approved after a freeze
+        # unless this page was approved before it.
+        if not _approve_dispatch(state, index):
+            stopped = PageDispatchFrozen(index)
+            if job is not None:
+                # Admission already reserved this call. Seal the existing
+                # before-stream witness (inflight, then ``dispatch.stopped``)
+                # so the settled reservation is not an unproven UNKNOWN; with
+                # no job there is no usage scope and so no reservation.
+                payload["inflight"] = provider_ordinal
+                await checkpoint(job, index, payload=payload)
+                await save_event({"terminal_event": "dispatch.stopped",
+                                  "diagnostics": dict(_DISPATCH_STOPPED)})
+            raise stopped
         # A checkpoint is a recovery witness, not a separate
         # purchase ledger. Admission still owns reservation.
         if getattr(state, "terminal_drain_enabled", False) and state.fatal_error is not None:
@@ -223,14 +282,15 @@ async def attempt_author(*, ctx, request, index, content, role, count, payload, 
         observer_ready = True
 
     observer_scope = nullcontext()
-    if getattr(state, "terminal_drain_enabled", False) and job is not None:
-        from utils.codex_stream_adapter import observe_codex_provider_events
+    if job is not None:
+        # The sealed terminal record is written with or without terminal drain:
+        # a dispatch-freeze stop needs it too.
         from services.svg_presentation_checkpoint import record_svg_provider_event
-        loop, owner_context = asyncio.get_running_loop(), copy_context()
 
         async def save_event(event):
             record = {**event, "schema": "svg-provider-terminal/v1", "ordinal": provider_ordinal,
-                "job_id": str(job.id), "operation_id": str(job.workspace_operation_id),
+                "job_id": str(job.id), "operation_id": (str(job.workspace_operation_id)
+                    if getattr(job, "workspace_operation_id", None) is not None else None),
                 "attempt_token": job.attempt_token,
                 "fencing_token": getattr(job, "_workspace_fencing_token", None),
                 "input_digest": payload.get("input_digest")}
@@ -238,6 +298,10 @@ async def attempt_author(*, ctx, request, index, content, role, count, payload, 
             payload.setdefault("provider_terminal_responses", {})[str(provider_ordinal)] = sealed
             if sealed.get("terminal_event") in {"response.completed", "dispatch.stopped"}:
                 payload["inflight"] = None
+
+    if getattr(state, "terminal_drain_enabled", False) and job is not None:
+        from utils.codex_stream_adapter import observe_codex_provider_events
+        loop, owner_context = asyncio.get_running_loop(), copy_context()
 
         async def dispatch_preflight():
             from types import SimpleNamespace

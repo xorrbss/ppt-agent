@@ -28,6 +28,7 @@ from services.ppt_writing_policy import WRITING_POLICY_ID, writing_policy_prompt
 from services.svg_contract import SVG_CONTRACT_VERSION, source_digest, validate_raster_data_url
 from services.svg_authoring_profile import read_authoring_profile, read_quality_recovery_policy
 from utils.hashing import canonical_json_digest, sha256_prefixed
+from utils.llm_calls.author_prompt_cache_key import apply_prompt_cache_key
 from utils.llm_calls.author_prompt_profile import authoring_model
 from utils.llm_calls.author_prompt_split import author_messages
 from services.generation_core.authoring.author_slide import (
@@ -561,6 +562,86 @@ class SvgAuthorResult:
     native_declarations: dict | None = None
 
 
+SVG_AUTHOR_INPUT_DEDUP_VERSION = "svg-author-input-dedup/v1"
+
+
+def _reduced_table_fact(fact):
+    """Return fact without data.rows[r][c].text when cells[] carries identical text, else None."""
+    if not isinstance(fact, dict) or fact.get("kind") != "table":
+        return None
+    data, cells = fact.get("data"), fact.get("cells")
+    rows = data.get("rows") if isinstance(data, dict) else None
+    if not isinstance(rows, list) or not rows or not isinstance(cells, list) or not cells:
+        return None
+    anchors, covered = {}, set()
+    for cell in cells:
+        if not isinstance(cell, dict):
+            return None
+        r, c, rs, cs, text = (cell.get(k) for k in ("row", "column", "row_span", "column_span", "text"))
+        if (any(type(v) is not int for v in (r, c, rs, cs)) or min(rs, cs) < 1 or min(r, c) < 0
+                or not isinstance(text, str) or (r, c) in anchors):
+            return None
+        anchors[(r, c)] = text
+        covered.update((rr, cc) for rr in range(r, r + rs) for cc in range(c, c + cs))
+        covered.discard((r, c))
+    for r, row in enumerate(rows):
+        if not isinstance(row, list):
+            return None
+        for c, cell in enumerate(row):
+            if not isinstance(cell, dict) or not isinstance(cell.get("text"), str):
+                return None
+            if (r, c) in covered:
+                if (r, c) in anchors:
+                    return None
+            elif anchors.get((r, c)) != cell["text"]:
+                return None
+    # Every anchor must also be a real row cell; a stray anchor means the pairing is undecidable.
+    if any(r >= len(rows) or c >= len(rows[r]) for r, c in anchors):
+        return None
+    reduced_rows = [[cell if (r, c) in covered else {k: v for k, v in cell.items() if k != "text"}
+                     for c, cell in enumerate(row)] for r, row in enumerate(rows)]
+    return {**fact, "data": {**data, "rows": reduced_rows}}
+
+
+def _llm_source_content_view(content):
+    """Local prompt value for typed whole-page JSON; the ``content`` argument itself is never altered.
+
+    Returns (value, receipt). Embeds the parsed object only when the producer's exact serialization
+    reproduces the string byte-for-byte, then drops table text that cells[] repeats verbatim.
+    """
+    def size(value):
+        return len(json.dumps(value, ensure_ascii=False).encode("utf-8"))
+
+    try:
+        parsed = json.loads(content) if isinstance(content, str) else None
+        if (not isinstance(parsed, dict) or not isinstance(parsed.get("source_facts"), list)
+                or "source_authoring_contract" not in parsed or "source_page_id" not in parsed
+                or json.dumps(parsed, ensure_ascii=False) != content):
+            return content, {"input_json_unwrap": False}
+    except (ValueError, TypeError, RecursionError):
+        return content, {"input_json_unwrap": False}
+    escape_bytes = size(content) - size(parsed)
+    value, table_bytes = parsed, None
+    try:
+        facts, changed = [], False
+        for fact in parsed["source_facts"]:
+            reduced = _reduced_table_fact(fact)
+            changed = changed or reduced is not None
+            facts.append(fact if reduced is None else reduced)
+        candidate = {**parsed, "source_facts": facts}
+        table_bytes = size(parsed) - size(candidate)
+        if changed and table_bytes > 0:
+            value = candidate
+        else:
+            table_bytes = 0
+    except Exception:
+        value, table_bytes = parsed, None
+    total = escape_bytes + (table_bytes or 0)
+    return value, {"input_assembly_version": SVG_AUTHOR_INPUT_DEDUP_VERSION,
+        "input_dedup": {"table_text_dup_bytes": table_bytes, "json_double_escape_bytes": escape_bytes,
+                        "total_omitted_bytes": total}}
+
+
 def svg_author_rules(style_snapshot: dict, body_floor: float, *, new_copy: bool = False,
                      header_page: dict | None = None, source_preserved: bool = False) -> str:
     canvas = style_snapshot.get("canvas") or {}
@@ -852,8 +933,11 @@ async def author_slide_svg(content: str, style_snapshot: dict, role: str, index:
                    **({"kind": v["kind"]} if v.get("kind") else {}),
                    **({"allowOmit": v["allowOmit"]} if new_copy and "allowOmit" in v else {})}
                for k, v in manifest.items()}
+    # Local prompt value only: header binding, visual intent and native data above/below read ``content``.
+    prompt_source, dedup_receipt = (_llm_source_content_view(content) if source_preserved
+                                    else (content, {}))
     prompt = design + "\n\n" + json.dumps({"role": role, "index": index, "slide_count": n,
-                                           "instructions": instructions or "", "source_content": content,
+                                           "instructions": instructions or "", "source_content": prompt_source,
                                            "correction": correction_hint or "", "source_images": offered,
                                            **({"common_header": {"page": header_page,
                                                "body_box": style_snapshot["common_header"]["body_box"],
@@ -1031,6 +1115,9 @@ async def author_slide_svg(content: str, style_snapshot: dict, role: str, index:
     extra = _authoring_extra_body(reasoning_effort or effort, model=model)
     if extra:
         kwargs["extra_body"] = extra
+    # The deck's prompt-cache lane, when the SVG page loop bound one; the
+    # receipt below hashes the request as actually sent, key included.
+    apply_prompt_cache_key(kwargs)
     input_receipt = svg_author_input_receipt(style_snapshot, messages, provider=provider,
                                              model=str(model), budget=budget, kwargs=kwargs)
     if header_page is not None:
@@ -1121,6 +1208,7 @@ async def author_slide_svg(content: str, style_snapshot: dict, role: str, index:
             **({"author_attempt_identity": author_attempt_identity} if author_attempt_identity is not None else {}),
             **declaration_receipt(declarations),
             **input_receipt,
+            **dedup_receipt,
             **reference_receipt,
             **coverage_receipt,
             **repair_receipt,

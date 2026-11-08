@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import time
 import uuid
 from collections.abc import Mapping
 from datetime import datetime, timezone
@@ -531,10 +532,52 @@ def _native_object_entries(slides):
     return entries if any(entry is not None for entry in entries) else None
 
 
+class _StageClock:
+    """Private export timing. ``lap`` records sequential, non-overlapping top-level
+    segments; ``add`` accumulates spans nested inside a top-level segment, which are
+    inclusive (never sum them with the top-level values). Never raises."""
+
+    __slots__ = ("_last", "top", "inner", "counts")
+
+    def __init__(self):
+        self._last = time.perf_counter()
+        self.top = {}
+        self.inner = {}
+        self.counts = {}
+
+    def lap(self, name):
+        try:
+            now = time.perf_counter()
+            self.top[name] = self.top.get(name, 0.0) + (now - self._last)
+            self._last = now
+        except Exception:  # pragma: no cover - timing must never alter export behaviour
+            pass
+
+    def add(self, name, started):
+        try:
+            self.inner[name] = self.inner.get(name, 0.0) + (time.perf_counter() - started)
+            self.counts[name] = self.counts.get(name, 0) + 1
+        except Exception:  # pragma: no cover
+            pass
+
+    def log(self, operation_id, outcome):
+        try:
+            LOGGER.info(
+                "svg_export_stage_seconds operation=%s outcome=%s top_level_sequential=%s "
+                "nested_inclusive=%s calls=%s",
+                operation_id, outcome,
+                {key: round(value, 3) for key, value in self.top.items()},
+                {key: round(value, 3) for key, value in self.inner.items()},
+                dict(self.counts))
+        except Exception:  # pragma: no cover
+            pass
+
+
 async def render_and_export_svgs(claim, *, tenant_id, svgs, notes, export_format, canvas, session_factory,
                                  asset_bindings=None, source_preservation=None, deadline_grant=None,
                                  font_embedding=False, native_objects=None, slide_refs=None,
-                                 source_manifest=None, source_manifest_encoding=None, io_memo=None):
+                                 source_manifest=None, source_manifest_encoding=None, io_memo=None,
+                                 _stages=None):
     """Run the svg worker; ``slide_refs`` are pre-persisted slide svg checkpoints
     (``services.svg_export_identity``), otherwise the sources persist ephemeral."""
     if (claim.owner_id is None or claim.kind != f"export.{export_format}"
@@ -565,6 +608,7 @@ async def render_and_export_svgs(claim, *, tenant_id, svgs, notes, export_format
     _require_deadline_budget(grant)
     service = configured_public_artifact_service()
     from services.svg_export_assets import ExportIoMemo
+    _t_prepare = time.perf_counter()
     async with session_factory() as session:
         refs = []
         asset_refs = []
@@ -602,11 +646,14 @@ async def render_and_export_svgs(claim, *, tenant_id, svgs, notes, export_format
             payload=json.dumps(payload).encode(), media_type="application/vnd.presenton.export-bundle+json",
             created_by_operation_id=claim.operation_id, retention_class="ephemeral")
         await session.commit()
+    if _stages is not None:
+        _stages.add("render_prepare_persist_bundle_incl", _t_prepare)
     if asset_memo.counters is not None:
         asset_memo.counters.log(LOGGER, "prepare", claim.operation_id)
     # The worker receives only digest-verified transport bytes, never database
     # credentials or an assumption that the authority is a local filesystem.
     _require_deadline_budget(grant)
+    _t_stage = time.perf_counter()
     cache = configured_worker_artifact_cache()
     await cache.maintain()
     # One eviction pass for the whole staging batch instead of one full cache
@@ -616,18 +663,29 @@ async def render_and_export_svgs(claim, *, tenant_id, svgs, notes, export_format
         for reference in dict.fromkeys([*refs, *asset_refs, bundle]):
             _require_deadline_budget(grant)
             await service.stream_ref_to_object_store(reference, cache)
-    exported = await execute_isolated_export_operation(
-        claim, input_artifact=_worker_ref(bundle),
-        deadline_seconds=grant.export_worker_seconds() if grant else None)
+    if _stages is not None:
+        _stages.add("worker_cache_staging", _t_stage)
+    _t_worker = time.perf_counter()
+    try:
+        exported = await execute_isolated_export_operation(
+            claim, input_artifact=_worker_ref(bundle),
+            deadline_seconds=grant.export_worker_seconds() if grant else None)
+    finally:
+        # Includes launch, transport and output verification unless converter metrics separate them.
+        if _stages is not None:
+            _stages.add("worker_invocation_incl", _t_worker)
     if not exported.ok:
         raise PublicExportOperationError(exported.error_code or "svg_export_worker_failed")
     ref = _public_worker_output(dict(exported.output_artifact or {}), retention_class="published")
     if (ref.owner_id != claim.owner_id or ref.tenant_id != tenant_id
             or ref.created_by_operation_id != claim.operation_id or ref.kind != f"presentation-{export_format}"):
         raise PublicExportOperationError("svg_export_output_binding_invalid")
+    _t_register = time.perf_counter()
     async with session_factory() as session:
         registered = await service.register_ref(session, ref)
         await session.commit()
+    if _stages is not None:
+        _stages.add("output_ref_register", _t_register)
     return PublicWorkerArtifactResult(artifact=registered, resource_metrics={
         "role": exported.role, **exported.resource_metrics,
         "public_export_worker_evidence": dict(exported.execution_evidence)})
@@ -804,7 +862,7 @@ async def _bound_final_lock_wait(session):
 
 
 async def _build_slide_asset_bindings(context, *, slides, service, session, tenant_id, export_format, canvas, grant,
-                                      io_memo=None):
+                                      io_memo=None, _stages=None):
     """Share producer proof only inside this export preparation transaction.
 
     The long per-slide phase reads and writes only content-addressed artifacts;
@@ -827,31 +885,49 @@ async def _build_slide_asset_bindings(context, *, slides, service, session, tena
     if (presentation is None or presentation.owner_id != claim.owner_id
             or presentation.revision != claim.expected_revision):
         raise ValueError("svg_export_source_snapshot_changed")
-    verification = _PublicationSourceVerification(session, presentation)
+    verification = _PublicationSourceVerification(session, presentation, use_source_snapshot=True,
+                                                   source_snapshot_slides=slides)
 
     async def verify_source(*args):
-        if claim_binding() != expected_claim:
-            raise ValueError("svg_export_asset_fence_lost")
-        _require_deadline_budget(grant)
-        return await verification.verify(*args)
+        _t_verify = time.perf_counter()
+        try:
+            if claim_binding() != expected_claim:
+                raise ValueError("svg_export_asset_fence_lost")
+            _require_deadline_budget(grant)
+            return await verification.verify(*args)
+        finally:
+            # Nested inside the asset loop: inclusive, summed over callbacks.
+            if _stages is not None:
+                _stages.add("source_verify_wrapper_incl", _t_verify)
 
     bindings = []
     # Operation-scoped memo for verified source manifests, sealed assets and derivatives.
     # Verified manifest proofs are shared across the operation; per-slide entries belong to this transaction.
     export_memo = io_memo.for_session() if io_memo is not None else {}
     deferred_publications = []
-    for slide in slides:
-        await context.raise_if_cancelled()
-        _require_deadline_budget(grant)
-        bindings.append(await build_slide_export_assets(slide, service=service, session=session,
-            claim=claim, tenant_id=tenant_id, export_format=export_format, canvas=canvas,
-            _source_verifier=verify_source, _memo=export_memo, _deferred_publications=deferred_publications))
-    await verification.revalidate()
+    _t_loop = time.perf_counter()
+    try:
+        for slide in slides:
+            await context.raise_if_cancelled()
+            _require_deadline_budget(grant)
+            bindings.append(await build_slide_export_assets(slide, service=service, session=session,
+                claim=claim, tenant_id=tenant_id, export_format=export_format, canvas=canvas,
+                _source_verifier=verify_source, _memo=export_memo, _deferred_publications=deferred_publications))
+    finally:
+        if _stages is not None:
+            _stages.add("asset_loop_incl_source_verify", _t_loop)
+    _t_revalidate = time.perf_counter()
+    try:
+        await verification.revalidate()
+    finally:
+        if _stages is not None:
+            _stages.add("final_revalidate", _t_revalidate)
     await context.raise_if_cancelled()
     _require_deadline_budget(grant)
     if claim_binding() != expected_claim:
         raise ValueError("svg_export_asset_fence_lost")
     # Final section: the only admission -> operation row locks of this transaction.
+    _t_final = time.perf_counter()
     await _bound_final_lock_wait(session)
     try:
         current = await _locked_current_operation(session, operation_id=claim.operation_id,
@@ -876,6 +952,15 @@ async def _build_slide_asset_bindings(context, *, slides, service, session, tena
         operation_id=claim.operation_id, owner_id=claim.owner_id, tenant_id=tenant_id,
         attempt_number=claim.attempt_number, attempt_token=claim.attempt_token,
         fencing_token=claim.fencing_token, operation_kind="export", deferred_publications=deferred_publications))
+    # One-time derived source snapshot for inherited sources this export proved the
+    # legacy way; written under this export's live fence, never failing the export.
+    await verification.bootstrap_source_snapshots(SvgPublicationContext(
+        operation_id=claim.operation_id, owner_id=claim.owner_id, tenant_id=tenant_id,
+        attempt_number=claim.attempt_number, attempt_token=claim.attempt_token,
+        fencing_token=claim.fencing_token, operation_kind="export"))
+    if _stages is not None:
+        # Lock wait + checks + promotion only; excludes the caller's session.commit().
+        _stages.add("final_section_pre_commit", _t_final)
     _require_deadline_budget(grant)
     return bindings
 
@@ -893,6 +978,7 @@ async def execute_svg_workspace_export(context, *, presentation, admission, sess
         prepare_workspace_export_artifact_ref,
         publish_workspace_export_artifact,
     )
+    stages = _StageClock()
     claim = context.claim
     fmt = claim.kind.removeprefix("export.")
     if admission is None or admission.state != "active" or admission.owner_id != claim.owner_id:
@@ -922,6 +1008,7 @@ async def execute_svg_workspace_export(context, *, presentation, admission, sess
     if (len(slides) != presentation.n_slides
             or [slide.index for slide in slides] != list(range(len(slides)))):
         raise NonRetryableWorkspaceOperationError("svg_export_incomplete_presentation")
+    stages.lap("load_slides_validate")
     # Lineage authority, source preservation and the sealed manifest can keep the
     # loop busy before asset preparation too; widen the lease before them. A
     # missing or exhausted grant still fails at its own check below.
@@ -932,6 +1019,7 @@ async def execute_svg_workspace_export(context, *, presentation, admission, sess
         early_lease_seconds = None
     if early_lease_seconds is not None:
         await context.extend_lease(seconds=early_lease_seconds)
+    stages.lap("early_grant_lease")
     try:
         async with session_factory() as session:
             header_authority = await require_current_header_revision_authority(session, presentation, slides)
@@ -939,6 +1027,7 @@ async def execute_svg_workspace_export(context, *, presentation, admission, sess
                 header_revision_authority=header_authority)
     except ValueError as error:
         raise NonRetryableWorkspaceOperationError(str(error)) from error
+    stages.lap("preflight_authority_and_parent")
     if header_authority is not None:
         slides = header_revision_review_slides(header_authority, presentation, slides)
     canvas = presentation_canvas_metadata(presentation.theme)
@@ -964,6 +1053,7 @@ async def execute_svg_workspace_export(context, *, presentation, admission, sess
                     receipts=measured_source_preservation)
     except PublicExportOperationError as error:
         raise NonRetryableWorkspaceOperationError(str(error)) from error
+    stages.lap("snapshot_source_preservation_manifest")
     from services.svg_export_assets import ExportIoMemo
     io_counters = ExportIoCounters()
     io_memo = ExportIoMemo(io_counters)
@@ -978,6 +1068,7 @@ async def execute_svg_workspace_export(context, *, presentation, admission, sess
         async with session_factory() as session:
             slides = await project_cached_source_tables(session, presentation=presentation, slides=slides,
                 receipts=measured_source_preservation, canvas=parse_canvas_metadata(canvas), owner_id=claim.owner_id)
+    stages.lap("manifest_encode_table_projection")
     svgs = [slide.svg_content for slide in slides]
     notes = [slide.speaker_note or "" for slide in slides]
     source_assets = [(slide.content or {}).get("svgAssetManifest") for slide in slides]
@@ -1014,6 +1105,7 @@ async def execute_svg_workspace_export(context, *, presentation, admission, sess
             source_revision=claim.expected_revision, source_snapshot_sha256=source_digest,
             request_hash=operation.request_hash, idempotency_key_hash=operation.idempotency_key_hash,
             requested_adapter="general", provenance=provenance)
+    stages.lap("source_digest_begin_attempt")
     try:
         # Before any preparation: an expired admission must not spend minutes
         # deriving assets and staging a bundle on every retry.
@@ -1029,16 +1121,23 @@ async def execute_svg_workspace_export(context, *, presentation, admission, sess
         advisory = svg_meta.get("advisory")
         async with session_factory() as producer_session:
             source_review = await svg_source_review_context(producer_session, presentation, slides)
+        stages.lap("grant_lease_source_review")
 
         async def run_worker(slide_refs):
             asset_bindings = None
             if any(asset is not None for asset in source_assets):
                 service = configured_public_artifact_service()
+                _t_bindings = time.perf_counter()
                 async with session_factory() as session:
-                    asset_bindings = await _build_slide_asset_bindings(context, slides=slides,
-                        service=service, session=session, tenant_id=admission.tenant_id,
-                        export_format=fmt, canvas=canvas, grant=grant, io_memo=io_memo)
-                    await session.commit()
+                    try:
+                        asset_bindings = await _build_slide_asset_bindings(context, slides=slides,
+                            service=service, session=session, tenant_id=admission.tenant_id,
+                            export_format=fmt, canvas=canvas, grant=grant, io_memo=io_memo, _stages=stages)
+                        _t_commit = time.perf_counter()
+                        await session.commit()
+                        stages.add("bindings_commit", _t_commit)
+                    finally:
+                        stages.add("bindings_total_incl", _t_bindings)
                 io_counters.log(LOGGER, "bindings", claim.operation_id)
             return await render_and_export_svgs(
                 claim, tenant_id=admission.tenant_id, svgs=svgs, notes=notes, export_format=fmt, canvas=canvas,
@@ -1046,7 +1145,7 @@ async def execute_svg_workspace_export(context, *, presentation, admission, sess
                 source_preservation=source_preservation, deadline_grant=grant, font_embedding=font_embedding,
                 native_objects=native_objects, slide_refs=slide_refs,
                 source_manifest=source_manifest, source_manifest_encoding=manifest_encoding,
-                io_memo=io_memo)
+                io_memo=io_memo, _stages=stages)
 
         # One export per identity: a completed identity is reused without the
         # worker or asset derivation; only a claimed one runs ``run_worker``.
@@ -1060,6 +1159,8 @@ async def execute_svg_workspace_export(context, *, presentation, admission, sess
                 source_manifest=source_manifest, source_manifest_encoding=manifest_encoding,
                 font_embedding=font_embedding, advisory=advisory, quality_policy=quality_policy),
             session_factory=session_factory, grant=grant, execute=run_worker)
+        # Inclusive of identity lookup/checkpoint persistence and run_worker (nested spans above).
+        stages.lap("identity_export_incl_worker")
         ref = result.artifact
         final_reviews = ((presentation.theme or {}).get("svg") or {}).get("finalPptxReviews") or {}
         if isinstance(final_reviews, dict) and isinstance(final_reviews.get(ref.sha256), dict):
@@ -1087,6 +1188,7 @@ async def execute_svg_workspace_export(context, *, presentation, admission, sess
         # Post-export: the receipt's own digest is the publication quality
         # digest. ``evidenceDigests`` are the pre-export identity inputs.
         quality_digest = _digest(receipt)
+        stages.lap("quality_receipt_build")
         # Pre-export evidence stays in the immutable identity checkpoint. The
         # public receipt is a strict QualityReceiptV3; adding identity fields
         # here makes status projection discard the artifact-bound receipt.
@@ -1103,9 +1205,13 @@ async def execute_svg_workspace_export(context, *, presentation, admission, sess
                 public_artifact_id=ref.artifact_id, public_tenant_id=admission.tenant_id,
                 public_attempt_number=claim.attempt_number, public_quality_digest=quality_digest,
                 public_quality_receipt=receipt)
+        stages.lap("publish_artifact_sessions")
+        stages.log(claim.operation_id, "completed")
         return WorkspaceOperationResult(
             payload={"status": "completed", "format": fmt, **result.resource_metrics}, result_revision=revision)
     except BaseException as error:
+        stages.lap("failed_segment")
+        stages.log(claim.operation_id, "failed")
         try:
             async with session_factory() as session:
                 await terminalize_export_attempt_failed_if_current_workspace_claim(

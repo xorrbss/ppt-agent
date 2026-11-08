@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import asyncio
 from copy import deepcopy
+import json
 from pathlib import Path
 import re
 
@@ -115,7 +116,7 @@ async def record_svg_provider_event(job, index: int, record: dict) -> dict:
     if 'diagnostics' in value:
         value['diagnostics'] = safe_provider_diagnostics(diagnostics=value['diagnostics'])
     async with async_session_maker() as session:
-        active = await owned_job(session, job.id, job.attempt_token, fencing_token=identity['fencing_token'])
+        active = await owned_job(session, job.id, job.attempt_token, fencing_token=identity['fencing_token'], light=True)
         if active.workspace_operation_id != job.workspace_operation_id:
             raise ValueError('svg_provider_terminal_binding_invalid')
         if job.workspace_operation_id is not None:
@@ -490,12 +491,82 @@ async def initialize_svg_checkpoints(*, job_id, attempt_token, roles, fencing_to
         await session.commit()
 
 
+async def _require_read_authority(session, job) -> None:
+    """The ``owned_job`` predicates as a plain read: no row locks, no writes.
+
+    A checkpoint read changes no authority; every write, provider dispatch and
+    publication still takes the full fenced CAS. A revoked attempt therefore
+    still fails at its next read, without serializing live pages on the job
+    and operation rows or rewriting their heartbeats.
+    """
+    from models.sql.presentation_generation_job import PresentationGenerationJob
+    from models.sql.public_admission import PublicOperationAdmission
+    from models.sql.workspace import WorkspaceOperation
+    from services.authored_checkpoint_errors import AuthoredStageError
+
+    fencing_token = getattr(job, "_workspace_fencing_token", None)
+    current = (await session.execute(select(
+        PresentationGenerationJob.state, PresentationGenerationJob.attempt_token,
+        PresentationGenerationJob.workspace_operation_id,
+    ).where(PresentationGenerationJob.id == job.id))).one_or_none()
+    lost = "authored_attempt_lost"
+    if current is not None and current.workspace_operation_id is not None:
+        if isinstance(fencing_token, bool) or not isinstance(fencing_token, int):
+            raise AuthoredStageError(slide_index=0, stage="persist", retryable=True,
+                                     code="authored_workspace_operation_fencing_token_required")
+        operation = (await session.execute(select(
+            WorkspaceOperation.state, WorkspaceOperation.attempt_token,
+            WorkspaceOperation.fencing_token, WorkspaceOperation.contract_version,
+        ).where(WorkspaceOperation.id == current.workspace_operation_id))).one_or_none()
+        admission = (await session.execute(select(
+            PublicOperationAdmission.operation_kind, PublicOperationAdmission.state,
+            PublicOperationAdmission.fence,
+        ).where(PublicOperationAdmission.operation_id == current.workspace_operation_id))).one_or_none()
+        if (operation is None or operation.state != "running"
+                or operation.attempt_token != job.attempt_token
+                or operation.fencing_token != fencing_token
+                or operation.contract_version == "public-operation/v2" and (
+                    admission is None or admission.operation_kind != "generation"
+                    or admission.state != "active" or admission.fence != fencing_token)):
+            raise AuthoredStageError(slide_index=0, stage="persist", retryable=True,
+                                     code="authored_workspace_operation_fence_lost")
+        if current.state not in ("running", "staging"):
+            raise AuthoredStageError(slide_index=0, stage="persist", code=lost, retryable=True)
+    elif (current is None or current.state not in ("running", "staging")
+            or current.attempt_token != job.attempt_token):
+        raise AuthoredStageError(slide_index=0, stage="persist", code=lost, retryable=True)
+
+
+async def _fence_checkpoint_authority(job, index: int) -> None:
+    """The fenced CAS of ``_checkpoint(job, index)`` without transferring its payload."""
+    async with async_session_maker() as session:
+        await owned_job(session, job.id, job.attempt_token,
+                        fencing_token=getattr(job, "_workspace_fencing_token", None), light=True)
+        if await session.scalar(select(AuthoredSlideCheckpoint.id).where(
+                AuthoredSlideCheckpoint.job_id == job.id,
+                AuthoredSlideCheckpoint.slide_index == index)) is None:
+            raise RuntimeError("svg_checkpoint_missing")
+        await session.commit()
+
+
 async def _checkpoint(job, index, *, payload=None):
     if job is None:
         return None
     async with async_session_maker() as session:
+        if payload is None:
+            # Read first, then assert the fence, so a takeover cannot slip in
+            # between a passed check and the returned page. A lost fence still
+            # takes precedence over a missing row.
+            found = (await session.execute(select(AuthoredSlideCheckpoint.svg_checkpoint).where(
+                AuthoredSlideCheckpoint.job_id == job.id,
+                AuthoredSlideCheckpoint.slide_index == index,
+            ))).one_or_none()
+            await _require_read_authority(session, job)
+            if found is None:
+                raise RuntimeError("svg_checkpoint_missing")
+            return dict(found.svg_checkpoint or {})
         active = await owned_job(session, job.id, job.attempt_token,
-                                 fencing_token=getattr(job, "_workspace_fencing_token", None))
+                                 fencing_token=getattr(job, "_workspace_fencing_token", None), light=True)
         row = await session.scalar(select(AuthoredSlideCheckpoint).where(
             AuthoredSlideCheckpoint.job_id == job.id,
             AuthoredSlideCheckpoint.slide_index == index,
@@ -504,13 +575,21 @@ async def _checkpoint(job, index, *, payload=None):
             raise RuntimeError("svg_checkpoint_missing")
         if payload is not None:
             payload = _preserve_provider_terminal_responses(row.svg_checkpoint or {}, payload, job=job)
+            # Completion times record the first transition into completed; a
+            # later write of the same completed stage (repair, receipt, review)
+            # by the same attempt keeps it. Leaving the stage or a new attempt
+            # clears it, so a re-entry stamps anew.
+            now = get_current_utc_datetime()
+            same_attempt = row.attempt_token == job.attempt_token
+            authored_at = row.author_completed_at if same_attempt and row.author_status == "completed" else None
+            rendered_at = row.render_completed_at if same_attempt and row.render_status == "completed" else None
             row.svg_checkpoint = payload
             row.attempt_token = job.attempt_token
             row.author_status = "completed" if payload.get("svg_content") else "running"
             row.illustrate_status = "skipped"
             row.render_status = "completed" if payload.get("png_sha256") else "pending"
-            row.author_completed_at = get_current_utc_datetime() if payload.get("svg_content") else None
-            row.render_completed_at = get_current_utc_datetime() if payload.get("png_sha256") else None
+            row.author_completed_at = (authored_at or now) if payload.get("svg_content") else None
+            row.render_completed_at = (rendered_at or now) if payload.get("png_sha256") else None
             row.failed_stage = None
             row.error = None
             session.add(row)
@@ -541,6 +620,90 @@ def _read_png(payload: dict) -> bytes | None:
         return None
     png = path.read_bytes()
     return png if sha256_hex(png) == digest else None
+
+
+BROWSER_METRICS_REF_SCHEMA = "svg-browser-metrics-ref/v1"
+
+
+def _browser_metrics_path(digest: str) -> Path:
+    return checkpoint_root() / "svg-metrics" / digest[:2] / f"{digest}.json"
+
+
+def compact_browser_metrics(quality: dict) -> dict | None:
+    """Move a quality dict's measured metrics to the content-addressed store.
+
+    The dict keeps its identity and key order; ``browser_metrics`` is replaced
+    in place by an integrity-bound reference, so every holder of the same
+    quality object (attempt, current, initial) persists one blob. The blob is
+    fsynced before any checkpoint can carry the reference. Returns the exact
+    metrics, or ``None`` when the dict stays inline (nothing to move, or the
+    value has no lossless UTF-8 encoding).
+    """
+    metrics = quality.get("browser_metrics")
+    if not isinstance(metrics, dict) or "browser_metrics_ref" in quality:
+        return None
+    try:
+        blob = json.dumps(metrics, ensure_ascii=False, separators=(",", ":"),
+                          allow_nan=True).encode("utf-8")
+    except (TypeError, ValueError, UnicodeEncodeError):
+        return None
+    if json.loads(blob) != metrics:
+        return None
+    digest = sha256_hex(blob)
+    path = _browser_metrics_path(digest)
+    if not (path.is_file() and sha256_hex(path.read_bytes()) == digest):
+        atomic_write(path, blob)
+    reference = {"schema": BROWSER_METRICS_REF_SCHEMA, "sha256": digest, "bytes": len(blob)}
+    items = [("browser_metrics_ref", reference) if key == "browser_metrics" else (key, value)
+             for key, value in quality.items()]
+    quality.clear()
+    quality.update(items)
+    return metrics
+
+
+def quality_browser_metrics(quality) -> dict | None:
+    """The exact measured metrics of a quality dict, inline or referenced.
+
+    Legacy inline dicts are returned as stored. A reference must resolve to
+    its exact sealed blob; a missing, tampered or ambiguous reference raises
+    ``ValueError`` instead of reading as "no metrics".
+    """
+    if not isinstance(quality, dict):
+        return None
+    reference = quality.get("browser_metrics_ref")
+    if reference is None:
+        return quality.get("browser_metrics")
+    if "browser_metrics" in quality or not isinstance(reference, dict):
+        raise ValueError("svg_browser_metrics_ref_invalid")
+    digest, size = reference.get("sha256"), reference.get("bytes")
+    if (reference.get("schema") != BROWSER_METRICS_REF_SCHEMA or set(reference) != {"schema", "sha256", "bytes"}
+            or not isinstance(digest, str) or len(digest) != 64
+            or any(c not in "0123456789abcdef" for c in digest)
+            or type(size) is not int or size < 2):
+        raise ValueError("svg_browser_metrics_ref_invalid")
+    try:
+        blob = _browser_metrics_path(digest).read_bytes()
+    except OSError as error:
+        raise ValueError("svg_browser_metrics_ref_invalid") from error
+    if len(blob) != size or sha256_hex(blob) != digest:
+        raise ValueError("svg_browser_metrics_ref_invalid")
+    metrics = json.loads(blob)
+    if not isinstance(metrics, dict):
+        raise ValueError("svg_browser_metrics_ref_invalid")
+    return metrics
+
+
+def with_browser_metrics(quality, metrics=None):
+    """A shallow copy carrying exact inline metrics at the reference's position.
+
+    The input is never modified, so stored-form digests stay unchanged.
+    """
+    if not isinstance(quality, dict) or "browser_metrics_ref" not in quality:
+        return quality
+    if metrics is None:
+        metrics = quality_browser_metrics(quality)
+    return {("browser_metrics" if key == "browser_metrics_ref" else key):
+            (metrics if key == "browser_metrics_ref" else value) for key, value in quality.items()}
 
 
 def _save_source_page_pngs(presentation_id, pages, publication_token):

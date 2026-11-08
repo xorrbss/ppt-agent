@@ -167,20 +167,28 @@ def _interval(bounds: list[float], value: float) -> int | None:
 
 
 def _wrapped_cell_matches(declared: str, lines) -> bool:
-    """A single-paragraph cell drawn over several lines: the lines must spell the declared
-    text exactly, with at most one space dropped at each line break (a wrap between words
-    drops it; a mid-word wrap, common in Korean, has none)."""
-    if len(lines) < 2 or chr(10) in declared:
-        return False
-    position = 0
+    """A cell drawn over several lines: the lines must spell the declared text exactly, with
+    at most one space dropped at each line break (a wrap between words drops it; a mid-word
+    wrap, common in Korean, has none). A multi-paragraph cell's paragraph breaks must each
+    fall on a drawn line break; a paragraph may itself wrap over several lines."""
+    return len(lines) >= 2 and _drawn_line_separators(declared, lines) is not None
+
+
+def _drawn_line_separators(declared: str, lines) -> list[str] | None:
+    """What the declared text has between consecutive drawn lines: a newline (a hard
+    paragraph break), a space (a wrap that dropped it) or nothing (a mid-word wrap);
+    ``None`` when the lines do not spell the declared text exactly."""
+    position, separators = 0, []
     for index, line in enumerate(lines):
         line = normalize_cell(line)
         if not line or not declared.startswith(line, position):
-            return False
+            return None
         position += len(line)
-        if index < len(lines) - 1 and declared.startswith(" ", position):
-            position += 1
-    return position == len(declared)
+        if index < len(lines) - 1:
+            separator = declared[position] if declared.startswith((chr(10), " "), position) else ""
+            position += len(separator)
+            separators.append(separator)
+    return separators if position == len(declared) else None
 
 
 def _place(texts, xs, ys, cells, spans=None, blocks=None) -> dict[tuple[int, int], DrawnText]:
@@ -322,9 +330,20 @@ def apply_drawn_table_style(projected: dict, item, root) -> None:
     for (row, column), text in placed.items():
         cell = projected["rows"][row][column]
         bottom_row = min(row + blocks.get((row, column), (1, 1))[0], len(ys) - 1)
+        # A multi-paragraph cell keeps its own hard paragraph breaks: the drawn lines of
+        # one declared paragraph stay one paragraph whose drawn wraps are soft line
+        # breaks (DrawingML a:br), instead of each drawn line becoming a paragraph.
+        declared = normalize_cell(cells[row][column])
+        separators = starts = None
+        if chr(10) in declared and declared != text.text:
+            separators = (_drawn_line_separators(declared, text.lines)
+                          if len(text.lines) == len(text.run_lines) else None)
+            if separators is None:
+                continue
+            starts = [0] + [index + 1 for index, separator in enumerate(separators) if separator == chr(10)]
         geometry = (None if any(edge in cell.get("padding", {}) for edge in ("top", "bottom"))
-                    else _paragraph_geometry(text, ys[row], ys[bottom_row]))
-        if not text.run_lines or (text.uniform and geometry is None):
+                    else _paragraph_geometry(text, ys[row], ys[bottom_row], starts))
+        if not text.run_lines or (text.uniform and geometry is None and separators is None):
             continue
         paragraphs = []
         for index, line in enumerate(text.run_lines):
@@ -338,7 +357,13 @@ def apply_drawn_table_style(projected: dict, item, root) -> None:
                 if family:
                     run["font_family"] = family
                 runs.append(run)
-            paragraphs.append({"runs": runs, **(geometry[0][index] if geometry else {})})
+            if separators is not None and index > 0 and separators[index - 1] != chr(10):
+                # The drawn wrap becomes a soft break; it stands for the dropped space.
+                if runs:
+                    runs[0]["break_before"] = True
+                paragraphs[-1]["runs"].extend(runs)
+                continue
+            paragraphs.append({"runs": runs, **(geometry[0][len(paragraphs)] if geometry else {})})
         cell.pop("text", None)
         cell["paragraphs"] = paragraphs
         if geometry is not None:
@@ -348,8 +373,15 @@ def apply_drawn_table_style(projected: dict, item, root) -> None:
             cell["valign"] = "top"
 
 
-def _paragraph_geometry(text: DrawnText, top: float, bottom: float):
-    """Optional canvas-unit spacing for source lines with one common font size."""
+def _paragraph_geometry(text: DrawnText, top: float, bottom: float, starts=None):
+    """Optional canvas-unit spacing for source lines with one common font size.
+
+    ``starts`` are the drawn line indices that open a hard paragraph (default: every
+    line). A paragraph's own drawn lines share one baseline pitch, which becomes its
+    exact line spacing; the baseline sits at 0.8 of a line box, as the font box the
+    shared padding uses (1.25 x size, baseline at size). A paragraph whose drawn
+    lines are not evenly spaced cannot be represented and is rejected.
+    """
     if (len(text.lines) < 2 or len(text.lines) != len(text.points)
             or len(text.lines) != len(text.run_lines)
             or any(run.size != text.size or run.family != text.family
@@ -357,13 +389,29 @@ def _paragraph_geometry(text: DrawnText, top: float, bottom: float):
             or any(abs(point[0] - text.points[0][0]) > 1e-6 for point in text.points)):
         return None
     line_box = text.size * 1.25
-    gaps = [text.points[index][1] - text.points[index - 1][1]
-            for index in range(1, len(text.points))]
-    padding = {"top": text.points[0][1] - text.size - top,
-               "bottom": bottom - text.points[-1][1] - text.size * 0.25}
+    starts = list(range(len(text.lines))) if starts is None else sorted(starts)
+    groups = [range(start, end) for start, end in zip(starts, starts[1:] + [len(text.lines)])]
+    baselines = [point[1] for point in text.points]
+    spacing = []
+    for group in groups:
+        pitches = [baselines[index] - baselines[index - 1] for index in group[1:]]
+        if pitches and max(pitches) - min(pitches) > 0.5:
+            raise NativeRejection("native_table_paragraph_pitch_nonuniform")
+        spacing.append(sum(pitches) / len(pitches) if pitches else line_box)
+    def ascent(value):  # baseline at 0.8 of the line box (exactly the font size for 1.25 x size)
+        return text.size if value == line_box else value * 4 / 5
+
+    def descent(value):
+        return text.size * 0.25 if value == line_box else value / 5
+
+    padding = {"top": baselines[0] - ascent(spacing[0]) - top,
+               "bottom": bottom - baselines[-1] - descent(spacing[-1])}
+    befores = [0.0] + [baselines[groups[k][0]] - baselines[groups[k - 1][-1]]
+                       - (spacing[k] if spacing[k - 1] == spacing[k] else descent(spacing[k - 1]) + ascent(spacing[k]))
+                       for k in range(1, len(groups))]
     if (not math.isfinite(line_box) or line_box <= 0
-            or any(not math.isfinite(gap) or gap < line_box for gap in gaps)
+            or any(not math.isfinite(value) or value < line_box for value in spacing)
+            or any(not math.isfinite(value) or value < 0 for value in befores)
             or any(not math.isfinite(value) or value < 0 for value in padding.values())):
         return None
-    return ([{"line_spacing": line_box, "space_before": 0.0 if index == 0 else gaps[index - 1] - line_box}
-             for index in range(len(text.lines))], padding)
+    return ([{"line_spacing": spacing[k], "space_before": befores[k]} for k in range(len(groups))], padding)
