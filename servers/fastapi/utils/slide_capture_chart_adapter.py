@@ -160,7 +160,10 @@ class _SharedChartPipe:
                 raise RuntimeError("chart sibling blank document did not become ready")
             time.sleep(0.01)
         new_context = page("Page.createIsolatedWorld", {"frameId": frame_id, "worldName": "chart-plane-reset/v1"}).get("executionContextId")
-        if type(old_context) is not int or type(new_context) is not int or new_context == old_context:
+        # CDP does not promise distinct context ids across a navigation (Chrome for
+        # Testing 153 reuses them), so the id only has to exist; the loader change
+        # and the blank-document sentinel check below prove the reset.
+        if type(old_context) is not int or type(new_context) is not int:
             raise RuntimeError("chart sibling execution context was not replaced")
         clean = page("Runtime.evaluate", {"expression": "(async()=>{if(document.readyState!=='complete')await new Promise(resolve=>window.addEventListener('load',resolve,{once:true}));return {chartPlaneBlankV1:document.readyState==='complete'&&location.href==='data:,'&&typeof globalThis.__chartPlanePriorDocument==='undefined'&&typeof globalThis.__chartPaint==='undefined'&&!document.getElementById('chart-plane-prior-document')&&!document.querySelector('svg')&&!document.getElementById('__codex_authored_dom_metrics')&&document.styleSheets.length===0&&document.adoptedStyleSheets.length===0&&(!document.fonts||document.fonts.size===0)&&(!getSelection()||getSelection().rangeCount===0)&&(!document.body||document.body.childNodes.length===0)}})()", "returnByValue": True, "awaitPromise": True})
         if clean.get("exceptionDetails") or clean.get("result", {}).get("value") != {"chartPlaneBlankV1": True}:

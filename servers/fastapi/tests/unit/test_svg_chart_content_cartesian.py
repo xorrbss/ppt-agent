@@ -633,3 +633,19 @@ def test_fixed_axis_calibration_attacks_fail(attack):
         next(node for node in group if node.tag == "rect" and node.get("width") != "10").set("height", "20")
     canvas_texts = collect_primitives(siblings, (0, 0), {}, CHART_ELEMENTS).texts
     assert not _proof(raw, group, canvas_texts=canvas_texts)["passed"]
+
+
+def test_legendless_bars_with_many_possible_series_layouts_are_refused_quickly():
+    """Fewer drawn bars than series, without a legend, must not search every layout."""
+    import time
+
+    values = [[10 + s + c for c in range(7)] for s in range(6)]
+    raw, group = _fixture("column", values, legend=False)
+    bars = [node for node in group if node.tag == "rect"]
+    for node in bars[3 * 7:]:  # keep three of six series drawn in every category
+        group.remove(node)
+    started = time.monotonic()
+    proof = _proof(raw, group)
+    assert time.monotonic() - started < 5
+    assert not proof["passed"]
+    assert proof.get("reason") == "chart_content_bar_series_association_ambiguous", proof

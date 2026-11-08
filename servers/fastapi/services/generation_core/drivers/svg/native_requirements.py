@@ -484,7 +484,8 @@ def required_numeric_claims_with_native_charts(content: str, payload: dict, svg:
         for start, end in excluded:
             masked[start:end] = " " * (end - start)
         return _required_numeric_claims("".join(masked))
-    except (ValueError, TypeError, KeyError, AttributeError, InvalidOperation, RecursionError):
+    except (ValueError, TypeError, KeyError, IndexError, ZeroDivisionError, AttributeError, InvalidOperation,
+            RecursionError):
         # Parsing or association uncertainty keeps every original text claim.
         return legacy
 
@@ -560,12 +561,19 @@ def apply_requested_native_quality(quality: dict, payload: dict, svg: str, conte
             expected_units = {_unit_key(label["unit"]) for label in expected.get("requiredUnitLabels", [])}
             if not declared_units <= expected_units:
                 return False
+            # A proof for a different chart (another series count) cannot match; check
+            # that first so a unit binding never indexes past the expected series.
+            if not v5_chart_matches(proof, expected):
+                return False
+            expected_series_list = expected.get("series", [expected])
             for binding in bindings:
                 unit = _unit_key(binding["unit"])
                 if not unit:
                     continue
                 series_index = binding["seriesIndex"]
-                expected_series = expected.get("series", [expected])[series_index]
+                if not 0 <= series_index < len(expected_series_list):
+                    return False
+                expected_series = expected_series_list[series_index]
                 own_units = {_unit_key(label["unit"]) for label in expected.get("requiredUnitLabels", [])
                              if "seriesName" not in label or label["seriesName"] == expected_series.get("name")}
                 if unit not in own_units:

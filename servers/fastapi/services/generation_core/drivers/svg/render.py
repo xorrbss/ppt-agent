@@ -863,6 +863,12 @@ async def _attempt_render(*, ctx, request, presentation_id, index, content, payl
             if ctx.canonical_assets:
                 raise AuthoredStageError(slide_index=index, stage="render",
                     code="svg_asset_capture_failed", retryable=False) from error
+            if str(error).startswith("chart_"):
+                # The chart witness capture (utils/slide_capture_chart_*) failed to bind
+                # its own evidence. The author's SVG is not at fault, so this must not
+                # become a repair hint that costs another provider call.
+                raise AuthoredStageError(slide_index=index, stage="render",
+                    code="svg_chart_capture_unproven", retryable=False) from error
             raise
     except ValueError as error:
         hint = str(error)[:600]

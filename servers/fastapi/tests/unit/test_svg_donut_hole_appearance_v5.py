@@ -424,3 +424,18 @@ def test_expanded_xml_readback_ignores_only_empty_indentation():
     changed_tail = ET.fromstring('<c:root xmlns:c="urn:chart"><c:value key="x"> A </c:value> tail</c:root>')
     assert _expanded_xml_tree(plain) != _expanded_xml_tree(changed_text)
     assert _expanded_xml_tree(plain) != _expanded_xml_tree(changed_tail)
+
+
+@pytest.mark.parametrize("ratio", [.05, .95])
+def test_export_keeps_an_unrepresentable_hole_drawn_instead_of_failing_the_deck(ratio, vendor):
+    from services.generation_core.drivers.svg.export_scene import SvgPptxInputs, _annotate
+
+    page = _page(ratio)
+    item = _item(page)
+    root = ET.fromstring(page["svg_content"])
+    inputs = SvgPptxInputs()
+    marked = _annotate(root, [(item, False)], 0, inputs, width=800, height=600)
+    assert marked == 0
+    assert [offer.reason for offer in inputs.offers] == ["native_chart_donut_hole_unrepresentable"]
+    group = next(node for node in root.iter() if node.get("id") == "donut")
+    assert "data-pptx-native" not in group.attrib

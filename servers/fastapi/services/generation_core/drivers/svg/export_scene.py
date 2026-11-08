@@ -22,7 +22,9 @@ from pathlib import Path
 from pptx.enum.shapes import MSO_SHAPE_TYPE
 
 from services.generation_core.drivers.svg.export_native_wire import PageNativeObjects
-from services.generation_core.drivers.svg.export_projection import converter_payload
+from services.generation_core.drivers.svg.export_projection import (
+    NativeChartDonutHoleUnrepresentable, converter_payload,
+)
 from services.generation_core.native_objects import NativeObject
 from services.source_content.raster_redesign_pptx import (
     is_redesign_svg,
@@ -245,7 +247,14 @@ def _annotate(root: ET.Element, entries: list[tuple[NativeObject, bool]], index:
             offer.reason = "retained_axis_title_unproven"
             continue
         element.set("data-pptx-native", item.kind)
-        projected = converter_payload(item, pt_per_px=pt_per_px)
+        try:
+            projected = converter_payload(item, pt_per_px=pt_per_px)
+        except NativeChartDonutHoleUnrepresentable:
+            # A proved doughnut hole outside PowerPoint's 10-90% holeSize range stays
+            # drawn (raster) instead of failing the whole deck's export.
+            del element.attrib["data-pptx-native"]
+            offer.reason = "native_chart_donut_hole_unrepresentable"
+            continue
         if item.kind == "table":
             from services.generation_core.drivers.svg.native_table import apply_drawn_table_style
 

@@ -181,6 +181,16 @@ CONVERTER_LEDGER = VerifierRevisionLedger(
         # (same results and rejection codes), which joins the source inventories that
         # hold native_geometry/slide_capture_chart_paint. No behaviour changed.
         "c10ad72ceb1d38e619b722c650fae23293663088d473a201474c95f5e8983a1a": "svg-pptx-converter/1",
+        # 2026-11-08 V5 hardening (default-off V5 paths and failure handling only): bar
+        # layout search capped at 4096 candidates (larger ambiguities are refused, not
+        # searched), v5_proven checks the chart match before indexing series, an
+        # unrepresentable doughnut hole falls back to raster at export instead of failing
+        # the deck, V5 readers also turn IndexError/KeyError/ZeroDivisionError into
+        # rejections, chart capture errors stop costing an author repair, the context-id
+        # inequality (not promised by CDP) is dropped, masks are vectorized with exact
+        # integer/float parity, and unreadable fonts leave a proof incomplete. Stored
+        # V4 and legacy evidence is unchanged.
+        "5f216f163c2bd855aba4b8257e74a3be9e9d3f3aba8a17747efe4c4567f34a6c": "svg-pptx-converter/1",
     }),
 )
 
@@ -260,6 +270,16 @@ COMMON_HEADER_VERIFIER_LEDGER = VerifierRevisionLedger(
         # (same results and rejection codes), which joins the source inventories that
         # hold native_geometry/slide_capture_chart_paint. No behaviour changed.
         "sha256:f75cf143e2dd63465adfaf86f7ff5fa999561eb71ddd314fd9b7047407589569": "svg-common-header-verifier/1",
+        # 2026-11-08 V5 hardening (default-off V5 paths and failure handling only): bar
+        # layout search capped at 4096 candidates (larger ambiguities are refused, not
+        # searched), v5_proven checks the chart match before indexing series, an
+        # unrepresentable doughnut hole falls back to raster at export instead of failing
+        # the deck, V5 readers also turn IndexError/KeyError/ZeroDivisionError into
+        # rejections, chart capture errors stop costing an author repair, the context-id
+        # inequality (not promised by CDP) is dropped, masks are vectorized with exact
+        # integer/float parity, and unreadable fonts leave a proof incomplete. Stored
+        # V4 and legacy evidence is unchanged.
+        "sha256:b816323be5451aa00c7b340daf376565ad12cb36140ca2fbf515e0d4772646ce": "svg-common-header-verifier/1",
     }),
 )
 
@@ -344,6 +364,16 @@ WHOLE_PAGE_VERIFIER_LEDGER = VerifierRevisionLedger(
         # (same results and rejection codes), which joins the source inventories that
         # hold native_geometry/slide_capture_chart_paint. No behaviour changed.
         "568dc168020b969dc9610dd49911e02f9fb2dfed70d535039e4936be35d0ea5d": "svg-whole-page-verifier/1",
+        # 2026-11-08 V5 hardening (default-off V5 paths and failure handling only): bar
+        # layout search capped at 4096 candidates (larger ambiguities are refused, not
+        # searched), v5_proven checks the chart match before indexing series, an
+        # unrepresentable doughnut hole falls back to raster at export instead of failing
+        # the deck, V5 readers also turn IndexError/KeyError/ZeroDivisionError into
+        # rejections, chart capture errors stop costing an author repair, the context-id
+        # inequality (not promised by CDP) is dropped, masks are vectorized with exact
+        # integer/float parity, and unreadable fonts leave a proof incomplete. Stored
+        # V4 and legacy evidence is unchanged.
+        "7ba5494102fb78e6950c9933f8fe27f851d4e999785d97e20004a28f13938f03": "svg-whole-page-verifier/1",
     }),
 )
 
@@ -498,6 +528,16 @@ PARTIAL_RECOVERY_CODE_LEDGER = VerifierRevisionLedger(
         # frame). It only refuses more reorders; page render, recovery and stored proofs
         # are unchanged.
         "10c8a0020f58e06501c992b572039994f89a2321c3de81fbd1d9f333ec3ecf81": "svg-partial-recovery-code/1",
+        # 2026-11-08 V5 hardening (default-off V5 paths and failure handling only): bar
+        # layout search capped at 4096 candidates (larger ambiguities are refused, not
+        # searched), v5_proven checks the chart match before indexing series, an
+        # unrepresentable doughnut hole falls back to raster at export instead of failing
+        # the deck, V5 readers also turn IndexError/KeyError/ZeroDivisionError into
+        # rejections, chart capture errors stop costing an author repair, the context-id
+        # inequality (not promised by CDP) is dropped, masks are vectorized with exact
+        # integer/float parity, and unreadable fonts leave a proof incomplete. Stored
+        # V4 and legacy evidence is unchanged.
+        "09150788f26c372d033b53e787fd792ba01d7e1a3d951334dbe5c16504d0986d": "svg-partial-recovery-code/1",
     }),
 )
 
@@ -563,6 +603,16 @@ PAGE_RENDER_CODE_LEDGER = VerifierRevisionLedger(
         # frame). It only refuses more reorders; page render, recovery and stored proofs
         # are unchanged.
         "293aa2011edce74b1a1944cda80d2894a5340d9cc2a5a31467e001a65719d541": "svg-page-render-code/1",
+        # 2026-11-08 V5 hardening (default-off V5 paths and failure handling only): bar
+        # layout search capped at 4096 candidates (larger ambiguities are refused, not
+        # searched), v5_proven checks the chart match before indexing series, an
+        # unrepresentable doughnut hole falls back to raster at export instead of failing
+        # the deck, V5 readers also turn IndexError/KeyError/ZeroDivisionError into
+        # rejections, chart capture errors stop costing an author repair, the context-id
+        # inequality (not promised by CDP) is dropped, masks are vectorized with exact
+        # integer/float parity, and unreadable fonts leave a proof incomplete. Stored
+        # V4 and legacy evidence is unchanged.
+        "4de79a055753a475c2dcdfca205c10106a02dbeb970d323ece4adc68c5ddf4d7": "svg-page-render-code/1",
     }),
 )
 

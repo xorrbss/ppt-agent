@@ -273,10 +273,14 @@ def prepare_chart_capture_manifest(manifest, *, canonical_svg, wrapper_html, wid
 
 
 def _svg_root(source):
-    match = re.search(r"(<(?:[\w.-]+:)?svg\b.*?</(?:[\w.-]+:)?svg>)", source, re.S | re.I)
+    # Greedy to the last closing tag: a nested <svg> must not truncate the document.
+    match = re.search(r"(<(?:[\w.-]+:)?svg\b.*</(?:[\w.-]+:)?svg>)", source, re.S | re.I)
     if match is None:
         raise ValueError("chart_witness_svg_missing")
-    return ET.fromstring(match.group(1))
+    try:
+        return ET.fromstring(match.group(1))
+    except ET.ParseError as error:
+        raise ValueError("chart_witness_svg_invalid") from error
 
 
 def _font_faces(payload):
@@ -339,7 +343,9 @@ def _installed_face(postscript):
                         faces[0].close()
                 if matches:
                     found.extend(face for face in _font_faces(path.read_bytes()) if face["postScriptName"] == postscript)
-            except (OSError, ValueError, KeyError):
+            except Exception:
+                # One unreadable system font (TTLibError, a WOFF2 without brotli, ...)
+                # must not make every glyph target unprovable.
                 continue
     return tuple(found)
 
@@ -590,6 +596,53 @@ def _source_over_original_color(native, background, original, appearance, expect
     shared alpha. Its unpremultiplication must round-trip exactly. Only an
     appearance mismatch with unchanged causal response and no owned overpaint
     can use this witness; all other paint classifications stay unchanged.
+
+    Vectorized form of :func:`_source_over_original_color_reference` (same
+    integer arithmetic per pixel); masks in other modes use the reference.
+    """
+    import numpy as np
+    from PIL import Image
+
+    size = native.size
+    if any(image.size != size for image in (background, original, appearance, expected,
+                                           current, owned_alpha, original_contribution)):
+        raise ValueError("chart_source_over_witness_size_mismatch")
+    if any(image.mode not in {"1", "L"} for image in (appearance, owned_alpha, original_contribution)):
+        return _source_over_original_color_reference(native, background, original, appearance, expected,
+                                                     current, owned_alpha, original_contribution)
+    qualified = np.zeros((size[1], size[0]), dtype=np.uint8)
+    bounds = appearance.getbbox()
+    if bounds is None:
+        return Image.fromarray(qualified, "L")
+    x0, y0, x1, y1 = bounds
+
+    def window(image, mode=None):
+        array = np.asarray(image.convert(mode) if mode else image)
+        return array[y0:y1, x0:x1].astype(np.int64)
+
+    rgba = window(native, "RGBA")
+    alpha = rgba[..., 3]
+    paint = rgba[..., :3]
+    selected = ((window(appearance) != 0) & (window(owned_alpha) == 0) & (window(original_contribution) != 0)
+                & np.all(window(expected, "RGB") == window(current, "RGB"), axis=2) & (alpha != 0))
+    alpha3 = alpha[..., np.newaxis]
+    premultiplied = (alpha3 * paint + 127) // 255
+    divisor = np.where(alpha3 == 0, 1, alpha3)
+    selected &= np.all((255 * premultiplied + alpha3 // 2) // divisor == paint, axis=2)
+    reconstructed = premultiplied + (window(background, "RGB") * (255 - alpha3) + 127) // 255
+    selected &= np.all(reconstructed == window(original, "RGB"), axis=2)
+    qualified[y0:y1, x0:x1] = np.where(selected, 255, 0)
+    return Image.fromarray(qualified, "L")
+
+
+def _source_over_original_color_reference(native, background, original, appearance, expected, current,
+                                owned_alpha, original_contribution):
+    """A sufficient exact byte-compositing witness, never an error tolerance.
+
+    The isolated native RGBA fixes one integer premultiplied color and one
+    shared alpha. Its unpremultiplication must round-trip exactly. Only an
+    appearance mismatch with unchanged causal response and no owned overpaint
+    can use this witness; all other paint classifications stay unchanged.
     """
     from PIL import Image
 
@@ -643,6 +696,7 @@ def _canonical_canvas_matrix(raw, root_transform):
 
 def _region_mask(size, support, matrix, dpr):
     """Partition shared primitive pixels by canonical-canvas pixel-center strips."""
+    import numpy as np
     from PIL import Image
     strip = support.get("categoryStrip")
     if strip is None:
@@ -652,13 +706,17 @@ def _region_mask(size, support, matrix, dpr):
     if not determinant:
         raise ValueError("chart_canvas_transform_singular")
     minimum, maximum = strip.get("minimumX"), strip.get("maximumX")
-    values = bytearray(size[0]*size[1])
-    for y in range(size[1]):
-        for x in range(size[0]):
-            canvas_x = (d*((x+.5)/dpr-e)-c*((y+.5)/dpr-f))/determinant
-            if (minimum is None or canvas_x >= minimum) and (maximum is None or canvas_x <= maximum):
-                values[y*size[0]+x] = 255
-    return Image.frombytes("L", size, bytes(values))
+    # Same float64 operations, in the same order, as the per-pixel formula
+    # (d*((x+.5)/dpr-e)-c*((y+.5)/dpr-f))/determinant.
+    xs = (np.arange(size[0], dtype=np.float64) + .5) / dpr - e
+    ys = (np.arange(size[1], dtype=np.float64) + .5) / dpr - f
+    canvas_x = (d * xs[np.newaxis, :] - c * ys[:, np.newaxis]) / determinant
+    inside = np.ones((size[1], size[0]), dtype=bool)
+    if minimum is not None:
+        inside &= canvas_x >= minimum
+    if maximum is not None:
+        inside &= canvas_x <= maximum
+    return Image.fromarray(np.where(inside, 255, 0).astype(np.uint8), "L")
 
 
 def collect_chart_paint_proof(*, command, manifest, source_html, final_png, metrics,
@@ -691,10 +749,19 @@ def collect_chart_paint_proof(*, command, manifest, source_html, final_png, metr
         embedded_fonts = []
         material_records = []
         for mime, encoded in re.findall(r"data:([^;,\s]+);base64,([A-Za-z0-9+/=]+)", source_html):
-            payload = base64.b64decode(encoded, validate=True)
+            try:
+                payload = base64.b64decode(encoded, validate=True)
+            except ValueError:
+                failure = "chart_embedded_resource_invalid"
+                continue
             material_records.append({"mimeType": mime, "digest": sha256_prefixed(payload)})
             if mime.startswith("font/"):
-                embedded_fonts.extend(_font_faces(payload))
+                try:
+                    embedded_fonts.extend(_font_faces(payload))
+                except Exception:
+                    # An unreadable embedded font leaves the proof incomplete instead
+                    # of aborting the capture.
+                    failure = "chart_embedded_font_unreadable"
         proof["materialIdentities"] = {"embeddedResources": sorted(material_records, key=lambda row:(row["mimeType"],row["digest"]))}
         projection = (manifest.get("captureContext") or {}).get("textProjection")
         config = {"width":width_px,"height":height_px,"dpr":device_scale_factor}

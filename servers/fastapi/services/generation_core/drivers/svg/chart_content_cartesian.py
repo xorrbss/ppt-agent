@@ -16,6 +16,8 @@ from services.generation_core.drivers.svg.native_geometry import (
 )
 
 _EPS = 1.0  # Canvas-pixel rounding, shared across series rather than relative percentages.
+#: Upper bound on candidate bar-to-series layouts examined for one chart.
+_MAX_BAR_LAYOUTS = 4096
 
 
 def _mid(box: Box, horizontal: bool) -> float:
@@ -373,6 +375,11 @@ def _bar_proof(raw, chart, prims, centers, legends, legend_indices, ticks, norma
         if not choices:
             raise NativeRejection("bar_series_association")
         assignment.append(choices)
+    # Without a legend, every subset of the non-zero series is a candidate for a
+    # category that draws fewer bars, and the layouts multiply across categories.
+    # An ambiguity that large is not a proof; refuse it instead of searching it.
+    if math.prod(len(choices) for choices in assignment) > _MAX_BAR_LAYOUTS:
+        raise NativeRejection("bar_series_association_ambiguous")
 
     def evaluate():
         origins, pairs = [], [(value / normalizer, position) for value, position in ticks]

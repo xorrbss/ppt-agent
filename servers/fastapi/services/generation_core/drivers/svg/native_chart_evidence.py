@@ -840,7 +840,9 @@ def chart_drawing_evidence(payload: dict, svg: str, *, revision: str, measuremen
                     measurement=measurement, svg=svg,
                     native_group_ids={item.get("id") for item in record.get("objects", []) if isinstance(item, dict)})
             evidence[group_id] = proof
-        except (NativeRejection, TypeError, ValueError, AttributeError):
+        except (NativeRejection, TypeError, ValueError, AttributeError, KeyError, IndexError, ZeroDivisionError):
+            # An internal slip in reading one chart rejects that chart; it never
+            # aborts publication of the page.
             continue
     from services.generation_core.drivers.svg.native_requirements import REQUIREMENTS_VERSION_V5
     if revision == REQUIREMENTS_VERSION_V5:
@@ -913,7 +915,8 @@ def chart_witness_render_kwargs(payload: dict, svg: str, *, revision: str) -> di
     """Keep the optional renderer argument entirely absent on legacy paths."""
     try:
         manifest = build_chart_witness_manifest(payload, svg, revision=revision)
-    except (NativeRejection, ET.ParseError, TypeError, ValueError, KeyError, AttributeError):
+    except (NativeRejection, ET.ParseError, TypeError, ValueError, KeyError, AttributeError, IndexError,
+            ZeroDivisionError):
         manifest = None
     return {"chart_witness_manifest": manifest} if manifest is not None else {}
 

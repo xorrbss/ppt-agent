@@ -548,11 +548,12 @@ class _CarrierPlaneAbort(BaseException):
 class _LifecycleCdp:
     """Stateful CDP boundary for the actual frozen driver and chart adapter."""
 
-    def __init__(self, *, bad_loader=False, uncommitted=False, same_context=False,
+    def __init__(self, *, bad_loader=False, uncommitted=False, same_context=False, missing_context=False,
                  retained_state=None, cleanup_failure=False, readiness=(), ready_default=True):
         self.bad_loader = bad_loader
         self.uncommitted = uncommitted
         self.same_context = same_context
+        self.missing_context = missing_context
         self.retained_state = retained_state
         self.cleanup_failure = cleanup_failure
         self.readiness = list(readiness)
@@ -619,7 +620,7 @@ class _LifecycleCdp:
             return {"frameTree": {"frame": {"id": page["frame"], "loaderId": page["loader"], "url": page["url"]}}}
         if method == "Page.createIsolatedWorld":
             assert params == {"frameId": page["frame"], "worldName": "chart-plane-reset/v1"}
-            return {"executionContextId": page["execution"]}
+            return {} if self.missing_context and page["generation"] else {"executionContextId": page["execution"]}
         if method == "Page.navigate":
             assert params == {"url": "data:,"}
             prior_loader, prior_context = page["loader"], page["execution"]
@@ -787,6 +788,20 @@ def test_private_chart_sibling_reuses_transport_but_commits_fresh_documents(monk
     _assert_chart_transport_teardown_once(transport)
 
 
+def test_private_chart_sibling_accepts_a_reused_execution_context_id(monkeypatch):
+    # CDP does not promise distinct ids across a navigation (Chrome for Testing 153
+    # reuses them); the committed loader and blank-document checks prove the reset.
+    transport = _LifecycleCdp(same_context=True)
+    fixture = _exercise_reused_chart_planes(monkeypatch, transport)
+    png, _metrics = fixture.run()
+    assert Image.open(io.BytesIO(png)).size == (32, 24)
+    commits = transport.navigation_commits
+    assert len(commits) == 2 and all(commit[3] == commit[4] for commit in commits)
+    assert commits[0][1] != commits[0][2] != commits[1][2]
+    assert len(fixture.accepted) == 1 and fixture.shared[0].poisoned is False
+    _assert_chart_transport_teardown_once(transport)
+
+
 @pytest.mark.parametrize("failure", [RuntimeError("plane failed"), _CarrierPlaneAbort("plane cancelled")])
 def test_private_chart_sibling_failure_and_baseexception_poison_reuse(monkeypatch, failure):
     transport = _LifecycleCdp()
@@ -801,7 +816,7 @@ def test_private_chart_sibling_failure_and_baseexception_poison_reuse(monkeypatc
 
 @pytest.mark.parametrize("transport_kwargs,reason", [
     ({"bad_loader": True}, "navigation identity invalid"),
-    ({"same_context": True}, "execution context was not replaced"),
+    ({"missing_context": True}, "execution context was not replaced"),
     *[({"retained_state": field}, "blank document retained prior state") for field in
       ("prior_js", "prior_dom", "chart", "svg", "metric", "font", "selection", "adopted", "stylesheet", "body")],
 ])

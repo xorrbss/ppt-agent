@@ -1471,5 +1471,6 @@ def validate_chart_content_paint(manifest, quality, *, capture=None) -> dict:
                 **({"nativeCompositionVerified": True, "unilateralVisibilityVerified": False} if has_composition else {}), **binding}
     except _Unproven as error:
         return {"passed": False, "reason": "chart_content_paint_" + str(error)}
-    except (KeyError, TypeError, ValueError, OverflowError, InvalidOperation, UnicodeError, RecursionError, ET.ParseError):
+    except (KeyError, IndexError, ZeroDivisionError, TypeError, ValueError, OverflowError, InvalidOperation,
+            UnicodeError, RecursionError, ET.ParseError):
         return {"passed": False, "reason": "chart_content_paint_carrier_invalid"}
