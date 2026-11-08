@@ -301,6 +301,10 @@ COMMON_HEADER_VERIFIER_LEDGER = VerifierRevisionLedger(
         # Chart-proof Chrome launches add frame-pacing flags; the default argv is unchanged.
         # V4, earlier revisions and non-SVG paths are unchanged; no stored V5 proofs exist.
         "sha256:69a1a1959c3697d7e4bd1b9155ebeba4a4563b2fd1564c26f2556d99686d1e6e": "svg-common-header-verifier/1",
+        # 2026-11-08: v5 author guidance only (native_declarations NATIVE_CHART_GUIDANCE_V5
+        # gains title/shared-scale/axis-beneath-bars sentences); V4 and earlier prompt
+        # bytes and the common-header verifier behaviour are unchanged.
+        "sha256:b734900b117bf44e6a80e8be6e583365b38ca9eb276d4778c70be9114c3ade6d": "svg-common-header-verifier/1",
     }),
 )
 
@@ -436,6 +440,16 @@ WHOLE_PAGE_VERIFIER_LEDGER = VerifierRevisionLedger(
         # the follow-up verification. The export bundle, worker input, receipts, digests
         # and the source-proved whole-page path are unchanged.
         "6e009717bd98610d81add2699447743036d585e9fce5b1d3c938145963bc395c": "svg-whole-page-verifier/1",
+        # 2026-11-08: v5 chart evidence only. Partly occluded text outside every chart
+        # group no longer withdraws the chart (kept as an estimated-box occluder, never
+        # claimed as chart content), and v5 reads a Korean magnitude with or without 원
+        # as one unit. V4 and earlier revisions are unchanged.
+        "7294507e211e94a3b338ff0fdb8c9db810fbda658055d23a96e2a1b711e2ecd1": "svg-whole-page-verifier/1",
+        # 2026-11-08: v5 only. Bars resting on a baseline axis drawn before them own
+        # their overlap with its stroke (datum-on-baseline-axis, mirrored by capture
+        # and consumer); v5 author guidance asks for axes beneath bars. V4 and earlier
+        # revisions are unchanged.
+        "333c627fddd7c6b4d5f3a8d7c052f27f6a834de6fb6c1bf110001e3990579ae4": "svg-whole-page-verifier/1",
     }),
 )
 
@@ -639,6 +653,16 @@ PARTIAL_RECOVERY_CODE_LEDGER = VerifierRevisionLedger(
         # not measure) marks the glyph measurement incomplete and uses the estimated text
         # box, instead of raising and rejecting the chart. V5-only; V4 unchanged.
         "8eeebe12a360eec2b5ffe5e8396980796485b25db7648033ba9064e5d5ecdd30": "svg-partial-recovery-code/1",
+        # 2026-11-08: v5 chart evidence only. Partly occluded text outside every chart
+        # group no longer withdraws the chart (kept as an estimated-box occluder, never
+        # claimed as chart content), and v5 reads a Korean magnitude with or without 원
+        # as one unit. V4 and earlier revisions are unchanged.
+        "1016bf4022072276f57f1af4e42ac68616c9e1ffac1667d7c5163b2d8be4d213": "svg-partial-recovery-code/1",
+        # 2026-11-08: v5 only. Bars resting on a baseline axis drawn before them own
+        # their overlap with its stroke (datum-on-baseline-axis, mirrored by capture
+        # and consumer); v5 author guidance asks for axes beneath bars. V4 and earlier
+        # revisions are unchanged.
+        "2377b41e5958078a28ae9344236fae353e885a7696d6d96dc48e4c8f1dcceb05": "svg-partial-recovery-code/1",
     }),
 )
 
@@ -753,6 +777,16 @@ PAGE_RENDER_CODE_LEDGER = VerifierRevisionLedger(
         # not measure) marks the glyph measurement incomplete and uses the estimated text
         # box, instead of raising and rejecting the chart. V5-only; V4 unchanged.
         "55c2ed63713a2cef2f43855c9b723aca30210272a90bcfb2bc41765cfbc51576": "svg-page-render-code/1",
+        # 2026-11-08: v5 chart evidence only. Partly occluded text outside every chart
+        # group no longer withdraws the chart (kept as an estimated-box occluder, never
+        # claimed as chart content), and v5 reads a Korean magnitude with or without 원
+        # as one unit. V4 and earlier revisions are unchanged.
+        "f72ec0ec35dfecc8546d677d23dfc8c461740b6af7608accf863682535d2c01d": "svg-page-render-code/1",
+        # 2026-11-08: v5 only. Bars resting on a baseline axis drawn before them own
+        # their overlap with its stroke (datum-on-baseline-axis, mirrored by capture
+        # and consumer); v5 author guidance asks for axes beneath bars. V4 and earlier
+        # revisions are unchanged.
+        "8c2aec90a1a0f93d069c7353a0e9afc01bf4780a7286300d892b34af7a097cc7": "svg-page-render-code/1",
     }),
 )
 

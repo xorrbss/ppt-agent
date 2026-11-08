@@ -1257,3 +1257,135 @@ def test_unmeasured_ink_fragments_fall_back_to_estimated_text_boxes():
     static = chart_drawing_evidence(page, svg, revision=V5)
     assert measured["native-chart-sales"]["contentGeometry"]["passed"] is True
     assert measured["native-chart-sales"]["contentGeometry"] == static["native-chart-sales"]["contentGeometry"]
+
+
+def _occlusion_measurement(svg, occluded_text):
+    from services.svg_contract import source_digest
+    root = ET.fromstring(svg)
+    elements = [{"qid": f"svg-{index}", "tag": "text", "has_owned_text": True,
+                 "occluded_fraction": 0.17 if node.text == occluded_text else 0}
+                for index, node in enumerate(root.iter()) if node.tag == NS + "text"]
+    return {"measurement_complete": True, "source_digest": source_digest(svg), "wrapper_digest": "sha256:wrapper",
+            "browser_metrics": {"source_digest": "sha256:wrapper", "elements": elements}}
+
+
+def test_partly_occluded_text_outside_every_chart_does_not_withdraw_the_chart():
+    """Seen live: a KPI caption beside a bar chart measured 17% occluded and the
+    whole chart lost its V5 evidence. Text outside the chart group proves nothing
+    about the chart; its estimated box still counts as a foreign occluder."""
+    page = _with_page_extras(
+        '<text xmlns="http://www.w3.org/2000/svg" x="1000" y="80" font-size="16" fill="#222222">KPI note</text>')
+    svg = page["svg_content"]
+    measured = chart_drawing_evidence(page, svg, revision=V5, measurement=_occlusion_measurement(svg, "KPI note"))
+    assert measured["native-chart-sales"]["contentGeometry"]["passed"] is True
+
+
+def test_partly_occluded_text_inside_the_chart_still_withdraws_the_chart():
+    page = _page()
+    svg = page["svg_content"]
+    assert chart_drawing_evidence(page, svg, revision=V5, measurement=_occlusion_measurement(svg, "60")) == {}
+
+
+def _won_magnitude_page(label_suffix):
+    page = _page(horizontal=True)
+    root = ET.fromstring(page["svg_content"])
+    raw = page["nativeDeclarations"]["objects"][0]["raw"]
+    raw["title"] = raw["series"][0]["name"] = "Sales (억원)"
+    group = next(node for node in root.iter(NS + "g") if node.get("id") == "native-chart-sales")
+    group.set("data-native-chart", json.dumps(raw, ensure_ascii=False))
+    for node in group.iter(NS + "text"):
+        if node.text in {"Sales trend", "Sales"}:
+            node.text = "Sales (억원)" if node.text == "Sales trend" else None
+        elif node.text in {"30", "60", "90"}:
+            node.text += label_suffix
+    for node in [node for node in group if node.tag == NS + "text" and node.text is None]:
+        group.remove(node)
+    svg = ET.tostring(root, encoding="unicode")
+    page = {"svg_content": svg}
+    bind_native_declarations(page, svg, extract_native_declarations(ET.fromstring(svg)))
+    return page
+
+
+@pytest.mark.parametrize("suffix,proven", [("억", True), ("억원", True), ("명", False)])
+def test_v5_reads_a_korean_magnitude_with_or_without_won_as_one_unit(suffix, proven):
+    page = _won_magnitude_page(suffix)
+    quality = {"passed": True, "failures": []}
+    apply_requested_native_quality(quality, page, page["svg_content"], "", pt_per_px=.75, revision=V5,
+                                   paint_deferred=True)
+    missing = [failure for failure in quality["failures"] if failure["kind"] == "native_requested_chart_missing"]
+    assert (not missing) is proven, quality["failures"]
+
+
+def test_won_magnitude_synonym_is_v5_only():
+    from services.generation_core.drivers.svg.native_requirements import _unit_key, _v5_unit_key
+    assert _v5_unit_key("억") == _v5_unit_key("억원") == _v5_unit_key("억 원")
+    assert _v5_unit_key("만") == _v5_unit_key("만원")
+    assert _v5_unit_key("억") != _v5_unit_key("억명")
+    assert _unit_key("억") != _unit_key("억원")
+
+
+def _axis_page(*, axis_first=True, offset=0):
+    """A column chart whose x axis lies on the proven baseline (y=450)."""
+    page = _page()
+    root = ET.fromstring(page["svg_content"])
+    group = next(node for node in root.iter(NS + "g") if node.get("id") == "native-chart-sales")
+    axis = ET.Element(NS + "line", {"x1": "200", "y1": str(450 + offset), "x2": "620", "y2": str(450 + offset),
+                                    "stroke": "#64748B", "stroke-width": "2"})
+    group.insert(2 if axis_first else len(group), axis)
+    svg = ET.tostring(root, encoding="unicode")
+    declarations = page["nativeDeclarations"]
+    page = {"svg_content": svg}
+    bind_native_declarations(page, svg, declarations)
+    return page
+
+
+def _baseline_axis_relations(page):
+    from services.generation_core.drivers.svg.native_chart_evidence import build_chart_witness_manifest
+    manifest = build_chart_witness_manifest(page, page["svg_content"], revision=V5)
+    return manifest, [relation for chart in manifest["charts"] for relation in chart["compositionGroup"]["relationships"]
+                      if relation["kind"] == "datum-on-baseline-axis"]
+
+
+def test_bars_resting_on_an_earlier_baseline_axis_own_their_overlap():
+    """Seen live on every real bar chart: the axis drawn first, the bars on top of
+    it. The bars may cover the axis stroke; both capture and consumer agree."""
+    from services.generation_core.drivers.svg import chart_content_paint
+    from utils import slide_capture_chart_paint
+    manifest, relations = _baseline_axis_relations(_axis_page())
+    assert len(relations) == 1 and len(relations[0]["occluderQids"]) == 3
+    datum_qids = {qid for chart in manifest["charts"] for datum in chart["datums"] for qid in datum["primitiveQids"]}
+    assert set(relations[0]["occluderQids"]) == datum_qids
+    consumer, _, _ = chart_content_paint._targets(manifest)
+    capture = slide_capture_chart_paint._targets(manifest)
+    for targets in (consumer, capture):
+        axis = next(target for target in targets if target.get("qid") == relations[0]["qid"])
+        assert axis["datumIds"] == [] and axis["ownedQids"] == relations[0]["occluderQids"]
+        assert all(axis["ownedPaints"][qid] == "all" for qid in axis["ownedQids"])
+    def strip(targets):
+        return [{key: value for key, value in target.items() if key != "geometrySupport"} for target in targets]
+    assert strip(consumer) == strip(capture)
+
+
+@pytest.mark.parametrize("kwargs", [{"axis_first": False}, {"offset": 12}])
+def test_baseline_axis_ownership_needs_an_earlier_axis_on_the_baseline(kwargs):
+    _manifest, relations = _baseline_axis_relations(_axis_page(**kwargs))
+    assert relations == []
+
+
+@pytest.mark.parametrize("tamper", ["foreign", "earlier", "extra_key"])
+def test_tampered_baseline_axis_relation_is_refused(tamper):
+    from services.generation_core.drivers.svg import chart_content_paint
+    from utils import slide_capture_chart_paint
+    manifest, relations = _baseline_axis_relations(_axis_page())
+    relation = relations[0]
+    if tamper == "foreign":
+        relation["occluderQids"] = [*relation["occluderQids"], "svg-999"]
+    elif tamper == "earlier":
+        relation["occluderQids"] = ["svg-1", *relation["occluderQids"]]
+    else:
+        relation["localOverlaps"] = []
+    with pytest.raises(ValueError):
+        chart_content_paint._targets(manifest)
+    if tamper != "extra_key":
+        with pytest.raises(ValueError):
+            slide_capture_chart_paint._targets(manifest)

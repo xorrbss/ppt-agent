@@ -191,6 +191,20 @@ def _unit_key(unit: str) -> str:
     return _compact(unicodedata.normalize("NFKC", unit))
 
 
+_V5_WON_MAGNITUDE = re.compile(r"(천|만|백만|천만|억|조)원?")
+
+
+def _v5_unit_key(unit: str) -> str:
+    """V5 unit identity: a Korean magnitude with or without 원 is one unit.
+
+    "38억" under a "(억원)" title states the same amount as "38억원"; only the
+    v5 proof uses this, so earlier revisions keep their exact unit identity.
+    """
+    key = _unit_key(unit)
+    match = _V5_WON_MAGNITUDE.fullmatch(key)
+    return f"{match[1]}원" if match else key
+
+
 def _series_name_unit(name: str) -> str | None:
     match = re.search(r"\((?:(단위|unit)\s*[:：]\s*)?([^()]+)\)\s*$", name, re.I)
     if not match:
@@ -550,19 +564,19 @@ def apply_requested_native_quality(quality: dict, payload: dict, svg: str, conte
                 and proof["contentGeometry"].get("calibrated")):
             axis_title = own.get("valueAxis", {}).get("title", "")
             axis_unit = _series_name_unit(axis_title) or _series_name_unit(f"({axis_title})")
-            if title_unit and axis_unit and _unit_key(title_unit) != _unit_key(axis_unit):
+            if title_unit and axis_unit and _v5_unit_key(title_unit) != _v5_unit_key(axis_unit):
                 return False
             title_unit = title_unit or axis_unit
         series_units = [_series_name_unit(series["name"]) for series in own["series"]]
-        if title_unit and any(unit and _unit_key(title_unit) != _unit_key(unit) for unit in series_units):
+        if title_unit and any(unit and _v5_unit_key(title_unit) != _v5_unit_key(unit) for unit in series_units):
             return False
         # A proven share label's "%" states the datum's share of its whole
         # (pie/donut/percent-stacked only), not the unit of the datum itself.
         bindings = [binding for binding in proof["contentGeometry"].get("valueLabelBindings", [])
                     if binding.get("valueMatch") != "share"]
         if expected is not None:
-            declared_units = {_unit_key(unit) for unit in (title_unit, *series_units) if unit}
-            expected_units = {_unit_key(label["unit"]) for label in expected.get("requiredUnitLabels", [])}
+            declared_units = {_v5_unit_key(unit) for unit in (title_unit, *series_units) if unit}
+            expected_units = {_v5_unit_key(label["unit"]) for label in expected.get("requiredUnitLabels", [])}
             if not declared_units <= expected_units:
                 return False
             # A proof for a different chart (another series count) cannot match; check
@@ -571,22 +585,22 @@ def apply_requested_native_quality(quality: dict, payload: dict, svg: str, conte
                 return False
             expected_series_list = expected.get("series", [expected])
             for binding in bindings:
-                unit = _unit_key(binding["unit"])
+                unit = _v5_unit_key(binding["unit"])
                 if not unit:
                     continue
                 series_index = binding["seriesIndex"]
                 if not 0 <= series_index < len(expected_series_list):
                     return False
                 expected_series = expected_series_list[series_index]
-                own_units = {_unit_key(label["unit"]) for label in expected.get("requiredUnitLabels", [])
+                own_units = {_v5_unit_key(label["unit"]) for label in expected.get("requiredUnitLabels", [])
                              if "seriesName" not in label or label["seriesName"] == expected_series.get("name")}
                 if unit not in own_units:
                     return False
             return v5_chart_matches(proof, expected)
         # Without a source literal this proves only the drawing/declaration
         # relationship. Do not infer source fidelity from self-declared JSON.
-        return all(not binding["unit"] or _unit_key(binding["unit"]) in {
-            _unit_key(unit) for unit in (title_unit, series_units[binding["seriesIndex"]]) if unit}
+        return all(not binding["unit"] or _v5_unit_key(binding["unit"]) in {
+            _v5_unit_key(unit) for unit in (title_unit, series_units[binding["seriesIndex"]]) if unit}
             for binding in bindings)
 
     paint_evidence = {group_id: proof.get("paintEvidence", {}) for group_id, proof in evidence.items()}

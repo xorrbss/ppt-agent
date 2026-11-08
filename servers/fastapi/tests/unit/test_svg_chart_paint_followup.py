@@ -66,7 +66,7 @@ async def harness(tmp_path, monkeypatch):
         session.add(User(id=OWNER_ID, username="chart-owner", hashed_password="test-only"))
 
     state = SimpleNamespace(maker=maker, clock=_Clock(), renders=[], paint=dict(PASSED), refreshes=[],
-                            capture_error=None)
+                            refresh_rounds=[], capture_error=None)
 
     async def inputs(session, presentation, slide):
         return {"width": 1280, "height": 720}
@@ -81,8 +81,9 @@ async def harness(tmp_path, monkeypatch):
             raise state.capture_error
         return SimpleNamespace(quality={"fixture": True}, png=b"png", wrapper_html="<html/>", source_digest="d")
 
-    async def refresh(session_factory, *, presentation_id, revision, export_context):
+    async def refresh(session_factory, *, presentation_id, revision, round_number, export_context):
         state.refreshes.append((presentation_id, revision, dict(export_context)))
+        state.refresh_rounds.append(round_number)
         return uuid.uuid4()
 
     monkeypatch.setattr(verification_service, "_render_inputs", inputs)
@@ -380,7 +381,7 @@ async def test_export_with_unverified_charts_enqueues_round_one_with_its_options
     assert (payload["source_revision"], payload["round"], payload["passed_so_far"]) == (1, 1, 0)
     assert payload["export_context"] == {"font_embedding": False, "quality_policy": "interactive-v1"}
     assert payload["source_export_operation_id"] == str(export_id)
-    # The export that the chain refreshes re-enters here and finds round 1 taken.
+    # Another export while round 1 is still queued starts nothing.
     assert await followup.enqueue_after_export(harness.maker, claim=claim, chart_paint_fallbacks=fallbacks) is None
 
 
@@ -407,20 +408,21 @@ async def test_refresh_export_is_one_export_command_at_the_verified_revision(mon
     monkeypatch.setattr(workspace_service, "create_workspace_command", create)
     presentation_id = uuid.uuid4()
     operation_id = await followup.submit_refresh_export(
-        lambda: Session(), presentation_id=presentation_id, revision=7, export_context={"font_embedding": True})
+        lambda: Session(), presentation_id=presentation_id, revision=7, round_number=2,
+        export_context={"font_embedding": True})
     assert operation_id is not None
     ((target, request),) = submitted
     assert target == presentation_id and request.command_type == "export.pptx"
     assert request.expected_revision == 7 and request.context == {"font_embedding": True}
     assert request.idempotency_key == followup.refresh_export_idempotency_key(
-        presentation_id=presentation_id, revision=7)
+        presentation_id=presentation_id, revision=7, round_number=2)
 
     async def refused(session, *, presentation_id, request):
         raise workspace_service.WorkspaceServiceError("public_admission_capacity", status_code=429)
 
     monkeypatch.setattr(workspace_service, "create_workspace_command", refused)
     assert await followup.submit_refresh_export(
-        lambda: Session(), presentation_id=presentation_id, revision=7, export_context={}) is None
+        lambda: Session(), presentation_id=presentation_id, revision=7, round_number=1, export_context={}) is None
 
 
 def test_export_enqueues_only_after_publishing_a_v5_pptx_of_stored_pages():
@@ -437,3 +439,93 @@ def test_export_enqueues_only_after_publishing_a_v5_pptx_of_stored_pages():
     guard = source.rindex("if (chart_paint_fallbacks is not None and header_authority is None", 0, hook)
     assert "measured_source_preservation is None" in source[guard:hook]
     assert hook < source.index("return WorkspaceOperationResult(", hook)
+
+
+def _export_claim(presentation_id, conversation_id, operation_id=None):
+    return SimpleNamespace(owner_id=OWNER_ID, owner_scope=str(OWNER_ID), conversation_id=conversation_id,
+                           presentation_id=presentation_id, expected_revision=1,
+                           operation_id=operation_id or uuid.uuid4(),
+                           request_payload={"context": {}, "account_deletion_generation": 0})
+
+
+FALLBACKS = [[{"id": "native-chart-sales", "reason": UNVERIFIED_REASON}]]
+
+
+@pytest.mark.anyio
+async def test_a_later_manual_export_at_the_same_revision_continues_with_the_next_round(harness):
+    """Seen live: a second manual export of the same revision never resumed the
+    background verification, because round 1 of that revision was already used."""
+    presentation_id, conversation_id = await _seed(harness.maker, pages=2)
+    harness.capture_error = TimeoutError("capture cut off")
+    first = await followup.enqueue_after_export(
+        harness.maker, claim=_export_claim(presentation_id, conversation_id), chart_paint_fallbacks=FALLBACKS)
+    assert await _drain(harness.runner()) == 1
+    second = await followup.enqueue_after_export(
+        harness.maker, claim=_export_claim(presentation_id, conversation_id), chart_paint_fallbacks=FALLBACKS)
+    assert first is not None and second is not None and second != first
+    assert [op.request_payload["round"] for op in await _operations(harness.maker, presentation_id)] == [1, 2]
+
+
+@pytest.mark.anyio
+async def test_rounds_after_manual_exports_stay_within_the_bound(harness):
+    presentation_id, conversation_id = await _seed(harness.maker, pages=1)
+    harness.capture_error = TimeoutError("capture cut off")
+    runner = harness.runner()
+    for _ in range(followup.MAX_ROUNDS):
+        assert await followup.enqueue_after_export(
+            harness.maker, claim=_export_claim(presentation_id, conversation_id), chart_paint_fallbacks=FALLBACKS)
+        assert await _drain(runner) == 1
+    assert await followup.enqueue_after_export(
+        harness.maker, claim=_export_claim(presentation_id, conversation_id), chart_paint_fallbacks=FALLBACKS) is None
+    assert len(await _operations(harness.maker, presentation_id)) == followup.MAX_ROUNDS
+
+
+@pytest.mark.anyio
+async def test_the_chains_own_refreshed_export_starts_no_new_chain(harness):
+    from services.workspace_service import workspace_idempotency_hash
+    presentation_id, conversation_id = await _seed(harness.maker, pages=2)
+    refresh_id = uuid.uuid4()
+    async with harness.maker() as session, session.begin():
+        session.add(WorkspaceOperation(
+            id=refresh_id, owner_id=OWNER_ID, owner_scope=str(OWNER_ID), conversation_id=conversation_id,
+            presentation_id=presentation_id, anchor_position=900, kind="export.pptx", state="succeeded",
+            idempotency_key_hash=workspace_idempotency_hash(followup.refresh_export_idempotency_key(
+                presentation_id=presentation_id, revision=1, round_number=3)),
+            request_hash="0" * 64, request_payload={}))
+    assert await followup.enqueue_after_export(
+        harness.maker, claim=_export_claim(presentation_id, conversation_id, refresh_id),
+        chart_paint_fallbacks=FALLBACKS) is None
+    assert await _operations(harness.maker, presentation_id) == []
+
+
+@pytest.mark.anyio
+async def test_export_verifies_the_cheapest_capture_first_and_keeps_deck_order(harness, monkeypatch):
+    """Seen live: a 29-target chart first in the deck always ran out of time and
+    used the export's whole verification budget."""
+    presentation_id, _conversation_id = await _seed(harness.maker, pages=3)
+    slides = await _slides(harness.maker, presentation_id)
+    async with harness.maker() as session:
+        presentation = await session.get(PresentationModel, presentation_id)
+    costs = {slides[0].id: 29, slides[1].id: 14, slides[2].id: 14}
+    monkeypatch.setattr(verification_service, "verification_cost", lambda slide: costs[slide.id])
+    order = []
+
+    async def verify(session, presentation, slide, **kwargs):
+        order.append(slide.index)
+        return None
+
+    monkeypatch.setattr(verification_service, "verify_slide_chart_paint", verify)
+    result = await verification_service.deck_chart_paint_fallbacks(
+        harness.maker, presentation=presentation, slides=slides, remaining_seconds=lambda: 10_000)
+    assert order == [1, 2, 0]
+    assert len(result) == 3 and all(page for page in result)
+
+
+def test_verification_cost_counts_the_proofs_capture_targets():
+    page, content = _published()
+    manifest = verification_service.verification_manifest(content, page["svg_content"])
+    expected = sum(len(chart["compositionGroup"]["primitiveQids"])
+                   + sum(len(glyph["ranges"]) for glyph in chart["glyphs"]) for chart in manifest["charts"])
+    slide = SimpleNamespace(content=content, svg_content=page["svg_content"])
+    assert verification_service.verification_cost(slide) == expected > 0
+    assert verification_service.verification_cost(SimpleNamespace(content={}, svg_content="<svg/>")) == 0

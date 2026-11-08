@@ -147,7 +147,7 @@ def _v5_path_subpaths(source):
     return tuple(paths), tuple(closed)
 
 
-def _v5_scene(root, measurement=None, svg=None):
+def _v5_scene(root, measurement=None, svg=None, chart_group_ids=None):
     """Reuse canonical primitives, supplementing text with bound renderer boxes.
 
     The old native reader intentionally retains its historical tspan layout.
@@ -188,8 +188,9 @@ def _v5_scene(root, measurement=None, svg=None):
         measured = {item.get("qid"): item for item in measurement["browser_metrics"].get("elements", [])}
     order = {node: index for index, node in enumerate(root.iter())}
     records = []
+    measured_hidden = set()
 
-    def text_record(node, position, attrs):
+    def text_record(node, position, attrs, in_chart=True):
         fragments = []
         cursor = [float(node.get("x", 0)), float(node.get("y", 0))]
         chunks, chunk = {}, 0
@@ -261,7 +262,15 @@ def _v5_scene(root, measurement=None, svg=None):
                 if (member.get("css_visible") is False or member.get("clipped") or member.get("glyph_clipped")
                         or member.get("effective_opacity", 1) <= 0
                         or member.get("occluded_fraction", 0) > 0):
-                    raise NativeRejection("native_chart_content_hidden")
+                    if in_chart:
+                        raise NativeRejection("native_chart_content_hidden")
+                    # Text outside every chart group proves nothing about a chart.
+                    # Its measured ink is not trusted: the estimated full text box
+                    # is kept, so it still counts as a foreign occluder, and it can
+                    # never be claimed as chart content (``measuredHidden``).
+                    complete_glyphs = False
+                    measured_hidden.add(node)
+                    break
                 from services.generation_core.drivers.svg.source_paint_occlusion import _complete_glyphs
                 # The renderer reports a fragment whose ink it could not measure as
                 # null: the glyph measurement is then incomplete and the estimated
@@ -339,10 +348,13 @@ def _v5_scene(root, measurement=None, svg=None):
                 visit(child, position, attrs, (*ancestors, node))
             return
         if tag == "text":
-            text = text_record(node, position, attrs)
+            # Without the bound chart ids every text is treated as chart text.
+            text = text_record(node, position, attrs, in_chart=chart_group_ids is None or any(
+                item.get("id") in chart_group_ids for item in ancestors))
             if text is not None:
                 records.append({"node": node, "ancestors": ancestors, "text": text, "order": order[node],
-                                "alpha": attrs.get("_opacity", 1) * float(attrs.get("fill-opacity", 1))})
+                                "alpha": attrs.get("_opacity", 1) * float(attrs.get("fill-opacity", 1)),
+                                **({"measuredHidden": True} if node in measured_hidden else {})})
             return
         if tag not in CHART_ELEMENTS | {"image"}:
             raise NativeRejection("native_chart_content_svg_contract_invalid")
@@ -640,12 +652,13 @@ def _v5_visibility(root, group, records, prims, geometry, *, chart_type=None):
 def _v5_content_geometry(root, group, raw, chart, prims, *, measurement=None, svg=None, native_group_ids=(), check_visibility=True):
     from services.generation_core.drivers.svg.chart_content_cartesian import prove_cartesian
     from services.generation_core.drivers.svg.chart_content_polar import prove_polar
-    records, primitive_type = _v5_scene(root, measurement, svg)
+    records, primitive_type = _v5_scene(root, measurement, svg,
+                                        chart_group_ids=frozenset(native_group_ids) if native_group_ids else None)
     local = [record for record in records if group in record["ancestors"]]
     prims = primitive_type(tuple(record["shape"] for record in local if "shape" in record),
                            tuple(record["text"] for record in local if "text" in record), prims.tags)
     canvas_texts = tuple(record["text"] for record in records if "text" in record
-        and group not in record["ancestors"]
+        and group not in record["ancestors"] and not record.get("measuredHidden")
         and not any(ancestor.get("id") in native_group_ids for ancestor in record["ancestors"]))
     geometry = (prove_polar(raw, chart, prims) if chart["chartType"] in {"pie", "donut"}
                 else prove_cartesian(raw, chart, prims, canvas_texts=canvas_texts))
@@ -921,7 +934,9 @@ def chart_drawing_evidence(payload: dict, svg: str, *, revision: str, measuremen
                 continue
             from services.generation_core.drivers.svg.native_requirements import REQUIREMENTS_VERSION_V5
             if revision == REQUIREMENTS_VERSION_V5:
-                records, primitive_type = _v5_scene(root, measurement, svg)
+                chart_ids = frozenset(item.get("id") for item in record.get("objects") or []
+                                      if isinstance(item, dict) and item.get("kind") == "chart")
+                records, primitive_type = _v5_scene(root, measurement, svg, chart_group_ids=chart_ids)
                 local = [entry for entry in records if found[0] in entry["ancestors"]]
                 prims = primitive_type(tuple(entry["shape"] for entry in local if "shape" in entry),
                                        tuple(entry["text"] for entry in local if "text" in entry),
@@ -1270,6 +1285,24 @@ def build_chart_witness_manifest(payload: dict, svg: str, *, revision: str) -> d
                 relationships.append({"kind": "proved-donut-hole", "qid": qid(node)})
             elif geometry.get("calibrated") and node.tag.rsplit("}", 1)[-1] == "line":
                 relationships.append({"kind": "calibrated-axis", "qid": qid(node)})
+            if (chart["chartType"] in {"bar", "column"} and node.tag.rsplit("}", 1)[-1] == "line"
+                    and isinstance(geometry.get("baseline"), (int, float))):
+                # A baseline axis drawn before the bars that rest on it: the bars
+                # cover part of its stroke by construction. Only an axis line on
+                # the proven baseline, across the value direction, qualifies.
+                line = shapes[index]["shape"]
+                horizontal_bars = chart["chartType"] == "bar"
+                across = line.box.x0 == line.box.x1 if horizontal_bars else line.box.y0 == line.box.y1
+                position = line.box.x0 if horizontal_bars else line.box.y0
+                if across and abs(position - geometry["baseline"]) <= line.stroke_width / 2:
+                    axis_qid = qid(node)
+                    resting = sorted({qid(shapes[point["shapeIndex"]]["node"]) for point in geometry["points"]
+                                      if isinstance(point.get("shapeIndex"), int)
+                                      and int(qid(shapes[point["shapeIndex"]]["node"])[4:]) > int(axis_qid[4:])},
+                                     key=lambda value: int(value[4:]))
+                    if resting:
+                        relationships.append({"kind": "datum-on-baseline-axis", "qid": axis_qid,
+                                              "occluderQids": resting})
         from services.generation_core.drivers.svg.native_requirements import _series_name_unit, _unit_key
         from decimal import Decimal
         data_qids = {value for datum in datums for value in datum["primitiveQids"]}
