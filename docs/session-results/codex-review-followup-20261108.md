@@ -129,3 +129,50 @@ check that.
 - **Handoff items that need authorization.** The handoff's acceptance items
   (paid generation, Office rendering, the paired quality study) need the
   owner's authorization and were not started.
+
+## Follow-up during the same session (multi-agent)
+
+Further commits, each reviewed before integration:
+
+- `4d2f08627`: SVG template UI literals moved to i18n catalogs. `check:i18n`
+  passes.
+- `0620cc818`: the Next.js timeout-signal tests awaited only an unref'd
+  `AbortSignal.timeout`, so node:test cancelled them. They now keep the event
+  loop alive; product code is unchanged.
+- `4b92debf9`: 19 literal workspace error codes registered, and the errors
+  contract regenerated.
+- `66b15ae5d` and the registry snapshot commit: stale fixtures and test doubles
+  repaired, each traced to the commit that made code and test disagree.
+  - The only product bug in this batch: `alembic check` always reported drift
+    for the ORM-less `workspace_generation_lineage_state`.
+- Two decision memos (no code changes):
+  - `notice-sbom-platform-analysis-20261108.md`: NOTICE and the SBOM are stale
+    on every OS, wheel licence texts and digests differ by platform, and the CI
+    step lacks uv.
+  - `svg-v5-plane-budget-options-20261108.md`: in-target document reuse with
+    full revalidation plus chart-only frame-pacing flags, prototyped at 30-43 s
+    with byte-identical proofs.
+
+### Final checks
+
+- **Full backend pytest:** 21 failures, against 93 at the Codex head and 48
+  earlier in this session.
+- **Remaining backend failures, none introduced by this work:**
+  - frozen authored/vNext paths that depend on Windows fonts, Linux clock
+    behaviour or PostgreSQL (vNext e2e ×4, scheduler overload, checkpoint
+    90-slide and process restart, capacity deferral, public export product
+    path);
+  - Windows-only paths in `test_trusted_executor_contracts`;
+  - test DB pollution (`test_presentation_publication_durability` passes
+    alone);
+  - `test_authored_illustration_plan_wiring` (failing before Codex);
+  - the two environment-dependent Chromium cases;
+  - `test_public_v2_admission_errors`, left for an owner decision: one test's
+    premise, that a non-raster style is rejected, was removed on purpose by
+    the 2026-10 free-composition change.
+- **Next.js node suite:** first batch 836 passed, 0 failed. The renderer batch,
+  which never ran before because the first batch failed, has 2 Chrome-cleanup
+  ECONNRESET failures in the frozen authored-hybrid path.
+- **CI gates:** ruff, structural layering, the svg subset check and the
+  required-CI contract test pass. `check:notice` and `check:release-sbom` fail
+  as described in the analysis document.
