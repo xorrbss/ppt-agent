@@ -16,7 +16,9 @@
     "action_id": "act-demo-approve-0001",
     "expected_operation_version": 3,
     "expected_revision": 4,
-    "recovery_revision": null
+    "recovery_revision": null,
+    "stage_review_decision": null,
+    "recovery_decision": null
   },
   "action_response": {
     "schema_version": 1,
@@ -48,6 +50,7 @@
           "recoveryReason": null,
           "recoveryStatus": "unavailable",
           "capacity_waiting": false,
+          "wait_reason": null,
           "queue_position": null,
           "result": {
             "revision": 5,
@@ -112,6 +115,7 @@
         "recoveryReason": null,
         "recoveryStatus": "unavailable",
         "capacity_waiting": false,
+        "wait_reason": null,
         "queue_position": null,
         "result": {
           "revision": 5,
@@ -184,6 +188,7 @@
           "recoveryReason": null,
           "recoveryStatus": "unavailable",
           "capacity_waiting": false,
+          "wait_reason": null,
           "queue_position": null,
           "result": {
             "revision": 5,
@@ -248,6 +253,7 @@
         "recoveryReason": null,
         "recoveryStatus": "unavailable",
         "capacity_waiting": false,
+        "wait_reason": null,
         "queue_position": null,
         "result": {
           "revision": 5,

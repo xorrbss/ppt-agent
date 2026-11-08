@@ -97,6 +97,7 @@
           "recoveryReason": null,
           "recoveryStatus": "unavailable",
           "capacity_waiting": false,
+          "wait_reason": null,
           "queue_position": null,
           "result": null,
           "version": 0,

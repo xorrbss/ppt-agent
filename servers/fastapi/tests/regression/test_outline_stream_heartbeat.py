@@ -53,7 +53,7 @@ def stubbed_stream(monkeypatch):
     """Drive `stream_outlines` without a database, temp dir, or LLM."""
 
     outline_payload = {"slides": [{"content": "one"}]}
-    presentation = SimpleNamespace(outlines=outline_payload)
+    presentation = SimpleNamespace(outlines=outline_payload, is_svg=lambda: False)
     presentation.model_dump = lambda mode="json": {"outlines": outline_payload}
 
     async def _require_live_presentation(_session, _id):

@@ -542,6 +542,9 @@ def test_upgrade_from_baseline_stamp_skips_existing_theme_column(tmp_path):
                 text("CREATE TABLE slides (id TEXT PRIMARY KEY, html_content TEXT)")
             )
             connection.execute(
+                text("CREATE TABLE async_presentation_generation_tasks (id TEXT PRIMARY KEY)")
+            )
+            connection.execute(
                 text("CREATE TABLE alembic_version (version_num VARCHAR(32) NOT NULL)")
             )
             connection.execute(
@@ -593,6 +596,9 @@ def test_upgrade_from_theme_stamp_skips_existing_template_create_infos_table(tmp
                 )
             )
             connection.execute(
+                text("CREATE TABLE async_presentation_generation_tasks (id TEXT PRIMARY KEY)")
+            )
+            connection.execute(
                 text("CREATE TABLE alembic_version (version_num VARCHAR(32) NOT NULL)")
             )
             connection.execute(
@@ -624,7 +630,7 @@ def test_upgrade_from_template_stamp_skips_existing_chat_history_table(tmp_path)
     engine = create_engine(database_url)
     try:
         with engine.begin() as connection:
-            connection.execute(text("CREATE TABLE presentations (id TEXT PRIMARY KEY)"))
+            connection.execute(text("CREATE TABLE presentations (id TEXT PRIMARY KEY, theme JSON)"))
             connection.execute(
                 text("CREATE TABLE slides (id TEXT PRIMARY KEY, html_content TEXT)")
             )
@@ -644,6 +650,9 @@ def test_upgrade_from_template_stamp_skips_existing_chat_history_table(tmp_path)
                     )
                     """
                 )
+            )
+            connection.execute(
+                text("CREATE TABLE async_presentation_generation_tasks (id TEXT PRIMARY KEY)")
             )
             connection.execute(
                 text("CREATE TABLE alembic_version (version_num VARCHAR(32) NOT NULL)")

@@ -7,6 +7,7 @@ private SQLite database; no live credentials or provider endpoints are used.
 from __future__ import annotations
 
 import asyncio
+import concurrent.futures
 import threading
 import time
 
@@ -184,6 +185,7 @@ def test_auth401_20_parallel_pages_single_flight(auth401_http, refresh_status, u
 
     async def run():
         # asyncio.to_thread propagates the stale job snapshot to every caller.
+        asyncio.get_running_loop().set_default_executor(concurrent.futures.ThreadPoolExecutor(max_workers=20))
         with runtime_settings_context(state.initial):
             return await asyncio.gather(*(asyncio.to_thread(call) for call in calls),
                                         return_exceptions=True)

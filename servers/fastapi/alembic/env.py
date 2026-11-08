@@ -156,6 +156,9 @@ if alembic_config.config_file_name is not None:
 
 target_metadata = SQLModel.metadata
 
+# Tables created and read only through migrations/raw SQL, with no ORM model.
+_ALEMBIC_OWNED_TABLES = frozenset({"workspace_generation_lineage_state"})
+
 _ALEMBIC_OWNED_FOREIGN_KEYS = {
     (
         "presentations",
@@ -257,6 +260,8 @@ def _foreign_key_signature(constraint) -> tuple[object, ...]:
 
 
 def _include_object(obj, _name, type_, reflected, compare_to) -> bool:
+    if type_ == "table" and reflected and compare_to is None and _name in _ALEMBIC_OWNED_TABLES:
+        return False
     if type_ == "foreign_key_constraint" and (
         _foreign_key_signature(obj) in _ALEMBIC_OWNED_FOREIGN_KEYS
     ):

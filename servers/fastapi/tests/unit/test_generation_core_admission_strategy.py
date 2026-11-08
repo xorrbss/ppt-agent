@@ -115,7 +115,7 @@ def test_omitted_strategy_stays_authored_for_an_svg_unsupported_style_id():
         content_policy=SimpleNamespace(text="verbatim", allow_summarization=False),
     )
     assert resolve_generation_strategy_with_reason(request) == (
-        "authored", "svg_source_template_unsupported",
+        "authored", "svg_source_template_unavailable",
     )
 
 
@@ -136,13 +136,13 @@ def test_omitted_strategy_resolves_svg_for_an_admissible_raster_reconstruction()
     assert resolve_generation_strategy_with_reason(request) == ("svg", "default")
 
 
-def test_omitted_strategy_stays_authored_for_an_exact_reconstruction_style():
+def test_omitted_strategy_uses_svg_for_an_exact_reconstruction_style():
+    # Exact-reconstruction styles may serve as SVG design references
+    # (docs/svg-all-canvas-free-composition-design-20261001.md, section 5.2).
     request = _request(authored_style="exact-private")
     style = SimpleNamespace(reference_mode="exact_reconstruction")
     with patch("utils.authored_styles.resolve_authored_style", return_value=style):
-        assert resolve_generation_strategy_with_reason(request) == (
-            "authored", "svg_exact_reconstruction_not_supported",
-        )
+        assert resolve_generation_strategy_with_reason(request) == ("svg", "default")
 
 
 def test_resolve_generation_strategy_is_the_reason_wrapper_dropping_it():

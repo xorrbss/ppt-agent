@@ -652,6 +652,7 @@ async def _runner_rejects_stale_revision(tmp_path: Path):
             "retry_count": 1,
             "max_attempts": 3,
             "revision": 9,
+            "original_error_code": "revision_conflict",
         }
         events = await _events(maker, operation.id)
         assert [event.event_type for event in events] == [
