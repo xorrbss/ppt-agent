@@ -137,3 +137,18 @@ def test_common_phrase_candidates_are_separated_only_with_supplied_common_phrase
 def test_nonfinite_metric_values_are_not_summarized_as_observations():
     assert metrics.summarize([{"a": float("nan"), "b": float("inf")}, {"a": 2}]) == {
         "a": {"mean": 2.0, "min": 2, "max": 2, "n": 1}}
+
+
+def test_run_eval_runs_as_a_script_without_the_scripts_package(tmp_path):
+    """The README runs run_eval.py directly; its imports must not need `scripts` on sys.path."""
+    import subprocess
+    import sys
+    from pathlib import Path
+
+    directory = Path(__file__).resolve().parents[2] / "scripts" / "svg_template_eval"
+    code = ("import sys; sys.path.insert(0, sys.argv[1]); import run_eval; "
+            "print(run_eval.svg_content_sizing.__name__)")
+    result = subprocess.run([sys.executable, "-c", code, str(directory)], cwd=tmp_path,
+                            capture_output=True, text=True, timeout=120)
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip() == "svg_content_sizing"

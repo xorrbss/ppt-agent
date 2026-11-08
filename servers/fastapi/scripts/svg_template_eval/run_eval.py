@@ -41,6 +41,7 @@ import httpx
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from metrics import (attempt_accounting, normalized_page_metrics, package_objects, retention,  # noqa: E402
                      structured_data_integrity, summarize, svg_structure, template_text_leaks)
+from content_sizing_metrics import svg_content_sizing  # noqa: E402
 from recovery import atomic_write_json, load_existing  # noqa: E402
 
 API = "/api/v1/ppt"
@@ -232,7 +233,6 @@ def measure_deck(conn, presentation_id: str) -> dict:
             if code:
                 causes[code.split(":", 1)[-1]] += 1
     structures = [svg_structure(content) for _, content in slides if content]
-    from scripts.svg_template_eval.content_sizing_metrics import svg_content_sizing
     saved_pages = {index: checkpoint or {} for index, checkpoint in checkpoints}
     content_sizing = []
     for index, content in slides:
@@ -240,6 +240,12 @@ def measure_deck(conn, presentation_id: str) -> dict:
         body_bounds = page_context.get("body_region") if isinstance(page_context, dict) else None
         content_sizing.append({"page_index": index,
                                **svg_content_sizing(content or "", body_bounds=body_bounds)})
+    # One deck-level scalar so summarize/decide can report sizing: the mean of the
+    # pages whose cards all have an estimate. Absent (not zero) when no page does.
+    sized = [page["card_unused_envelope_share"] for page in content_sizing
+             if isinstance(page.get("card_unused_envelope_share"), (int, float))]
+    sizing_summary = ({"card_unused_envelope_share": sum(sized) / len(sized)} if sized else {})
+    sizing_summary["content_sizing_pages"] = len(sized)
     totals = {key: sum(item[key] for item in structures) for key in
               ("polygon", "path", "line", "polyline", "rect", "text", "icons", "pictures", "arrow_glyphs", "flow_shapes")}
     pages = len(slides)
@@ -250,7 +256,7 @@ def measure_deck(conn, presentation_id: str) -> dict:
             "attempt_evidence_pages": len(attempts_available),
             "retried_pages": sum(len((checkpoint or {}).get("attempts") or []) > 1 for _, checkpoint in checkpoints),
             "pages_with_flow_shapes": sum(1 for item in structures if item["polygon"] or item["line"] or item["path"]),
-            **totals, "repair_causes": dict(causes), "content_sizing": content_sizing,
+            **totals, **sizing_summary, "repair_causes": dict(causes), "content_sizing": content_sizing,
             "_texts": " ".join(text for item in structures for text in item["texts"])}
 
 

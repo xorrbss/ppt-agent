@@ -83,7 +83,9 @@ def test_nested_cards_are_ambiguous_and_not_double_counted():
 @pytest.mark.parametrize("content", [
     '<g transform="translate(10 0)">' + _card() + '</g>',
     _card().replace('<text ', '<text transform="rotate(5)" '),
-    _card().replace('</g>', '<path d="M120 120 L150 150"/></g>'),
+    # Relative commands and arcs are not bounded, so they stay unsupported.
+    _card().replace('</g>', '<path d="m120 120 l30 30"/></g>'),
+    _card().replace('</g>', '<path d="M120 120 A10 10 0 0 1 150 150"/></g>'),
     _card().replace('<text ', '<text style="letter-spacing:3px" '),
     '<g letter-spacing="3">' + _card() + '</g>',
     _card().replace('<rect ', '<rect clip-path="url(#clip)" '),
@@ -238,3 +240,40 @@ def test_text_proxy_overflow_and_area_underflow_are_unavailable(size):
     assert "invalid_text_proxy_bounds" in result["reasons"]
     assert result["context"]["content_envelope_share"] is None
     json.dumps(result, allow_nan=False)
+
+
+def _page_with(*extra):
+    return _svg(_card() + "".join(extra))
+
+
+@pytest.mark.parametrize("extra", [
+    '<line x1="0" y1="20" x2="1000" y2="20" stroke="#ccc"/>',
+    '<circle cx="20" cy="20" r="10" fill="#f00"/>',
+    '<path d="M10 10 L60 10 L60 40 Z" fill="#0f0"/>',
+    '<polyline points="10,750 900,750" stroke="#000" fill="none"/>',
+])
+def test_unrelated_bounded_shapes_outside_a_card_keep_its_estimate(extra):
+    """Decoration elsewhere on the page must not make every card unavailable."""
+    plain = metrics.svg_content_sizing(_page_with())
+    result = metrics.svg_content_sizing(_page_with(extra))
+    assert result["available_card_count"] == plain["available_card_count"] == 1
+    assert result["cards"][0]["unused_envelope_share"] == plain["cards"][0]["unused_envelope_share"]
+
+
+def test_a_background_rectangle_limits_the_page_context_but_not_the_card():
+    result = metrics.svg_content_sizing(_svg('<rect x="0" y="0" width="5" height="5" fill="#eee"/>' + _card()))
+    assert result["available_card_count"] == 1
+    assert "unclassified_rectangles_excluded" in result["reasons"]
+    assert result["context"]["content_envelope_share"] is None
+
+
+def test_unbounded_geometry_elsewhere_still_withholds_the_card():
+    result = metrics.svg_content_sizing(_page_with('<path d="m10 10 l50 0"/>'))
+    assert result["available_card_count"] == 0
+    assert "unbounded_external_geometry" in result["cards"][0]["reasons"]
+
+
+def test_bounded_shape_overlapping_a_card_withholds_it():
+    result = metrics.svg_content_sizing(_page_with('<line x1="0" y1="200" x2="1000" y2="200" stroke="#000"/>'))
+    assert result["available_card_count"] == 0
+    assert "external_geometry_overlaps_card" in result["cards"][0]["reasons"]

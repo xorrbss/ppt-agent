@@ -280,11 +280,14 @@ Template phrase matches are leakage candidates; a zero count does not prove abse
 Every dispatched attempt is saved before the POST, and its task ID is saved before polling. Generation completion
 is saved before measurement. `matrix --resume` retains every prior record and fills only unattempted slots;
 `--resume --retry-failed` explicitly authorizes failed-slot replacements and links each retry with `retry_of`.
+For the comparison status a failure that its linked retry completed counts as recovered (the attempt accounting
+still reports both attempts); a retry that fails again leaves the slot failed.
 Unknown outcomes block the cell until reconciled. `recover` retains existing records and every exact-request-matched
 durable job, including failed jobs and decks with missing PPTX exports; it never dispatches a generation.
 Without prior saved records, pre-job rejection/transport history cannot be reconstructed and is reported as unavailable.
 Recovery does not infer historical runtime identity from the current invocation or relaunch failed measurements.
 
+**Without `--identity-manifest`, `decide` withholds every verdict** (runs carry no runtime identity to compare).
 `--identity-manifest` on `run`/`matrix` accepts sanitized, operator-verified identities as
 `{"default": {...}, "cells": {"<cell>": {...}}}`. Each identity can contain `code_revision`,
 `generation_config_sha256`, `policy_revision`, `policy_sha256`, `input_sha256`, `request_sha256` and
@@ -298,5 +301,9 @@ between A and B; generation configuration must match explicitly. Judge compariso
 image-byte hashes, implementation identity, version and served models; mixed/fallback served-model evidence blocks it.
 `runner_identity` hashes evaluator sources only and makes no claim that backend services loaded them.
 
+Each deck also records `card_unused_envelope_share` (the mean over pages whose cards all have an estimate; absent
+when none does) and `content_sizing_pages` (how many pages contributed), so `summarize`/`decide` can report sizing.
+A card is judged on its own subtree and on geometry that can reach it: simple shapes (line, circle, ellipse,
+polygon, polyline, absolute-command path) get conservative bounds, and only unbounded geometry elsewhere withholds it.
 The content-sizing metric is supplied by the separate `content_sizing_metrics.svg_content_sizing` module;
 its per-SVG hook is reserved for root integration, retaining availability, units and body-bound provenance.
