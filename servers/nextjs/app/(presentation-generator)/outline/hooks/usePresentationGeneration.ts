@@ -51,6 +51,7 @@ export const usePresentationGeneration = (
 ) => {
   const tA2b = useA2bTranslations("outlineExtras");
   const t = useTranslations("generation");
+  const tTemplate = useTranslations("svgTemplatePicker");
   const dispatch = useDispatch();
   const router = useRouter();
   const templateRestoreState = useSavedSvgTemplate(presentationId);
@@ -228,7 +229,7 @@ export const usePresentationGeneration = (
   const handleSubmit = useCallback(async () => {
     if (submittingDurableTaskRef.current || ownerInvalidatedRef.current) return;
     if (templateRestoreState !== "ready") {
-      notify.warning("템플릿 설정 확인이 필요합니다", templateRestoreState === "loading" ? "저장된 템플릿 설정을 확인하고 있습니다." : "저장된 템플릿 설정을 불러오지 못했습니다. 페이지를 새로고침해 주세요."); return;
+      notify.warning(tTemplate("restoreCheckTitle"), templateRestoreState === "loading" ? tTemplate("restoreCheckLoading") : tTemplate("restoreCheckFailed")); return;
     }
     if (!presentationId) {
       notify.error(
@@ -463,6 +464,7 @@ export const usePresentationGeneration = (
     openRecoverableWorkspace,
     reportDurableGenerationFailure,
     t,
+    tTemplate,
   ]);
 
   useEffect(() => {

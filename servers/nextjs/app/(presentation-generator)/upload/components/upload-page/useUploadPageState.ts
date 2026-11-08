@@ -78,6 +78,7 @@ export const useUploadPageState = ({
   onMasterRequired,
 }: UseUploadPageStateArgs) => {
   const tA2b = useA2bTranslations("uploadExtras");
+  const tTemplate = useA2bTranslations("svgTemplatePicker");
   // Allocate the server-visible deck id before the create command so the
   // workspace operation and its retries hash the exact same stable id.
   const [pendingPresentationId, setPendingPresentationId] = useState<string>(
@@ -361,7 +362,7 @@ export const useUploadPageState = ({
       return false;
     }
     if (generationStrategy === "svg" && config.svgTemplatePin && config.svgTemplateCapabilityState !== "available") {
-      notify.warning("템플릿 준비가 필요합니다", "선택한 크기와 생성 방식의 사용 가능 여부를 확인해 주세요."); return false;
+      notify.warning(tTemplate("capabilityRequiredTitle"), tTemplate("capabilityRequiredBody")); return false;
     }
     if (generationStrategy === "svg" && config.svgDesignReferencePending) {
       notify.warning(tA2b("svgReferenceRegistrationRequired"), tA2b("svgReferenceRegistrationRequiredBody")); return false;
