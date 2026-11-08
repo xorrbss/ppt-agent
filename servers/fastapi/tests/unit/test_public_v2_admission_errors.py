@@ -70,7 +70,7 @@ def test_generation_request_admission_error_code_extracts_validator_message() ->
     with pytest.raises(ValidationError) as excinfo:
         GeneratePresentationRequest(
             content="Raster reconstruction baseline",
-            template="authored",
+            template="general",
             authored_style="default",
             sourceMode="raster_reconstruction",
             rasterApprovalPin=dict(_RASTER_APPROVAL_PIN),
@@ -84,19 +84,12 @@ def test_generation_request_admission_error_code_extracts_validator_message() ->
     )
 
 
-def test_raster_reconstruction_non_raster_style_is_422_not_500() -> None:
-    request = _raster_generation_request_v2("default")
-    reference_ids = [uuid.UUID(value) for value in request.reference_snapshot_ids]
-    with pytest.raises(PublicV2OrchestrationError) as excinfo:
-        resolve_internal_generation_request(
-            request,
-            slide_count=5,
-            reference_ids=reference_ids,
-            internal_generation_mode="free-design",
-            effective_generation_engine="authored",
-        )
-    assert excinfo.value.status_code == 422
-    assert excinfo.value.reason_code == "source_content_template_required"
+def test_raster_reconstruction_unknown_style_is_422_not_500() -> None:
+    # Since the 2026-10 free-composition change any catalogue style is admitted
+    # for raster reconstruction; an unknown style is still refused, as a request
+    # validation error (422), not an unhandled 500.
+    with pytest.raises(ValidationError):
+        _raster_generation_request_v2("no-such-style")
 
 
 def test_raster_reconstruction_admits_the_raster_template_style() -> None:
@@ -201,6 +194,7 @@ def test_v2_canvas_style_resolution_admits_the_style_it_resolves_to() -> None:
 
     request = GeneratePresentationRequest(
         content="Portrait deck", authored_style="no-such-style", aspect_ratio="9:16",
+        strategy="authored",
     )
     with pytest.raises(ValueError, match="authored_portrait_combination_not_supported"):
         validate_authored_canvas_admission(request, style_id=request.authored_style)
