@@ -102,6 +102,50 @@ Same input (6 pages, five numeric series), real `claude-sonnet-5-5`, V4 checks
 
 **Caveat:** five decks are a small sample. Generation time and cost vary run to run.
 
+## Hardening and wider measurement (same day)
+
+**Changes after review of the first prototype:**
+- inside value labels that do not fit move every label outside;
+- the legend wraps;
+- category names wrap to two lines and shrink to 14 px before a chart is refused;
+- chart text follows the page body size (14-20 px);
+- the marker names a frozen renderer revision, and its output is pinned by digest tests;
+- correction prompts show server charts as placeholders. A real deck had lost a
+  native chart because the model copied the drawn bars;
+- grounding binds each value to its category (and series), with the
+  value-before-name direction decided per text. Replayed on 41 real bar/column
+  declarations, it rejected none.
+
+**Measurement.** Three prompts:
+- p1: business review;
+- p2: consumer survey with long category names and decimals;
+- p3: library statistics with 만명 units and decimals.
+
+Each prompt ran 2 decks per arm, with real `claude-sonnet-5-5` and V4 checks:
+
+| | Author-drawn | Server-rendered |
+|---|---|---|
+| Decks | 6 | 6 |
+| Declared charts in the final pages | 23 | 17 |
+| Native charts in the PPTX | 16 (70%) | 16 (94%) |
+| Declared charts lost to drawing errors | 3 (scale mismatch → picture) | 0 |
+| Declared charts lost to page-level text overlap | 4 | 1 |
+| Pages with a likely undeclared bar chart (heuristic) | 2 | 6 |
+| Cost per deck | $0.98 | **$0.68 (-31%)** |
+| Generation time per deck (mean) | 144 s | **113 s (-22%)** |
+
+**What it shows:**
+- Server charts remove the drawing errors and make almost every declared chart
+  native.
+- They do not raise the number of native charts per deck (16 each). Under the
+  server rule the model more often draws a chart itself without a declaration,
+  for example cost shares as an undeclared bar group, which then exports as a
+  picture.
+- Two rule edits (a smaller minimum box; "every chart is declared") did not
+  change that on the page that showed it most. They were reverted, so the
+  committed rule is the one measured.
+- The sample is still small: 2 decks per cell.
+
 ## What it does not solve yet
 
 - Line, area, pie, donut and stacked charts are still author-drawn.
@@ -114,8 +158,13 @@ Same input (6 pages, five numeric series), real `claude-sonnet-5-5`, V4 checks
 
 ## Next steps (proposed)
 
-1. Extend the renderer to stacked, line, area, pie and donut, each with the
-   same "unchanged native checks pass" tests.
-2. Decide whether V5 skips the paint proof for server-rendered charts.
-3. Measure on more inputs (several prompts, 5+ decks per arm) and with the
-   template eval judge. Then decide the default.
+1. **Detect undeclared charts:** a group of three or more bars or columns
+   sharing a baseline, with value texts, outside any declaration. Make it a
+   quality failure with a "declare it" repair hint, measured as advisory first.
+   This is now the main loss in both arms.
+2. Extend the renderer to stacked, line, area, pie and donut, each with the
+   same "unchanged native checks pass" tests. Stacked share charts are where
+   the model drew undeclared bars.
+3. Decide whether V5 skips the paint proof for server-rendered charts.
+4. Measure with 5+ decks per cell and the template eval judge. Then decide the
+   default.
