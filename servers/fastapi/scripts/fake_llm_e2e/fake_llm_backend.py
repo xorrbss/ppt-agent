@@ -161,9 +161,22 @@ def _chart_svg(example: dict, number: int, width: int, height: int) -> str:
             raise RuntimeError(f"fixture {example['name']}: group {declaration['id']} not found exactly once")
         attribute = _xml_escape(json.dumps(declaration["raw"], ensure_ascii=False), quote=True)
         svg = svg.replace(marker, f"{marker} data-native-chart=\"{attribute}\"", 1)
-    title = (f'<text x="102" y="64" font-family="Arial" font-size="32" font-weight="700" '
-             f'fill="#1b2230">검증 슬라이드 {number}</text>')
-    return svg.replace("</svg>", title + "</svg>", 1)
+    # The builder's value labels are 10px, below the svg body-text floor (12px
+    # and 9.5pt physical): enlarge them, keeping the label centred on its anchor.
+    def _enlarge(match):
+        size, baseline = float(match["size"]), float(match["y"])
+        return match[0].replace(f'y="{match["y"]}"', f'y="{baseline + 0.375 * (13 - size):g}"').replace(
+            f'font-size="{match["size"]}"', 'font-size="13"')
+    svg = re.sub(r'<text [^>]*?y="(?P<y>[^"]+)"[^>]*?font-size="(?P<size>\d+(?:\.\d+)?)"[^>]*>',
+                 lambda m: _enlarge(m) if float(m["size"]) < 13 else m[0], svg)
+    # The request's descriptive lines ("Donut chart, hole size 0.7.") must be drawn:
+    # the requested-text check wants every literal of the source on the page.
+    caption = " ".join(line for line in example["requestedSource"]["content"].splitlines()
+                       if not line.lower().startswith("chart:"))
+    extra = (f'<text x="102" y="64" font-family="Arial" font-size="32" font-weight="700" '
+             f'fill="#1b2230">검증 슬라이드 {number}</text>'
+             f'<text x="102" y="690" font-family="Arial" font-size="16" fill="#1b2230">{_xml_escape(caption)}</text>')
+    return svg.replace("</svg>", extra + "</svg>", 1)
 
 
 def _outline(schema, prompt: str) -> dict:

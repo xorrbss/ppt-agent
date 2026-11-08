@@ -35,6 +35,15 @@ SVG_NATIVE_CHART_INTEGRITY_V5=on FAKE_LLM_CHART_FIXTURES=1 FAKE_OUTLINE_LONG=1 \
 scripts/fake_llm_e2e/run_generation.sh 9
 ```
 
+The v5 chart paint proof runs inside `export.pptx` and is budgeted (about three
+charts per export of ~600 s), so a deck with more charts needs another export
+to verify the rest: `scripts/fake_llm_e2e/run_export.sh <presentation-id>`.
+Fixtures adapt the builder output to the svg contract: 10px value labels are
+enlarged to 13px, and the example's descriptive line (e.g. "hole size 0.7") is
+drawn as a caption so the requested-text check finds it. Without
+`SVG_NATIVE_CHART_INTEGRITY_V5=on` the v4 rules apply and most fixtures fail
+admission (they draw no value text).
+
 ## What is fake, and why
 
 - **LLM clients** (`fake_llm_backend.py`): `llmai.get_client` returns
