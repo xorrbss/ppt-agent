@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 from collections import Counter
-from copy import deepcopy
 from decimal import Decimal, InvalidOperation
 import math
 import re
@@ -80,7 +79,7 @@ def _v5_scene(root, measurement=None, svg=None):
     letter-spacing and positive uniform-transform spelling without changing
     any renderer or earlier native-object output.
     """
-    from dataclasses import dataclass, replace
+    from dataclasses import dataclass
     from services.generation_core.drivers.svg.native_geometry import (
         Box, DrawnText, DrawnTextRun, GroupPrimitives, Shape, _compose_transform,
         _transform_of, paint, shape_of, transform_shape,
@@ -115,7 +114,7 @@ def _v5_scene(root, measurement=None, svg=None):
     records = []
 
     def text_record(node, position, attrs):
-        fragments, lines = [], []
+        fragments = []
         cursor = [float(node.get("x", 0)), float(node.get("y", 0))]
         chunks, chunk = {}, 0
         def emit(content, style, transform):
@@ -370,8 +369,8 @@ def _v5_paint_at(record, x, y):
                 vertices = ((box.x0, box.y0), (box.x1, box.y0), (box.x1, box.y1), (box.x0, box.y1), (box.x0, box.y0))
             if shape.tag in {"path", "polygon"} and vertices:
                 vertices = (*vertices, vertices[0])
-            segments = ([(a, b) for path in shape.subpaths for a, b in zip(path, path[1:])]
-                        if getattr(shape, "subpaths", ()) else list(zip(vertices, vertices[1:])))
+            segments = ([(a, b) for path in shape.subpaths for a, b in zip(path, path[1:], strict=False)]
+                        if getattr(shape, "subpaths", ()) else list(zip(vertices, vertices[1:], strict=False)))
             for a, b in segments:
                 dx, dy = b[0] - a[0], b[1] - a[1]
                 denominator = dx * dx + dy * dy
@@ -626,7 +625,7 @@ def _v5_content_geometry(root, group, raw, chart, prims, *, measurement=None, sv
                     return {"passed": False, "reason": "native_chart_content_value_binding_unproven"}
                 positions = [(item[1].box().x0 + item[1].box().x1) / 2 if horizontal
                              else (item[1].box().y0 + item[1].box().y1) / 2 for item in labels]
-                if any(abs(a - b) <= 1e-7 for a, b in zip(positions, positions[1:])):
+                if any(abs(a - b) <= 1e-7 for a, b in zip(positions, positions[1:], strict=False)):
                     return {"passed": False, "reason": "native_chart_content_value_binding_unproven"}
                 for point, item in zip(points, labels, strict=True):
                     label_owners[item[0]] = (point["seriesIndex"], category)
@@ -919,6 +918,13 @@ def chart_witness_render_kwargs(payload: dict, svg: str, *, revision: str) -> di
     return {"chart_witness_manifest": manifest} if manifest is not None else {}
 
 
+def _bar_cross_segment(box, position, horizontal_bar):
+    """The segment across a bar at ``position`` (x for horizontal bars, y for columns)."""
+    if horizontal_bar:
+        return [[position, box.y0], [position, box.y1]]
+    return [[box.x0, position], [box.x1, position]]
+
+
 def build_chart_witness_manifest(payload: dict, svg: str, *, revision: str) -> dict | None:
     """Server-derived chart semantics for the existing same-capture paint probe.
 
@@ -942,7 +948,8 @@ def build_chart_witness_manifest(payload: dict, svg: str, *, revision: str) -> d
     nodes = list(root.iter())
     indexes = {node: index for index, node in enumerate(nodes)}
     parents = {child: parent for parent in nodes for child in parent}
-    qid = lambda node: f"svg-{indexes[node]}"
+    def qid(node):
+        return f"svg-{indexes[node]}"
     tree = [{"qid": qid(node), "parentQid": qid(parents[node]) if node in parents else None,
              "tag": node.tag, "attributes": dict(node.attrib), "text": node.text or "", "tail": node.tail or ""}
             for node in nodes]
@@ -978,32 +985,28 @@ def build_chart_witness_manifest(payload: dict, svg: str, *, revision: str) -> d
         datum_ids = {(point["seriesIndex"], point["categoryIndex"]):
                      f"{chart_id}/s{point['seriesIndex']}/c{point['categoryIndex']}" for point in geometry["points"]}
 
-        def boundary_support(point, shape, target_qid):
+        def boundary_support(point, shape, target_qid, *, chart=chart, geometry=geometry, datum_ids=datum_ids):
             """Actual numeric-determining boundaries, never a fabricated ink box."""
             if shape is None or point.get("geometryAnchorOnly"):
                 return []
             datum_id = datum_ids[point["seriesIndex"], point["categoryIndex"]]
-            def obligation(suffix, segments=None, ellipse=None):
+            def make_obligation(suffix, segment_list=None, ellipse=None):
                 return {"id": f"{datum_id}/{suffix}", "kind": suffix, "primitiveQid": target_qid,
                         "regionRule": "native-alpha-boundary-neighborhood/v1", "radiusPhysicalPixels": 1,
-                        "segments": segments or [], **({"ellipse": ellipse} if ellipse else {}), "alternatives": []}
+                        "segments": segment_list or [], **({"ellipse": ellipse} if ellipse else {}), "alternatives": []}
             if chart["chartType"] in {"bar", "column"}:
-                box = shape.box
-                if chart["chartType"] == "bar":
-                    line = lambda coordinate: [[coordinate, box.y0], [coordinate, box.y1]]
-                    endpoint = point["x"]
-                else:
-                    line = lambda coordinate: [[box.x0, coordinate], [box.x1, coordinate]]
-                    endpoint = point["y"]
-                result = [obligation("value-end", [line(endpoint)])]
+                horizontal_bar = chart["chartType"] == "bar"
+                endpoint = point["x"] if horizontal_bar else point["y"]
+                result = [make_obligation("value-end", [_bar_cross_segment(shape.box, endpoint, horizontal_bar)])]
                 if point.get("baseline") is not None:
-                    result.append(obligation("value-base", [line(point["baseline"])]))
+                    result.append(make_obligation("value-base",
+                        [_bar_cross_segment(shape.box, point["baseline"], horizontal_bar)]))
                 return result
             paths = getattr(shape, "subpaths", ()) or (shape.vertices,)
             closed = getattr(shape, "closedSubpaths", ())
             edges = [(a, b) for index, path in enumerate(paths) if len(path) >= 2
                      for a, b in zip(path, (*path[1:], path[0]) if (shape.fill or shape.tag == "polygon"
-                         or index < len(closed) and closed[index]) else path[1:]) if a != b]
+                         or index < len(closed) and closed[index]) else path[1:], strict=False) if a != b]
             if chart["chartType"] in {"line", "area"}:
                 # The family proof already verifies every actual top edge and
                 # its full domain. Canonical category-local pieces remove only
@@ -1011,30 +1014,30 @@ def build_chart_witness_manifest(payload: dict, svg: str, *, revision: str) -> d
                 row = sorted((other for other in geometry["points"] if other["seriesIndex"] == point["seriesIndex"]),
                              key=lambda other: other["categoryIndex"])
                 category_index = point["categoryIndex"]
-                result = [obligation("value-anchor", [[ [point["x"], point["y"]], [point["x"], point["y"]] ]])]
+                result = [make_obligation("value-anchor", [[ [point["x"], point["y"]], [point["x"], point["y"]] ]])]
                 for left, right in ((category_index - 1, category_index), (category_index, category_index + 1)):
                     if left < 0 or right >= len(row):
                         continue
                     a, b = row[left], row[right]
                     midpoint = [(a["x"] + b["x"]) / 2, (a["y"] + b["y"]) / 2]
                     segment = [midpoint, [b["x"], b["y"]]] if right == category_index else [[a["x"], a["y"]], midpoint]
-                    result.append(obligation(f"incident-edge-{len(result)}", [segment]))
+                    result.append(make_obligation(f"incident-edge-{len(result)}", [segment]))
                 return result
             cx, cy = geometry["center"]
             rx, ry = geometry["radii"]
             if shape.tag in {"circle", "ellipse"}:
-                return [obligation("polar-outer-arc", ellipse={"center": [cx, cy], "radii": [rx, ry],
+                return [make_obligation("polar-outer-arc", ellipse={"center": [cx, cy], "radii": [rx, ry],
                     "startAngle": 0, "sweepAngle": 2 * math.pi})]
             outer = [[list(a), list(b)] for a, b in edges
                      if all(abs(math.hypot((x - cx) / rx, (y - cy) / ry) - 1) <= max(1e-4, .05 / min(rx, ry)) for x, y in (a, b))]
-            return [obligation("polar-outer-arc", outer)] if outer else []
+            return [make_obligation("polar-outer-arc", outer)] if outer else []
 
-        def add_glyph(text_index, role, owners):
+        def add_glyph(text_index, role, owners, *, texts=texts):
             if text_index is None or not 0 <= text_index < len(texts):
                 return []
             return add_record_glyph(texts[text_index], role, owners)
 
-        def add_record_glyph(record, role, owners):
+        def add_record_glyph(record, role, owners, *, glyph_targets=glyph_targets, glyphs=glyphs):
             text_node = record["node"]
             targets = []
             for node in text_node.iter():
@@ -1142,10 +1145,11 @@ def build_chart_witness_manifest(payload: dict, svg: str, *, revision: str) -> d
         from decimal import Decimal
         data_qids = {value for datum in datums for value in datum["primitiveQids"]}
         points_by_id = {datum_ids[point["seriesIndex"], point["categoryIndex"]]: point for point in geometry["points"]}
-        datums_by_id = {datum["id"]: datum for datum in datums}
-        primitive_target = lambda datum_id, source_qid: f"{chart_id}/primitive/{source_qid}/{datum_id}"
-        glyph_target = lambda glyph, span: f"{chart_id}/glyph/{glyph['qid']}/{span['start']}/{span['length']}"
-        def unit_key(datum):
+        def primitive_target(datum_id, source_qid, *, chart_id=chart_id):
+            return f"{chart_id}/primitive/{source_qid}/{datum_id}"
+        def glyph_target(glyph, span, *, chart_id=chart_id):
+            return f"{chart_id}/glyph/{glyph['qid']}/{span['start']}/{span['length']}"
+        def unit_key(datum, *, chart=chart, declaration=declaration, geometry=geometry):
             name, title = chart["series"][datum["seriesIndex"]]["name"], chart.get("title", "")
             units = {_unit_key(binding["unit"]) for binding in geometry.get("valueLabelBindings", [])
                      if binding["seriesIndex"] == datum["seriesIndex"] and binding["categoryIndex"] == datum["categoryIndex"]
@@ -1237,7 +1241,7 @@ def build_chart_witness_manifest(payload: dict, svg: str, *, revision: str) -> d
                             owned = {(binding["seriesIndex"], binding["categoryIndex"])
                                      for binding in geometry.get("valueLabelBindings", [])
                                      if binding.get("segmentOwnershipProven") is True}
-                            def value_glyph_ids(owner):
+                            def value_glyph_ids(owner, *, glyphs=glyphs):
                                 return [glyph_target(glyph, span) for glyph in glyphs
                                         if glyph["role"] == "value" and glyph["datumIds"] == [owner["id"]]
                                         for span in glyph["ranges"]]

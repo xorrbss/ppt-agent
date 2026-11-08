@@ -175,6 +175,12 @@ CONVERTER_LEDGER = VerifierRevisionLedger(
         # rebuilt bytes; no superseded-manifest alias or historical preimage is
         # changed. Bounded evidence is in the final source-state report.
         "82c2b1c3b18a71ca0c6919fa43ec6132f347814886c5809441caf001a17ae228": "svg-pptx-converter/1",
+        # 2026-11-08 lint-gate repair of the #149 chart sources: explicit zip(strict=False),
+        # lambda -> def, closure loop variables bound as keyword defaults, dead bindings
+        # removed, and the uniform transform parser moved to utils.svg_uniform_transform
+        # (same results and rejection codes), which joins the source inventories that
+        # hold native_geometry/slide_capture_chart_paint. No behaviour changed.
+        "c10ad72ceb1d38e619b722c650fae23293663088d473a201474c95f5e8983a1a": "svg-pptx-converter/1",
     }),
 )
 
@@ -248,6 +254,12 @@ COMMON_HEADER_VERIFIER_LEDGER = VerifierRevisionLedger(
             "sha256:45666ce705a9f1a41fdf0e2339189d30ea5731a1a83abbd2db8722e726f9a1b0": "svg-common-header-verifier/1",
             # Reviewed V5 native layered-paint support and static marker visibility; legacy paths retained.
             "sha256:b3a5aa367b8c8ede77a2c8b33c3c19d532eaf20876a7bf3e8496440e32513894": "svg-common-header-verifier/1",
+        # 2026-11-08 lint-gate repair of the #149 chart sources: explicit zip(strict=False),
+        # lambda -> def, closure loop variables bound as keyword defaults, dead bindings
+        # removed, and the uniform transform parser moved to utils.svg_uniform_transform
+        # (same results and rejection codes), which joins the source inventories that
+        # hold native_geometry/slide_capture_chart_paint. No behaviour changed.
+        "sha256:f75cf143e2dd63465adfaf86f7ff5fa999561eb71ddd314fd9b7047407589569": "svg-common-header-verifier/1",
     }),
 )
 
@@ -326,6 +338,12 @@ WHOLE_PAGE_VERIFIER_LEDGER = VerifierRevisionLedger(
         "2bb40cac39ddf79d9a81a5db0becceb539d39e25233a6a1bb3b08e8b6ddf450f": "svg-whole-page-verifier/1",
             # Reviewed V5 native layered-paint support and static marker visibility; legacy paths retained.
             "0501cd4f5a8bc665e97374bbd7bc8bc2211feaa34626ce5b67d431d2f976ec20": "svg-whole-page-verifier/1",
+        # 2026-11-08 lint-gate repair of the #149 chart sources: explicit zip(strict=False),
+        # lambda -> def, closure loop variables bound as keyword defaults, dead bindings
+        # removed, and the uniform transform parser moved to utils.svg_uniform_transform
+        # (same results and rejection codes), which joins the source inventories that
+        # hold native_geometry/slide_capture_chart_paint. No behaviour changed.
+        "568dc168020b969dc9610dd49911e02f9fb2dfed70d535039e4936be35d0ea5d": "svg-whole-page-verifier/1",
     }),
 )
 
@@ -469,6 +487,12 @@ PARTIAL_RECOVERY_CODE_LEDGER = VerifierRevisionLedger(
             "c7651890b9f5b0e6982e8c873431a6faa1aeb028fe3ae9b3c350a01842bf46e6": "svg-partial-recovery-code/1",
             # Reviewed V5 native layered-paint support and static marker visibility; legacy paths retained.
             "7e207cf8e8a46c4520beeb37ae7472fa417110690efdeac3d2abdcc90f17c44d": "svg-partial-recovery-code/1",
+        # 2026-11-08 lint-gate repair of the #149 chart sources: explicit zip(strict=False),
+        # lambda -> def, closure loop variables bound as keyword defaults, dead bindings
+        # removed, and the uniform transform parser moved to utils.svg_uniform_transform
+        # (same results and rejection codes), which joins the source inventories that
+        # hold native_geometry/slide_capture_chart_paint. No behaviour changed.
+        "9234dab38481247127cdeed6451798043bb13a324759cbb0f9194c717f0f9a77": "svg-partial-recovery-code/1",
     }),
 )
 
@@ -523,6 +547,12 @@ PAGE_RENDER_CODE_LEDGER = VerifierRevisionLedger(
             "1ea4c8823fe285d68a5381d0da4b3afe12a2c3caaa665a66b48dd817f6156846": "svg-page-render-code/1",
             # Reviewed V5 native layered-paint support and static marker visibility; legacy paths retained.
             "c15a6c05ea8ab8419188617ab7349805203a043c337fb5201769b4f697fe2b98": "svg-page-render-code/1",
+        # 2026-11-08 lint-gate repair of the #149 chart sources: explicit zip(strict=False),
+        # lambda -> def, closure loop variables bound as keyword defaults, dead bindings
+        # removed, and the uniform transform parser moved to utils.svg_uniform_transform
+        # (same results and rejection codes), which joins the source inventories that
+        # hold native_geometry/slide_capture_chart_paint. No behaviour changed.
+        "596080684783c7d173b3646deda6215d8ecb8575cd29fc3646d498bb30996a1c": "svg-page-render-code/1",
     }),
 )
 

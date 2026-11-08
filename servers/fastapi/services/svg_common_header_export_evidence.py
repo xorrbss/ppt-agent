@@ -26,7 +26,7 @@ COMMON_HEADER_VERIFIER_FILES = (
     "services/svg_export_page_evidence.py", "services/svg_export_quality.py",
     "services/generation_core/drivers/svg/render.py", "services/svg_master_furniture.py",
     "utils/slide_capture.py",
-    "utils/slide_capture_chart_adapter.py", "utils/slide_capture_chart_paint.py",
+    "utils/slide_capture_chart_adapter.py", "utils/slide_capture_chart_paint.py", "utils/svg_uniform_transform.py",
     "utils/slide_capture_chart_text.py", "utils/slide_capture_chart_support.py",
     "utils/slide_capture_worker_client.py", "utils/renderer_isolation.py",
     "utils/authored_renderer_worker.py", "utils/authored_renderer_session.py",

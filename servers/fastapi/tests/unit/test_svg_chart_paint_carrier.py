@@ -75,7 +75,7 @@ def test_atomic_manifest_bypasses_every_cache_and_preserves_scope(monkeypatch):
     def forbidden(*args, **kwargs):
         pytest.fail("manifest capture entered a legacy cache or alias")
 
-    async def isolated(html, timeout, **kwargs):
+    async def isolated(html, timeout, **kwargs):  # noqa: ASYNC109 - stub of the production render signature
         assert active and current_render_deck_scope() == "chart-deck"
         calls.append(kwargs)
         return bytes([len(calls)]), {"nativeChartPaintProof": {"complete": False, "frame": len(calls)}}
@@ -305,7 +305,7 @@ def test_svg_forwards_optional_carrier_on_regular_and_font_paths(monkeypatch, fo
     async def regular(html, **kwargs):
         calls.append(("regular", html, kwargs))
         return RenderCapture.from_payload(html_digest="fixture", png=b"png", browser_metrics=metrics, runtime_counters={})
-    async def isolated(html, timeout, **kwargs):
+    async def isolated(html, timeout, **kwargs):  # noqa: ASYNC109 - stub of the production render signature
         calls.append(("isolated", html, kwargs))
         return b"png", metrics
     monkeypatch.setattr(svg, "svg_preview_html", lambda *args, **kwargs: wrapper)
@@ -382,7 +382,10 @@ def _chart_test_font_bytes(*, variable=True, postscript="Fixture-Thin", variable
     for name in glyphs:
         pen = TTGlyphPen(None)
         if name != ".notdef":
-            pen.moveTo((0, 0)); pen.lineTo((250, 700)); pen.lineTo((500, 0)); pen.closePath()
+            pen.moveTo((0, 0))
+            pen.lineTo((250, 700))
+            pen.lineTo((500, 0))
+            pen.closePath()
         outlines[name] = pen.glyph()
     builder.setupGlyf(outlines)
     builder.setupHorizontalMetrics({name: (500, 0) for name in glyphs})

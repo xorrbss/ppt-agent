@@ -2179,7 +2179,7 @@ def test_authoring_profile_staging_preserves_legacy_and_frozen_new_identity(monk
     assert payload[INTERNAL_SVG_AUTHORING_PROFILE_KEY] == expected
     assert snapshot["authoring_profile"] == expected
     new_contract_keys = ({"readability_policy", "common_header_design_plan", "native_requirements_revision",
-                          "page_number_ink"}
+                          "page_number_ink", "asset_projection_revision"}
                          if profile_id is None else set())
     if profile_id is None:
         from services.document_canvas_generation import validate_svg_readability_policy

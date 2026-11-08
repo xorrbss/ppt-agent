@@ -552,7 +552,8 @@ async def publish_svg_candidate(session, presentation, slides, index, task, *, s
         **({"system_furniture": furniture} if furniture is not None else {}),
         **physical_kwargs)
     _apply_v5_rendered_native_quality(rendered.quality, svg, native,
-        presentation_canvas_metadata(presentation.theme), source, _deck_requirements_revision(presentation), render_capture=rendered)
+        presentation_canvas_metadata(presentation.theme), (target.content or {}).get("source", ""),
+        _deck_requirements_revision(presentation), render_capture=rendered)
     if template_page is not None:
         from services.svg_templates.generation import apply_template_body_quality
         apply_template_body_quality(rendered.quality, svg, frozen_snapshot, template_page)

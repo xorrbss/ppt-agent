@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import base64
-import copy
 import hashlib
 import xml.etree.ElementTree as ET
 import zlib
@@ -211,7 +210,7 @@ def _polar_pair():
 
     chart, records, masks = _area_layers()
     chart["chartType"] = "donut"
-    for index, (datum, record) in enumerate(zip(chart["datums"], records)):
+    for index, (datum, record) in enumerate(zip(chart["datums"], records, strict=False)):
         datum["seriesIndex"], datum["categoryIndex"] = 0, index
         datum["geometrySupport"]["visibilityObligations"][0]["kind"] = "polar-outer-arc"
         raw = masks[record["id"]]

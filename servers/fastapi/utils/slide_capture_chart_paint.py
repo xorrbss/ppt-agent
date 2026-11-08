@@ -45,7 +45,8 @@ def _node_tree(source):
     nodes = list(root.iter())
     parents = {child: node for node in nodes for child in node}
     indexes = {node: index for index, node in enumerate(nodes)}
-    qid = lambda node: f"svg-{indexes[node]}"
+    def qid(node):
+        return f"svg-{indexes[node]}"
     tree = [{"qid": qid(node), "parentQid": qid(parents[node]) if node in parents else None,
              "tag": node.tag, "attributes": {key: value for key, value in node.attrib.items() if key != "data-qid"},
              "text": node.text or "", "tail": node.tail or ""} for node in nodes]
@@ -68,7 +69,7 @@ def _text_projection(source):
         root_text = "".join(text_root.itertext())
         owners = {}
         offset = 0
-        def piece(owner, value):
+        def piece(owner, value, *, owners=owners):
             nonlocal offset
             value = value or ""
             length = len(value.encode("utf-16-le"))//2
@@ -128,7 +129,7 @@ def _targets(manifest):
             datum_ids = [datum["id"]] if datum is not None else []
             owned = []
             owned_paints = {}
-            def own(source_qid, paint):
+            def own(source_qid, paint, *, owned=owned, owned_paints=owned_paints):
                 owned.append(source_qid)
                 if owned_paints.get(source_qid) != "all":
                     owned_paints[source_qid] = paint
@@ -430,7 +431,7 @@ def validate_chart_paint_binding(metrics, png, manifest, *, wrapper_html, width_
             item["id"] for item in _targets(manifest)]:
         raise ValueError("chart_paint_proof_targets_mismatch")
     if any(any(record.get(key) != value for key, value in target.items())
-           for target, record in zip(_targets(manifest), observed)):
+           for target, record in zip(_targets(manifest), observed, strict=False)):
         raise ValueError("chart_paint_proof_target_association_mismatch")
 
 
@@ -615,10 +616,10 @@ def _source_over_original_color(native, background, original, appearance, expect
                 continue
             premultiplied = tuple((alpha * channel + 127) // 255 for channel in rgba[:3])
             if any((255 * paint + alpha // 2) // alpha != channel
-                   for paint, channel in zip(premultiplied, rgba[:3])):
+                   for paint, channel in zip(premultiplied, rgba[:3], strict=False)):
                 continue
             reconstructed = tuple(paint + (backdrop * (255 - alpha) + 127) // 255
-                                  for paint, backdrop in zip(premultiplied, background.getpixel(point)))
+                                  for paint, backdrop in zip(premultiplied, background.getpixel(point), strict=False))
             if reconstructed == original.getpixel(point):
                 qualified.putpixel(point, 255)
     return qualified
@@ -668,11 +669,11 @@ def collect_chart_paint_proof(*, command, manifest, source_html, final_png, metr
     with timing_phase(timing, "support_cpu"):
         from PIL import Image, ImageChops
         from utils.slide_capture_chart_text import TEXT_HELPERS
-        from services.generation_core.drivers.svg.native_geometry import _transform_of
+        from utils.svg_uniform_transform import parse_uniform_transform
         validate_manifest(manifest)
         # The service binds exact canonical source; this admitted derivative
         # changes fonts only. Reuse the same root parser as the V5 scene reader.
-        root_transform = _transform_of(_svg_root(source_html))
+        root_transform = parse_uniform_transform(_svg_root(source_html).get("transform"))
         viewport = {"cssWidth": width_px, "cssHeight": height_px, "dpr": device_scale_factor,
                     "rasterWidth": width_px*device_scale_factor, "rasterHeight": height_px*device_scale_factor}
         proof = {"schema": PROOF_SCHEMA, "probeVersion": PROBE_VERSION, "complete": False,
@@ -776,7 +777,8 @@ def collect_chart_paint_proof(*, command, manifest, source_html, final_png, metr
                     if font_evidence is not None:
                         record["fontEvidence"]=font_evidence
                 if len(planes)!=8:
-                    if target["kind"]=="glyph-range":record["unresolvedRanges"]=[{"startUtf16":target["startUtf16"],"endUtf16":target["endUtf16"],"reason":record["reason"]}]
+                    if target["kind"]=="glyph-range":
+                        record["unresolvedRanges"]=[{"startUtf16":target["startUtf16"],"endUtf16":target["endUtf16"],"reason":record["reason"]}]
                     continue
                 record["foreignOccluderQids"]=observed["foreignOccluderQids"]
                 record["clippedQids"]=[]
@@ -794,15 +796,18 @@ def collect_chart_paint_proof(*, command, manifest, source_html, final_png, metr
                 glyphs_complete=True
                 if target["kind"]=="glyph-range":
                     if sha256_prefixed(observed["ownedText"].encode("utf-8"))!=target["ownedTextDigest"]:
-                        record["reason"]="owned_text_binding_mismatch";continue
+                        record["reason"]="owned_text_binding_mismatch"
+                        continue
                     if record["fontEvidence"]["complete"] is not True:
-                        record["reason"]=record["fontEvidence"]["reason"];continue
+                        record["reason"]=record["fontEvidence"]["reason"]
+                        continue
                     record["glyphs"]=[]
                     for index,cluster in enumerate(observed["clusters"]):
                         cluster_planes={}
                         for mode in ("alpha","reference-white","reference-black","current-absent"):
                             image,_,_=plane(target,mode,cluster=index)
-                            if image is None:raise ValueError("chart_cluster_paint_unproven")
+                            if image is None:
+                                raise ValueError("chart_cluster_paint_unproven")
                             cluster_planes[mode]=image
                         cluster_alpha=cluster_planes["alpha"].getchannel("A")
                         mask=cluster_alpha.point(lambda value:255 if value else 0)
@@ -851,12 +856,18 @@ def collect_chart_paint_proof(*, command, manifest, source_html, final_png, metr
                         "right":(observed["bbox"]["x"]+observed["bbox"]["width"])*device_scale_factor,
                         "bottom":(observed["bbox"]["y"]+observed["bbox"]["height"])*device_scale_factor},
                     "canvasMatrix":canvas_matrix,"deviceScaleFactor":device_scale_factor}
-                if not footprint.getbbox():record["reason"]="reference_paint_empty"
-                elif not glyphs_complete:record["reason"]="glyph_original_contribution_missing"
-                elif not original_contribution.getbbox():record["reason"]="original_color_semantic_contribution_empty"
-                elif not exposed.getbbox():record["reason"]="reference_observable_contribution_empty"
-                elif zero.getbbox():record["reason"]="owned_or_quantized_paint_unresolved"
-                else:record.update(complete=True,reason=None,paintRetained=not bool(altered.getbbox()))
+                if not footprint.getbbox():
+                    record["reason"]="reference_paint_empty"
+                elif not glyphs_complete:
+                    record["reason"]="glyph_original_contribution_missing"
+                elif not original_contribution.getbbox():
+                    record["reason"]="original_color_semantic_contribution_empty"
+                elif not exposed.getbbox():
+                    record["reason"]="reference_observable_contribution_empty"
+                elif zero.getbbox():
+                    record["reason"]="owned_or_quantized_paint_unresolved"
+                else:
+                    record.update(complete=True,reason=None,paintRetained=not bool(altered.getbbox()))
             from utils.slide_capture_chart_support import (
                 boundary_mask, native_composition_requests, resolve_chart_support, stack_boundary_contrast,
             )
@@ -911,10 +922,12 @@ def collect_chart_paint_proof(*, command, manifest, source_html, final_png, metr
                     }
                 for equivalent in chart["compositionGroup"].get("equivalenceClasses",[]):
                     members=[by_target.get(member["targetId"]) for member in equivalent["members"]]
-                    if not members or any(member is None or member["id"] not in support_masks for member in members):continue
+                    if not members or any(member is None or member["id"] not in support_masks for member in members):
+                        continue
                     template=dict(members[0],jointQids=sorted({member["qid"] for member in members},key=lambda qid:int(qid[4:])))
                     images={mode:plane(template,mode)[0] for mode in ("alpha","reference-original","reference-white","reference-black","current-white","current-black","current-absent")}
-                    if any(image is None for image in images.values()):continue
+                    if any(image is None for image in images.values()):
+                        continue
                     native_alpha=images["alpha"].getchannel("A")
                     region=_region_mask(native_alpha.size,template["geometrySupport"],support_masks[template["id"]]["canvasMatrix"],device_scale_factor)
                     native_alpha=ImageChops.multiply(native_alpha,region)
@@ -954,22 +967,27 @@ def collect_chart_paint_proof(*, command, manifest, source_html, final_png, metr
                         "retained":_mask_record(joint_retained,native_alpha),"altered":_mask_record(altered,native_alpha)})
                 for record in chart_records:
                     raw=support_masks.get(record["id"])
-                    if raw is None:continue
+                    if raw is None:
+                        continue
                     record["contributionRegions"]=[]
                     for region in record.get("geometrySupport",{}).get("contributionRegions",[]):
-                        if region.get("primitiveQid")!=record["qid"]:continue
+                        if region.get("primitiveQid")!=record["qid"]:
+                            continue
                         native_region=ImageChops.multiply(boundary_mask(region,raw["footprint"].size,raw["canvasMatrix"],device_scale_factor),raw["footprint"])
                         contributed=ImageChops.multiply(native_region,raw["originalContribution"])
                         record["contributionRegions"].append({"id":region["id"],"kind":region["kind"],
                             "footprint":_mask_record(native_region,raw["alpha"]),"originalContribution":_mask_record(contributed,raw["alpha"])})
                     for obligation in record.get("geometrySupport",{}).get("visibilityObligations",[]):
-                        if obligation.get("primitiveQid")!=record["qid"]:continue
+                        if obligation.get("primitiveQid")!=record["qid"]:
+                            continue
                         boundary=ImageChops.multiply(boundary_mask(obligation,raw["footprint"].size,raw["canvasMatrix"],device_scale_factor),raw["footprint"])
                         for alternative in obligation.get("alternatives",[]):
-                            if alternative["kind"]!="shared-stack-interface":continue
+                            if alternative["kind"]!="shared-stack-interface":
+                                continue
                             neighbor=by_target.get(alternative.get("neighborTargetId"))
                             neighbor_raw=support_masks.get(alternative.get("neighborTargetId"))
-                            if neighbor is None or neighbor_raw is None:continue
+                            if neighbor is None or neighbor_raw is None:
+                                continue
                             pair=tuple(sorted({record["qid"],neighbor["qid"]},key=lambda qid:int(qid[4:])))
                             if pair not in pair_absences:
                                 template=dict(record,jointQids=list(pair))
@@ -979,7 +997,8 @@ def collect_chart_paint_proof(*, command, manifest, source_html, final_png, metr
                                 pair_native_paints[pair]=plane(template,"alpha")[0]
                             absent=pair_absences[pair]
                             native_pair=pair_native_paints[pair]
-                            if absent is None or native_pair is None:continue
+                            if absent is None or native_pair is None:
+                                continue
                             measurement=stack_boundary_contrast(obligation,raw["canvasMatrix"],device_scale_factor,
                                 raw["nativeGeometryBounds"],neighbor_raw["nativeGeometryBounds"],
                                 original,absent.convert("RGB"),native_pair.convert("RGBA"),boundary)
@@ -1003,13 +1022,15 @@ def collect_chart_paint_proof(*, command, manifest, source_html, final_png, metr
                         specifications={item["id"]:item for item in record.get("geometrySupport",{}).get("visibilityObligations",[])}
                         for item in record["visibilityObligations"]:
                             specification=specifications.get(item["supportId"])
-                            if specification is None:continue
+                            if specification is None:
+                                continue
                             native_boundary=ImageChops.multiply(boundary_mask(specification,raw["footprint"].size,raw["canvasMatrix"],device_scale_factor),raw["footprint"])
                             item["footprint"]=_mask_record(native_boundary,raw["alpha"])
                             item["originalContribution"]=_mask_record(ImageChops.multiply(native_boundary,raw["originalContribution"]),raw["alpha"])
                     record["complete"]=resolved["complete"]
                     record["paintRetained"]=resolved["paintRetained"]
-                    if record["complete"] and record["paintRetained"]:record["reason"]=None
+                    if record["complete"] and record["paintRetained"]:
+                        record["reason"]=None
         except Exception as error:
             failure=str(error)[:160]
         # The primary emitted frame was never used for counterfactual mutation.
@@ -1017,10 +1038,12 @@ def collect_chart_paint_proof(*, command, manifest, source_html, final_png, metr
             failure="chart_immutable_capture_frame_changed"
         if failure:
             proof["reason"]=failure
-            for record in proof["targets"]:record.update(complete=False,paintRetained=False,reason=failure)
+            for record in proof["targets"]:
+                record.update(complete=False,paintRetained=False,reason=failure)
         present={record["id"] for record in proof["targets"]}
         for target in _targets(manifest):
-            if target["id"] not in present:proof["targets"].append(dict(target,complete=False,paintRetained=False,reason=failure or "target_unproven",unresolvedRanges=[]))
+            if target["id"] not in present:
+                proof["targets"].append(dict(target,complete=False,paintRetained=False,reason=failure or "target_unproven",unresolvedRanges=[]))
         proof["charts"]=[]
         for chart in manifest["charts"]:
             chart_targets=[record for record in proof["targets"] if record["chartId"]==chart["id"]]

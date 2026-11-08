@@ -285,29 +285,33 @@ def test_template_redesign_icons_get_body_ids(library_icons, monkeypatch):
     assert embed_assets.vector_icon_id_prefix(None) == "asset-"
 
 
-@pytest.mark.parametrize(("body", "png_digest", "svg_digest"), [
+@pytest.mark.parametrize(("body", "pixel_digest", "svg_digest"), [
     ('<path fill="#000" stroke="none" d="M2 2H22V22H2Z M6 6H18V18H6Z"/>',
-     "83731639ba93a9290219a517560ba5bb096b35606466e76be274ccfcdf55d15f",
+     "46cd34db08a75c9daf01edd111b49961c50061c7d2a601cb1e3537a336bed879",
      "d2ef39c0f2749b74bdefc619442ecd763e57f1eefe33bafc49786b00dde634ed"),
     ('<g opacity="0.5" fill-opacity="0.5"><rect x="4" y="4" width="16" height="16" fill="#000" fill-opacity="0.5"/></g>',
-     "c029e7a09087b6c01b27a5433b0a34f9a5024f210d22f505b1bcd3daed1fc7c4",
+     "6ddd470b050650b2280102c546c61190f037b761688e7e5baa43ab56c2eaae8a",
      "61f2adcf1b8102cec60645bbe2633e7727ec327b5194c722281f044ccfef35ef"),
     ('<g stroke-opacity="0.5"><rect x="4" y="4" width="16" height="16" fill="none" stroke="#000" stroke-opacity="0.5"/></g>',
-     "35cda8472b208ba8754def13bb95f97771485403942297c375ff0ac1016d4a0b",
+     "f7ef5b47d6e8b2e5de0f59dcc5dc484caba312efd1c279fed298ddac5aabdd90",
      "ee685921ade193093337982a7c0cbafc98e1e7fc5fe3eba57cbcff75138fb371"),
 ])
-def test_asset_projection_legacy_matches_7c_png_and_svg_bytes(body, png_digest, svg_digest, monkeypatch):
+def test_asset_projection_legacy_matches_7c_pixels_and_svg_bytes(body, pixel_digest, svg_digest, monkeypatch):
     # Drawing normalizers register a default namespace globally; isolate serialization
     # so the baseline bytes do not depend on which test module ran first.
     monkeypatch.setattr(ET, "_namespace_map", {**ET._namespace_map, SVG_NS: ""})
-    # Digests captured from the exact 7c42f37a4 flatten/raster implementations.
+    # Digests captured from the exact 7c42f37a4 flatten/raster implementations. The
+    # raster is compared as decoded RGBA pixels: encoded PNG bytes depend on the
+    # platform's zlib build, so they cannot pin the legacy projection across machines.
     from hashlib import sha256
     from services.generation_core.drivers.svg.icon_flatten import ASSET_PROJECTION_LEGACY
     svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">' + body + '</svg>'
     old = flatten_icon_svg(svg, color=INK, projection_revision=ASSET_PROJECTION_LEGACY)
     png = rasterize_icon(old, size=96, projection_revision=ASSET_PROJECTION_LEGACY)
     vector = ET.tostring(icon_group(old, x=0, y=0, width=96, height=96))
-    assert sha256(png).hexdigest() == png_digest
+    image = Image.open(io.BytesIO(png))
+    assert (image.mode, image.size) == ("RGBA", (96, 96))
+    assert sha256(image.tobytes()).hexdigest() == pixel_digest
     assert sha256(vector).hexdigest() == svg_digest
     current = flatten_icon_svg(svg, color=INK)
     assert rasterize_icon(current, size=96) != png

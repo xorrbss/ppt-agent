@@ -143,7 +143,7 @@ def rasterize_icon(icon: FlattenedIcon, *, size: int = 256,
         edges = []
         for ring in subpaths:
             points = [point(px, py) for px, py in ring]
-            for (ax, ay), (bx, by) in zip(points, points[1:] + points[:1]):
+            for (ax, ay), (bx, by) in zip(points, points[1:] + points[:1], strict=False):
                 if ay != by:
                     edges.append((ax, ay, bx, by))
         if not edges:

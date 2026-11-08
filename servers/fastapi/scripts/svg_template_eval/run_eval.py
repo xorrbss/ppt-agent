@@ -374,7 +374,7 @@ def _sample_runs(client: httpx.Client, conn, judge, args: argparse.Namespace, pa
         if on_run is not None:
             on_run(runs)  # Durable record before a POST can spend or become uncertain.
 
-        def task_started(task_id):
+        def task_started(task_id, *, record=record):
             record.update(task_id=task_id, state="running")
             if on_run is not None:
                 on_run(runs)

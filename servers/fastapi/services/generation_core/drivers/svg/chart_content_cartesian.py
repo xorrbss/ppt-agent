@@ -65,7 +65,7 @@ def _categories(chart: dict, prims: GroupPrimitives):
     coordinates = [_mid(text.box(), horizontal) for _, text in selected]
     if any(not math.isfinite(value) for value in coordinates):
         raise NativeRejection("category_geometry_nonfinite")
-    if any(b - a <= _EPS for a, b in zip(coordinates, coordinates[1:])):
+    if any(b - a <= _EPS for a, b in zip(coordinates, coordinates[1:], strict=False)):
         raise NativeRejection("category_positions_ambiguous")
     return selected, coordinates
 
@@ -305,7 +305,7 @@ def _fixed_axis(raw, chart, prims, canvas_texts):
 def _category_bucket(coordinate, centers):
     index = min(range(len(centers)), key=lambda i: abs(coordinate - centers[i]))
     if len(centers) > 1:
-        pitch = min(b - a for a, b in zip(centers, centers[1:]))
+        pitch = min(b - a for a, b in zip(centers, centers[1:], strict=False))
         if abs(coordinate - centers[index]) >= pitch / 2:
             return None
     return index
@@ -352,7 +352,7 @@ def _bar_proof(raw, chart, prims, centers, legends, legend_indices, ticks, norma
         if thick <= 0 or length <= 0:
             continue  # Zero values need no positive-area rectangle.
         if bucket is None or (len(centers) > 1 and thick >= min(
-                b - a for a, b in zip(centers, centers[1:])) * .9):
+                b - a for a, b in zip(centers, centers[1:], strict=False)) * .9):
             unclaimed.add(index)
             continue
         rows[bucket].append((index, shape))
@@ -369,7 +369,7 @@ def _bar_proof(raw, chart, prims, centers, legends, legend_indices, ticks, norma
         eligible = [s for s in range(series_count) if chart["series"][s]["values"][category_index] != 0]
         choices = [choice for choice in combinations(eligible, len(row))
                    if all(_bar_color(raw, legends, s, category_index, shape)
-                          for s, (_, shape) in zip(choice, row))]
+                          for s, (_, shape) in zip(choice, row, strict=False))]
         if not choices:
             raise NativeRejection("bar_series_association")
         assignment.append(choices)
@@ -416,7 +416,7 @@ def _bar_proof(raw, chart, prims, centers, legends, legend_indices, ticks, norma
     for layout in product(*assignment):
         matrix = [[None] * category_count for _ in range(series_count)]
         for c, choice in enumerate(layout):
-            for s, item in zip(choice, rows[c]):
+            for s, item in zip(choice, rows[c], strict=False):
                 matrix[s][c] = item
         fitted = evaluate()
         if fitted is not None:
@@ -474,9 +474,12 @@ def _stack_proof(raw, chart, prims, rows, centers, legends, ticks, normalizer, u
     count = len(chart["series"])
     if not any(rows) or (percent and any(not row for row in rows)):
         raise NativeRejection("stack_geometry_missing")
-    near = lambda shape: shape.box.x0 if horizontal else shape.box.y1
-    far = lambda shape: shape.box.x1 if horizontal else shape.box.y0
-    length = lambda shape: shape.box.width if horizontal else shape.box.height
+    def near(shape):
+        return shape.box.x0 if horizontal else shape.box.y1
+    def far(shape):
+        return shape.box.x1 if horizontal else shape.box.y0
+    def length(shape):
+        return shape.box.width if horizontal else shape.box.height
     origins = [near(row[0][1]) for row in rows if row]
     baseline = origins[0]
     if any(abs(value - baseline) > _EPS for value in origins):
@@ -486,7 +489,7 @@ def _stack_proof(raw, chart, prims, rows, centers, legends, ticks, normalizer, u
     for c, row in enumerate(rows):
         if any(abs(_mid(shape.box, horizontal) - centers[c]) > _EPS for _, shape in row):
             raise NativeRejection("stack_category_association")
-        if any(abs(far(a[1]) - near(b[1])) > _EPS for a, b in zip(row, row[1:])):
+        if any(abs(far(a[1]) - near(b[1])) > _EPS for a, b in zip(row, row[1:], strict=False)):
             raise NativeRejection("stack_chain_mismatch")
         extents.append(sum(length(shape) for _, shape in row))
         values = [series["values"][c] for series in chart["series"]]
@@ -511,11 +514,11 @@ def _stack_proof(raw, chart, prims, rows, centers, legends, ticks, normalizer, u
                     for s in range(count)]
         choice = next((choice for choice in combinations(range(count), len(row))
                        if all(_bar_color(raw, legends, s, c, shape) and abs(length(shape) - expected[s]) <= _EPS
-                              for s, (_, shape) in zip(choice, row))
+                              for s, (_, shape) in zip(choice, row, strict=False))
                        and all(expected[s] <= _EPS for s in range(count) if s not in choice)), None)
         if choice is None:
             raise NativeRejection("stack_common_scale_or_series_mismatch")
-        mapped = dict(zip(choice, row))
+        mapped = dict(zip(choice, row, strict=False))
         cumulative = 0.0
         for s, series in enumerate(chart["series"]):
             start = baseline + (1 if horizontal else -1) * cumulative
@@ -557,7 +560,7 @@ def _sample_chain(vertices, centers):
     if vertices[0][0] > vertices[-1][0]:
         vertices.reverse()
     if (abs(vertices[0][0] - centers[0]) > _EPS or abs(vertices[-1][0] - centers[-1]) > _EPS
-            or any(b[0] <= a[0] for a, b in zip(vertices, vertices[1:]))):
+            or any(b[0] <= a[0] for a, b in zip(vertices, vertices[1:], strict=False))):
         return None
     data = []
     for center in centers:
@@ -567,7 +570,7 @@ def _sample_chain(vertices, centers):
         if exact:
             data.append((center, exact[0][1]))
             continue
-        segment = next(((a, b) for a, b in zip(vertices, vertices[1:]) if a[0] <= center <= b[0]), None)
+        segment = next(((a, b) for a, b in zip(vertices, vertices[1:], strict=False) if a[0] <= center <= b[0]), None)
         if segment is None:
             return None
         a, b = segment
@@ -576,7 +579,7 @@ def _sample_chain(vertices, centers):
     for x, y in vertices:
         if x <= centers[0] or x >= centers[-1]:
             continue
-        for a, b in zip(data, data[1:]):
+        for a, b in zip(data, data[1:], strict=False):
             if a[0] <= x <= b[0]:
                 expected = a[1] + (b[1] - a[1]) * (x - a[0]) / (b[0] - a[0])
                 if abs(y - expected) > _EPS:
@@ -592,12 +595,12 @@ def _drawn_subpaths(shape):
         closed = getattr(shape, "closedSubpaths", ())
         if len(paths) != len(closed):
             return []
-        return [(list(points), bool(flag)) for points, flag in zip(paths, closed)]
+        return [(list(points), bool(flag)) for points, flag in zip(paths, closed, strict=False)]
     return [(list(shape.vertices), shape.tag == "polygon")]
 
 
 def _edges(points, closed=False):
-    edges = list(zip(points, points[1:]))
+    edges = list(zip(points, points[1:], strict=False))
     if closed and len(points) > 1 and points[-1] != points[0]:
         edges.append((points[-1], points[0]))
     return edges
@@ -659,7 +662,7 @@ def _sample_segments(segments, centers, *, missing_baseline=None):
             if len(data) == 1:
                 expected = data[0][1]
             else:
-                pair = next(((p, q) for p, q in zip(data, data[1:]) if p[0] - _EPS <= x <= q[0] + _EPS), None)
+                pair = next(((p, q) for p, q in zip(data, data[1:], strict=False) if p[0] - _EPS <= x <= q[0] + _EPS), None)
                 if pair is None:
                     return None
                 p, q = pair
@@ -718,7 +721,7 @@ def _area_domain_covered(segments, data, baseline):
     for left, right in gaps:
         probes = [left, right, *(x for x, _ in data if left < x < right)]
         for x in probes:
-            pair = next(((a, b) for a, b in zip(data, data[1:]) if a[0] - _EPS <= x <= b[0] + _EPS), None)
+            pair = next(((a, b) for a, b in zip(data, data[1:], strict=False) if a[0] - _EPS <= x <= b[0] + _EPS), None)
             if pair is None:
                 return False
             a, b = pair
@@ -832,7 +835,7 @@ def _curve_proof(raw, chart, prims, centers, legends, legend_indices, ticks, nor
             color = _color(shape) if area else shape.stroke or shape.fill
             if s in legends and legends[s] != color:
                 continue
-            pairs = [(value / normalizer, point[1]) for value, point in zip(chart["series"][s]["values"], data)]
+            pairs = [(value / normalizer, point[1]) for value, point in zip(chart["series"][s]["values"], data, strict=False)]
             if _fit([*tick_pairs, *pairs], baseline=baseline if area else None) is None:
                 continue
             choices.append(item)
@@ -852,8 +855,8 @@ def _curve_proof(raw, chart, prims, centers, legends, legend_indices, ticks, nor
             consistent = not area or all(abs(item[3] - baseline) <= _EPS for item in assigned)
             if consistent:
                 pairs = list(tick_pairs)
-                for series, item in zip(chart["series"], assigned):
-                    pairs.extend((value / normalizer, point[1]) for value, point in zip(series["values"], item[2]))
+                for series, item in zip(chart["series"], assigned, strict=False):
+                    pairs.extend((value / normalizer, point[1]) for value, point in zip(series["values"], item[2], strict=False))
                 fitted = _fit(pairs, baseline=baseline)
             if fitted is not None:
                 break
@@ -889,10 +892,10 @@ def _curve_proof(raw, chart, prims, centers, legends, legend_indices, ticks, nor
             unclaimed.add(item[0])
     points, colors = [], []
     marker_used, marker_values = set(), {}
-    for s, (series, item) in enumerate(zip(chart["series"], assigned)):
+    for s, (series, item) in enumerate(zip(chart["series"], assigned, strict=False)):
         index, shape, data, _ = item
         colors.append(_color(shape) if area else shape.stroke or shape.fill)
-        for c, (value, (x, y)) in enumerate(zip(series["values"], data)):
+        for c, (value, (x, y)) in enumerate(zip(series["values"], data, strict=False)):
             point = {"seriesIndex": s, "categoryIndex": c, "value": value, "x": x, "y": y,
                      "shapeIndex": index, "box": _box(shape.box), "baseline": fitted["baseline"],
                      "color": colors[-1], "seriesBinding": "visible-legend" if s in legends else
@@ -924,7 +927,7 @@ def _curve_proof(raw, chart, prims, centers, legends, legend_indices, ticks, nor
             if index in used or shape.fill is not None or not shape.stroke:
                 continue
             parsed = _curve(shape, centers)
-            if parsed is not None and any(all(abs(a[1] - b[1]) <= _EPS for a, b in zip(parsed[0], item[2]))
+            if parsed is not None and any(all(abs(a[1] - b[1]) <= _EPS for a, b in zip(parsed[0], item[2], strict=False))
                                           for item in assigned):
                 used.add(index)
                 unclaimed.discard(index)

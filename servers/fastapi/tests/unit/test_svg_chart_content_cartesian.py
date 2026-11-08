@@ -35,14 +35,14 @@ def _fixture(kind, values, *, grouping=None, markers=False, appearance=False, no
         node.text = value
 
     centers = [200 + index * 200 for index in range(len(categories))]
-    for category, center in zip(categories, centers):
+    for category, center in zip(categories, centers, strict=False):
         text(category, 100 if kind == "bar" else center, center + 6 if kind == "bar" else 650)
     maximum = max(abs(value) for row in values for value in row) or 1
     stacked = grouping in {"stacked", "percentStacked"}
     for s, row in enumerate(values):
         color = COLORS[s % len(COLORS)]
         points = []
-        for c, (value, center) in enumerate(zip(row, centers)):
+        for c, (value, center) in enumerate(zip(row, centers, strict=False)):
             effective = value / maximum if normalized else value
             endpoint = baseline - effective * scale
             points.append((center, endpoint))
@@ -73,7 +73,7 @@ def _fixture(kind, values, *, grouping=None, markers=False, appearance=False, no
                 "points": " ".join(f"{x},{y}" for x, y in points),
                 "fill": color if kind == "area" else "none", "stroke": color, "stroke-width": "2"})
             if markers:
-                for center, value in zip(centers, row):
+                for center, value in zip(centers, row, strict=False):
                     y = baseline - (value / maximum if normalized else value) * scale
                     ET.SubElement(group, "circle", {"cx": str(center), "cy": str(y), "r": "4", "fill": color})
         if legend:

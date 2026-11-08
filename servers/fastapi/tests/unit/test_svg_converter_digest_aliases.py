@@ -46,10 +46,35 @@ def _reviewed_checkout(monkeypatch, crlf):
         ledger, reviewed={**ledger.reviewed, state.reviewed_key: ledger.current}))
 
 
+def test_voided_historical_aliases_are_refused():
+    """b392c58f7 patched an executed vendored file, so the E3 alias stopped applying (D5)."""
+    assert aliases.SUPERSEDED_VENDOR_MANIFESTS == {}
+    for historical in _HISTORICAL_ALIASES.values():
+        assert not aliases.converter_digest_accepted(historical)
+        assert not _verifies(_final_render_proof(historical))
+
+
+@pytest.fixture
+def provenance_only_manifest(tmp_path, monkeypatch):
+    """Register a superseded manifest that differs from the current one only in provenance."""
+    current = json.loads((convert.VENDOR_ROOT / "MANIFEST.json").read_text(encoding="utf-8"))
+    superseded = {**current, "presentonPatches": [*current.get("presentonPatches", []), "provenance-only"]}
+    kept = (json.dumps(superseded, indent=2) + "\n").encode("utf-8")
+    sha256 = hashlib.sha256(kept).hexdigest()
+    root = tmp_path / "superseded"
+    root.mkdir()
+    (root / f"{sha256}.json").write_bytes(kept)
+    monkeypatch.setattr(aliases, "SUPERSEDED_MANIFEST_ROOT", root)
+    monkeypatch.setattr(aliases, "SUPERSEDED_VENDOR_MANIFESTS", {sha256: "test: provenance-only rebuild"})
+    return sha256, kept
+
+
 @pytest.mark.parametrize("crlf", [False, True])
-def test_historical_alias_survives_only_the_reviewed_anchor_execution(monkeypatch, crlf):
+def test_historical_alias_survives_only_the_reviewed_anchor_execution(monkeypatch, crlf, provenance_only_manifest):
+    sha256, _ = provenance_only_manifest
     _reviewed_checkout(monkeypatch, crlf)
-    historical = _HISTORICAL_ALIASES[crlf]
+    historical = aliases._historical_converter_identity_digest(sha256)
+    assert historical is not None
     assert aliases.converter_digest_accepted(historical)
     assert _verifies(_final_render_proof(historical))
 
@@ -61,9 +86,11 @@ def test_historical_alias_survives_only_the_reviewed_anchor_execution(monkeypatc
     assert not aliases.converter_digest_accepted(historical)
 
 
-def test_unreviewed_subset_change_cannot_inherit_a_historical_alias(monkeypatch):
+def test_unreviewed_subset_change_cannot_inherit_a_historical_alias(monkeypatch, provenance_only_manifest):
+    sha256, _ = provenance_only_manifest
     _reviewed_checkout(monkeypatch, False)
-    assert aliases.converter_digest_accepted(_HISTORICAL_ALIASES[False])
+    historical = aliases._historical_converter_identity_digest(sha256)
+    assert aliases.converter_digest_accepted(historical)
     original = Path.read_bytes
     target = Path(convert.__file__).resolve().parents[1] / "services/svg_pptx_font_subset.py"
 
@@ -72,7 +99,7 @@ def test_unreviewed_subset_change_cannot_inherit_a_historical_alias(monkeypatch)
         return data + b"\n# unreviewed subset change\n" if Path(path).resolve() == target else data
 
     monkeypatch.setattr(Path, "read_bytes", changed)
-    assert not aliases.converter_digest_accepted(_HISTORICAL_ALIASES[False])
+    assert not aliases.converter_digest_accepted(historical)
 
 
 def _vendor_files_on_disk(root):
@@ -96,9 +123,9 @@ def test_identity_mirror_matches_converter_source_digest():
     assert aliases.converter_identity_digest(current) == convert.converter_source_digest()
 
 
-@pytest.mark.parametrize("sha256", sorted(aliases.SUPERSEDED_VENDOR_MANIFESTS))
-def test_superseded_manifest_describes_byte_identical_executed_converter(sha256, tmp_path, monkeypatch):
-    kept = (aliases.SUPERSEDED_MANIFEST_ROOT / f"{sha256}.json").read_bytes()
+def test_superseded_manifest_describes_byte_identical_executed_converter(provenance_only_manifest, tmp_path,
+                                                                         monkeypatch):
+    sha256, kept = provenance_only_manifest
     assert hashlib.sha256(kept).hexdigest() == sha256
     superseded = aliases.superseded_manifest(sha256)
     current = json.loads((convert.VENDOR_ROOT / "MANIFEST.json").read_text(encoding="utf-8"))
@@ -124,7 +151,7 @@ def test_superseded_manifest_describes_byte_identical_executed_converter(sha256,
     assert aliases.accepted_converter_digests() == expected
 
 
-def test_alias_stops_applying_when_executed_vendor_bytes_change(tmp_path, monkeypatch):
+def test_alias_stops_applying_when_executed_vendor_bytes_change(provenance_only_manifest, tmp_path, monkeypatch):
     vendor = tmp_path / "vendor"
     shutil.copytree(convert.VENDOR_ROOT, vendor, ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
     changed = vendor / "svg_to_pptx" / "conversion_context.py"
@@ -138,9 +165,8 @@ def test_alias_stops_applying_when_executed_vendor_bytes_change(tmp_path, monkey
     assert not any(aliases.converter_digest_accepted(value) for value in old_digests)
 
 
-def test_alias_refuses_a_tampered_superseded_manifest(tmp_path, monkeypatch):
-    sha256 = next(iter(aliases.SUPERSEDED_VENDOR_MANIFESTS))
-    kept = (aliases.SUPERSEDED_MANIFEST_ROOT / f"{sha256}.json").read_bytes()
+def test_alias_refuses_a_tampered_superseded_manifest(provenance_only_manifest, tmp_path, monkeypatch):
+    sha256, kept = provenance_only_manifest
     (tmp_path / f"{sha256}.json").write_bytes(kept.replace(b"slide-master-svg-converter", b"slide-master-svg-convertor"))
     monkeypatch.setattr(aliases, "SUPERSEDED_MANIFEST_ROOT", tmp_path)
     with pytest.raises(ValueError, match="svg_converter_alias_manifest_integrity_failed"):
@@ -173,9 +199,9 @@ def _verifies(proof):
                                 owner_id=uuid.UUID(int=4), tenant_id="tenant")
 
 
-def test_stored_final_render_proof_with_the_superseded_digest_still_verifies(tmp_path, monkeypatch):
-    sha256 = next(iter(aliases.SUPERSEDED_VENDOR_MANIFESTS))
-    kept = (aliases.SUPERSEDED_MANIFEST_ROOT / f"{sha256}.json").read_bytes()
+def test_stored_final_render_proof_with_the_superseded_digest_still_verifies(provenance_only_manifest, tmp_path,
+                                                                          monkeypatch):
+    sha256, kept = provenance_only_manifest
     old_digest = _digest_over_manifest(tmp_path, monkeypatch, kept)
     assert _verifies(_final_render_proof(convert.converter_digest()))
     assert _verifies(_final_render_proof(old_digest))

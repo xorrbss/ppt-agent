@@ -71,7 +71,7 @@ def _disjoint_fill_interiors(first, second):
     if any(_proper_cross(a, b) for a in first for b in second):
         return False
     xs = sorted({point[0] for edge in (*first, *second) for point in edge})
-    for left, right in zip(xs, xs[1:]):
+    for left, right in zip(xs, xs[1:], strict=False):
         x = (left + right) / 2
         a, b = _filled_intervals(first, x), _filled_intervals(second, x)
         if any(max(lo, other_lo) < min(hi, other_hi) for lo, hi in a for other_lo, other_hi in b):
@@ -123,7 +123,7 @@ def _shared_radial_fill_boundaries(first, second, geometry):
             if lo < center_projection < hi:
                 cuts.add(center_projection)
             cuts = sorted(cuts)
-            for start, end in zip(cuts, cuts[1:]):
+            for start, end in zip(cuts, cuts[1:], strict=False):
                 p, q = [(a[0] + amount * delta[0], a[1] + amount * delta[1]) for amount in (start, end)]
                 midpoint, normal = ((p[0] + q[0]) / 2, (p[1] + q[1]) / 2), (-delta[1], delta[0])
                 left_a, right_a = [_infinitesimal_winding(first, midpoint, normal, side) for side in (1, -1)]
@@ -274,7 +274,7 @@ def _arc(shape, ellipse, *, full=False):
     if len(outer) < 2:
         return None
     angles = [angle for _, angle in outer]
-    deltas = [(b - a + math.pi) % TAU - math.pi for a, b in zip(angles, angles[1:])]
+    deltas = [(b - a + math.pi) % TAU - math.pi for a, b in zip(angles, angles[1:], strict=False)]
     nonzero = [value for value in deltas if abs(value) > 1e-10]
     if nonzero and not (all(value > 0 for value in nonzero) or all(value < 0 for value in nonzero)):
         return None
@@ -304,7 +304,7 @@ def _arc(shape, ellipse, *, full=False):
             return None
     elif hole > tolerance:
         inner_angles = [math.atan2(y, x) for x, y in angular_points if abs(math.hypot(x, y) - hole) <= tolerance]
-        inner_deltas = [(b - a + math.pi) % TAU - math.pi for a, b in zip(inner_angles, inner_angles[1:])]
+        inner_deltas = [(b - a + math.pi) % TAU - math.pi for a, b in zip(inner_angles, inner_angles[1:], strict=False)]
         if len(inner_angles) < 2 or (not full and abs(abs(sum(inner_deltas)) - span) > tolerance):
             return None
         if any(max(rx, ry) * hole * (1 - math.cos(abs(delta) / 2)) > .5 for delta in inner_deltas):
@@ -313,7 +313,7 @@ def _arc(shape, ellipse, *, full=False):
             return None
     # Every edge follows a common ring or a radial boundary. Interior chords,
     # disconnected islands and differently scaled wedges are not data sectors.
-    for index, (x, y) in enumerate(points):
+    for _index, (x, y) in enumerate(points):
         radius, angle = math.hypot(x, y), math.atan2(y, x) % TAU
         on_radius = abs(radius - 1) <= tolerance or abs(radius - hole) <= tolerance
         on_boundary = radius <= tolerance or min((angle - start) % TAU, (start - angle) % TAU,
