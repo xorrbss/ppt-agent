@@ -379,6 +379,11 @@ WHOLE_PAGE_VERIFIER_LEDGER = VerifierRevisionLedger(
         # serialized by a lock, and the offer receipt's budget meaning is documented. No
         # output for valid inputs changed.
         "7d5042de89c4b9568366943a51d42bfc905472d7cca6c1d51e496b5402fbd331": "svg-whole-page-verifier/1",
+        # 2026-11-08 V5 per-chart witness isolation: an unbound or statically unprovable chart
+        # is left out of the witness manifest (and gets its own paint failure) instead of
+        # withdrawing every chart's witness on the page. V5 is default-off; V4 and legacy
+        # evidence is unchanged.
+        "9e5fe10f724bdf83ee609e619756f529ecb8dc5ef53f00fd7b8120caf505435d": "svg-whole-page-verifier/1",
     }),
 )
 
@@ -548,6 +553,11 @@ PARTIAL_RECOVERY_CODE_LEDGER = VerifierRevisionLedger(
         # serialized by a lock, and the offer receipt's budget meaning is documented. No
         # output for valid inputs changed.
         "2390350e5558c3acd408097dce811245d3d6fe33385ac09b4b6a269810328376": "svg-partial-recovery-code/1",
+        # 2026-11-08 V5 per-chart witness isolation: an unbound or statically unprovable chart
+        # is left out of the witness manifest (and gets its own paint failure) instead of
+        # withdrawing every chart's witness on the page. V5 is default-off; V4 and legacy
+        # evidence is unchanged.
+        "867e9c69df1d29d76d353e09a5f1a4e3dca58b5b7df5630c895a12d3990f7d6e": "svg-partial-recovery-code/1",
     }),
 )
 
@@ -628,6 +638,11 @@ PAGE_RENDER_CODE_LEDGER = VerifierRevisionLedger(
         # serialized by a lock, and the offer receipt's budget meaning is documented. No
         # output for valid inputs changed.
         "1aa3299244b8c6b7fafda80dc6d35d8ac16b90a9b33f94999b42204225a43691": "svg-page-render-code/1",
+        # 2026-11-08 V5 per-chart witness isolation: an unbound or statically unprovable chart
+        # is left out of the witness manifest (and gets its own paint failure) instead of
+        # withdrawing every chart's witness on the page. V5 is default-off; V4 and legacy
+        # evidence is unchanged.
+        "50c82c32111ea85ec64cbb2f50526eb9108aeb7e4dfa645a7d0461e9583f51cb": "svg-page-render-code/1",
     }),
 )
 

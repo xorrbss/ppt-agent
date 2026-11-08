@@ -852,10 +852,15 @@ def chart_drawing_evidence(payload: dict, svg: str, *, revision: str, measuremen
             from services.generation_core.drivers.svg.chart_content_paint import validate_chart_content_paint
             manifest = chart_witness_render_kwargs(payload, svg, revision=revision).get("chart_witness_manifest")
             paint = validate_chart_content_paint(manifest, measurement, capture=render_capture)
+            witnessed = {chart.get("id") for chart in (manifest or {}).get("charts", [])}
         else:
             paint = {"passed": False, "status": "pending", "reason": "native_chart_capture_not_measured"}
-        for proof in evidence.values():
-            proof["paintEvidence"] = dict(paint)
+            witnessed = None
+        for group_id, proof in evidence.items():
+            # A chart the manifest could not cover gets its own failure instead of
+            # sharing (or spoiling) the page's paint result.
+            proof["paintEvidence"] = (dict(paint) if witnessed is None or group_id in witnessed else
+                                      {"passed": False, "reason": "native_chart_witness_unavailable"})
     return evidence
 
 
@@ -967,7 +972,9 @@ def build_chart_witness_manifest(payload: dict, svg: str, *, revision: str) -> d
     for declaration in declarations:
         found = find_group(root, declaration.get("id"))
         if found is None:
-            return None
+            # One unbound or unprovable chart leaves only itself without a witness;
+            # the other charts on the page keep their paint proof.
+            continue
         group = found[0]
         chart = _model_chart(declaration["raw"])
         local = [record for record in scene if group in record["ancestors"]]
@@ -980,7 +987,7 @@ def build_chart_witness_manifest(payload: dict, svg: str, *, revision: str) -> d
         geometry = _v5_content_geometry(root, group, declaration["raw"], chart, prims, svg=svg,
                                        native_group_ids=native_ids, check_visibility=False)
         if geometry.get("passed") is not True:
-            return None
+            continue
         chart_id = declaration["id"]
         datums, glyphs, relationships = [], [], []
         primitive_qids = set()
@@ -1359,6 +1366,8 @@ def build_chart_witness_manifest(payload: dict, svg: str, *, revision: str) -> d
                 "id": f"{chart_id}/composition", "primitiveQids": sorted(primitive_qids, key=lambda value: int(value[4:])),
                 "glyphTargets": glyph_targets, "relationships": relationships,
                 "equivalenceClasses": equivalence_classes}})
+    if not charts:
+        return None
     manifest = {"schema": "svg-native-chart-witness/v1", "requirementsRevision": revision,
         "canonicalSvgDigest": source_digest(svg),
         "treeDerivativeDigest": canonical_json_digest({"schema": "svg-chart-node-tree/v1", "nodes": tree}),

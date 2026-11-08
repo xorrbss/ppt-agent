@@ -1174,3 +1174,20 @@ def test_marker_alternative_is_explicit_same_datum_complete_boundary_contract():
             assert marker["geometrySupportDigest"] == datum["geometrySupport"]["geometryDigest"]
             assert marker["requiresEntireBoundaryCoverage"] is True
             assert marker["requiresOriginalContribution"] is True
+
+
+def test_an_unprovable_second_chart_does_not_withdraw_the_first_charts_witness():
+    from services.generation_core.drivers.svg.native_chart_evidence import build_chart_witness_manifest
+    from services.generation_core.drivers.svg.native_chart_evidence import bound_declarations
+    original = _page()
+    kept, _ = bound_declarations(original, original["svg_content"])
+    root = ET.fromstring(original["svg_content"])
+    raw = {"chartType": "column", "categories": ["X", "Y"], "series": [{"name": "Empty", "values": [5, 7]}]}
+    ET.SubElement(root, NS + "g", {"id": "native-chart-empty", "data-native-chart": json.dumps(raw)})
+    added = extract_native_declarations(root)
+    svg = ET.tostring(root, encoding="unicode")
+    page = {"svg_content": svg}
+    bind_native_declarations(page, svg, {**added, "objects": [*kept["objects"], *added["objects"]]})
+    manifest = build_chart_witness_manifest(page, svg, revision=V5)
+    assert manifest is not None
+    assert [chart["id"] for chart in manifest["charts"]] == ["native-chart-sales"]
