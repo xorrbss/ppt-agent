@@ -27,7 +27,7 @@ SCORES = {"chartType": "bar", "categories": ["제품 품질", "배송"], "series
           "valueLabels": {"shown": True, "position": "center"}}
 
 
-def _raw_svg(raw, *, render="server", box="64 140 700 460"):
+def _raw_svg(raw, *, render=server_chart.SERVER_CHART_REVISION, box="64 140 700 460"):
     attributes = f" data-chart-render=\"{render}\"" if render is not None else ""
     attributes += f" data-chart-box=\"{box}\"" if box is not None else ""
     return ('<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720" viewBox="0 0 1280 720">'
@@ -88,7 +88,7 @@ def test_axis_is_drawn_before_the_bars_and_value_text_keeps_contrast():
 def test_unsupported_placeholders_are_dropped_with_a_reason_and_left_empty(raw, box, reason):
     page, record = _extract(_raw_svg(raw, box=box))
     assert record["objects"] == [] and record["dropped"][0]["reason"] == reason
-    group = next(node for node in ET.fromstring(page["svg_content"]).iter(NS + "g"))
+    group = next(node for node in ET.fromstring(page["svg_content"]).iter(NS + "g") if node.get("id"))
     assert len(group) == 0 and group.attrib == {"id": "native-chart-x"}
 
 
@@ -99,22 +99,48 @@ def test_a_drawn_chart_without_the_marker_is_extracted_exactly_as_before():
     assert record["objects"] == [{"id": "native-chart-x", "kind": "chart", "raw": SALES}]
 
 
-def test_an_unknown_render_value_is_dropped():
-    _page, record = _extract(_raw_svg(SALES, render="client"))
-    assert record["dropped"][0]["reason"] == "server_chart_render_invalid"
+@pytest.mark.parametrize("render", ["server", "client", "svg-server-chart/v0"])
+def test_only_a_published_renderer_revision_draws(render):
+    page, record = _extract(_raw_svg(SALES, render=render))
+    assert record["objects"] == [] and record["dropped"][0]["reason"] == "server_chart_render_invalid"
+    assert "data-chart" not in page["svg_content"]
 
 
-def test_values_must_be_numbers_the_source_states():
-    page, _ = _extract(_raw_svg(SALES))
-    grounded = {"passed": True, "failures": []}
-    server_chart.apply_server_chart_grounding(grounded, page, page["svg_content"],
-                                              "국내영업 420, 해외영업 315, 온라인 268, 파트너 142억원")
-    assert grounded == {"passed": True, "failures": []}
-    ungrounded = {"passed": True, "failures": []}
-    server_chart.apply_server_chart_grounding(ungrounded, page, page["svg_content"], "국내영업 420, 해외 315")
-    assert ungrounded["passed"] is False
-    assert ungrounded["failures"] == [{"kind": "native_requested_chart_missing", "declarationId": "native-chart-x",
-                                       "reason": "server_chart_value_ungrounded", "values": ["142", "268"]}]
+def _grounding(raw, sources):
+    page, _ = _extract(_raw_svg(raw))
+    quality = {"passed": True, "failures": []}
+    server_chart.apply_server_chart_grounding(quality, page, page["svg_content"], sources)
+    return quality
+
+
+def test_each_value_must_be_stated_for_its_own_category():
+    stated = "1. 사업부별 매출 (단위: 억원): 국내영업 420, 해외영업 315, 온라인 268, 파트너 142."
+    assert _grounding(SALES, [stated]) == {"passed": True, "failures": []}
+    swapped = "국내영업 315, 해외영업 420, 온라인 268, 파트너 142"
+    quality = _grounding(SALES, [swapped])
+    assert quality["passed"] is False
+    assert quality["failures"][0]["values"] == ["국내영업=420", "해외영업=315"]
+    assert quality["failures"][0]["reason"] == "server_chart_value_ungrounded"
+
+
+def test_any_one_source_may_state_a_value():
+    outline = "국내영업이 420억원으로 가장 크고 해외영업은 315억원이다."
+    request = "온라인 268, 파트너 142"
+    assert _grounding(SALES, [outline, request])["failures"] == []
+    assert _grounding(SALES, [outline])["passed"] is False
+
+
+def test_several_series_bind_each_value_to_category_and_series():
+    stated = ("2024년 국내 55%, 해외 30%, 온라인 15%; 2025년 국내 48%, 해외 32%, 온라인 20%; "
+              "2026년 국내 42%, 해외 33%, 온라인 25%.")
+    assert _grounding(CHANNELS, [stated])["failures"] == []
+    wrong = stated.replace("해외 32%", "해외 23%")
+    assert _grounding(CHANNELS, [wrong])["failures"][0]["values"] == ["해외/2025년=32"]
+
+
+def test_a_value_written_before_its_category_counts():
+    stated = "420억원 국내영업, 315억원 해외영업, 268억원 온라인, 142억원 파트너"
+    assert _grounding(SALES, [stated])["failures"] == []
 
 
 def test_source_numbers_read_thousands_separators_and_decimals():
@@ -125,7 +151,8 @@ def test_source_numbers_read_thousands_separators_and_decimals():
 def test_the_author_rule_is_sent_only_to_decks_admitted_with_server_charts():
     assert server_chart.server_chart_rule({}) == ""
     assert server_chart.server_chart_rule({"server_chart_render": "other"}) == ""
-    assert "data-chart-render" in server_chart.server_chart_rule({"server_chart_render": server_chart.SERVER_CHART_REVISION})
+    rule = server_chart.server_chart_rule({"server_chart_render": server_chart.SERVER_CHART_REVISION})
+    assert f'data-chart-render=\"{server_chart.SERVER_CHART_REVISION}\"' in rule
 
 
 @pytest.mark.parametrize("value,expected", [("on", True), ("1", True), ("", False), ("off", False)])
@@ -133,3 +160,83 @@ def test_server_charts_setting_is_default_off(monkeypatch, value, expected):
     from utils.get_env_concurrency import get_svg_server_charts_env
     monkeypatch.setenv("SVG_SERVER_CHARTS", value)
     assert get_svg_server_charts_env() is expected
+
+
+def _group(page):
+    return next(node for node in ET.fromstring(page["svg_content"]).iter(NS + "g") if node.get("id"))
+
+
+@pytest.mark.parametrize("chart_type", ["bar", "column"])
+def test_an_inside_label_that_does_not_fit_its_bar_moves_every_label_outside(chart_type):
+    raw = {"chartType": chart_type, "categories": ["A", "B"], "series": [{"name": "S", "values": [420, 9]}],
+           "valueLabels": {"shown": True, "position": "insideEnd"}}
+    page, record = _extract(_raw_svg(raw))
+    assert record["objects"][0]["raw"]["valueLabels"] == {"shown": True, "position": "outsideEnd"}
+    labels = {node.text: node.get("fill") for node in _group(page).iter(NS + "text")}
+    assert labels["9"] == "#0F172A" and labels["420"] == "#0F172A"
+    quality = {"passed": True, "failures": []}
+    apply_requested_native_quality(quality, page, page["svg_content"], "", pt_per_px=.75, revision=V4)
+    assert quality["failures"] == []
+
+
+def test_the_legend_wraps_inside_the_box():
+    from services.generation_core.drivers.svg.fallback import _text_em
+    raw = {"chartType": "column", "categories": ["A", "B"],
+           "series": [{"name": f"아주 긴 계열 이름 {index}", "values": [index + 1, index + 2]} for index in range(6)]}
+    page, record = _extract(_raw_svg(raw, box="64 140 420 400"))
+    assert record["dropped"] == []
+    right = max(float(node.get("x")) + _text_em(node.text) * float(node.get("font-size"))
+                for node in _group(page).iter(NS + "text") if node.text and node.text.startswith("아주"))
+    assert right <= 64 + 420
+
+
+@pytest.mark.parametrize("chart_type", ["bar", "column"])
+def test_long_category_names_wrap_onto_two_lines_and_still_prove(chart_type):
+    raw = {"chartType": chart_type, "categories": ["수도권 대형 유통 채널", "지방 중소 유통 채널", "온라인 자사몰", "해외 파트너사"],
+           "series": [{"name": "매출", "values": [4, 3, 2, 1]}]}
+    page, record = _extract(_raw_svg(raw, box="64 140 360 400").replace('font-size="36"', 'font-size="16"'))
+    assert record["dropped"] == []
+    assert any(len(list(node.iter(NS + "tspan"))) == 2 for node in _group(page).iter(NS + "text"))
+    for revision in (V4, V5):
+        quality = {"passed": True, "failures": []}
+        apply_requested_native_quality(quality, page, page["svg_content"], "", pt_per_px=.75, revision=revision,
+                                       paint_deferred=True)
+        assert quality["failures"] == []
+
+
+def test_chart_text_follows_the_pages_body_size_within_bounds():
+    def sizes(body):
+        svg = _raw_svg(SALES).replace('font-size="36"', f'font-size="{body}"')
+        page, _ = _extract(svg)
+        return {node.get("font-size") for node in _group(page).iter(NS + "text")}
+    assert sizes(18) == {"18", "20"}
+    assert sizes(40) == {"20", "22"}
+    assert sizes(10) == {"14", "16"}
+
+
+def test_a_correction_sees_server_charts_as_their_placeholders():
+    page, record = _extract(_raw_svg(SALES))
+    view = server_chart.placeholder_view(page["svg_content"], page["nativeDeclarations"])
+    group = next(node for node in ET.fromstring(view).iter(NS + "g") if node.get("id"))
+    assert len(group) == 0 and group.get(server_chart.RENDER_ATTRIBUTE) == server_chart.SERVER_CHART_REVISION
+    assert group.get(server_chart.BOX_ATTRIBUTE) == "64 140 700 460"
+    # The placeholder the model sees re-renders to the identical page.
+    again, _ = _extract(view)
+    assert again["svg_content"] == page["svg_content"]
+    assert server_chart.placeholder_view(page["svg_content"], None) == page["svg_content"]
+
+
+#: Published output of revision one. A change here means a stored deck would
+#: replay differently: publish a new revision instead of editing v1.
+V1_DIGESTS = {
+    "sales": "sha256:96207f11d95f3734759532564b62d15bce01641620d253d8a5f50cb9030cc4e6",
+    "channels": "sha256:9114d0d2c574ebd39a783287d38dfa199e74a2f05d298a4232b23740a20a8977",
+    "scores": "sha256:0083fcc4371df58bbccd9c9c6156330ee8b672f9ed4e4f5e295f5f50732472b0",
+}
+
+
+@pytest.mark.parametrize("name,raw", [("sales", SALES), ("channels", CHANNELS), ("scores", SCORES)])
+def test_revision_one_output_is_frozen(name, raw):
+    from services.svg_contract import source_digest
+    page, _ = _extract(_raw_svg(raw))
+    assert source_digest(page["svg_content"]) == V1_DIGESTS[name]

@@ -489,6 +489,13 @@ async def attempt_author(*, ctx, request, index, content, role, count, payload, 
                         previous_svg = payload.get("last_valid_svg") or payload.get("svg_content")
                         if previous_svg:
                             repair_kwargs["previous_svg"] = previous_svg
+                from services.generation_core.drivers.svg.server_chart import server_chart_policy
+                if server_chart_policy(ctx.snapshot) and repair_kwargs.get("previous_svg"):
+                    # The correction sees server-drawn charts as placeholders (only in its prompt).
+                    from services.generation_core.drivers.svg.native_declarations import bound_declarations
+                    record, current = bound_declarations(payload, repair_kwargs["previous_svg"])
+                    if record is not None and current:
+                        repair_kwargs["previous_native_declarations"] = record
                 authored = await author_slide_svg(
                     content=content, style_snapshot=ctx.snapshot, role=role,
                     index=index, n=count, instructions=request.instructions,

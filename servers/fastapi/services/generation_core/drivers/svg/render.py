@@ -951,7 +951,8 @@ async def _attempt_render(*, ctx, request, presentation_id, index, content, payl
         from services.generation_core.drivers.svg.server_chart import (
             apply_server_chart_grounding, server_chart_policy)
         if server_chart_policy(ctx.snapshot):
-            apply_server_chart_grounding(rendered.quality, payload, final, native_source)
+            apply_server_chart_grounding(rendered.quality, payload, final,
+                                         [native_source, getattr(request, "content", None)])
     elif ctx.source_reflow and payload.get("source_preservation", {}).get("whole_page_native_groups"):
         from services.authored_canvas import request_canvas_metadata
         from services.generation_core.drivers.svg.native_publish import canvas_point_per_px, page_native_objects
