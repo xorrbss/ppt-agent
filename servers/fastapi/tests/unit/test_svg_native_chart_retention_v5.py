@@ -1257,3 +1257,68 @@ def test_unmeasured_ink_fragments_fall_back_to_estimated_text_boxes():
     static = chart_drawing_evidence(page, svg, revision=V5)
     assert measured["native-chart-sales"]["contentGeometry"]["passed"] is True
     assert measured["native-chart-sales"]["contentGeometry"] == static["native-chart-sales"]["contentGeometry"]
+
+
+def _occlusion_measurement(svg, occluded_text):
+    from services.svg_contract import source_digest
+    root = ET.fromstring(svg)
+    elements = [{"qid": f"svg-{index}", "tag": "text", "has_owned_text": True,
+                 "occluded_fraction": 0.17 if node.text == occluded_text else 0}
+                for index, node in enumerate(root.iter()) if node.tag == NS + "text"]
+    return {"measurement_complete": True, "source_digest": source_digest(svg), "wrapper_digest": "sha256:wrapper",
+            "browser_metrics": {"source_digest": "sha256:wrapper", "elements": elements}}
+
+
+def test_partly_occluded_text_outside_every_chart_does_not_withdraw_the_chart():
+    """Seen live: a KPI caption beside a bar chart measured 17% occluded and the
+    whole chart lost its V5 evidence. Text outside the chart group proves nothing
+    about the chart; its estimated box still counts as a foreign occluder."""
+    page = _with_page_extras(
+        '<text xmlns="http://www.w3.org/2000/svg" x="1000" y="80" font-size="16" fill="#222222">KPI note</text>')
+    svg = page["svg_content"]
+    measured = chart_drawing_evidence(page, svg, revision=V5, measurement=_occlusion_measurement(svg, "KPI note"))
+    assert measured["native-chart-sales"]["contentGeometry"]["passed"] is True
+
+
+def test_partly_occluded_text_inside_the_chart_still_withdraws_the_chart():
+    page = _page()
+    svg = page["svg_content"]
+    assert chart_drawing_evidence(page, svg, revision=V5, measurement=_occlusion_measurement(svg, "60")) == {}
+
+
+def _won_magnitude_page(label_suffix):
+    page = _page(horizontal=True)
+    root = ET.fromstring(page["svg_content"])
+    raw = page["nativeDeclarations"]["objects"][0]["raw"]
+    raw["title"] = raw["series"][0]["name"] = "Sales (억원)"
+    group = next(node for node in root.iter(NS + "g") if node.get("id") == "native-chart-sales")
+    group.set("data-native-chart", json.dumps(raw, ensure_ascii=False))
+    for node in group.iter(NS + "text"):
+        if node.text in {"Sales trend", "Sales"}:
+            node.text = "Sales (억원)" if node.text == "Sales trend" else None
+        elif node.text in {"30", "60", "90"}:
+            node.text += label_suffix
+    for node in [node for node in group if node.tag == NS + "text" and node.text is None]:
+        group.remove(node)
+    svg = ET.tostring(root, encoding="unicode")
+    page = {"svg_content": svg}
+    bind_native_declarations(page, svg, extract_native_declarations(ET.fromstring(svg)))
+    return page
+
+
+@pytest.mark.parametrize("suffix,proven", [("억", True), ("억원", True), ("명", False)])
+def test_v5_reads_a_korean_magnitude_with_or_without_won_as_one_unit(suffix, proven):
+    page = _won_magnitude_page(suffix)
+    quality = {"passed": True, "failures": []}
+    apply_requested_native_quality(quality, page, page["svg_content"], "", pt_per_px=.75, revision=V5,
+                                   paint_deferred=True)
+    missing = [failure for failure in quality["failures"] if failure["kind"] == "native_requested_chart_missing"]
+    assert (not missing) is proven, quality["failures"]
+
+
+def test_won_magnitude_synonym_is_v5_only():
+    from services.generation_core.drivers.svg.native_requirements import _unit_key, _v5_unit_key
+    assert _v5_unit_key("억") == _v5_unit_key("억원") == _v5_unit_key("억 원")
+    assert _v5_unit_key("만") == _v5_unit_key("만원")
+    assert _v5_unit_key("억") != _v5_unit_key("억명")
+    assert _unit_key("억") != _unit_key("억원")
