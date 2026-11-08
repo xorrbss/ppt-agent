@@ -363,6 +363,10 @@ async def _refresh_template_pages(session, presentation, slides, snapshot):
             new = template_page_context(snapshot, index, len(slides), source, chapter=chapter, saved_context=old)
             if new["frame_id"] != old["frame_id"] or new["frame_digest"] != old["frame_digest"]:
                 raise ValueError("svg_template_page_frame_changed")
+            from services.svg_templates.generation import same_frame_after_move
+            if not same_frame_after_move(snapshot, old_index, old_count, index, len(slides),
+                                         role=old.get("role"), chapter=chapter):
+                raise ValueError("svg_template_page_frame_changed")
             if new == old:
                 slide.index = index
                 continue

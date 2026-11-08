@@ -493,6 +493,11 @@ PARTIAL_RECOVERY_CODE_LEDGER = VerifierRevisionLedger(
         # (same results and rejection codes), which joins the source inventories that
         # hold native_geometry/slide_capture_chart_paint. No behaviour changed.
         "9234dab38481247127cdeed6451798043bb13a324759cbb0f9194c717f0f9a77": "svg-partial-recovery-code/1",
+        # 2026-11-08 same_frame_after_move: a page move is also refused when the template
+        # chooses a different frame for the new position (v1 contexts replay their saved
+        # frame). It only refuses more reorders; page render, recovery and stored proofs
+        # are unchanged.
+        "10c8a0020f58e06501c992b572039994f89a2321c3de81fbd1d9f333ec3ecf81": "svg-partial-recovery-code/1",
     }),
 )
 
@@ -553,6 +558,11 @@ PAGE_RENDER_CODE_LEDGER = VerifierRevisionLedger(
         # (same results and rejection codes), which joins the source inventories that
         # hold native_geometry/slide_capture_chart_paint. No behaviour changed.
         "596080684783c7d173b3646deda6215d8ecb8575cd29fc3646d498bb30996a1c": "svg-page-render-code/1",
+        # 2026-11-08 same_frame_after_move: a page move is also refused when the template
+        # chooses a different frame for the new position (v1 contexts replay their saved
+        # frame). It only refuses more reorders; page render, recovery and stored proofs
+        # are unchanged.
+        "293aa2011edce74b1a1944cda80d2894a5340d9cc2a5a31467e001a65719d541": "svg-page-render-code/1",
     }),
 )
 

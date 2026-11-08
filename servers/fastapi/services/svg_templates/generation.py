@@ -277,6 +277,17 @@ def page_frame(snapshot: dict, index: int, count: int, role: str | None = None,
         adaptations[selected_id], package)).frame
 
 
+def same_frame_after_move(snapshot: dict, old_index: int, old_count: int, new_index: int, new_count: int,
+                          role: str | None = None, chapter: dict | None = None) -> bool:
+    """Whether the template chooses the same frame for a page at its new position.
+
+    A v1 page context replays its saved frame wherever the page sits, so a move is
+    checked against the template's own choice at both positions (a body page moved
+    to the cover position changes frame even though its context does not)."""
+    return (page_frame(snapshot, old_index, old_count, role=role, chapter=chapter).frame_id
+            == page_frame(snapshot, new_index, new_count, role=role, chapter=chapter).frame_id)
+
+
 def context_frame(snapshot: dict, context: dict) -> SvgTemplateFrame:
     """The frame a saved page context was built with.
 
