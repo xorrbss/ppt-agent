@@ -3,7 +3,7 @@
   "dataLicense": "CC0-1.0",
   "SPDXID": "SPDXRef-DOCUMENT",
   "name": "presenton-authored-vnext-release",
-  "documentNamespace": "https://github.com/xorrbss/ppt-agent/sbom/eea6189705dbbb5edbf47431806b735d01e398c502f843cb78b7b8d199848244",
+  "documentNamespace": "https://github.com/xorrbss/ppt-agent/sbom/8c2aaf4ae57e0da84fd7a12f76c829709b1e02a83167f7342eefd0c19d01892f",
   "creationInfo": {
     "created": "1970-01-01T00:00:00Z",
     "creators": [
@@ -16,7 +16,7 @@
       "annotationDate": "1970-01-01T00:00:00Z",
       "annotationType": "OTHER",
       "annotator": "Tool: scripts/generate-release-sbom.mjs",
-      "comment": "{\"schema\":\"presenton.release-license-attestation/v1\",\"policySha256\":\"037df554b794399a9e6003827260664346bc86d4507f9a47fad7e1e547ea313d\",\"noticeSha256\":\"7053de97afdab9c2a2c1c4943dd4b9afb293ef3cb02f9cc9cb00919208b96b14\",\"sourceOfferSha256\":\"2b1b29e49e15197bbf46918fa473727aac2f2907cfca9cb453f2e0d137f32a81\"}"
+      "comment": "{\"schema\":\"presenton.release-license-attestation/v1\",\"policySha256\":\"7241a43f8dd862ae4f5a5bef7af5d3176c9c8ab4fc4f5857736d58671199030e\",\"noticeSha256\":\"23296c5789277c6624304a7c054804de498f3835e0922b7bbbc29c04a7f2f3ae\",\"sourceOfferSha256\":\"aafa7aac5dd6a9b68a59d41ae4526e9c1ce36815b844ebe49f387ccdb45845a4\"}"
     }
   ],
   "documentDescribes": [
@@ -36,7 +36,7 @@
       "externalRefs": [],
       "supplier": "NOASSERTION",
       "primaryPackagePurpose": "APPLICATION",
-      "comment": "Dependency identity SHA-256: eea6189705dbbb5edbf47431806b735d01e398c502f843cb78b7b8d199848244"
+      "comment": "Dependency identity SHA-256: 8c2aaf4ae57e0da84fd7a12f76c829709b1e02a83167f7342eefd0c19d01892f"
     },
     {
       "SPDXID": "SPDXRef-npm-nextjs-node-modules-acemir-cssom",
@@ -3620,6 +3620,32 @@
           "referenceCategory": "PACKAGE-MANAGER",
           "referenceType": "purl",
           "referenceLocator": "pkg:npm/@swc%2Fcore@1.15.47"
+        }
+      ],
+      "supplier": "NOASSERTION",
+      "primaryPackagePurpose": "LIBRARY",
+      "comment": "Production dependency from nextjs/package-lock.json; license from nextjs/package-lock.json"
+    },
+    {
+      "SPDXID": "SPDXRef-npm-nextjs-node-modules-next-intl-node-modules-swc-helpers",
+      "name": "@swc/helpers",
+      "versionInfo": "0.5.23",
+      "downloadLocation": "https://registry.npmjs.org/@swc/helpers/-/helpers-0.5.23.tgz",
+      "filesAnalyzed": false,
+      "checksums": [
+        {
+          "algorithm": "SHA512",
+          "checksumValue": "e654ac30e4d751178f8250dfbee01052a9067a4f47836924b0e61acb69b4f9747ef9bd8d5982ffe2c5b2baf54122cf282a725ac64762f7085a2ffb2a375dda7f"
+        }
+      ],
+      "licenseConcluded": "Apache-2.0",
+      "licenseDeclared": "Apache-2.0",
+      "copyrightText": "NOASSERTION",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:npm/@swc%2Fhelpers@0.5.23"
         }
       ],
       "supplier": "NOASSERTION",
@@ -11186,7 +11212,7 @@
       ],
       "supplier": "NOASSERTION",
       "primaryPackagePurpose": "LIBRARY",
-      "comment": "Production dependency from servers/fastapi/uv.lock via uv CycloneDX export; license from installed METADATA License-Expression/License/Classifier"
+      "comment": "Production dependency from servers/fastapi/uv.lock via uv CycloneDX export; license from reviewed platform-specific PyPI metadata https://pypi.org/pypi/colorama/0.4.6/json"
     },
     {
       "SPDXID": "SPDXRef-python-confection-34-1.3.3",
@@ -11273,7 +11299,28 @@
       "comment": "Production dependency from servers/fastapi/uv.lock via uv CycloneDX export; license from installed METADATA License-Expression/License/Classifier"
     },
     {
-      "SPDXID": "SPDXRef-python-dirtyjson-38-1.0.8",
+      "SPDXID": "SPDXRef-python-defusedxml-38-0.7.1",
+      "name": "defusedxml",
+      "versionInfo": "0.7.1",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "checksums": [],
+      "licenseConcluded": "PSF-2.0",
+      "licenseDeclared": "PSF-2.0",
+      "copyrightText": "NOASSERTION",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:pypi/defusedxml@0.7.1"
+        }
+      ],
+      "supplier": "NOASSERTION",
+      "primaryPackagePurpose": "LIBRARY",
+      "comment": "Production dependency from servers/fastapi/uv.lock via uv CycloneDX export; license from installed METADATA License-Expression/License/Classifier"
+    },
+    {
+      "SPDXID": "SPDXRef-python-dirtyjson-39-1.0.8",
       "name": "dirtyjson",
       "versionInfo": "1.0.8",
       "downloadLocation": "NOASSERTION",
@@ -11294,7 +11341,7 @@
       "comment": "Production dependency from servers/fastapi/uv.lock via uv CycloneDX export; license from installed METADATA License-Expression/License/Classifier"
     },
     {
-      "SPDXID": "SPDXRef-python-distro-39-1.9.0",
+      "SPDXID": "SPDXRef-python-distro-40-1.9.0",
       "name": "distro",
       "versionInfo": "1.9.0",
       "downloadLocation": "NOASSERTION",
@@ -11315,7 +11362,7 @@
       "comment": "Production dependency from servers/fastapi/uv.lock via uv CycloneDX export; license from installed METADATA License-Expression/License/Classifier"
     },
     {
-      "SPDXID": "SPDXRef-python-dnspython-40-2.8.0",
+      "SPDXID": "SPDXRef-python-dnspython-41-2.8.0",
       "name": "dnspython",
       "versionInfo": "2.8.0",
       "downloadLocation": "NOASSERTION",
@@ -11336,7 +11383,7 @@
       "comment": "Production dependency from servers/fastapi/uv.lock via uv CycloneDX export; license from installed METADATA License-Expression/License/Classifier"
     },
     {
-      "SPDXID": "SPDXRef-python-docstring-parser-41-0.18.0",
+      "SPDXID": "SPDXRef-python-docstring-parser-42-0.18.0",
       "name": "docstring-parser",
       "versionInfo": "0.18.0",
       "downloadLocation": "NOASSERTION",
@@ -11357,7 +11404,7 @@
       "comment": "Production dependency from servers/fastapi/uv.lock via uv CycloneDX export; license from installed METADATA License-Expression/License/Classifier"
     },
     {
-      "SPDXID": "SPDXRef-python-docutils-42-0.22.4",
+      "SPDXID": "SPDXRef-python-docutils-43-0.22.4",
       "name": "docutils",
       "versionInfo": "0.22.4",
       "downloadLocation": "NOASSERTION",
@@ -11378,7 +11425,7 @@
       "comment": "Production dependency from servers/fastapi/uv.lock via uv CycloneDX export; license from reviewed installed license file SHA-256"
     },
     {
-      "SPDXID": "SPDXRef-python-email-validator-43-2.3.0",
+      "SPDXID": "SPDXRef-python-email-validator-44-2.3.0",
       "name": "email-validator",
       "versionInfo": "2.3.0",
       "downloadLocation": "NOASSERTION",
@@ -11399,7 +11446,7 @@
       "comment": "Production dependency from servers/fastapi/uv.lock via uv CycloneDX export; license from installed METADATA License-Expression/License/Classifier"
     },
     {
-      "SPDXID": "SPDXRef-python-exceptiongroup-44-1.3.1",
+      "SPDXID": "SPDXRef-python-exceptiongroup-45-1.3.1",
       "name": "exceptiongroup",
       "versionInfo": "1.3.1",
       "downloadLocation": "NOASSERTION",
@@ -11420,7 +11467,7 @@
       "comment": "Production dependency from servers/fastapi/uv.lock via uv CycloneDX export; license from installed METADATA License-Expression/License/Classifier"
     },
     {
-      "SPDXID": "SPDXRef-python-fastapi-45-0.136.0",
+      "SPDXID": "SPDXRef-python-fastapi-46-0.136.0",
       "name": "fastapi",
       "versionInfo": "0.136.0",
       "downloadLocation": "NOASSERTION",
@@ -11441,7 +11488,7 @@
       "comment": "Production dependency from servers/fastapi/uv.lock via uv CycloneDX export; license from installed METADATA License-Expression/License/Classifier"
     },
     {
-      "SPDXID": "SPDXRef-python-fastapi-cli-46-0.0.24",
+      "SPDXID": "SPDXRef-python-fastapi-cli-47-0.0.24",
       "name": "fastapi-cli",
       "versionInfo": "0.0.24",
       "downloadLocation": "NOASSERTION",
@@ -11462,7 +11509,7 @@
       "comment": "Production dependency from servers/fastapi/uv.lock via uv CycloneDX export; license from installed METADATA License-Expression/License/Classifier"
     },
     {
-      "SPDXID": "SPDXRef-python-fastapi-cloud-cli-47-0.17.0",
+      "SPDXID": "SPDXRef-python-fastapi-cloud-cli-48-0.17.0",
       "name": "fastapi-cloud-cli",
       "versionInfo": "0.17.0",
       "downloadLocation": "NOASSERTION",
@@ -11483,7 +11530,7 @@
       "comment": "Production dependency from servers/fastapi/uv.lock via uv CycloneDX export; license from installed METADATA License-Expression/License/Classifier"
     },
     {
-      "SPDXID": "SPDXRef-python-fastapi-users-48-15.0.5",
+      "SPDXID": "SPDXRef-python-fastapi-users-49-15.0.5",
       "name": "fastapi-users",
       "versionInfo": "15.0.5",
       "downloadLocation": "NOASSERTION",
@@ -11504,7 +11551,7 @@
       "comment": "Production dependency from servers/fastapi/uv.lock via uv CycloneDX export; license from installed METADATA License-Expression/License/Classifier"
     },
     {
-      "SPDXID": "SPDXRef-python-fastapi-users-db-sqlalchemy-49-7.0.0",
+      "SPDXID": "SPDXRef-python-fastapi-users-db-sqlalchemy-50-7.0.0",
       "name": "fastapi-users-db-sqlalchemy",
       "versionInfo": "7.0.0",
       "downloadLocation": "NOASSERTION",
@@ -11525,7 +11572,7 @@
       "comment": "Production dependency from servers/fastapi/uv.lock via uv CycloneDX export; license from installed METADATA License-Expression/License/Classifier"
     },
     {
-      "SPDXID": "SPDXRef-python-fastar-50-0.11.0",
+      "SPDXID": "SPDXRef-python-fastar-51-0.11.0",
       "name": "fastar",
       "versionInfo": "0.11.0",
       "downloadLocation": "NOASSERTION",
@@ -11546,7 +11593,7 @@
       "comment": "Production dependency from servers/fastapi/uv.lock via uv CycloneDX export; license from installed METADATA License-Expression/License/Classifier"
     },
     {
-      "SPDXID": "SPDXRef-python-fastembed-51-0.8.0",
+      "SPDXID": "SPDXRef-python-fastembed-52-0.8.0",
       "name": "fastembed",
       "versionInfo": "0.8.0",
       "downloadLocation": "NOASSERTION",
@@ -11567,7 +11614,7 @@
       "comment": "Production dependency from servers/fastapi/uv.lock via uv CycloneDX export; license from installed METADATA License-Expression/License/Classifier"
     },
     {
-      "SPDXID": "SPDXRef-python-fastembed-vectorstore-52-0.5.3",
+      "SPDXID": "SPDXRef-python-fastembed-vectorstore-53-0.5.3",
       "name": "fastembed-vectorstore",
       "versionInfo": "0.5.3",
       "downloadLocation": "NOASSERTION",
@@ -11588,7 +11635,7 @@
       "comment": "Production dependency from servers/fastapi/uv.lock via uv CycloneDX export; license from installed METADATA License-Expression/License/Classifier"
     },
     {
-      "SPDXID": "SPDXRef-python-fastmcp-53-3.2.4",
+      "SPDXID": "SPDXRef-python-fastmcp-54-3.2.4",
       "name": "fastmcp",
       "versionInfo": "3.2.4",
       "downloadLocation": "NOASSERTION",
@@ -11609,7 +11656,7 @@
       "comment": "Production dependency from servers/fastapi/uv.lock via uv CycloneDX export; license from installed METADATA License-Expression/License/Classifier"
     },
     {
-      "SPDXID": "SPDXRef-python-filelock-54-3.29.0",
+      "SPDXID": "SPDXRef-python-filelock-55-3.29.0",
       "name": "filelock",
       "versionInfo": "3.29.0",
       "downloadLocation": "NOASSERTION",
@@ -11630,7 +11677,7 @@
       "comment": "Production dependency from servers/fastapi/uv.lock via uv CycloneDX export; license from installed METADATA License-Expression/License/Classifier"
     },
     {
-      "SPDXID": "SPDXRef-python-flatbuffers-55-25.12.19",
+      "SPDXID": "SPDXRef-python-flatbuffers-56-25.12.19",
       "name": "flatbuffers",
       "versionInfo": "25.12.19",
       "downloadLocation": "NOASSERTION",
@@ -11651,7 +11698,7 @@
       "comment": "Production dependency from servers/fastapi/uv.lock via uv CycloneDX export; license from installed METADATA License-Expression/License/Classifier"
     },
     {
-      "SPDXID": "SPDXRef-python-fonttools-56-4.63.0",
+      "SPDXID": "SPDXRef-python-fonttools-57-4.63.0",
       "name": "fonttools",
       "versionInfo": "4.63.0",
       "downloadLocation": "NOASSERTION",
@@ -11672,7 +11719,7 @@
       "comment": "Production dependency from servers/fastapi/uv.lock via uv CycloneDX export; license from installed METADATA License-Expression/License/Classifier"
     },
     {
-      "SPDXID": "SPDXRef-python-frozenlist-57-1.8.0",
+      "SPDXID": "SPDXRef-python-frozenlist-58-1.8.0",
       "name": "frozenlist",
       "versionInfo": "1.8.0",
       "downloadLocation": "NOASSERTION",
@@ -11693,7 +11740,7 @@
       "comment": "Production dependency from servers/fastapi/uv.lock via uv CycloneDX export; license from installed METADATA License-Expression/License/Classifier"
     },
     {
-      "SPDXID": "SPDXRef-python-fsspec-58-2026.3.0",
+      "SPDXID": "SPDXRef-python-fsspec-59-2026.3.0",
       "name": "fsspec",
       "versionInfo": "2026.3.0",
       "downloadLocation": "NOASSERTION",
@@ -11714,7 +11761,7 @@
       "comment": "Production dependency from servers/fastapi/uv.lock via uv CycloneDX export; license from installed METADATA License-Expression/License/Classifier"
     },
     {
-      "SPDXID": "SPDXRef-python-google-auth-59-2.49.2",
+      "SPDXID": "SPDXRef-python-google-auth-60-2.49.2",
       "name": "google-auth",
       "versionInfo": "2.49.2",
       "downloadLocation": "NOASSERTION",
@@ -11735,7 +11782,7 @@
       "comment": "Production dependency from servers/fastapi/uv.lock via uv CycloneDX export; license from installed METADATA License-Expression/License/Classifier"
     },
     {
-      "SPDXID": "SPDXRef-python-google-genai-60-1.73.1",
+      "SPDXID": "SPDXRef-python-google-genai-61-1.73.1",
       "name": "google-genai",
       "versionInfo": "1.73.1",
       "downloadLocation": "NOASSERTION",
@@ -11756,7 +11803,7 @@
       "comment": "Production dependency from servers/fastapi/uv.lock via uv CycloneDX export; license from installed METADATA License-Expression/License/Classifier"
     },
     {
-      "SPDXID": "SPDXRef-python-greenlet-61-3.4.0",
+      "SPDXID": "SPDXRef-python-greenlet-62-3.4.0",
       "name": "greenlet",
       "versionInfo": "3.4.0",
       "downloadLocation": "NOASSERTION",
@@ -11777,7 +11824,7 @@
       "comment": "Production dependency from servers/fastapi/uv.lock via uv CycloneDX export; license from installed METADATA License-Expression/License/Classifier"
     },
     {
-      "SPDXID": "SPDXRef-python-griffelib-62-2.0.2",
+      "SPDXID": "SPDXRef-python-griffelib-63-2.0.2",
       "name": "griffelib",
       "versionInfo": "2.0.2",
       "downloadLocation": "NOASSERTION",
@@ -11798,7 +11845,7 @@
       "comment": "Production dependency from servers/fastapi/uv.lock via uv CycloneDX export; license from installed METADATA License-Expression/License/Classifier"
     },
     {
-      "SPDXID": "SPDXRef-python-grpcio-63-1.80.0",
+      "SPDXID": "SPDXRef-python-grpcio-64-1.80.0",
       "name": "grpcio",
       "versionInfo": "1.80.0",
       "downloadLocation": "NOASSERTION",
@@ -11819,7 +11866,7 @@
       "comment": "Production dependency from servers/fastapi/uv.lock via uv CycloneDX export; license from installed METADATA License-Expression/License/Classifier"
     },
     {
-      "SPDXID": "SPDXRef-python-h11-64-0.16.0",
+      "SPDXID": "SPDXRef-python-h11-65-0.16.0",
       "name": "h11",
       "versionInfo": "0.16.0",
       "downloadLocation": "NOASSERTION",
@@ -11840,7 +11887,7 @@
       "comment": "Production dependency from servers/fastapi/uv.lock via uv CycloneDX export; license from installed METADATA License-Expression/License/Classifier"
     },
     {
-      "SPDXID": "SPDXRef-python-h2-65-4.3.0",
+      "SPDXID": "SPDXRef-python-h2-66-4.3.0",
       "name": "h2",
       "versionInfo": "4.3.0",
       "downloadLocation": "NOASSERTION",
@@ -11861,7 +11908,7 @@
       "comment": "Production dependency from servers/fastapi/uv.lock via uv CycloneDX export; license from installed METADATA License-Expression/License/Classifier"
     },
     {
-      "SPDXID": "SPDXRef-python-hf-xet-66-1.4.3",
+      "SPDXID": "SPDXRef-python-hf-xet-67-1.4.3",
       "name": "hf-xet",
       "versionInfo": "1.4.3",
       "downloadLocation": "NOASSERTION",
@@ -11882,7 +11929,7 @@
       "comment": "Production dependency from servers/fastapi/uv.lock via uv CycloneDX export; license from installed METADATA License-Expression/License/Classifier"
     },
     {
-      "SPDXID": "SPDXRef-python-hpack-67-4.1.0",
+      "SPDXID": "SPDXRef-python-hpack-68-4.1.0",
       "name": "hpack",
       "versionInfo": "4.1.0",
       "downloadLocation": "NOASSERTION",
@@ -11903,7 +11950,7 @@
       "comment": "Production dependency from servers/fastapi/uv.lock via uv CycloneDX export; license from installed METADATA License-Expression/License/Classifier"
     },
     {
-      "SPDXID": "SPDXRef-python-html5lib-68-1.1",
+      "SPDXID": "SPDXRef-python-html5lib-69-1.1",
       "name": "html5lib",
       "versionInfo": "1.1",
       "downloadLocation": "NOASSERTION",
@@ -11924,7 +11971,7 @@
       "comment": "Production dependency from servers/fastapi/uv.lock via uv CycloneDX export; license from installed METADATA License-Expression/License/Classifier"
     },
     {
-      "SPDXID": "SPDXRef-python-httpcore-69-1.0.9",
+      "SPDXID": "SPDXRef-python-httpcore-70-1.0.9",
       "name": "httpcore",
       "versionInfo": "1.0.9",
       "downloadLocation": "NOASSERTION",
@@ -11945,7 +11992,7 @@
       "comment": "Production dependency from servers/fastapi/uv.lock via uv CycloneDX export; license from installed METADATA License-Expression/License/Classifier"
     },
     {
-      "SPDXID": "SPDXRef-python-httptools-70-0.7.1",
+      "SPDXID": "SPDXRef-python-httptools-71-0.7.1",
       "name": "httptools",
       "versionInfo": "0.7.1",
       "downloadLocation": "NOASSERTION",
@@ -11966,7 +12013,7 @@
       "comment": "Production dependency from servers/fastapi/uv.lock via uv CycloneDX export; license from installed METADATA License-Expression/License/Classifier"
     },
     {
-      "SPDXID": "SPDXRef-python-httpx-71-0.28.1",
+      "SPDXID": "SPDXRef-python-httpx-72-0.28.1",
       "name": "httpx",
       "versionInfo": "0.28.1",
       "downloadLocation": "NOASSERTION",
@@ -11987,7 +12034,7 @@
       "comment": "Production dependency from servers/fastapi/uv.lock via uv CycloneDX export; license from installed METADATA License-Expression/License/Classifier"
     },
     {
-      "SPDXID": "SPDXRef-python-httpx-sse-72-0.4.3",
+      "SPDXID": "SPDXRef-python-httpx-sse-73-0.4.3",
       "name": "httpx-sse",
       "versionInfo": "0.4.3",
       "downloadLocation": "NOASSERTION",
@@ -12008,7 +12055,7 @@
       "comment": "Production dependency from servers/fastapi/uv.lock via uv CycloneDX export; license from installed METADATA License-Expression/License/Classifier"
     },
     {
-      "SPDXID": "SPDXRef-python-huggingface-hub-73-1.11.0",
+      "SPDXID": "SPDXRef-python-huggingface-hub-74-1.11.0",
       "name": "huggingface-hub",
       "versionInfo": "1.11.0",
       "downloadLocation": "NOASSERTION",
@@ -12029,7 +12076,7 @@
       "comment": "Production dependency from servers/fastapi/uv.lock via uv CycloneDX export; license from installed METADATA License-Expression/License/Classifier"
     },
     {
-      "SPDXID": "SPDXRef-python-hyperframe-74-6.1.0",
+      "SPDXID": "SPDXRef-python-hyperframe-75-6.1.0",
       "name": "hyperframe",
       "versionInfo": "6.1.0",
       "downloadLocation": "NOASSERTION",
@@ -12050,7 +12097,7 @@
       "comment": "Production dependency from servers/fastapi/uv.lock via uv CycloneDX export; license from installed METADATA License-Expression/License/Classifier"
     },
     {
-      "SPDXID": "SPDXRef-python-idna-75-3.18",
+      "SPDXID": "SPDXRef-python-idna-76-3.18",
       "name": "idna",
       "versionInfo": "3.18",
       "downloadLocation": "NOASSERTION",
@@ -12071,7 +12118,7 @@
       "comment": "Production dependency from servers/fastapi/uv.lock via uv CycloneDX export; license from installed METADATA License-Expression/License/Classifier"
     },
     {
-      "SPDXID": "SPDXRef-python-importlib-metadata-76-8.7.1",
+      "SPDXID": "SPDXRef-python-importlib-metadata-77-8.7.1",
       "name": "importlib-metadata",
       "versionInfo": "8.7.1",
       "downloadLocation": "NOASSERTION",
@@ -12092,7 +12139,7 @@
       "comment": "Production dependency from servers/fastapi/uv.lock via uv CycloneDX export; license from installed METADATA License-Expression/License/Classifier"
     },
     {
-      "SPDXID": "SPDXRef-python-jaraco-classes-77-3.4.0",
+      "SPDXID": "SPDXRef-python-jaraco-classes-78-3.4.0",
       "name": "jaraco-classes",
       "versionInfo": "3.4.0",
       "downloadLocation": "NOASSERTION",
@@ -12113,7 +12160,7 @@
       "comment": "Production dependency from servers/fastapi/uv.lock via uv CycloneDX export; license from installed METADATA License-Expression/License/Classifier"
     },
     {
-      "SPDXID": "SPDXRef-python-jaraco-context-78-6.1.2",
+      "SPDXID": "SPDXRef-python-jaraco-context-79-6.1.2",
       "name": "jaraco-context",
       "versionInfo": "6.1.2",
       "downloadLocation": "NOASSERTION",
@@ -12134,7 +12181,7 @@
       "comment": "Production dependency from servers/fastapi/uv.lock via uv CycloneDX export; license from installed METADATA License-Expression/License/Classifier"
     },
     {
-      "SPDXID": "SPDXRef-python-jaraco-functools-79-4.4.0",
+      "SPDXID": "SPDXRef-python-jaraco-functools-80-4.4.0",
       "name": "jaraco-functools",
       "versionInfo": "4.4.0",
       "downloadLocation": "NOASSERTION",
@@ -12155,7 +12202,7 @@
       "comment": "Production dependency from servers/fastapi/uv.lock via uv CycloneDX export; license from installed METADATA License-Expression/License/Classifier"
     },
     {
-      "SPDXID": "SPDXRef-python-jeepney-80-0.9.0",
+      "SPDXID": "SPDXRef-python-jeepney-81-0.9.0",
       "name": "jeepney",
       "versionInfo": "0.9.0",
       "downloadLocation": "NOASSERTION",
@@ -12173,10 +12220,10 @@
       ],
       "supplier": "NOASSERTION",
       "primaryPackagePurpose": "LIBRARY",
-      "comment": "Production dependency from servers/fastapi/uv.lock via uv CycloneDX export; license from reviewed platform-specific PyPI metadata https://pypi.org/pypi/jeepney/0.9.0/json"
+      "comment": "Production dependency from servers/fastapi/uv.lock via uv CycloneDX export; license from installed METADATA License-Expression/License/Classifier"
     },
     {
-      "SPDXID": "SPDXRef-python-jinja2-81-3.1.6",
+      "SPDXID": "SPDXRef-python-jinja2-82-3.1.6",
       "name": "jinja2",
       "versionInfo": "3.1.6",
       "downloadLocation": "NOASSERTION",
@@ -12197,7 +12244,7 @@
       "comment": "Production dependency from servers/fastapi/uv.lock via uv CycloneDX export; license from installed METADATA License-Expression/License/Classifier"
     },
     {
-      "SPDXID": "SPDXRef-python-jiter-82-0.14.0",
+      "SPDXID": "SPDXRef-python-jiter-83-0.14.0",
       "name": "jiter",
       "versionInfo": "0.14.0",
       "downloadLocation": "NOASSERTION",
@@ -12218,7 +12265,7 @@
       "comment": "Production dependency from servers/fastapi/uv.lock via uv CycloneDX export; license from installed METADATA License-Expression/License/Classifier"
     },
     {
-      "SPDXID": "SPDXRef-python-jmespath-83-1.1.0",
+      "SPDXID": "SPDXRef-python-jmespath-84-1.1.0",
       "name": "jmespath",
       "versionInfo": "1.1.0",
       "downloadLocation": "NOASSERTION",
@@ -12239,7 +12286,7 @@
       "comment": "Production dependency from servers/fastapi/uv.lock via uv CycloneDX export; license from installed METADATA License-Expression/License/Classifier"
     },
     {
-      "SPDXID": "SPDXRef-python-joserfc-84-1.7.4",
+      "SPDXID": "SPDXRef-python-joserfc-85-1.7.4",
       "name": "joserfc",
       "versionInfo": "1.7.4",
       "downloadLocation": "NOASSERTION",
@@ -12260,7 +12307,7 @@
       "comment": "Production dependency from servers/fastapi/uv.lock via uv CycloneDX export; license from installed METADATA License-Expression/License/Classifier"
     },
     {
-      "SPDXID": "SPDXRef-python-jsonref-85-1.1.0",
+      "SPDXID": "SPDXRef-python-jsonref-86-1.1.0",
       "name": "jsonref",
       "versionInfo": "1.1.0",
       "downloadLocation": "NOASSERTION",
@@ -12281,7 +12328,7 @@
       "comment": "Production dependency from servers/fastapi/uv.lock via uv CycloneDX export; license from installed METADATA License-Expression/License/Classifier"
     },
     {
-      "SPDXID": "SPDXRef-python-jsonschema-86-4.26.0",
+      "SPDXID": "SPDXRef-python-jsonschema-87-4.26.0",
       "name": "jsonschema",
       "versionInfo": "4.26.0",
       "downloadLocation": "NOASSERTION",
@@ -12302,7 +12349,7 @@
       "comment": "Production dependency from servers/fastapi/uv.lock via uv CycloneDX export; license from installed METADATA License-Expression/License/Classifier"
     },
     {
-      "SPDXID": "SPDXRef-python-jsonschema-path-87-0.4.5",
+      "SPDXID": "SPDXRef-python-jsonschema-path-88-0.4.5",
       "name": "jsonschema-path",
       "versionInfo": "0.4.5",
       "downloadLocation": "NOASSERTION",
@@ -12323,7 +12370,7 @@
       "comment": "Production dependency from servers/fastapi/uv.lock via uv CycloneDX export; license from installed METADATA License-Expression/License/Classifier"
     },
     {
-      "SPDXID": "SPDXRef-python-jsonschema-specifications-88-2025.9.1",
+      "SPDXID": "SPDXRef-python-jsonschema-specifications-89-2025.9.1",
       "name": "jsonschema-specifications",
       "versionInfo": "2025.9.1",
       "downloadLocation": "NOASSERTION",
@@ -12344,7 +12391,7 @@
       "comment": "Production dependency from servers/fastapi/uv.lock via uv CycloneDX export; license from installed METADATA License-Expression/License/Classifier"
     },
     {
-      "SPDXID": "SPDXRef-python-keyring-89-25.7.0",
+      "SPDXID": "SPDXRef-python-keyring-90-25.7.0",
       "name": "keyring",
       "versionInfo": "25.7.0",
       "downloadLocation": "NOASSERTION",
@@ -12365,7 +12412,7 @@
       "comment": "Production dependency from servers/fastapi/uv.lock via uv CycloneDX export; license from installed METADATA License-Expression/License/Classifier"
     },
     {
-      "SPDXID": "SPDXRef-python-llmai-90-0.3.7",
+      "SPDXID": "SPDXRef-python-llmai-91-0.3.7",
       "name": "llmai",
       "versionInfo": "0.3.7",
       "downloadLocation": "NOASSERTION",
@@ -12386,7 +12433,7 @@
       "comment": "Production dependency from servers/fastapi/uv.lock via uv CycloneDX export; license from installed METADATA License-Expression/License/Classifier"
     },
     {
-      "SPDXID": "SPDXRef-python-loguru-91-0.7.3",
+      "SPDXID": "SPDXRef-python-loguru-92-0.7.3",
       "name": "loguru",
       "versionInfo": "0.7.3",
       "downloadLocation": "NOASSERTION",
@@ -12407,7 +12454,7 @@
       "comment": "Production dependency from servers/fastapi/uv.lock via uv CycloneDX export; license from installed METADATA License-Expression/License/Classifier"
     },
     {
-      "SPDXID": "SPDXRef-python-lxml-92-6.1.1",
+      "SPDXID": "SPDXRef-python-lxml-93-6.1.1",
       "name": "lxml",
       "versionInfo": "6.1.1",
       "downloadLocation": "NOASSERTION",
@@ -12428,7 +12475,7 @@
       "comment": "Production dependency from servers/fastapi/uv.lock via uv CycloneDX export; license from installed METADATA License-Expression/License/Classifier"
     },
     {
-      "SPDXID": "SPDXRef-python-makefun-93-1.16.0",
+      "SPDXID": "SPDXRef-python-makefun-94-1.16.0",
       "name": "makefun",
       "versionInfo": "1.16.0",
       "downloadLocation": "NOASSERTION",
@@ -12449,7 +12496,7 @@
       "comment": "Production dependency from servers/fastapi/uv.lock via uv CycloneDX export; license from installed METADATA License-Expression/License/Classifier"
     },
     {
-      "SPDXID": "SPDXRef-python-mako-94-1.3.12",
+      "SPDXID": "SPDXRef-python-mako-95-1.3.12",
       "name": "mako",
       "versionInfo": "1.3.12",
       "downloadLocation": "NOASSERTION",
@@ -12470,7 +12517,7 @@
       "comment": "Production dependency from servers/fastapi/uv.lock via uv CycloneDX export; license from installed METADATA License-Expression/License/Classifier"
     },
     {
-      "SPDXID": "SPDXRef-python-markdown-it-py-95-4.0.0",
+      "SPDXID": "SPDXRef-python-markdown-it-py-96-4.0.0",
       "name": "markdown-it-py",
       "versionInfo": "4.0.0",
       "downloadLocation": "NOASSERTION",
@@ -12491,7 +12538,7 @@
       "comment": "Production dependency from servers/fastapi/uv.lock via uv CycloneDX export; license from installed METADATA License-Expression/License/Classifier"
     },
     {
-      "SPDXID": "SPDXRef-python-markupsafe-96-3.0.3",
+      "SPDXID": "SPDXRef-python-markupsafe-97-3.0.3",
       "name": "markupsafe",
       "versionInfo": "3.0.3",
       "downloadLocation": "NOASSERTION",
@@ -12512,7 +12559,7 @@
       "comment": "Production dependency from servers/fastapi/uv.lock via uv CycloneDX export; license from installed METADATA License-Expression/License/Classifier"
     },
     {
-      "SPDXID": "SPDXRef-python-mcp-97-1.29.0",
+      "SPDXID": "SPDXRef-python-mcp-98-1.29.0",
       "name": "mcp",
       "versionInfo": "1.29.0",
       "downloadLocation": "NOASSERTION",
@@ -12533,7 +12580,7 @@
       "comment": "Production dependency from servers/fastapi/uv.lock via uv CycloneDX export; license from installed METADATA License-Expression/License/Classifier"
     },
     {
-      "SPDXID": "SPDXRef-python-mdurl-98-0.1.2",
+      "SPDXID": "SPDXRef-python-mdurl-99-0.1.2",
       "name": "mdurl",
       "versionInfo": "0.1.2",
       "downloadLocation": "NOASSERTION",
@@ -12554,7 +12601,7 @@
       "comment": "Production dependency from servers/fastapi/uv.lock via uv CycloneDX export; license from installed METADATA License-Expression/License/Classifier"
     },
     {
-      "SPDXID": "SPDXRef-python-mem0ai-99-2.0.0",
+      "SPDXID": "SPDXRef-python-mem0ai-100-2.0.0",
       "name": "mem0ai",
       "versionInfo": "2.0.0",
       "downloadLocation": "NOASSERTION",
@@ -12575,7 +12622,7 @@
       "comment": "Production dependency from servers/fastapi/uv.lock via uv CycloneDX export; license from installed METADATA License-Expression/License/Classifier"
     },
     {
-      "SPDXID": "SPDXRef-python-mmh3-100-5.2.1",
+      "SPDXID": "SPDXRef-python-mmh3-101-5.2.1",
       "name": "mmh3",
       "versionInfo": "5.2.1",
       "downloadLocation": "NOASSERTION",
@@ -12596,7 +12643,7 @@
       "comment": "Production dependency from servers/fastapi/uv.lock via uv CycloneDX export; license from installed METADATA License-Expression/License/Classifier"
     },
     {
-      "SPDXID": "SPDXRef-python-more-itertools-101-11.0.2",
+      "SPDXID": "SPDXRef-python-more-itertools-102-11.0.2",
       "name": "more-itertools",
       "versionInfo": "11.0.2",
       "downloadLocation": "NOASSERTION",
@@ -12617,7 +12664,7 @@
       "comment": "Production dependency from servers/fastapi/uv.lock via uv CycloneDX export; license from installed METADATA License-Expression/License/Classifier"
     },
     {
-      "SPDXID": "SPDXRef-python-mpmath-102-1.3.0",
+      "SPDXID": "SPDXRef-python-mpmath-103-1.3.0",
       "name": "mpmath",
       "versionInfo": "1.3.0",
       "downloadLocation": "NOASSERTION",
@@ -12638,7 +12685,7 @@
       "comment": "Production dependency from servers/fastapi/uv.lock via uv CycloneDX export; license from installed METADATA License-Expression/License/Classifier"
     },
     {
-      "SPDXID": "SPDXRef-python-multidict-103-6.7.1",
+      "SPDXID": "SPDXRef-python-multidict-104-6.7.1",
       "name": "multidict",
       "versionInfo": "6.7.1",
       "downloadLocation": "NOASSERTION",
@@ -12659,7 +12706,7 @@
       "comment": "Production dependency from servers/fastapi/uv.lock via uv CycloneDX export; license from installed METADATA License-Expression/License/Classifier"
     },
     {
-      "SPDXID": "SPDXRef-python-murmurhash-104-1.0.15",
+      "SPDXID": "SPDXRef-python-murmurhash-105-1.0.15",
       "name": "murmurhash",
       "versionInfo": "1.0.15",
       "downloadLocation": "NOASSERTION",
@@ -12680,7 +12727,7 @@
       "comment": "Production dependency from servers/fastapi/uv.lock via uv CycloneDX export; license from installed METADATA License-Expression/License/Classifier"
     },
     {
-      "SPDXID": "SPDXRef-python-numpy-105-2.4.4",
+      "SPDXID": "SPDXRef-python-numpy-106-2.4.4",
       "name": "numpy",
       "versionInfo": "2.4.4",
       "downloadLocation": "NOASSERTION",
@@ -12701,7 +12748,7 @@
       "comment": "Production dependency from servers/fastapi/uv.lock via uv CycloneDX export; license from installed METADATA License-Expression/License/Classifier"
     },
     {
-      "SPDXID": "SPDXRef-python-onnxruntime-106-1.24.4",
+      "SPDXID": "SPDXRef-python-onnxruntime-107-1.24.4",
       "name": "onnxruntime",
       "versionInfo": "1.24.4",
       "downloadLocation": "NOASSERTION",
@@ -12722,7 +12769,7 @@
       "comment": "Production dependency from servers/fastapi/uv.lock via uv CycloneDX export; license from installed METADATA License-Expression/License/Classifier"
     },
     {
-      "SPDXID": "SPDXRef-python-openai-107-2.32.0",
+      "SPDXID": "SPDXRef-python-openai-108-2.32.0",
       "name": "openai",
       "versionInfo": "2.32.0",
       "downloadLocation": "NOASSERTION",
@@ -12743,7 +12790,7 @@
       "comment": "Production dependency from servers/fastapi/uv.lock via uv CycloneDX export; license from installed METADATA License-Expression/License/Classifier"
     },
     {
-      "SPDXID": "SPDXRef-python-openapi-pydantic-108-0.5.1",
+      "SPDXID": "SPDXRef-python-openapi-pydantic-109-0.5.1",
       "name": "openapi-pydantic",
       "versionInfo": "0.5.1",
       "downloadLocation": "NOASSERTION",
@@ -12764,7 +12811,7 @@
       "comment": "Production dependency from servers/fastapi/uv.lock via uv CycloneDX export; license from installed METADATA License-Expression/License/Classifier"
     },
     {
-      "SPDXID": "SPDXRef-python-opentelemetry-api-109-1.41.0",
+      "SPDXID": "SPDXRef-python-opentelemetry-api-110-1.41.0",
       "name": "opentelemetry-api",
       "versionInfo": "1.41.0",
       "downloadLocation": "NOASSERTION",
@@ -12785,7 +12832,7 @@
       "comment": "Production dependency from servers/fastapi/uv.lock via uv CycloneDX export; license from installed METADATA License-Expression/License/Classifier"
     },
     {
-      "SPDXID": "SPDXRef-python-packaging-110-26.1",
+      "SPDXID": "SPDXRef-python-packaging-111-26.1",
       "name": "packaging",
       "versionInfo": "26.1",
       "downloadLocation": "NOASSERTION",
@@ -12806,7 +12853,7 @@
       "comment": "Production dependency from servers/fastapi/uv.lock via uv CycloneDX export; license from installed METADATA License-Expression/License/Classifier"
     },
     {
-      "SPDXID": "SPDXRef-python-pathable-111-0.5.0",
+      "SPDXID": "SPDXRef-python-pathable-112-0.5.0",
       "name": "pathable",
       "versionInfo": "0.5.0",
       "downloadLocation": "NOASSERTION",
@@ -12827,7 +12874,7 @@
       "comment": "Production dependency from servers/fastapi/uv.lock via uv CycloneDX export; license from installed METADATA License-Expression/License/Classifier"
     },
     {
-      "SPDXID": "SPDXRef-python-pathvalidate-112-3.3.1",
+      "SPDXID": "SPDXRef-python-pathvalidate-113-3.3.1",
       "name": "pathvalidate",
       "versionInfo": "3.3.1",
       "downloadLocation": "NOASSERTION",
@@ -12848,7 +12895,7 @@
       "comment": "Production dependency from servers/fastapi/uv.lock via uv CycloneDX export; license from installed METADATA License-Expression/License/Classifier"
     },
     {
-      "SPDXID": "SPDXRef-python-pdfminer-six-113-20251230",
+      "SPDXID": "SPDXRef-python-pdfminer-six-114-20251230",
       "name": "pdfminer-six",
       "versionInfo": "20251230",
       "downloadLocation": "NOASSERTION",
@@ -12869,7 +12916,7 @@
       "comment": "Production dependency from servers/fastapi/uv.lock via uv CycloneDX export; license from installed METADATA License-Expression/License/Classifier"
     },
     {
-      "SPDXID": "SPDXRef-python-pdfplumber-114-0.11.9",
+      "SPDXID": "SPDXRef-python-pdfplumber-115-0.11.9",
       "name": "pdfplumber",
       "versionInfo": "0.11.9",
       "downloadLocation": "NOASSERTION",
@@ -12890,7 +12937,7 @@
       "comment": "Production dependency from servers/fastapi/uv.lock via uv CycloneDX export; license from installed METADATA License-Expression/License/Classifier"
     },
     {
-      "SPDXID": "SPDXRef-python-pillow-115-12.3.0",
+      "SPDXID": "SPDXRef-python-pillow-116-12.3.0",
       "name": "pillow",
       "versionInfo": "12.3.0",
       "downloadLocation": "NOASSERTION",
@@ -12911,7 +12958,7 @@
       "comment": "Production dependency from servers/fastapi/uv.lock via uv CycloneDX export; license from installed METADATA License-Expression/License/Classifier"
     },
     {
-      "SPDXID": "SPDXRef-python-platformdirs-116-4.9.6",
+      "SPDXID": "SPDXRef-python-platformdirs-117-4.9.6",
       "name": "platformdirs",
       "versionInfo": "4.9.6",
       "downloadLocation": "NOASSERTION",
@@ -12932,7 +12979,7 @@
       "comment": "Production dependency from servers/fastapi/uv.lock via uv CycloneDX export; license from installed METADATA License-Expression/License/Classifier"
     },
     {
-      "SPDXID": "SPDXRef-python-portalocker-117-3.2.0",
+      "SPDXID": "SPDXRef-python-portalocker-118-3.2.0",
       "name": "portalocker",
       "versionInfo": "3.2.0",
       "downloadLocation": "NOASSERTION",
@@ -12953,7 +13000,7 @@
       "comment": "Production dependency from servers/fastapi/uv.lock via uv CycloneDX export; license from installed METADATA License-Expression/License/Classifier"
     },
     {
-      "SPDXID": "SPDXRef-python-posthog-118-7.13.0",
+      "SPDXID": "SPDXRef-python-posthog-119-7.13.0",
       "name": "posthog",
       "versionInfo": "7.13.0",
       "downloadLocation": "NOASSERTION",
@@ -12974,7 +13021,7 @@
       "comment": "Production dependency from servers/fastapi/uv.lock via uv CycloneDX export; license from installed METADATA License-Expression/License/Classifier"
     },
     {
-      "SPDXID": "SPDXRef-python-preshed-119-3.0.13",
+      "SPDXID": "SPDXRef-python-preshed-120-3.0.13",
       "name": "preshed",
       "versionInfo": "3.0.13",
       "downloadLocation": "NOASSERTION",
@@ -12995,7 +13042,7 @@
       "comment": "Production dependency from servers/fastapi/uv.lock via uv CycloneDX export; license from installed METADATA License-Expression/License/Classifier"
     },
     {
-      "SPDXID": "SPDXRef-python-propcache-120-0.4.1",
+      "SPDXID": "SPDXRef-python-propcache-121-0.4.1",
       "name": "propcache",
       "versionInfo": "0.4.1",
       "downloadLocation": "NOASSERTION",
@@ -13016,7 +13063,7 @@
       "comment": "Production dependency from servers/fastapi/uv.lock via uv CycloneDX export; license from installed METADATA License-Expression/License/Classifier"
     },
     {
-      "SPDXID": "SPDXRef-python-protobuf-121-6.33.6",
+      "SPDXID": "SPDXRef-python-protobuf-122-6.33.6",
       "name": "protobuf",
       "versionInfo": "6.33.6",
       "downloadLocation": "NOASSERTION",
@@ -13037,7 +13084,7 @@
       "comment": "Production dependency from servers/fastapi/uv.lock via uv CycloneDX export; license from installed METADATA License-Expression/License/Classifier"
     },
     {
-      "SPDXID": "SPDXRef-python-psycopg-122-3.3.4",
+      "SPDXID": "SPDXRef-python-psycopg-123-3.3.4",
       "name": "psycopg",
       "versionInfo": "3.3.4",
       "downloadLocation": "NOASSERTION",
@@ -13058,7 +13105,7 @@
       "comment": "Production dependency from servers/fastapi/uv.lock via uv CycloneDX export; license from installed METADATA License-Expression/License/Classifier"
     },
     {
-      "SPDXID": "SPDXRef-python-psycopg-binary-123-3.3.4",
+      "SPDXID": "SPDXRef-python-psycopg-binary-124-3.3.4",
       "name": "psycopg-binary",
       "versionInfo": "3.3.4",
       "downloadLocation": "NOASSERTION",
@@ -13079,7 +13126,7 @@
       "comment": "Production dependency from servers/fastapi/uv.lock via uv CycloneDX export; license from installed METADATA License-Expression/License/Classifier"
     },
     {
-      "SPDXID": "SPDXRef-python-pwdlib-124-0.3.0",
+      "SPDXID": "SPDXRef-python-pwdlib-125-0.3.0",
       "name": "pwdlib",
       "versionInfo": "0.3.0",
       "downloadLocation": "NOASSERTION",
@@ -13100,7 +13147,7 @@
       "comment": "Production dependency from servers/fastapi/uv.lock via uv CycloneDX export; license from installed METADATA License-Expression/License/Classifier"
     },
     {
-      "SPDXID": "SPDXRef-python-py-key-value-aio-125-0.4.4",
+      "SPDXID": "SPDXRef-python-py-key-value-aio-126-0.4.4",
       "name": "py-key-value-aio",
       "versionInfo": "0.4.4",
       "downloadLocation": "NOASSERTION",
@@ -13121,7 +13168,7 @@
       "comment": "Production dependency from servers/fastapi/uv.lock via uv CycloneDX export; license from installed METADATA License-Expression/License/Classifier"
     },
     {
-      "SPDXID": "SPDXRef-python-py-rust-stemmers-126-0.1.5",
+      "SPDXID": "SPDXRef-python-py-rust-stemmers-127-0.1.5",
       "name": "py-rust-stemmers",
       "versionInfo": "0.1.5",
       "downloadLocation": "NOASSERTION",
@@ -13142,7 +13189,7 @@
       "comment": "Production dependency from servers/fastapi/uv.lock via uv CycloneDX export; license from reviewed installed license file SHA-256"
     },
     {
-      "SPDXID": "SPDXRef-python-pyasn1-127-0.6.4",
+      "SPDXID": "SPDXRef-python-pyasn1-128-0.6.4",
       "name": "pyasn1",
       "versionInfo": "0.6.4",
       "downloadLocation": "NOASSERTION",
@@ -13163,7 +13210,7 @@
       "comment": "Production dependency from servers/fastapi/uv.lock via uv CycloneDX export; license from installed METADATA License-Expression/License/Classifier"
     },
     {
-      "SPDXID": "SPDXRef-python-pyasn1-modules-128-0.4.2",
+      "SPDXID": "SPDXRef-python-pyasn1-modules-129-0.4.2",
       "name": "pyasn1-modules",
       "versionInfo": "0.4.2",
       "downloadLocation": "NOASSERTION",
@@ -13184,7 +13231,7 @@
       "comment": "Production dependency from servers/fastapi/uv.lock via uv CycloneDX export; license from installed METADATA License-Expression/License/Classifier"
     },
     {
-      "SPDXID": "SPDXRef-python-pycparser-129-3.0",
+      "SPDXID": "SPDXRef-python-pycparser-130-3.0",
       "name": "pycparser",
       "versionInfo": "3.0",
       "downloadLocation": "NOASSERTION",
@@ -13205,7 +13252,7 @@
       "comment": "Production dependency from servers/fastapi/uv.lock via uv CycloneDX export; license from installed METADATA License-Expression/License/Classifier"
     },
     {
-      "SPDXID": "SPDXRef-python-pydantic-130-2.13.3",
+      "SPDXID": "SPDXRef-python-pydantic-131-2.13.3",
       "name": "pydantic",
       "versionInfo": "2.13.3",
       "downloadLocation": "NOASSERTION",
@@ -13226,7 +13273,7 @@
       "comment": "Production dependency from servers/fastapi/uv.lock via uv CycloneDX export; license from installed METADATA License-Expression/License/Classifier"
     },
     {
-      "SPDXID": "SPDXRef-python-pydantic-core-131-2.46.3",
+      "SPDXID": "SPDXRef-python-pydantic-core-132-2.46.3",
       "name": "pydantic-core",
       "versionInfo": "2.46.3",
       "downloadLocation": "NOASSERTION",
@@ -13247,7 +13294,7 @@
       "comment": "Production dependency from servers/fastapi/uv.lock via uv CycloneDX export; license from installed METADATA License-Expression/License/Classifier"
     },
     {
-      "SPDXID": "SPDXRef-python-pydantic-extra-types-132-2.11.1",
+      "SPDXID": "SPDXRef-python-pydantic-extra-types-133-2.11.1",
       "name": "pydantic-extra-types",
       "versionInfo": "2.11.1",
       "downloadLocation": "NOASSERTION",
@@ -13268,7 +13315,7 @@
       "comment": "Production dependency from servers/fastapi/uv.lock via uv CycloneDX export; license from installed METADATA License-Expression/License/Classifier"
     },
     {
-      "SPDXID": "SPDXRef-python-pydantic-settings-133-2.14.2",
+      "SPDXID": "SPDXRef-python-pydantic-settings-134-2.14.2",
       "name": "pydantic-settings",
       "versionInfo": "2.14.2",
       "downloadLocation": "NOASSERTION",
@@ -13289,7 +13336,7 @@
       "comment": "Production dependency from servers/fastapi/uv.lock via uv CycloneDX export; license from installed METADATA License-Expression/License/Classifier"
     },
     {
-      "SPDXID": "SPDXRef-python-pygments-134-2.20.0",
+      "SPDXID": "SPDXRef-python-pygments-135-2.20.0",
       "name": "pygments",
       "versionInfo": "2.20.0",
       "downloadLocation": "NOASSERTION",
@@ -13310,7 +13357,7 @@
       "comment": "Production dependency from servers/fastapi/uv.lock via uv CycloneDX export; license from installed METADATA License-Expression/License/Classifier"
     },
     {
-      "SPDXID": "SPDXRef-python-pyjwt-135-2.13.0",
+      "SPDXID": "SPDXRef-python-pyjwt-136-2.13.0",
       "name": "pyjwt",
       "versionInfo": "2.13.0",
       "downloadLocation": "NOASSERTION",
@@ -13331,7 +13378,7 @@
       "comment": "Production dependency from servers/fastapi/uv.lock via uv CycloneDX export; license from installed METADATA License-Expression/License/Classifier"
     },
     {
-      "SPDXID": "SPDXRef-python-pymysql-136-1.1.2",
+      "SPDXID": "SPDXRef-python-pymysql-137-1.1.2",
       "name": "pymysql",
       "versionInfo": "1.1.2",
       "downloadLocation": "NOASSERTION",
@@ -13352,7 +13399,7 @@
       "comment": "Production dependency from servers/fastapi/uv.lock via uv CycloneDX export; license from installed METADATA License-Expression/License/Classifier"
     },
     {
-      "SPDXID": "SPDXRef-python-pypdfium2-137-5.7.1",
+      "SPDXID": "SPDXRef-python-pypdfium2-138-5.7.1",
       "name": "pypdfium2",
       "versionInfo": "5.7.1",
       "downloadLocation": "NOASSERTION",
@@ -13373,7 +13420,7 @@
       "comment": "Production dependency from servers/fastapi/uv.lock via uv CycloneDX export; license from installed METADATA License-Expression/License/Classifier"
     },
     {
-      "SPDXID": "SPDXRef-python-pyperclip-138-1.11.0",
+      "SPDXID": "SPDXRef-python-pyperclip-139-1.11.0",
       "name": "pyperclip",
       "versionInfo": "1.11.0",
       "downloadLocation": "NOASSERTION",
@@ -13394,7 +13441,7 @@
       "comment": "Production dependency from servers/fastapi/uv.lock via uv CycloneDX export; license from installed METADATA License-Expression/License/Classifier"
     },
     {
-      "SPDXID": "SPDXRef-python-python-dateutil-139-2.9.0.post0",
+      "SPDXID": "SPDXRef-python-python-dateutil-140-2.9.0.post0",
       "name": "python-dateutil",
       "versionInfo": "2.9.0.post0",
       "downloadLocation": "NOASSERTION",
@@ -13415,7 +13462,7 @@
       "comment": "Production dependency from servers/fastapi/uv.lock via uv CycloneDX export; license from installed METADATA License-Expression/License/Classifier"
     },
     {
-      "SPDXID": "SPDXRef-python-python-dotenv-140-1.2.2",
+      "SPDXID": "SPDXRef-python-python-dotenv-141-1.2.2",
       "name": "python-dotenv",
       "versionInfo": "1.2.2",
       "downloadLocation": "NOASSERTION",
@@ -13436,7 +13483,7 @@
       "comment": "Production dependency from servers/fastapi/uv.lock via uv CycloneDX export; license from installed METADATA License-Expression/License/Classifier"
     },
     {
-      "SPDXID": "SPDXRef-python-python-multipart-141-0.0.32",
+      "SPDXID": "SPDXRef-python-python-multipart-142-0.0.32",
       "name": "python-multipart",
       "versionInfo": "0.0.32",
       "downloadLocation": "NOASSERTION",
@@ -13457,7 +13504,7 @@
       "comment": "Production dependency from servers/fastapi/uv.lock via uv CycloneDX export; license from installed METADATA License-Expression/License/Classifier"
     },
     {
-      "SPDXID": "SPDXRef-python-python-pptx-142-1.0.2",
+      "SPDXID": "SPDXRef-python-python-pptx-143-1.0.2",
       "name": "python-pptx",
       "versionInfo": "1.0.2",
       "downloadLocation": "NOASSERTION",
@@ -13478,7 +13525,7 @@
       "comment": "Production dependency from servers/fastapi/uv.lock via uv CycloneDX export; license from installed METADATA License-Expression/License/Classifier"
     },
     {
-      "SPDXID": "SPDXRef-python-pytz-143-2026.1.post1",
+      "SPDXID": "SPDXRef-python-pytz-144-2026.1.post1",
       "name": "pytz",
       "versionInfo": "2026.1.post1",
       "downloadLocation": "NOASSERTION",
@@ -13499,7 +13546,7 @@
       "comment": "Production dependency from servers/fastapi/uv.lock via uv CycloneDX export; license from installed METADATA License-Expression/License/Classifier"
     },
     {
-      "SPDXID": "SPDXRef-python-pywin32-144-311",
+      "SPDXID": "SPDXRef-python-pywin32-145-311",
       "name": "pywin32",
       "versionInfo": "311",
       "downloadLocation": "NOASSERTION",
@@ -13517,10 +13564,10 @@
       ],
       "supplier": "NOASSERTION",
       "primaryPackagePurpose": "LIBRARY",
-      "comment": "Production dependency from servers/fastapi/uv.lock via uv CycloneDX export; license from installed METADATA License-Expression/License/Classifier"
+      "comment": "Production dependency from servers/fastapi/uv.lock via uv CycloneDX export; license from reviewed platform-specific PyPI metadata https://pypi.org/pypi/pywin32/311/json"
     },
     {
-      "SPDXID": "SPDXRef-python-pywin32-ctypes-145-0.2.3",
+      "SPDXID": "SPDXRef-python-pywin32-ctypes-146-0.2.3",
       "name": "pywin32-ctypes",
       "versionInfo": "0.2.3",
       "downloadLocation": "NOASSERTION",
@@ -13538,10 +13585,10 @@
       ],
       "supplier": "NOASSERTION",
       "primaryPackagePurpose": "LIBRARY",
-      "comment": "Production dependency from servers/fastapi/uv.lock via uv CycloneDX export; license from installed METADATA License-Expression/License/Classifier"
+      "comment": "Production dependency from servers/fastapi/uv.lock via uv CycloneDX export; license from reviewed platform-specific PyPI metadata https://pypi.org/pypi/pywin32-ctypes/0.2.3/json"
     },
     {
-      "SPDXID": "SPDXRef-python-pyyaml-146-6.0.3",
+      "SPDXID": "SPDXRef-python-pyyaml-147-6.0.3",
       "name": "pyyaml",
       "versionInfo": "6.0.3",
       "downloadLocation": "NOASSERTION",
@@ -13562,7 +13609,7 @@
       "comment": "Production dependency from servers/fastapi/uv.lock via uv CycloneDX export; license from installed METADATA License-Expression/License/Classifier"
     },
     {
-      "SPDXID": "SPDXRef-python-qdrant-client-147-1.17.1",
+      "SPDXID": "SPDXRef-python-qdrant-client-148-1.17.1",
       "name": "qdrant-client",
       "versionInfo": "1.17.1",
       "downloadLocation": "NOASSERTION",
@@ -13583,7 +13630,7 @@
       "comment": "Production dependency from servers/fastapi/uv.lock via uv CycloneDX export; license from installed METADATA License-Expression/License/Classifier"
     },
     {
-      "SPDXID": "SPDXRef-python-referencing-148-0.37.0",
+      "SPDXID": "SPDXRef-python-referencing-149-0.37.0",
       "name": "referencing",
       "versionInfo": "0.37.0",
       "downloadLocation": "NOASSERTION",
@@ -13604,7 +13651,28 @@
       "comment": "Production dependency from servers/fastapi/uv.lock via uv CycloneDX export; license from installed METADATA License-Expression/License/Classifier"
     },
     {
-      "SPDXID": "SPDXRef-python-requests-149-2.33.1",
+      "SPDXID": "SPDXRef-python-regex-150-2026.9.29",
+      "name": "regex",
+      "versionInfo": "2026.9.29",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "checksums": [],
+      "licenseConcluded": "Apache-2.0 AND CNRI-Python",
+      "licenseDeclared": "Apache-2.0 AND CNRI-Python",
+      "copyrightText": "NOASSERTION",
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:pypi/regex@2026.9.29"
+        }
+      ],
+      "supplier": "NOASSERTION",
+      "primaryPackagePurpose": "LIBRARY",
+      "comment": "Production dependency from servers/fastapi/uv.lock via uv CycloneDX export; license from installed METADATA License-Expression/License/Classifier"
+    },
+    {
+      "SPDXID": "SPDXRef-python-requests-151-2.33.1",
       "name": "requests",
       "versionInfo": "2.33.1",
       "downloadLocation": "NOASSERTION",
@@ -13625,7 +13693,7 @@
       "comment": "Production dependency from servers/fastapi/uv.lock via uv CycloneDX export; license from installed METADATA License-Expression/License/Classifier"
     },
     {
-      "SPDXID": "SPDXRef-python-rich-150-15.0.0",
+      "SPDXID": "SPDXRef-python-rich-152-15.0.0",
       "name": "rich",
       "versionInfo": "15.0.0",
       "downloadLocation": "NOASSERTION",
@@ -13646,7 +13714,7 @@
       "comment": "Production dependency from servers/fastapi/uv.lock via uv CycloneDX export; license from installed METADATA License-Expression/License/Classifier"
     },
     {
-      "SPDXID": "SPDXRef-python-rich-rst-151-1.3.2",
+      "SPDXID": "SPDXRef-python-rich-rst-153-1.3.2",
       "name": "rich-rst",
       "versionInfo": "1.3.2",
       "downloadLocation": "NOASSERTION",
@@ -13667,7 +13735,7 @@
       "comment": "Production dependency from servers/fastapi/uv.lock via uv CycloneDX export; license from installed METADATA License-Expression/License/Classifier"
     },
     {
-      "SPDXID": "SPDXRef-python-rich-toolkit-152-0.19.7",
+      "SPDXID": "SPDXRef-python-rich-toolkit-154-0.19.7",
       "name": "rich-toolkit",
       "versionInfo": "0.19.7",
       "downloadLocation": "NOASSERTION",
@@ -13688,7 +13756,7 @@
       "comment": "Production dependency from servers/fastapi/uv.lock via uv CycloneDX export; license from installed METADATA License-Expression/License/Classifier"
     },
     {
-      "SPDXID": "SPDXRef-python-rignore-153-0.7.6",
+      "SPDXID": "SPDXRef-python-rignore-155-0.7.6",
       "name": "rignore",
       "versionInfo": "0.7.6",
       "downloadLocation": "NOASSERTION",
@@ -13709,7 +13777,7 @@
       "comment": "Production dependency from servers/fastapi/uv.lock via uv CycloneDX export; license from installed METADATA License-Expression/License/Classifier"
     },
     {
-      "SPDXID": "SPDXRef-python-rpds-py-154-0.30.0",
+      "SPDXID": "SPDXRef-python-rpds-py-156-0.30.0",
       "name": "rpds-py",
       "versionInfo": "0.30.0",
       "downloadLocation": "NOASSERTION",
@@ -13730,7 +13798,7 @@
       "comment": "Production dependency from servers/fastapi/uv.lock via uv CycloneDX export; license from installed METADATA License-Expression/License/Classifier"
     },
     {
-      "SPDXID": "SPDXRef-python-s3transfer-155-0.16.1",
+      "SPDXID": "SPDXRef-python-s3transfer-157-0.16.1",
       "name": "s3transfer",
       "versionInfo": "0.16.1",
       "downloadLocation": "NOASSERTION",
@@ -13751,7 +13819,7 @@
       "comment": "Production dependency from servers/fastapi/uv.lock via uv CycloneDX export; license from installed METADATA License-Expression/License/Classifier"
     },
     {
-      "SPDXID": "SPDXRef-python-secretstorage-156-3.5.0",
+      "SPDXID": "SPDXRef-python-secretstorage-158-3.5.0",
       "name": "secretstorage",
       "versionInfo": "3.5.0",
       "downloadLocation": "NOASSERTION",
@@ -13769,10 +13837,10 @@
       ],
       "supplier": "NOASSERTION",
       "primaryPackagePurpose": "LIBRARY",
-      "comment": "Production dependency from servers/fastapi/uv.lock via uv CycloneDX export; license from reviewed platform-specific PyPI metadata https://pypi.org/pypi/secretstorage/3.5.0/json"
+      "comment": "Production dependency from servers/fastapi/uv.lock via uv CycloneDX export; license from installed METADATA License-Expression/License/Classifier"
     },
     {
-      "SPDXID": "SPDXRef-python-sentry-sdk-157-2.58.0",
+      "SPDXID": "SPDXRef-python-sentry-sdk-159-2.58.0",
       "name": "sentry-sdk",
       "versionInfo": "2.58.0",
       "downloadLocation": "NOASSERTION",
@@ -13793,7 +13861,7 @@
       "comment": "Production dependency from servers/fastapi/uv.lock via uv CycloneDX export; license from installed METADATA License-Expression/License/Classifier"
     },
     {
-      "SPDXID": "SPDXRef-python-setuptools-158-82.0.1",
+      "SPDXID": "SPDXRef-python-setuptools-160-82.0.1",
       "name": "setuptools",
       "versionInfo": "82.0.1",
       "downloadLocation": "NOASSERTION",
@@ -13814,7 +13882,7 @@
       "comment": "Production dependency from servers/fastapi/uv.lock via uv CycloneDX export; license from installed METADATA License-Expression/License/Classifier"
     },
     {
-      "SPDXID": "SPDXRef-python-shellingham-159-1.5.4",
+      "SPDXID": "SPDXRef-python-shellingham-161-1.5.4",
       "name": "shellingham",
       "versionInfo": "1.5.4",
       "downloadLocation": "NOASSERTION",
@@ -13835,7 +13903,7 @@
       "comment": "Production dependency from servers/fastapi/uv.lock via uv CycloneDX export; license from installed METADATA License-Expression/License/Classifier"
     },
     {
-      "SPDXID": "SPDXRef-python-six-160-1.17.0",
+      "SPDXID": "SPDXRef-python-six-162-1.17.0",
       "name": "six",
       "versionInfo": "1.17.0",
       "downloadLocation": "NOASSERTION",
@@ -13856,7 +13924,7 @@
       "comment": "Production dependency from servers/fastapi/uv.lock via uv CycloneDX export; license from installed METADATA License-Expression/License/Classifier"
     },
     {
-      "SPDXID": "SPDXRef-python-smart-open-161-7.6.0",
+      "SPDXID": "SPDXRef-python-smart-open-163-7.6.0",
       "name": "smart-open",
       "versionInfo": "7.6.0",
       "downloadLocation": "NOASSERTION",
@@ -13877,7 +13945,7 @@
       "comment": "Production dependency from servers/fastapi/uv.lock via uv CycloneDX export; license from installed METADATA License-Expression/License/Classifier"
     },
     {
-      "SPDXID": "SPDXRef-python-sniffio-162-1.3.1",
+      "SPDXID": "SPDXRef-python-sniffio-164-1.3.1",
       "name": "sniffio",
       "versionInfo": "1.3.1",
       "downloadLocation": "NOASSERTION",
@@ -13898,7 +13966,7 @@
       "comment": "Production dependency from servers/fastapi/uv.lock via uv CycloneDX export; license from installed METADATA License-Expression/License/Classifier"
     },
     {
-      "SPDXID": "SPDXRef-python-spacy-163-3.8.14",
+      "SPDXID": "SPDXRef-python-spacy-165-3.8.14",
       "name": "spacy",
       "versionInfo": "3.8.14",
       "downloadLocation": "NOASSERTION",
@@ -13919,7 +13987,7 @@
       "comment": "Production dependency from servers/fastapi/uv.lock via uv CycloneDX export; license from installed METADATA License-Expression/License/Classifier"
     },
     {
-      "SPDXID": "SPDXRef-python-spacy-legacy-164-3.0.12",
+      "SPDXID": "SPDXRef-python-spacy-legacy-166-3.0.12",
       "name": "spacy-legacy",
       "versionInfo": "3.0.12",
       "downloadLocation": "NOASSERTION",
@@ -13940,7 +14008,7 @@
       "comment": "Production dependency from servers/fastapi/uv.lock via uv CycloneDX export; license from installed METADATA License-Expression/License/Classifier"
     },
     {
-      "SPDXID": "SPDXRef-python-spacy-loggers-165-1.0.5",
+      "SPDXID": "SPDXRef-python-spacy-loggers-167-1.0.5",
       "name": "spacy-loggers",
       "versionInfo": "1.0.5",
       "downloadLocation": "NOASSERTION",
@@ -13961,7 +14029,7 @@
       "comment": "Production dependency from servers/fastapi/uv.lock via uv CycloneDX export; license from installed METADATA License-Expression/License/Classifier"
     },
     {
-      "SPDXID": "SPDXRef-python-sqlalchemy-166-2.0.49",
+      "SPDXID": "SPDXRef-python-sqlalchemy-168-2.0.49",
       "name": "sqlalchemy",
       "versionInfo": "2.0.49",
       "downloadLocation": "NOASSERTION",
@@ -13982,7 +14050,7 @@
       "comment": "Production dependency from servers/fastapi/uv.lock via uv CycloneDX export; license from installed METADATA License-Expression/License/Classifier"
     },
     {
-      "SPDXID": "SPDXRef-python-sqlmodel-167-0.0.38",
+      "SPDXID": "SPDXRef-python-sqlmodel-169-0.0.38",
       "name": "sqlmodel",
       "versionInfo": "0.0.38",
       "downloadLocation": "NOASSERTION",
@@ -14003,7 +14071,7 @@
       "comment": "Production dependency from servers/fastapi/uv.lock via uv CycloneDX export; license from installed METADATA License-Expression/License/Classifier"
     },
     {
-      "SPDXID": "SPDXRef-python-srsly-168-2.5.3",
+      "SPDXID": "SPDXRef-python-srsly-170-2.5.3",
       "name": "srsly",
       "versionInfo": "2.5.3",
       "downloadLocation": "NOASSERTION",
@@ -14024,7 +14092,7 @@
       "comment": "Production dependency from servers/fastapi/uv.lock via uv CycloneDX export; license from installed METADATA License-Expression/License/Classifier"
     },
     {
-      "SPDXID": "SPDXRef-python-sse-starlette-169-3.3.4",
+      "SPDXID": "SPDXRef-python-sse-starlette-171-3.3.4",
       "name": "sse-starlette",
       "versionInfo": "3.3.4",
       "downloadLocation": "NOASSERTION",
@@ -14045,7 +14113,7 @@
       "comment": "Production dependency from servers/fastapi/uv.lock via uv CycloneDX export; license from installed METADATA License-Expression/License/Classifier"
     },
     {
-      "SPDXID": "SPDXRef-python-starlette-170-1.3.1",
+      "SPDXID": "SPDXRef-python-starlette-172-1.3.1",
       "name": "starlette",
       "versionInfo": "1.3.1",
       "downloadLocation": "NOASSERTION",
@@ -14066,7 +14134,7 @@
       "comment": "Production dependency from servers/fastapi/uv.lock via uv CycloneDX export; license from installed METADATA License-Expression/License/Classifier"
     },
     {
-      "SPDXID": "SPDXRef-python-sympy-171-1.14.0",
+      "SPDXID": "SPDXRef-python-sympy-173-1.14.0",
       "name": "sympy",
       "versionInfo": "1.14.0",
       "downloadLocation": "NOASSERTION",
@@ -14087,7 +14155,7 @@
       "comment": "Production dependency from servers/fastapi/uv.lock via uv CycloneDX export; license from installed METADATA License-Expression/License/Classifier"
     },
     {
-      "SPDXID": "SPDXRef-python-tenacity-172-9.1.4",
+      "SPDXID": "SPDXRef-python-tenacity-174-9.1.4",
       "name": "tenacity",
       "versionInfo": "9.1.4",
       "downloadLocation": "NOASSERTION",
@@ -14108,7 +14176,7 @@
       "comment": "Production dependency from servers/fastapi/uv.lock via uv CycloneDX export; license from installed METADATA License-Expression/License/Classifier"
     },
     {
-      "SPDXID": "SPDXRef-python-thinc-173-8.3.13",
+      "SPDXID": "SPDXRef-python-thinc-175-8.3.13",
       "name": "thinc",
       "versionInfo": "8.3.13",
       "downloadLocation": "NOASSERTION",
@@ -14129,7 +14197,7 @@
       "comment": "Production dependency from servers/fastapi/uv.lock via uv CycloneDX export; license from installed METADATA License-Expression/License/Classifier"
     },
     {
-      "SPDXID": "SPDXRef-python-tinycss2-174-1.5.1",
+      "SPDXID": "SPDXRef-python-tinycss2-176-1.5.1",
       "name": "tinycss2",
       "versionInfo": "1.5.1",
       "downloadLocation": "NOASSERTION",
@@ -14150,7 +14218,7 @@
       "comment": "Production dependency from servers/fastapi/uv.lock via uv CycloneDX export; license from installed METADATA License-Expression/License/Classifier"
     },
     {
-      "SPDXID": "SPDXRef-python-tokenizers-175-0.22.2",
+      "SPDXID": "SPDXRef-python-tokenizers-177-0.22.2",
       "name": "tokenizers",
       "versionInfo": "0.22.2",
       "downloadLocation": "NOASSERTION",
@@ -14171,7 +14239,7 @@
       "comment": "Production dependency from servers/fastapi/uv.lock via uv CycloneDX export; license from installed METADATA License-Expression/License/Classifier"
     },
     {
-      "SPDXID": "SPDXRef-python-tqdm-176-4.67.3",
+      "SPDXID": "SPDXRef-python-tqdm-178-4.67.3",
       "name": "tqdm",
       "versionInfo": "4.67.3",
       "downloadLocation": "NOASSERTION",
@@ -14192,7 +14260,7 @@
       "comment": "Production dependency from servers/fastapi/uv.lock via uv CycloneDX export; license from installed METADATA License-Expression/License/Classifier"
     },
     {
-      "SPDXID": "SPDXRef-python-typer-177-0.24.1",
+      "SPDXID": "SPDXRef-python-typer-179-0.24.1",
       "name": "typer",
       "versionInfo": "0.24.1",
       "downloadLocation": "NOASSERTION",
@@ -14213,7 +14281,7 @@
       "comment": "Production dependency from servers/fastapi/uv.lock via uv CycloneDX export; license from installed METADATA License-Expression/License/Classifier"
     },
     {
-      "SPDXID": "SPDXRef-python-typing-extensions-178-4.15.0",
+      "SPDXID": "SPDXRef-python-typing-extensions-180-4.15.0",
       "name": "typing-extensions",
       "versionInfo": "4.15.0",
       "downloadLocation": "NOASSERTION",
@@ -14234,7 +14302,7 @@
       "comment": "Production dependency from servers/fastapi/uv.lock via uv CycloneDX export; license from installed METADATA License-Expression/License/Classifier"
     },
     {
-      "SPDXID": "SPDXRef-python-typing-inspection-179-0.4.2",
+      "SPDXID": "SPDXRef-python-typing-inspection-181-0.4.2",
       "name": "typing-inspection",
       "versionInfo": "0.4.2",
       "downloadLocation": "NOASSERTION",
@@ -14255,7 +14323,7 @@
       "comment": "Production dependency from servers/fastapi/uv.lock via uv CycloneDX export; license from installed METADATA License-Expression/License/Classifier"
     },
     {
-      "SPDXID": "SPDXRef-python-tzdata-180-2026.2",
+      "SPDXID": "SPDXRef-python-tzdata-182-2026.2",
       "name": "tzdata",
       "versionInfo": "2026.2",
       "downloadLocation": "NOASSERTION",
@@ -14273,10 +14341,10 @@
       ],
       "supplier": "NOASSERTION",
       "primaryPackagePurpose": "LIBRARY",
-      "comment": "Production dependency from servers/fastapi/uv.lock via uv CycloneDX export; license from installed METADATA License-Expression/License/Classifier"
+      "comment": "Production dependency from servers/fastapi/uv.lock via uv CycloneDX export; license from reviewed platform-specific PyPI metadata https://pypi.org/pypi/tzdata/2026.2/json"
     },
     {
-      "SPDXID": "SPDXRef-python-uncalled-for-181-0.3.1",
+      "SPDXID": "SPDXRef-python-uncalled-for-183-0.3.1",
       "name": "uncalled-for",
       "versionInfo": "0.3.1",
       "downloadLocation": "NOASSERTION",
@@ -14297,7 +14365,7 @@
       "comment": "Production dependency from servers/fastapi/uv.lock via uv CycloneDX export; license from installed METADATA License-Expression/License/Classifier"
     },
     {
-      "SPDXID": "SPDXRef-python-urllib3-182-2.7.0",
+      "SPDXID": "SPDXRef-python-urllib3-184-2.7.0",
       "name": "urllib3",
       "versionInfo": "2.7.0",
       "downloadLocation": "NOASSERTION",
@@ -14318,7 +14386,7 @@
       "comment": "Production dependency from servers/fastapi/uv.lock via uv CycloneDX export; license from installed METADATA License-Expression/License/Classifier"
     },
     {
-      "SPDXID": "SPDXRef-python-uvicorn-183-0.45.0",
+      "SPDXID": "SPDXRef-python-uvicorn-185-0.45.0",
       "name": "uvicorn",
       "versionInfo": "0.45.0",
       "downloadLocation": "NOASSERTION",
@@ -14339,7 +14407,7 @@
       "comment": "Production dependency from servers/fastapi/uv.lock via uv CycloneDX export; license from installed METADATA License-Expression/License/Classifier"
     },
     {
-      "SPDXID": "SPDXRef-python-uvloop-184-0.22.1",
+      "SPDXID": "SPDXRef-python-uvloop-186-0.22.1",
       "name": "uvloop",
       "versionInfo": "0.22.1",
       "downloadLocation": "NOASSERTION",
@@ -14357,10 +14425,10 @@
       ],
       "supplier": "NOASSERTION",
       "primaryPackagePurpose": "LIBRARY",
-      "comment": "Production dependency from servers/fastapi/uv.lock via uv CycloneDX export; license from reviewed platform-specific PyPI metadata https://pypi.org/pypi/uvloop/0.22.1/json"
+      "comment": "Production dependency from servers/fastapi/uv.lock via uv CycloneDX export; license from installed METADATA License-Expression/License/Classifier"
     },
     {
-      "SPDXID": "SPDXRef-python-wasabi-185-1.1.3",
+      "SPDXID": "SPDXRef-python-wasabi-187-1.1.3",
       "name": "wasabi",
       "versionInfo": "1.1.3",
       "downloadLocation": "NOASSERTION",
@@ -14381,7 +14449,7 @@
       "comment": "Production dependency from servers/fastapi/uv.lock via uv CycloneDX export; license from installed METADATA License-Expression/License/Classifier"
     },
     {
-      "SPDXID": "SPDXRef-python-watchfiles-186-1.1.1",
+      "SPDXID": "SPDXRef-python-watchfiles-188-1.1.1",
       "name": "watchfiles",
       "versionInfo": "1.1.1",
       "downloadLocation": "NOASSERTION",
@@ -14402,7 +14470,7 @@
       "comment": "Production dependency from servers/fastapi/uv.lock via uv CycloneDX export; license from installed METADATA License-Expression/License/Classifier"
     },
     {
-      "SPDXID": "SPDXRef-python-weasel-187-1.0.0",
+      "SPDXID": "SPDXRef-python-weasel-189-1.0.0",
       "name": "weasel",
       "versionInfo": "1.0.0",
       "downloadLocation": "NOASSERTION",
@@ -14423,7 +14491,7 @@
       "comment": "Production dependency from servers/fastapi/uv.lock via uv CycloneDX export; license from installed METADATA License-Expression/License/Classifier"
     },
     {
-      "SPDXID": "SPDXRef-python-webencodings-188-0.6.1",
+      "SPDXID": "SPDXRef-python-webencodings-190-0.6.1",
       "name": "webencodings",
       "versionInfo": "0.6.1",
       "downloadLocation": "NOASSERTION",
@@ -14444,7 +14512,7 @@
       "comment": "Production dependency from servers/fastapi/uv.lock via uv CycloneDX export; license from installed METADATA License-Expression/License/Classifier"
     },
     {
-      "SPDXID": "SPDXRef-python-websockets-189-16.0",
+      "SPDXID": "SPDXRef-python-websockets-191-16.0",
       "name": "websockets",
       "versionInfo": "16.0",
       "downloadLocation": "NOASSERTION",
@@ -14465,7 +14533,7 @@
       "comment": "Production dependency from servers/fastapi/uv.lock via uv CycloneDX export; license from installed METADATA License-Expression/License/Classifier"
     },
     {
-      "SPDXID": "SPDXRef-python-win32-setctime-190-1.2.0",
+      "SPDXID": "SPDXRef-python-win32-setctime-192-1.2.0",
       "name": "win32-setctime",
       "versionInfo": "1.2.0",
       "downloadLocation": "NOASSERTION",
@@ -14483,10 +14551,10 @@
       ],
       "supplier": "NOASSERTION",
       "primaryPackagePurpose": "LIBRARY",
-      "comment": "Production dependency from servers/fastapi/uv.lock via uv CycloneDX export; license from installed METADATA License-Expression/License/Classifier"
+      "comment": "Production dependency from servers/fastapi/uv.lock via uv CycloneDX export; license from reviewed platform-specific PyPI metadata https://pypi.org/pypi/win32-setctime/1.2.0/json"
     },
     {
-      "SPDXID": "SPDXRef-python-wrapt-191-2.1.2",
+      "SPDXID": "SPDXRef-python-wrapt-193-2.1.2",
       "name": "wrapt",
       "versionInfo": "2.1.2",
       "downloadLocation": "NOASSERTION",
@@ -14507,7 +14575,7 @@
       "comment": "Production dependency from servers/fastapi/uv.lock via uv CycloneDX export; license from installed METADATA License-Expression/License/Classifier"
     },
     {
-      "SPDXID": "SPDXRef-python-xlsxwriter-192-3.2.9",
+      "SPDXID": "SPDXRef-python-xlsxwriter-194-3.2.9",
       "name": "xlsxwriter",
       "versionInfo": "3.2.9",
       "downloadLocation": "NOASSERTION",
@@ -14528,7 +14596,7 @@
       "comment": "Production dependency from servers/fastapi/uv.lock via uv CycloneDX export; license from installed METADATA License-Expression/License/Classifier"
     },
     {
-      "SPDXID": "SPDXRef-python-yarl-193-1.23.0",
+      "SPDXID": "SPDXRef-python-yarl-195-1.23.0",
       "name": "yarl",
       "versionInfo": "1.23.0",
       "downloadLocation": "NOASSERTION",
@@ -14549,7 +14617,7 @@
       "comment": "Production dependency from servers/fastapi/uv.lock via uv CycloneDX export; license from installed METADATA License-Expression/License/Classifier"
     },
     {
-      "SPDXID": "SPDXRef-python-zipp-194-3.23.1",
+      "SPDXID": "SPDXRef-python-zipp-196-3.23.1",
       "name": "zipp",
       "versionInfo": "3.23.1",
       "downloadLocation": "NOASSERTION",
@@ -15265,6 +15333,11 @@
       "spdxElementId": "SPDXRef-Package-presenton",
       "relationshipType": "DEPENDS_ON",
       "relatedSpdxElement": "SPDXRef-npm-nextjs-node-modules-next-intl-node-modules-swc-core"
+    },
+    {
+      "spdxElementId": "SPDXRef-Package-presenton",
+      "relationshipType": "DEPENDS_ON",
+      "relatedSpdxElement": "SPDXRef-npm-nextjs-node-modules-next-intl-node-modules-swc-helpers"
     },
     {
       "spdxElementId": "SPDXRef-Package-presenton",
@@ -16774,787 +16847,797 @@
     {
       "spdxElementId": "SPDXRef-Package-presenton",
       "relationshipType": "DEPENDS_ON",
-      "relatedSpdxElement": "SPDXRef-python-dirtyjson-38-1.0.8"
+      "relatedSpdxElement": "SPDXRef-python-defusedxml-38-0.7.1"
     },
     {
       "spdxElementId": "SPDXRef-Package-presenton",
       "relationshipType": "DEPENDS_ON",
-      "relatedSpdxElement": "SPDXRef-python-distro-39-1.9.0"
+      "relatedSpdxElement": "SPDXRef-python-dirtyjson-39-1.0.8"
     },
     {
       "spdxElementId": "SPDXRef-Package-presenton",
       "relationshipType": "DEPENDS_ON",
-      "relatedSpdxElement": "SPDXRef-python-dnspython-40-2.8.0"
+      "relatedSpdxElement": "SPDXRef-python-distro-40-1.9.0"
     },
     {
       "spdxElementId": "SPDXRef-Package-presenton",
       "relationshipType": "DEPENDS_ON",
-      "relatedSpdxElement": "SPDXRef-python-docstring-parser-41-0.18.0"
+      "relatedSpdxElement": "SPDXRef-python-dnspython-41-2.8.0"
     },
     {
       "spdxElementId": "SPDXRef-Package-presenton",
       "relationshipType": "DEPENDS_ON",
-      "relatedSpdxElement": "SPDXRef-python-docutils-42-0.22.4"
+      "relatedSpdxElement": "SPDXRef-python-docstring-parser-42-0.18.0"
     },
     {
       "spdxElementId": "SPDXRef-Package-presenton",
       "relationshipType": "DEPENDS_ON",
-      "relatedSpdxElement": "SPDXRef-python-email-validator-43-2.3.0"
+      "relatedSpdxElement": "SPDXRef-python-docutils-43-0.22.4"
     },
     {
       "spdxElementId": "SPDXRef-Package-presenton",
       "relationshipType": "DEPENDS_ON",
-      "relatedSpdxElement": "SPDXRef-python-exceptiongroup-44-1.3.1"
+      "relatedSpdxElement": "SPDXRef-python-email-validator-44-2.3.0"
     },
     {
       "spdxElementId": "SPDXRef-Package-presenton",
       "relationshipType": "DEPENDS_ON",
-      "relatedSpdxElement": "SPDXRef-python-fastapi-45-0.136.0"
+      "relatedSpdxElement": "SPDXRef-python-exceptiongroup-45-1.3.1"
     },
     {
       "spdxElementId": "SPDXRef-Package-presenton",
       "relationshipType": "DEPENDS_ON",
-      "relatedSpdxElement": "SPDXRef-python-fastapi-cli-46-0.0.24"
+      "relatedSpdxElement": "SPDXRef-python-fastapi-46-0.136.0"
     },
     {
       "spdxElementId": "SPDXRef-Package-presenton",
       "relationshipType": "DEPENDS_ON",
-      "relatedSpdxElement": "SPDXRef-python-fastapi-cloud-cli-47-0.17.0"
+      "relatedSpdxElement": "SPDXRef-python-fastapi-cli-47-0.0.24"
     },
     {
       "spdxElementId": "SPDXRef-Package-presenton",
       "relationshipType": "DEPENDS_ON",
-      "relatedSpdxElement": "SPDXRef-python-fastapi-users-48-15.0.5"
+      "relatedSpdxElement": "SPDXRef-python-fastapi-cloud-cli-48-0.17.0"
     },
     {
       "spdxElementId": "SPDXRef-Package-presenton",
       "relationshipType": "DEPENDS_ON",
-      "relatedSpdxElement": "SPDXRef-python-fastapi-users-db-sqlalchemy-49-7.0.0"
+      "relatedSpdxElement": "SPDXRef-python-fastapi-users-49-15.0.5"
     },
     {
       "spdxElementId": "SPDXRef-Package-presenton",
       "relationshipType": "DEPENDS_ON",
-      "relatedSpdxElement": "SPDXRef-python-fastar-50-0.11.0"
+      "relatedSpdxElement": "SPDXRef-python-fastapi-users-db-sqlalchemy-50-7.0.0"
     },
     {
       "spdxElementId": "SPDXRef-Package-presenton",
       "relationshipType": "DEPENDS_ON",
-      "relatedSpdxElement": "SPDXRef-python-fastembed-51-0.8.0"
+      "relatedSpdxElement": "SPDXRef-python-fastar-51-0.11.0"
     },
     {
       "spdxElementId": "SPDXRef-Package-presenton",
       "relationshipType": "DEPENDS_ON",
-      "relatedSpdxElement": "SPDXRef-python-fastembed-vectorstore-52-0.5.3"
+      "relatedSpdxElement": "SPDXRef-python-fastembed-52-0.8.0"
     },
     {
       "spdxElementId": "SPDXRef-Package-presenton",
       "relationshipType": "DEPENDS_ON",
-      "relatedSpdxElement": "SPDXRef-python-fastmcp-53-3.2.4"
+      "relatedSpdxElement": "SPDXRef-python-fastembed-vectorstore-53-0.5.3"
     },
     {
       "spdxElementId": "SPDXRef-Package-presenton",
       "relationshipType": "DEPENDS_ON",
-      "relatedSpdxElement": "SPDXRef-python-filelock-54-3.29.0"
+      "relatedSpdxElement": "SPDXRef-python-fastmcp-54-3.2.4"
     },
     {
       "spdxElementId": "SPDXRef-Package-presenton",
       "relationshipType": "DEPENDS_ON",
-      "relatedSpdxElement": "SPDXRef-python-flatbuffers-55-25.12.19"
+      "relatedSpdxElement": "SPDXRef-python-filelock-55-3.29.0"
     },
     {
       "spdxElementId": "SPDXRef-Package-presenton",
       "relationshipType": "DEPENDS_ON",
-      "relatedSpdxElement": "SPDXRef-python-fonttools-56-4.63.0"
+      "relatedSpdxElement": "SPDXRef-python-flatbuffers-56-25.12.19"
     },
     {
       "spdxElementId": "SPDXRef-Package-presenton",
       "relationshipType": "DEPENDS_ON",
-      "relatedSpdxElement": "SPDXRef-python-frozenlist-57-1.8.0"
+      "relatedSpdxElement": "SPDXRef-python-fonttools-57-4.63.0"
     },
     {
       "spdxElementId": "SPDXRef-Package-presenton",
       "relationshipType": "DEPENDS_ON",
-      "relatedSpdxElement": "SPDXRef-python-fsspec-58-2026.3.0"
+      "relatedSpdxElement": "SPDXRef-python-frozenlist-58-1.8.0"
     },
     {
       "spdxElementId": "SPDXRef-Package-presenton",
       "relationshipType": "DEPENDS_ON",
-      "relatedSpdxElement": "SPDXRef-python-google-auth-59-2.49.2"
+      "relatedSpdxElement": "SPDXRef-python-fsspec-59-2026.3.0"
     },
     {
       "spdxElementId": "SPDXRef-Package-presenton",
       "relationshipType": "DEPENDS_ON",
-      "relatedSpdxElement": "SPDXRef-python-google-genai-60-1.73.1"
+      "relatedSpdxElement": "SPDXRef-python-google-auth-60-2.49.2"
     },
     {
       "spdxElementId": "SPDXRef-Package-presenton",
       "relationshipType": "DEPENDS_ON",
-      "relatedSpdxElement": "SPDXRef-python-greenlet-61-3.4.0"
+      "relatedSpdxElement": "SPDXRef-python-google-genai-61-1.73.1"
     },
     {
       "spdxElementId": "SPDXRef-Package-presenton",
       "relationshipType": "DEPENDS_ON",
-      "relatedSpdxElement": "SPDXRef-python-griffelib-62-2.0.2"
+      "relatedSpdxElement": "SPDXRef-python-greenlet-62-3.4.0"
     },
     {
       "spdxElementId": "SPDXRef-Package-presenton",
       "relationshipType": "DEPENDS_ON",
-      "relatedSpdxElement": "SPDXRef-python-grpcio-63-1.80.0"
+      "relatedSpdxElement": "SPDXRef-python-griffelib-63-2.0.2"
     },
     {
       "spdxElementId": "SPDXRef-Package-presenton",
       "relationshipType": "DEPENDS_ON",
-      "relatedSpdxElement": "SPDXRef-python-h11-64-0.16.0"
+      "relatedSpdxElement": "SPDXRef-python-grpcio-64-1.80.0"
     },
     {
       "spdxElementId": "SPDXRef-Package-presenton",
       "relationshipType": "DEPENDS_ON",
-      "relatedSpdxElement": "SPDXRef-python-h2-65-4.3.0"
+      "relatedSpdxElement": "SPDXRef-python-h11-65-0.16.0"
     },
     {
       "spdxElementId": "SPDXRef-Package-presenton",
       "relationshipType": "DEPENDS_ON",
-      "relatedSpdxElement": "SPDXRef-python-hf-xet-66-1.4.3"
+      "relatedSpdxElement": "SPDXRef-python-h2-66-4.3.0"
     },
     {
       "spdxElementId": "SPDXRef-Package-presenton",
       "relationshipType": "DEPENDS_ON",
-      "relatedSpdxElement": "SPDXRef-python-hpack-67-4.1.0"
+      "relatedSpdxElement": "SPDXRef-python-hf-xet-67-1.4.3"
     },
     {
       "spdxElementId": "SPDXRef-Package-presenton",
       "relationshipType": "DEPENDS_ON",
-      "relatedSpdxElement": "SPDXRef-python-html5lib-68-1.1"
+      "relatedSpdxElement": "SPDXRef-python-hpack-68-4.1.0"
     },
     {
       "spdxElementId": "SPDXRef-Package-presenton",
       "relationshipType": "DEPENDS_ON",
-      "relatedSpdxElement": "SPDXRef-python-httpcore-69-1.0.9"
+      "relatedSpdxElement": "SPDXRef-python-html5lib-69-1.1"
     },
     {
       "spdxElementId": "SPDXRef-Package-presenton",
       "relationshipType": "DEPENDS_ON",
-      "relatedSpdxElement": "SPDXRef-python-httptools-70-0.7.1"
+      "relatedSpdxElement": "SPDXRef-python-httpcore-70-1.0.9"
     },
     {
       "spdxElementId": "SPDXRef-Package-presenton",
       "relationshipType": "DEPENDS_ON",
-      "relatedSpdxElement": "SPDXRef-python-httpx-71-0.28.1"
+      "relatedSpdxElement": "SPDXRef-python-httptools-71-0.7.1"
     },
     {
       "spdxElementId": "SPDXRef-Package-presenton",
       "relationshipType": "DEPENDS_ON",
-      "relatedSpdxElement": "SPDXRef-python-httpx-sse-72-0.4.3"
+      "relatedSpdxElement": "SPDXRef-python-httpx-72-0.28.1"
     },
     {
       "spdxElementId": "SPDXRef-Package-presenton",
       "relationshipType": "DEPENDS_ON",
-      "relatedSpdxElement": "SPDXRef-python-huggingface-hub-73-1.11.0"
+      "relatedSpdxElement": "SPDXRef-python-httpx-sse-73-0.4.3"
     },
     {
       "spdxElementId": "SPDXRef-Package-presenton",
       "relationshipType": "DEPENDS_ON",
-      "relatedSpdxElement": "SPDXRef-python-hyperframe-74-6.1.0"
+      "relatedSpdxElement": "SPDXRef-python-huggingface-hub-74-1.11.0"
     },
     {
       "spdxElementId": "SPDXRef-Package-presenton",
       "relationshipType": "DEPENDS_ON",
-      "relatedSpdxElement": "SPDXRef-python-idna-75-3.18"
+      "relatedSpdxElement": "SPDXRef-python-hyperframe-75-6.1.0"
     },
     {
       "spdxElementId": "SPDXRef-Package-presenton",
       "relationshipType": "DEPENDS_ON",
-      "relatedSpdxElement": "SPDXRef-python-importlib-metadata-76-8.7.1"
+      "relatedSpdxElement": "SPDXRef-python-idna-76-3.18"
     },
     {
       "spdxElementId": "SPDXRef-Package-presenton",
       "relationshipType": "DEPENDS_ON",
-      "relatedSpdxElement": "SPDXRef-python-jaraco-classes-77-3.4.0"
+      "relatedSpdxElement": "SPDXRef-python-importlib-metadata-77-8.7.1"
     },
     {
       "spdxElementId": "SPDXRef-Package-presenton",
       "relationshipType": "DEPENDS_ON",
-      "relatedSpdxElement": "SPDXRef-python-jaraco-context-78-6.1.2"
+      "relatedSpdxElement": "SPDXRef-python-jaraco-classes-78-3.4.0"
     },
     {
       "spdxElementId": "SPDXRef-Package-presenton",
       "relationshipType": "DEPENDS_ON",
-      "relatedSpdxElement": "SPDXRef-python-jaraco-functools-79-4.4.0"
+      "relatedSpdxElement": "SPDXRef-python-jaraco-context-79-6.1.2"
     },
     {
       "spdxElementId": "SPDXRef-Package-presenton",
       "relationshipType": "DEPENDS_ON",
-      "relatedSpdxElement": "SPDXRef-python-jeepney-80-0.9.0"
+      "relatedSpdxElement": "SPDXRef-python-jaraco-functools-80-4.4.0"
     },
     {
       "spdxElementId": "SPDXRef-Package-presenton",
       "relationshipType": "DEPENDS_ON",
-      "relatedSpdxElement": "SPDXRef-python-jinja2-81-3.1.6"
+      "relatedSpdxElement": "SPDXRef-python-jeepney-81-0.9.0"
     },
     {
       "spdxElementId": "SPDXRef-Package-presenton",
       "relationshipType": "DEPENDS_ON",
-      "relatedSpdxElement": "SPDXRef-python-jiter-82-0.14.0"
+      "relatedSpdxElement": "SPDXRef-python-jinja2-82-3.1.6"
     },
     {
       "spdxElementId": "SPDXRef-Package-presenton",
       "relationshipType": "DEPENDS_ON",
-      "relatedSpdxElement": "SPDXRef-python-jmespath-83-1.1.0"
+      "relatedSpdxElement": "SPDXRef-python-jiter-83-0.14.0"
     },
     {
       "spdxElementId": "SPDXRef-Package-presenton",
       "relationshipType": "DEPENDS_ON",
-      "relatedSpdxElement": "SPDXRef-python-joserfc-84-1.7.4"
+      "relatedSpdxElement": "SPDXRef-python-jmespath-84-1.1.0"
     },
     {
       "spdxElementId": "SPDXRef-Package-presenton",
       "relationshipType": "DEPENDS_ON",
-      "relatedSpdxElement": "SPDXRef-python-jsonref-85-1.1.0"
+      "relatedSpdxElement": "SPDXRef-python-joserfc-85-1.7.4"
     },
     {
       "spdxElementId": "SPDXRef-Package-presenton",
       "relationshipType": "DEPENDS_ON",
-      "relatedSpdxElement": "SPDXRef-python-jsonschema-86-4.26.0"
+      "relatedSpdxElement": "SPDXRef-python-jsonref-86-1.1.0"
     },
     {
       "spdxElementId": "SPDXRef-Package-presenton",
       "relationshipType": "DEPENDS_ON",
-      "relatedSpdxElement": "SPDXRef-python-jsonschema-path-87-0.4.5"
+      "relatedSpdxElement": "SPDXRef-python-jsonschema-87-4.26.0"
     },
     {
       "spdxElementId": "SPDXRef-Package-presenton",
       "relationshipType": "DEPENDS_ON",
-      "relatedSpdxElement": "SPDXRef-python-jsonschema-specifications-88-2025.9.1"
+      "relatedSpdxElement": "SPDXRef-python-jsonschema-path-88-0.4.5"
     },
     {
       "spdxElementId": "SPDXRef-Package-presenton",
       "relationshipType": "DEPENDS_ON",
-      "relatedSpdxElement": "SPDXRef-python-keyring-89-25.7.0"
+      "relatedSpdxElement": "SPDXRef-python-jsonschema-specifications-89-2025.9.1"
     },
     {
       "spdxElementId": "SPDXRef-Package-presenton",
       "relationshipType": "DEPENDS_ON",
-      "relatedSpdxElement": "SPDXRef-python-llmai-90-0.3.7"
+      "relatedSpdxElement": "SPDXRef-python-keyring-90-25.7.0"
     },
     {
       "spdxElementId": "SPDXRef-Package-presenton",
       "relationshipType": "DEPENDS_ON",
-      "relatedSpdxElement": "SPDXRef-python-loguru-91-0.7.3"
+      "relatedSpdxElement": "SPDXRef-python-llmai-91-0.3.7"
     },
     {
       "spdxElementId": "SPDXRef-Package-presenton",
       "relationshipType": "DEPENDS_ON",
-      "relatedSpdxElement": "SPDXRef-python-lxml-92-6.1.1"
+      "relatedSpdxElement": "SPDXRef-python-loguru-92-0.7.3"
     },
     {
       "spdxElementId": "SPDXRef-Package-presenton",
       "relationshipType": "DEPENDS_ON",
-      "relatedSpdxElement": "SPDXRef-python-makefun-93-1.16.0"
+      "relatedSpdxElement": "SPDXRef-python-lxml-93-6.1.1"
     },
     {
       "spdxElementId": "SPDXRef-Package-presenton",
       "relationshipType": "DEPENDS_ON",
-      "relatedSpdxElement": "SPDXRef-python-mako-94-1.3.12"
+      "relatedSpdxElement": "SPDXRef-python-makefun-94-1.16.0"
     },
     {
       "spdxElementId": "SPDXRef-Package-presenton",
       "relationshipType": "DEPENDS_ON",
-      "relatedSpdxElement": "SPDXRef-python-markdown-it-py-95-4.0.0"
+      "relatedSpdxElement": "SPDXRef-python-mako-95-1.3.12"
     },
     {
       "spdxElementId": "SPDXRef-Package-presenton",
       "relationshipType": "DEPENDS_ON",
-      "relatedSpdxElement": "SPDXRef-python-markupsafe-96-3.0.3"
+      "relatedSpdxElement": "SPDXRef-python-markdown-it-py-96-4.0.0"
     },
     {
       "spdxElementId": "SPDXRef-Package-presenton",
       "relationshipType": "DEPENDS_ON",
-      "relatedSpdxElement": "SPDXRef-python-mcp-97-1.29.0"
+      "relatedSpdxElement": "SPDXRef-python-markupsafe-97-3.0.3"
     },
     {
       "spdxElementId": "SPDXRef-Package-presenton",
       "relationshipType": "DEPENDS_ON",
-      "relatedSpdxElement": "SPDXRef-python-mdurl-98-0.1.2"
+      "relatedSpdxElement": "SPDXRef-python-mcp-98-1.29.0"
     },
     {
       "spdxElementId": "SPDXRef-Package-presenton",
       "relationshipType": "DEPENDS_ON",
-      "relatedSpdxElement": "SPDXRef-python-mem0ai-99-2.0.0"
+      "relatedSpdxElement": "SPDXRef-python-mdurl-99-0.1.2"
     },
     {
       "spdxElementId": "SPDXRef-Package-presenton",
       "relationshipType": "DEPENDS_ON",
-      "relatedSpdxElement": "SPDXRef-python-mmh3-100-5.2.1"
+      "relatedSpdxElement": "SPDXRef-python-mem0ai-100-2.0.0"
     },
     {
       "spdxElementId": "SPDXRef-Package-presenton",
       "relationshipType": "DEPENDS_ON",
-      "relatedSpdxElement": "SPDXRef-python-more-itertools-101-11.0.2"
+      "relatedSpdxElement": "SPDXRef-python-mmh3-101-5.2.1"
     },
     {
       "spdxElementId": "SPDXRef-Package-presenton",
       "relationshipType": "DEPENDS_ON",
-      "relatedSpdxElement": "SPDXRef-python-mpmath-102-1.3.0"
+      "relatedSpdxElement": "SPDXRef-python-more-itertools-102-11.0.2"
     },
     {
       "spdxElementId": "SPDXRef-Package-presenton",
       "relationshipType": "DEPENDS_ON",
-      "relatedSpdxElement": "SPDXRef-python-multidict-103-6.7.1"
+      "relatedSpdxElement": "SPDXRef-python-mpmath-103-1.3.0"
     },
     {
       "spdxElementId": "SPDXRef-Package-presenton",
       "relationshipType": "DEPENDS_ON",
-      "relatedSpdxElement": "SPDXRef-python-murmurhash-104-1.0.15"
+      "relatedSpdxElement": "SPDXRef-python-multidict-104-6.7.1"
     },
     {
       "spdxElementId": "SPDXRef-Package-presenton",
       "relationshipType": "DEPENDS_ON",
-      "relatedSpdxElement": "SPDXRef-python-numpy-105-2.4.4"
+      "relatedSpdxElement": "SPDXRef-python-murmurhash-105-1.0.15"
     },
     {
       "spdxElementId": "SPDXRef-Package-presenton",
       "relationshipType": "DEPENDS_ON",
-      "relatedSpdxElement": "SPDXRef-python-onnxruntime-106-1.24.4"
+      "relatedSpdxElement": "SPDXRef-python-numpy-106-2.4.4"
     },
     {
       "spdxElementId": "SPDXRef-Package-presenton",
       "relationshipType": "DEPENDS_ON",
-      "relatedSpdxElement": "SPDXRef-python-openai-107-2.32.0"
+      "relatedSpdxElement": "SPDXRef-python-onnxruntime-107-1.24.4"
     },
     {
       "spdxElementId": "SPDXRef-Package-presenton",
       "relationshipType": "DEPENDS_ON",
-      "relatedSpdxElement": "SPDXRef-python-openapi-pydantic-108-0.5.1"
+      "relatedSpdxElement": "SPDXRef-python-openai-108-2.32.0"
     },
     {
       "spdxElementId": "SPDXRef-Package-presenton",
       "relationshipType": "DEPENDS_ON",
-      "relatedSpdxElement": "SPDXRef-python-opentelemetry-api-109-1.41.0"
+      "relatedSpdxElement": "SPDXRef-python-openapi-pydantic-109-0.5.1"
     },
     {
       "spdxElementId": "SPDXRef-Package-presenton",
       "relationshipType": "DEPENDS_ON",
-      "relatedSpdxElement": "SPDXRef-python-packaging-110-26.1"
+      "relatedSpdxElement": "SPDXRef-python-opentelemetry-api-110-1.41.0"
     },
     {
       "spdxElementId": "SPDXRef-Package-presenton",
       "relationshipType": "DEPENDS_ON",
-      "relatedSpdxElement": "SPDXRef-python-pathable-111-0.5.0"
+      "relatedSpdxElement": "SPDXRef-python-packaging-111-26.1"
     },
     {
       "spdxElementId": "SPDXRef-Package-presenton",
       "relationshipType": "DEPENDS_ON",
-      "relatedSpdxElement": "SPDXRef-python-pathvalidate-112-3.3.1"
+      "relatedSpdxElement": "SPDXRef-python-pathable-112-0.5.0"
     },
     {
       "spdxElementId": "SPDXRef-Package-presenton",
       "relationshipType": "DEPENDS_ON",
-      "relatedSpdxElement": "SPDXRef-python-pdfminer-six-113-20251230"
+      "relatedSpdxElement": "SPDXRef-python-pathvalidate-113-3.3.1"
     },
     {
       "spdxElementId": "SPDXRef-Package-presenton",
       "relationshipType": "DEPENDS_ON",
-      "relatedSpdxElement": "SPDXRef-python-pdfplumber-114-0.11.9"
+      "relatedSpdxElement": "SPDXRef-python-pdfminer-six-114-20251230"
     },
     {
       "spdxElementId": "SPDXRef-Package-presenton",
       "relationshipType": "DEPENDS_ON",
-      "relatedSpdxElement": "SPDXRef-python-pillow-115-12.3.0"
+      "relatedSpdxElement": "SPDXRef-python-pdfplumber-115-0.11.9"
     },
     {
       "spdxElementId": "SPDXRef-Package-presenton",
       "relationshipType": "DEPENDS_ON",
-      "relatedSpdxElement": "SPDXRef-python-platformdirs-116-4.9.6"
+      "relatedSpdxElement": "SPDXRef-python-pillow-116-12.3.0"
     },
     {
       "spdxElementId": "SPDXRef-Package-presenton",
       "relationshipType": "DEPENDS_ON",
-      "relatedSpdxElement": "SPDXRef-python-portalocker-117-3.2.0"
+      "relatedSpdxElement": "SPDXRef-python-platformdirs-117-4.9.6"
     },
     {
       "spdxElementId": "SPDXRef-Package-presenton",
       "relationshipType": "DEPENDS_ON",
-      "relatedSpdxElement": "SPDXRef-python-posthog-118-7.13.0"
+      "relatedSpdxElement": "SPDXRef-python-portalocker-118-3.2.0"
     },
     {
       "spdxElementId": "SPDXRef-Package-presenton",
       "relationshipType": "DEPENDS_ON",
-      "relatedSpdxElement": "SPDXRef-python-preshed-119-3.0.13"
+      "relatedSpdxElement": "SPDXRef-python-posthog-119-7.13.0"
     },
     {
       "spdxElementId": "SPDXRef-Package-presenton",
       "relationshipType": "DEPENDS_ON",
-      "relatedSpdxElement": "SPDXRef-python-propcache-120-0.4.1"
+      "relatedSpdxElement": "SPDXRef-python-preshed-120-3.0.13"
     },
     {
       "spdxElementId": "SPDXRef-Package-presenton",
       "relationshipType": "DEPENDS_ON",
-      "relatedSpdxElement": "SPDXRef-python-protobuf-121-6.33.6"
+      "relatedSpdxElement": "SPDXRef-python-propcache-121-0.4.1"
     },
     {
       "spdxElementId": "SPDXRef-Package-presenton",
       "relationshipType": "DEPENDS_ON",
-      "relatedSpdxElement": "SPDXRef-python-psycopg-122-3.3.4"
+      "relatedSpdxElement": "SPDXRef-python-protobuf-122-6.33.6"
     },
     {
       "spdxElementId": "SPDXRef-Package-presenton",
       "relationshipType": "DEPENDS_ON",
-      "relatedSpdxElement": "SPDXRef-python-psycopg-binary-123-3.3.4"
+      "relatedSpdxElement": "SPDXRef-python-psycopg-123-3.3.4"
     },
     {
       "spdxElementId": "SPDXRef-Package-presenton",
       "relationshipType": "DEPENDS_ON",
-      "relatedSpdxElement": "SPDXRef-python-pwdlib-124-0.3.0"
+      "relatedSpdxElement": "SPDXRef-python-psycopg-binary-124-3.3.4"
     },
     {
       "spdxElementId": "SPDXRef-Package-presenton",
       "relationshipType": "DEPENDS_ON",
-      "relatedSpdxElement": "SPDXRef-python-py-key-value-aio-125-0.4.4"
+      "relatedSpdxElement": "SPDXRef-python-pwdlib-125-0.3.0"
     },
     {
       "spdxElementId": "SPDXRef-Package-presenton",
       "relationshipType": "DEPENDS_ON",
-      "relatedSpdxElement": "SPDXRef-python-py-rust-stemmers-126-0.1.5"
+      "relatedSpdxElement": "SPDXRef-python-py-key-value-aio-126-0.4.4"
     },
     {
       "spdxElementId": "SPDXRef-Package-presenton",
       "relationshipType": "DEPENDS_ON",
-      "relatedSpdxElement": "SPDXRef-python-pyasn1-127-0.6.4"
+      "relatedSpdxElement": "SPDXRef-python-py-rust-stemmers-127-0.1.5"
     },
     {
       "spdxElementId": "SPDXRef-Package-presenton",
       "relationshipType": "DEPENDS_ON",
-      "relatedSpdxElement": "SPDXRef-python-pyasn1-modules-128-0.4.2"
+      "relatedSpdxElement": "SPDXRef-python-pyasn1-128-0.6.4"
     },
     {
       "spdxElementId": "SPDXRef-Package-presenton",
       "relationshipType": "DEPENDS_ON",
-      "relatedSpdxElement": "SPDXRef-python-pycparser-129-3.0"
+      "relatedSpdxElement": "SPDXRef-python-pyasn1-modules-129-0.4.2"
     },
     {
       "spdxElementId": "SPDXRef-Package-presenton",
       "relationshipType": "DEPENDS_ON",
-      "relatedSpdxElement": "SPDXRef-python-pydantic-130-2.13.3"
+      "relatedSpdxElement": "SPDXRef-python-pycparser-130-3.0"
     },
     {
       "spdxElementId": "SPDXRef-Package-presenton",
       "relationshipType": "DEPENDS_ON",
-      "relatedSpdxElement": "SPDXRef-python-pydantic-core-131-2.46.3"
+      "relatedSpdxElement": "SPDXRef-python-pydantic-131-2.13.3"
     },
     {
       "spdxElementId": "SPDXRef-Package-presenton",
       "relationshipType": "DEPENDS_ON",
-      "relatedSpdxElement": "SPDXRef-python-pydantic-extra-types-132-2.11.1"
+      "relatedSpdxElement": "SPDXRef-python-pydantic-core-132-2.46.3"
     },
     {
       "spdxElementId": "SPDXRef-Package-presenton",
       "relationshipType": "DEPENDS_ON",
-      "relatedSpdxElement": "SPDXRef-python-pydantic-settings-133-2.14.2"
+      "relatedSpdxElement": "SPDXRef-python-pydantic-extra-types-133-2.11.1"
     },
     {
       "spdxElementId": "SPDXRef-Package-presenton",
       "relationshipType": "DEPENDS_ON",
-      "relatedSpdxElement": "SPDXRef-python-pygments-134-2.20.0"
+      "relatedSpdxElement": "SPDXRef-python-pydantic-settings-134-2.14.2"
     },
     {
       "spdxElementId": "SPDXRef-Package-presenton",
       "relationshipType": "DEPENDS_ON",
-      "relatedSpdxElement": "SPDXRef-python-pyjwt-135-2.13.0"
+      "relatedSpdxElement": "SPDXRef-python-pygments-135-2.20.0"
     },
     {
       "spdxElementId": "SPDXRef-Package-presenton",
       "relationshipType": "DEPENDS_ON",
-      "relatedSpdxElement": "SPDXRef-python-pymysql-136-1.1.2"
+      "relatedSpdxElement": "SPDXRef-python-pyjwt-136-2.13.0"
     },
     {
       "spdxElementId": "SPDXRef-Package-presenton",
       "relationshipType": "DEPENDS_ON",
-      "relatedSpdxElement": "SPDXRef-python-pypdfium2-137-5.7.1"
+      "relatedSpdxElement": "SPDXRef-python-pymysql-137-1.1.2"
     },
     {
       "spdxElementId": "SPDXRef-Package-presenton",
       "relationshipType": "DEPENDS_ON",
-      "relatedSpdxElement": "SPDXRef-python-pyperclip-138-1.11.0"
+      "relatedSpdxElement": "SPDXRef-python-pypdfium2-138-5.7.1"
     },
     {
       "spdxElementId": "SPDXRef-Package-presenton",
       "relationshipType": "DEPENDS_ON",
-      "relatedSpdxElement": "SPDXRef-python-python-dateutil-139-2.9.0.post0"
+      "relatedSpdxElement": "SPDXRef-python-pyperclip-139-1.11.0"
     },
     {
       "spdxElementId": "SPDXRef-Package-presenton",
       "relationshipType": "DEPENDS_ON",
-      "relatedSpdxElement": "SPDXRef-python-python-dotenv-140-1.2.2"
+      "relatedSpdxElement": "SPDXRef-python-python-dateutil-140-2.9.0.post0"
     },
     {
       "spdxElementId": "SPDXRef-Package-presenton",
       "relationshipType": "DEPENDS_ON",
-      "relatedSpdxElement": "SPDXRef-python-python-multipart-141-0.0.32"
+      "relatedSpdxElement": "SPDXRef-python-python-dotenv-141-1.2.2"
     },
     {
       "spdxElementId": "SPDXRef-Package-presenton",
       "relationshipType": "DEPENDS_ON",
-      "relatedSpdxElement": "SPDXRef-python-python-pptx-142-1.0.2"
+      "relatedSpdxElement": "SPDXRef-python-python-multipart-142-0.0.32"
     },
     {
       "spdxElementId": "SPDXRef-Package-presenton",
       "relationshipType": "DEPENDS_ON",
-      "relatedSpdxElement": "SPDXRef-python-pytz-143-2026.1.post1"
+      "relatedSpdxElement": "SPDXRef-python-python-pptx-143-1.0.2"
     },
     {
       "spdxElementId": "SPDXRef-Package-presenton",
       "relationshipType": "DEPENDS_ON",
-      "relatedSpdxElement": "SPDXRef-python-pywin32-144-311"
+      "relatedSpdxElement": "SPDXRef-python-pytz-144-2026.1.post1"
     },
     {
       "spdxElementId": "SPDXRef-Package-presenton",
       "relationshipType": "DEPENDS_ON",
-      "relatedSpdxElement": "SPDXRef-python-pywin32-ctypes-145-0.2.3"
+      "relatedSpdxElement": "SPDXRef-python-pywin32-145-311"
     },
     {
       "spdxElementId": "SPDXRef-Package-presenton",
       "relationshipType": "DEPENDS_ON",
-      "relatedSpdxElement": "SPDXRef-python-pyyaml-146-6.0.3"
+      "relatedSpdxElement": "SPDXRef-python-pywin32-ctypes-146-0.2.3"
     },
     {
       "spdxElementId": "SPDXRef-Package-presenton",
       "relationshipType": "DEPENDS_ON",
-      "relatedSpdxElement": "SPDXRef-python-qdrant-client-147-1.17.1"
+      "relatedSpdxElement": "SPDXRef-python-pyyaml-147-6.0.3"
     },
     {
       "spdxElementId": "SPDXRef-Package-presenton",
       "relationshipType": "DEPENDS_ON",
-      "relatedSpdxElement": "SPDXRef-python-referencing-148-0.37.0"
+      "relatedSpdxElement": "SPDXRef-python-qdrant-client-148-1.17.1"
     },
     {
       "spdxElementId": "SPDXRef-Package-presenton",
       "relationshipType": "DEPENDS_ON",
-      "relatedSpdxElement": "SPDXRef-python-requests-149-2.33.1"
+      "relatedSpdxElement": "SPDXRef-python-referencing-149-0.37.0"
     },
     {
       "spdxElementId": "SPDXRef-Package-presenton",
       "relationshipType": "DEPENDS_ON",
-      "relatedSpdxElement": "SPDXRef-python-rich-150-15.0.0"
+      "relatedSpdxElement": "SPDXRef-python-regex-150-2026.9.29"
     },
     {
       "spdxElementId": "SPDXRef-Package-presenton",
       "relationshipType": "DEPENDS_ON",
-      "relatedSpdxElement": "SPDXRef-python-rich-rst-151-1.3.2"
+      "relatedSpdxElement": "SPDXRef-python-requests-151-2.33.1"
     },
     {
       "spdxElementId": "SPDXRef-Package-presenton",
       "relationshipType": "DEPENDS_ON",
-      "relatedSpdxElement": "SPDXRef-python-rich-toolkit-152-0.19.7"
+      "relatedSpdxElement": "SPDXRef-python-rich-152-15.0.0"
     },
     {
       "spdxElementId": "SPDXRef-Package-presenton",
       "relationshipType": "DEPENDS_ON",
-      "relatedSpdxElement": "SPDXRef-python-rignore-153-0.7.6"
+      "relatedSpdxElement": "SPDXRef-python-rich-rst-153-1.3.2"
     },
     {
       "spdxElementId": "SPDXRef-Package-presenton",
       "relationshipType": "DEPENDS_ON",
-      "relatedSpdxElement": "SPDXRef-python-rpds-py-154-0.30.0"
+      "relatedSpdxElement": "SPDXRef-python-rich-toolkit-154-0.19.7"
     },
     {
       "spdxElementId": "SPDXRef-Package-presenton",
       "relationshipType": "DEPENDS_ON",
-      "relatedSpdxElement": "SPDXRef-python-s3transfer-155-0.16.1"
+      "relatedSpdxElement": "SPDXRef-python-rignore-155-0.7.6"
     },
     {
       "spdxElementId": "SPDXRef-Package-presenton",
       "relationshipType": "DEPENDS_ON",
-      "relatedSpdxElement": "SPDXRef-python-secretstorage-156-3.5.0"
+      "relatedSpdxElement": "SPDXRef-python-rpds-py-156-0.30.0"
     },
     {
       "spdxElementId": "SPDXRef-Package-presenton",
       "relationshipType": "DEPENDS_ON",
-      "relatedSpdxElement": "SPDXRef-python-sentry-sdk-157-2.58.0"
+      "relatedSpdxElement": "SPDXRef-python-s3transfer-157-0.16.1"
     },
     {
       "spdxElementId": "SPDXRef-Package-presenton",
       "relationshipType": "DEPENDS_ON",
-      "relatedSpdxElement": "SPDXRef-python-setuptools-158-82.0.1"
+      "relatedSpdxElement": "SPDXRef-python-secretstorage-158-3.5.0"
     },
     {
       "spdxElementId": "SPDXRef-Package-presenton",
       "relationshipType": "DEPENDS_ON",
-      "relatedSpdxElement": "SPDXRef-python-shellingham-159-1.5.4"
+      "relatedSpdxElement": "SPDXRef-python-sentry-sdk-159-2.58.0"
     },
     {
       "spdxElementId": "SPDXRef-Package-presenton",
       "relationshipType": "DEPENDS_ON",
-      "relatedSpdxElement": "SPDXRef-python-six-160-1.17.0"
+      "relatedSpdxElement": "SPDXRef-python-setuptools-160-82.0.1"
     },
     {
       "spdxElementId": "SPDXRef-Package-presenton",
       "relationshipType": "DEPENDS_ON",
-      "relatedSpdxElement": "SPDXRef-python-smart-open-161-7.6.0"
+      "relatedSpdxElement": "SPDXRef-python-shellingham-161-1.5.4"
     },
     {
       "spdxElementId": "SPDXRef-Package-presenton",
       "relationshipType": "DEPENDS_ON",
-      "relatedSpdxElement": "SPDXRef-python-sniffio-162-1.3.1"
+      "relatedSpdxElement": "SPDXRef-python-six-162-1.17.0"
     },
     {
       "spdxElementId": "SPDXRef-Package-presenton",
       "relationshipType": "DEPENDS_ON",
-      "relatedSpdxElement": "SPDXRef-python-spacy-163-3.8.14"
+      "relatedSpdxElement": "SPDXRef-python-smart-open-163-7.6.0"
     },
     {
       "spdxElementId": "SPDXRef-Package-presenton",
       "relationshipType": "DEPENDS_ON",
-      "relatedSpdxElement": "SPDXRef-python-spacy-legacy-164-3.0.12"
+      "relatedSpdxElement": "SPDXRef-python-sniffio-164-1.3.1"
     },
     {
       "spdxElementId": "SPDXRef-Package-presenton",
       "relationshipType": "DEPENDS_ON",
-      "relatedSpdxElement": "SPDXRef-python-spacy-loggers-165-1.0.5"
+      "relatedSpdxElement": "SPDXRef-python-spacy-165-3.8.14"
     },
     {
       "spdxElementId": "SPDXRef-Package-presenton",
       "relationshipType": "DEPENDS_ON",
-      "relatedSpdxElement": "SPDXRef-python-sqlalchemy-166-2.0.49"
+      "relatedSpdxElement": "SPDXRef-python-spacy-legacy-166-3.0.12"
     },
     {
       "spdxElementId": "SPDXRef-Package-presenton",
       "relationshipType": "DEPENDS_ON",
-      "relatedSpdxElement": "SPDXRef-python-sqlmodel-167-0.0.38"
+      "relatedSpdxElement": "SPDXRef-python-spacy-loggers-167-1.0.5"
     },
     {
       "spdxElementId": "SPDXRef-Package-presenton",
       "relationshipType": "DEPENDS_ON",
-      "relatedSpdxElement": "SPDXRef-python-srsly-168-2.5.3"
+      "relatedSpdxElement": "SPDXRef-python-sqlalchemy-168-2.0.49"
     },
     {
       "spdxElementId": "SPDXRef-Package-presenton",
       "relationshipType": "DEPENDS_ON",
-      "relatedSpdxElement": "SPDXRef-python-sse-starlette-169-3.3.4"
+      "relatedSpdxElement": "SPDXRef-python-sqlmodel-169-0.0.38"
     },
     {
       "spdxElementId": "SPDXRef-Package-presenton",
       "relationshipType": "DEPENDS_ON",
-      "relatedSpdxElement": "SPDXRef-python-starlette-170-1.3.1"
+      "relatedSpdxElement": "SPDXRef-python-srsly-170-2.5.3"
     },
     {
       "spdxElementId": "SPDXRef-Package-presenton",
       "relationshipType": "DEPENDS_ON",
-      "relatedSpdxElement": "SPDXRef-python-sympy-171-1.14.0"
+      "relatedSpdxElement": "SPDXRef-python-sse-starlette-171-3.3.4"
     },
     {
       "spdxElementId": "SPDXRef-Package-presenton",
       "relationshipType": "DEPENDS_ON",
-      "relatedSpdxElement": "SPDXRef-python-tenacity-172-9.1.4"
+      "relatedSpdxElement": "SPDXRef-python-starlette-172-1.3.1"
     },
     {
       "spdxElementId": "SPDXRef-Package-presenton",
       "relationshipType": "DEPENDS_ON",
-      "relatedSpdxElement": "SPDXRef-python-thinc-173-8.3.13"
+      "relatedSpdxElement": "SPDXRef-python-sympy-173-1.14.0"
     },
     {
       "spdxElementId": "SPDXRef-Package-presenton",
       "relationshipType": "DEPENDS_ON",
-      "relatedSpdxElement": "SPDXRef-python-tinycss2-174-1.5.1"
+      "relatedSpdxElement": "SPDXRef-python-tenacity-174-9.1.4"
     },
     {
       "spdxElementId": "SPDXRef-Package-presenton",
       "relationshipType": "DEPENDS_ON",
-      "relatedSpdxElement": "SPDXRef-python-tokenizers-175-0.22.2"
+      "relatedSpdxElement": "SPDXRef-python-thinc-175-8.3.13"
     },
     {
       "spdxElementId": "SPDXRef-Package-presenton",
       "relationshipType": "DEPENDS_ON",
-      "relatedSpdxElement": "SPDXRef-python-tqdm-176-4.67.3"
+      "relatedSpdxElement": "SPDXRef-python-tinycss2-176-1.5.1"
     },
     {
       "spdxElementId": "SPDXRef-Package-presenton",
       "relationshipType": "DEPENDS_ON",
-      "relatedSpdxElement": "SPDXRef-python-typer-177-0.24.1"
+      "relatedSpdxElement": "SPDXRef-python-tokenizers-177-0.22.2"
     },
     {
       "spdxElementId": "SPDXRef-Package-presenton",
       "relationshipType": "DEPENDS_ON",
-      "relatedSpdxElement": "SPDXRef-python-typing-extensions-178-4.15.0"
+      "relatedSpdxElement": "SPDXRef-python-tqdm-178-4.67.3"
     },
     {
       "spdxElementId": "SPDXRef-Package-presenton",
       "relationshipType": "DEPENDS_ON",
-      "relatedSpdxElement": "SPDXRef-python-typing-inspection-179-0.4.2"
+      "relatedSpdxElement": "SPDXRef-python-typer-179-0.24.1"
     },
     {
       "spdxElementId": "SPDXRef-Package-presenton",
       "relationshipType": "DEPENDS_ON",
-      "relatedSpdxElement": "SPDXRef-python-tzdata-180-2026.2"
+      "relatedSpdxElement": "SPDXRef-python-typing-extensions-180-4.15.0"
     },
     {
       "spdxElementId": "SPDXRef-Package-presenton",
       "relationshipType": "DEPENDS_ON",
-      "relatedSpdxElement": "SPDXRef-python-uncalled-for-181-0.3.1"
+      "relatedSpdxElement": "SPDXRef-python-typing-inspection-181-0.4.2"
     },
     {
       "spdxElementId": "SPDXRef-Package-presenton",
       "relationshipType": "DEPENDS_ON",
-      "relatedSpdxElement": "SPDXRef-python-urllib3-182-2.7.0"
+      "relatedSpdxElement": "SPDXRef-python-tzdata-182-2026.2"
     },
     {
       "spdxElementId": "SPDXRef-Package-presenton",
       "relationshipType": "DEPENDS_ON",
-      "relatedSpdxElement": "SPDXRef-python-uvicorn-183-0.45.0"
+      "relatedSpdxElement": "SPDXRef-python-uncalled-for-183-0.3.1"
     },
     {
       "spdxElementId": "SPDXRef-Package-presenton",
       "relationshipType": "DEPENDS_ON",
-      "relatedSpdxElement": "SPDXRef-python-uvloop-184-0.22.1"
+      "relatedSpdxElement": "SPDXRef-python-urllib3-184-2.7.0"
     },
     {
       "spdxElementId": "SPDXRef-Package-presenton",
       "relationshipType": "DEPENDS_ON",
-      "relatedSpdxElement": "SPDXRef-python-wasabi-185-1.1.3"
+      "relatedSpdxElement": "SPDXRef-python-uvicorn-185-0.45.0"
     },
     {
       "spdxElementId": "SPDXRef-Package-presenton",
       "relationshipType": "DEPENDS_ON",
-      "relatedSpdxElement": "SPDXRef-python-watchfiles-186-1.1.1"
+      "relatedSpdxElement": "SPDXRef-python-uvloop-186-0.22.1"
     },
     {
       "spdxElementId": "SPDXRef-Package-presenton",
       "relationshipType": "DEPENDS_ON",
-      "relatedSpdxElement": "SPDXRef-python-weasel-187-1.0.0"
+      "relatedSpdxElement": "SPDXRef-python-wasabi-187-1.1.3"
     },
     {
       "spdxElementId": "SPDXRef-Package-presenton",
       "relationshipType": "DEPENDS_ON",
-      "relatedSpdxElement": "SPDXRef-python-webencodings-188-0.6.1"
+      "relatedSpdxElement": "SPDXRef-python-watchfiles-188-1.1.1"
     },
     {
       "spdxElementId": "SPDXRef-Package-presenton",
       "relationshipType": "DEPENDS_ON",
-      "relatedSpdxElement": "SPDXRef-python-websockets-189-16.0"
+      "relatedSpdxElement": "SPDXRef-python-weasel-189-1.0.0"
     },
     {
       "spdxElementId": "SPDXRef-Package-presenton",
       "relationshipType": "DEPENDS_ON",
-      "relatedSpdxElement": "SPDXRef-python-win32-setctime-190-1.2.0"
+      "relatedSpdxElement": "SPDXRef-python-webencodings-190-0.6.1"
     },
     {
       "spdxElementId": "SPDXRef-Package-presenton",
       "relationshipType": "DEPENDS_ON",
-      "relatedSpdxElement": "SPDXRef-python-wrapt-191-2.1.2"
+      "relatedSpdxElement": "SPDXRef-python-websockets-191-16.0"
     },
     {
       "spdxElementId": "SPDXRef-Package-presenton",
       "relationshipType": "DEPENDS_ON",
-      "relatedSpdxElement": "SPDXRef-python-xlsxwriter-192-3.2.9"
+      "relatedSpdxElement": "SPDXRef-python-win32-setctime-192-1.2.0"
     },
     {
       "spdxElementId": "SPDXRef-Package-presenton",
       "relationshipType": "DEPENDS_ON",
-      "relatedSpdxElement": "SPDXRef-python-yarl-193-1.23.0"
+      "relatedSpdxElement": "SPDXRef-python-wrapt-193-2.1.2"
     },
     {
       "spdxElementId": "SPDXRef-Package-presenton",
       "relationshipType": "DEPENDS_ON",
-      "relatedSpdxElement": "SPDXRef-python-zipp-194-3.23.1"
+      "relatedSpdxElement": "SPDXRef-python-xlsxwriter-194-3.2.9"
+    },
+    {
+      "spdxElementId": "SPDXRef-Package-presenton",
+      "relationshipType": "DEPENDS_ON",
+      "relatedSpdxElement": "SPDXRef-python-yarl-195-1.23.0"
+    },
+    {
+      "spdxElementId": "SPDXRef-Package-presenton",
+      "relationshipType": "DEPENDS_ON",
+      "relatedSpdxElement": "SPDXRef-python-zipp-196-3.23.1"
     }
   ]
 }

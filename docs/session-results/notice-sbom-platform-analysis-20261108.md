@@ -119,3 +119,24 @@ Remove the `noticeSha256`/`policySha256` embedding from the SBOM attestation, or
 - The SBOM SPDX ids embed an ordinal index, so unrelated dependency changes churn most ids [V].
 - A leftover worktree copy exists at `.claude/worktrees/agent-aacf1ff7499aa67ba/` with an older contract test; ignore.
 - Not checked: macOS/arm wheel digests; whether the real Bitbucket image has uv; actual Bitbucket build history.
+
+## 5. Interim step applied, and follow-up plan for the end state (plan only, not implemented)
+
+### 5.1 Interim step (options A + C, owner-approved 2026-11-08)
+
+- `nextjs-ci-node-contracts` now installs python3/uv 0.11.17 and runs `uv sync --frozen` in `servers/fastapi` before `npm run test:next-ci` (contract asserted in `scripts/required-ci-contract.test.mjs`).
+- `exactMetadataResolutions` accepts `licenseFileSha256s` (a list of reviewed digests; the single `licenseFileSha256` still works). caio and py-rust-stemmers list both the Windows-wheel and the Linux/sdist digests. colorama, pywin32, pywin32-ctypes, tzdata and win32-setctime are `exactPlatformMetadataResolutions`, so they resolve on Linux instead of throwing "metadata is missing".
+- Linux is declared the canonical generation platform in `scripts/rebuild_notice_all.py` and `scripts/generate-release-sbom.mjs`. NOTICE then the SBOM were regenerated on Linux from clean installs.
+- Known limits: NOTICE still scans installed trees (stale `node_modules` or a different dependency group changes it), and Windows/macOS contributors must not regenerate it.
+
+### 5.2 End state: release-time, lockfile-based generation (option B)
+
+1. Package set from lockfiles only. `rebuild_notice_all.py` reads `servers/fastapi/uv.lock` (production groups, all markers) and both `package-lock.json` files (production dependencies, no dev) to decide which packages are listed. The set no longer depends on OS, synced groups or leftover `node_modules`.
+2. Licence text sourcing. For each locked package take the licence file from the installed tree when present; otherwise from the locked artefact (sdist or the wheel recorded in the lock, hash-verified against the lock) fetched once and cached under a vendored `compliance/licenses/<ecosystem>/<name>@<version>/` directory that is committed and digest-listed. This removes the need for platform resolutions for Windows-only wheels and lets any OS regenerate identically.
+3. Platform appendix. Keep the main `NOTICE` to each package's own licence file. Move wheel-bundled third-party texts (Pillow, numpy bundled-library lists, per-OS native binaries such as `@img/sharp-*`, `@next/swc-*`) into `NOTICE.platform-<os>-<arch>.txt` (or `compliance/notice-platform/`), generated on the matching platform in a release job and checked per platform. The Docker image ships the Linux appendix with the main NOTICE. The compliance reviewer must approve moving these texts out of the main file.
+4. SBOM binding. The SBOM records sha256 of the NOTICE main file and of each appendix, plus the lockfile digests it was generated from. Replace the ordinal `SPDXRef-python-<name>-<n>-<ver>` ids with `<name>-<ver>` so unrelated dependency changes stop churning ids.
+5. Release-time gate. Run generation plus `--check` as a dedicated release pipeline step (and a lighter lockfile-vs-NOTICE package-list check on every PR). Keep `check:notice` and `check:release-sbom` in `test:next-ci` only if they stay deterministic across CI images; do not remove the NOTICE/policy binding.
+6. Policy cleanup. After step 2, collapse `licenseFileSha256s` back to one digest per package (the sdist digest) or drop it where the vendored text is authoritative; delete `exactPlatformMetadataResolutions` entries that the lockfile path makes redundant.
+7. Tests and docs. Extend `release-license-policy.test.mjs` and `required-ci-contract.test.mjs` for the new inputs; update `scripts/required-ci-contract.test.mjs` command assertions if script names change; document in `docs/` that any OS may regenerate once steps 1-3 land.
+
+Decisions needed from the owner: acceptance of the appendix layout (3), whether to vendor licence texts (2), and whether the per-PR check may be reduced to the package-list check (5).

@@ -82,13 +82,30 @@ export function loadPythonPackageMetadata() {
   return JSON.parse(result.stdout);
 }
 
-function exactResolution(name, version, metadata) {
-  const resolution = licensePolicy.exactMetadataResolutions.find(
+// A resolution lists every reviewed licence-file digest that may legitimately
+// be installed: wheels differ per platform (for example caio ships a
+// pure-Python wheel on Windows and native wheels elsewhere). The legacy single
+// `licenseFileSha256` field keeps working; `licenseFileSha256s` adds more.
+export function reviewedLicenseDigests(resolution) {
+  const digests = [
+    ...(resolution.licenseFileSha256 ? [resolution.licenseFileSha256] : []),
+    ...(resolution.licenseFileSha256s ?? []),
+  ];
+  assert.ok(
+    digests.length > 0 && digests.every((value) => /^[0-9a-f]{64}$/u.test(value)),
+    `${resolution.name}@${resolution.version} needs reviewed SHA-256 license digests`,
+  );
+  return digests;
+}
+
+export function exactResolution(name, version, metadata, policy = licensePolicy) {
+  const resolution = policy.exactMetadataResolutions.find(
     (item) => normalizedName(item.name) === normalizedName(name) && item.version === version,
   );
   if (!resolution) return null;
+  const reviewed = new Set(reviewedLicenseDigests(resolution));
   assert.ok(
-    metadata.licenseFiles.some((item) => item.sha256 === resolution.licenseFileSha256),
+    metadata.licenseFiles.some((item) => reviewed.has(item.sha256)),
     `${name}@${version} reviewed license file changed`,
   );
   return resolution.licenseConcluded;
