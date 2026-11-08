@@ -6,15 +6,15 @@ native charts look and behave in real PowerPoint. Everything else (unit tests,
 the fake-LLM real-Chrome run, CI gates) was verified in the cloud; see
 `codex-review-followup-20261108.md`.
 
-Branch: `claude/exciting-planck-oqcy7w`. V5 stays default-off. Turn it on only
-for this check.
+Code: `main` (PR #152 export-time verification, PR #153 background
+continuation). V5 stays default-off. Turn it on only for this check.
 
 ## 0. Prepare (about 10 min)
 
 1. Stop the stack, update and install:
    ```powershell
    .\scripts\start-local-stack.ps1 -Stop
-   git fetch origin; git checkout claude/exciting-planck-oqcy7w; git pull
+   git fetch origin; git checkout main; git pull
    cd servers\fastapi; uv sync --frozen; cd ..\nextjs; npm ci; cd ..\..
    ```
 2. Turn V5 on for the API and both controllers.
@@ -40,22 +40,43 @@ for this check.
 
    The CLI is fine:
    `node scripts/ppt-agent.mjs --async --slides 6 --export pptx --out <dir> "<prompt>"`.
-2. Record:
+2. **Do not export again by hand.** After the first export finishes, the
+   remaining charts are verified in the background:
+   - the deck's workspace timeline shows a **"네이티브 차트 검증"**
+     (`svg.chart.verify`) item;
+   - when it has newly verified charts, **a refreshed export is created
+     automatically**, as a new PPTX artifact in the same timeline.
+
+   Wait until that refreshed export appears. In the cloud run it came about
+   4 minutes after the first export; it takes longer with more charts, up to
+   5 background rounds of about 10 minutes each. Then download the newest PPTX
+   from the workspace or dashboard. The CLI's `--out` file is the *first*
+   export only.
+3. Record:
    - generation time;
    - per-page result (any fallback pages);
-   - export time from the export operation;
-   - in the API log, the `svg_export_stage_seconds` line with
-     `chart_paint_verification`, plus per-chart verify durations.
-3. Expectations, from the cloud run:
+   - the first export's time, and in the API log the `svg_export_stage_seconds`
+     line with `chart_paint_verification`;
+   - each `svg.chart.verify` round: start, end, and charts passed. The result
+     is shown on the timeline item; the API log only warns from
+     `svg_chart_paint_followup` when something could not be enqueued or
+     submitted;
+   - when the refreshed export appeared, and how long it took.
+4. Expectations, from the cloud run (3 + 3 charts, about 9 minutes from
+   generation to the final artifact):
    - render never fails on chart paint;
-   - each chart takes 60–120 s to verify at export;
-   - **one export verifies about 3 charts**, and the rest stay drawn (pictures).
-     **Run the export a second time** (dashboard export, or `ppt-agent.mjs`
-     again on the same deck) and confirm that more charts become native.
+   - each chart takes 60–120 s to verify;
+   - the first export holds about 3 native charts; the rest are drawn
+     (pictures);
+   - background verification starts right after the first export;
+   - the refreshed export holds all verifiable charts as native charts;
+   - while a background round runs, a new edit or export on the same deck waits
+     at most for the current chart capture (about 2.5 min).
 
 ## 2. PowerPoint check (about 15 min)
 
-Open the second export in PowerPoint and, for each chart page, check:
+Open the **refreshed (newest) export** in PowerPoint and, for each chart page,
+check:
 
 | Check | Pass when |
 |---|---|
@@ -70,8 +91,10 @@ Screenshot any mismatch, together with the in-app preview of the same page.
 
 ## 3. Report back
 
-- The timings from 1.2.
-- The number of native charts after export 1 and after export 2.
+- The timings from 1.3.
+- The number of native charts in the first export and in the refreshed export.
+- Whether the refreshed export appeared without a manual export, and after how
+  long.
 - The PowerPoint table above, with screenshots of failures.
 - The API log lines that mention `chart_paint` or `svgNativeChartPaint`.
 
@@ -82,9 +105,19 @@ restart, unless you decide to keep V5 on.
 
 ## Known limitations (do not report as new)
 
-- **Charts verified per export:** about 3 per export, because of the export
-  deadline reserve. A product decision is pending: either a follow-up
-  verification run, or a deadline that scales with the chart count.
+- **First export is partial by design:** it verifies about 3 charts within its
+  deadline reserve. Background verification and the automatic refreshed export
+  complete the rest.
+- **Background verification limits:**
+  - at most 5 rounds per deck revision;
+  - charts still unverified after that wait for the next manual export;
+  - editing the deck stops the current chain, because evidence is bound to the
+    revision;
+  - if the refreshed export is refused (for example on capacity), it is not
+    retried, but the verification evidence is kept and the next manual export
+    makes those charts native.
+- **No background verification:** decks exported with a header revision, and
+  source-preserved decks, verify at export time only.
 - **Pages that stay drawn:**
   - raster-reconstruction pages;
   - template pages whose render inputs cannot be reproduced at export;
