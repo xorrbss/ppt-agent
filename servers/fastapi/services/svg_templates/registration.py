@@ -8,6 +8,7 @@ import uuid
 from fastapi import HTTPException
 from sqlalchemy import select, update
 
+from constants.user_messages import UserMessageKey, user_message
 from models.canvas_defaults import canvas_or_default
 from models.sql.presentation import PresentationModel
 from models.sql.reference_snapshot import ReferenceSnapshot
@@ -343,7 +344,7 @@ class SvgTemplateOperationHandler:
         settings = claim.request_payload.get("generation_settings", {})
         payload = settings.get("svg_template_registration", {})
         await context.raise_if_cancelled()
-        await context.progress(stage="template-analysis", percent=10, message="템플릿 자료를 확인하고 있습니다.")
+        await context.progress(stage="template-analysis", percent=10, message=user_message(UserMessageKey.SVG_TEMPLATE_ANALYSIS_CHECKING))
         async with async_session_maker() as session:
             if claim.kind == "svg.template.prepare":
                 from models.document_canvas import DocumentCanvasMetadata

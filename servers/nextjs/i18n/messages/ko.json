@@ -2860,6 +2860,7 @@
     "quality_review_rendering": "{count}개 슬라이드를 렌더링하고 있습니다.",
     "quality_review_verifying": "수정 결과를 다시 검증하고 있습니다.",
     "raster_analysis_persisting": "검토할 원본 영역과 분석 결과를 저장하고 있습니다.",
+    "svg_template_analysis_checking": "템플릿 자료를 확인하고 있습니다.",
     "raster_analysis_preserve": "원본 화면을 순서대로 보존하고 있습니다.",
     "raster_analysis_redesign": "원본 화면을 편집 가능한 텍스트와 표로 재구성하고 있습니다.",
     "raster_analysis_redesign_elapsed": "원본 화면을 편집 가능한 텍스트와 표로 재구성하는 중입니다… ({elapsed}초 경과)",

@@ -284,6 +284,9 @@ COMMON_HEADER_VERIFIER_LEDGER = VerifierRevisionLedger(
         # optimizeForSpeed (identical decoded pixels) and numpy mask statistics with
         # exact parity to the byte loops they replace.
         "sha256:570ea9ac5a2335c149ce82a7c443035a16b3c992af3af2321610863337cf7391": "svg-common-header-verifier/1",
+        # 2026-11-08 repository lint tests: bare timeout/poll literals named as module
+        # constants with the same values; no behaviour changed.
+        "sha256:2437145fd9981f189fc88b935805fa8c830be5a9e61deb0a3e81f9167f9d6e39": "svg-common-header-verifier/1",
     }),
 )
 
@@ -580,6 +583,9 @@ PARTIAL_RECOVERY_CODE_LEDGER = VerifierRevisionLedger(
         # optimizeForSpeed (identical decoded pixels) and numpy mask statistics with
         # exact parity to the byte loops they replace.
         "564299af476ee6c10f61612502cf29281ba5e2acd38335c8c2960c7837d581e1": "svg-partial-recovery-code/1",
+        # 2026-11-08 repository lint tests: bare timeout/poll literals named as module
+        # constants with the same values; no behaviour changed.
+        "58d7befea47942dced7e6ed8aa5a9b9861b5e3e7697b226281df4044a36aec61": "svg-partial-recovery-code/1",
     }),
 )
 
@@ -674,6 +680,9 @@ PAGE_RENDER_CODE_LEDGER = VerifierRevisionLedger(
         # optimizeForSpeed (identical decoded pixels) and numpy mask statistics with
         # exact parity to the byte loops they replace.
         "a5caec9a42896023d3c8f465c47b64171c26e041d014f7674e9281e86bd9c1e0": "svg-page-render-code/1",
+        # 2026-11-08 repository lint tests: bare timeout/poll literals named as module
+        # constants with the same values; no behaviour changed.
+        "fa9cdd4becdc96548c6eba1a7972ab7203f70f6c9e551c19a6619d84f543e3c0": "svg-page-render-code/1",
     }),
 )
 

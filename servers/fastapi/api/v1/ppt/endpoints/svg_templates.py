@@ -180,7 +180,9 @@ async def prepare(request: PreparationRequest, session=Depends(get_async_session
     allowed = {frame["frame_id"] for frame in selection["package"].get("frames", [])}
     if not set(request.frame_ids).issubset(allowed):
         raise HTTPException(422, "svg_template_frame_selection_invalid")
-    _, operation = await new_operation(session, kind="svg.template.prepare", name="템플릿 크기 준비",
+    # The operation's timeline is titled with the template's own name, as analysis is.
+    template = await get_template(session, pin["templateId"])
+    _, operation = await new_operation(session, kind="svg.template.prepare", name=template.name,
         payload={"template_pin": pin, "canvas": request.canvas,
                  "frame_ids": request.frame_ids})
     await session.commit()

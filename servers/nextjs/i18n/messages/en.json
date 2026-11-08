@@ -2860,6 +2860,7 @@
     "quality_review_rendering": "Rendering {count} slides.",
     "quality_review_verifying": "Re-verifying the fixes.",
     "raster_analysis_persisting": "Saving the source regions and analysis results for review.",
+    "svg_template_analysis_checking": "Checking the template material.",
     "raster_analysis_preserve": "Preserving the source screens in order.",
     "raster_analysis_redesign": "Rebuilding the source screens into editable text and tables.",
     "raster_analysis_redesign_elapsed": "Rebuilding the source screens into editable text and tables… ({elapsed}s elapsed)",

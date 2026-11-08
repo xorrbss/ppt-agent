@@ -36,6 +36,11 @@ from typing import Callable
 
 from PIL import Image, ImageStat
 
+#: Bounds for the OCR used to mask template body renders.
+_TESSERACT_PROBE_TIMEOUT_SECONDS = 5.0
+_PAGE_OCR_TIMEOUT_SECONDS = 20.0
+_LITEPARSE_TIMEOUT_SECONDS = 120
+
 LOGGER = logging.getLogger(__name__)
 
 RENDER_VERSION = "svg-template-body-render/v1"
@@ -118,13 +123,13 @@ def _tesseract_reader() -> OcrReader | None:
     """The tesseract runtime the authored OCR checks use, when it is installed with kor+eng."""
     from utils.authored_ocr_quality import AuthoredOcrCache, _ocr_bytes, inspect_tesseract
 
-    runtime = inspect_tesseract(explicit_command=None, tessdata_dir=None, language="kor+eng", timeout_seconds=5.0)
+    runtime = inspect_tesseract(explicit_command=None, tessdata_dir=None, language="kor+eng", timeout_seconds=_TESSERACT_PROBE_TIMEOUT_SECONDS)
     if runtime.status != "ready":
         return None
     cache = AuthoredOcrCache()
 
     def read(png: bytes) -> str | None:
-        result = _ocr_bytes(png, language="kor+eng", cache=cache, timeout_seconds=20.0, command=None,
+        result = _ocr_bytes(png, language="kor+eng", cache=cache, timeout_seconds=_PAGE_OCR_TIMEOUT_SECONDS, command=None,
                             tessdata_dir=None, psm=11)
         return result.text if result.status == "success" else None
     return read
@@ -134,7 +139,7 @@ def _liteparse_reader() -> OcrReader | None:
     """LiteParse's built-in tesseract.js with the bundled ``tessdata/`` (kor+eng), as document parsing uses."""
     from services.liteparse_service import LiteParseError, LiteParseService
 
-    service = LiteParseService(timeout_seconds=120)
+    service = LiteParseService(timeout_seconds=_LITEPARSE_TIMEOUT_SECONDS)
     ready, _reason = service.check_runtime_ready()
     if not ready:
         return None

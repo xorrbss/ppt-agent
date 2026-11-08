@@ -25,6 +25,9 @@ from utils.slide_capture_pipe_render import (
     private_diagnostic_pipe_code_digest,
 )
 
+#: Interval between readiness checks of a chart plane's blank document.
+_BLANK_READY_POLL_SECONDS = 0.01
+
 
 def _wait_svg_materials(command: PageCommand, *, settle: bool = True) -> None:
     """Finish SVG image/font decoding before the one emitted chart frame."""
@@ -134,7 +137,7 @@ class _SharedChartPipe:
                 break
             if time.monotonic() >= deadline:
                 raise RuntimeError("chart sibling blank navigation did not commit")
-            time.sleep(0.01)
+            time.sleep(_BLANK_READY_POLL_SECONDS)
         frame_id = frame.get("id")
         if not isinstance(frame_id, str) or not frame_id or frame.get("url") != "data:,":
             raise RuntimeError("chart sibling committed frame invalid")
@@ -158,7 +161,7 @@ class _SharedChartPipe:
                     raise RuntimeError("chart sibling blank readiness invalid")
             if time.monotonic() >= deadline:
                 raise RuntimeError("chart sibling blank document did not become ready")
-            time.sleep(0.01)
+            time.sleep(_BLANK_READY_POLL_SECONDS)
         new_context = page("Page.createIsolatedWorld", {"frameId": frame_id, "worldName": "chart-plane-reset/v1"}).get("executionContextId")
         # CDP does not promise distinct context ids across a navigation (Chrome for
         # Testing 153 reuses them), so the id only has to exist; the loader change

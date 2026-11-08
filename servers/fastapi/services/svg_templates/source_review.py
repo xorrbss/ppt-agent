@@ -24,6 +24,9 @@ from services.svg_templates.frame_fonts import artifact_digest, bytes_digest, re
 
 import logging
 
+#: Wall-clock bound for one source-review worker call.
+_REVIEW_WORKER_TIMEOUT_SECONDS = 60
+
 logger = logging.getLogger(__name__)
 _SERVICE_ROOT = str(Path(__file__).resolve().parents[2])
 
@@ -195,7 +198,7 @@ async def _render_source_isolated(path, package, frame):
         process = await asyncio.create_subprocess_exec(sys.executable, "-m",
             "services.svg_templates.source_review_worker", **options)
         try:
-            output, _ = await asyncio.wait_for(process.communicate(json.dumps(request).encode()), timeout=60)
+            output, _ = await asyncio.wait_for(process.communicate(json.dumps(request).encode()), timeout=_REVIEW_WORKER_TIMEOUT_SECONDS)
             if process.returncode != 0 or len(output) > 48 * 1024 * 1024:
                 raise ValueError("svg_template_review_render_unavailable")
             value = json.loads(output)
