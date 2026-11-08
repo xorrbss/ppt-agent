@@ -235,6 +235,11 @@ async def _publish(request, presentation_id, outline, language, session, job, sn
         presentation.theme = publication_theme
     session.add(presentation)
     await session.flush()
+    if job:
+        # Never fails publication: an absent snapshot keeps the legacy export proof.
+        from services.svg_source_input_snapshot import publish_source_input_snapshot
+        await publish_source_input_snapshot(session, request=request, job=job, presentation_id=presentation_id,
+            owner_id=owner, result_revision=expected_revision + 1, published_slides=published_slides)
     # complete_publish still requires the running operation; terminalize the
     # public operation only after its linked job transition in this transaction.
     if job:

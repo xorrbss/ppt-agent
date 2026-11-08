@@ -1,4 +1,6 @@
 import asyncio
+from contextlib import contextmanager
+from datetime import timedelta
 from io import BytesIO
 import hashlib
 import json
@@ -20,8 +22,10 @@ from models.sql.async_presentation_generation_status import (
 )
 from models.sql.authored_slide_checkpoint import AuthoredSlideCheckpoint
 from models.sql.presentation_generation_job import PresentationGenerationJob
-from models.sql.public_admission import PublicOperationAdmission
-from models.sql.workspace import WorkspaceOperation
+from models.sql.presentation import PresentationModel
+from models.sql.public_admission import PublicOperationAdmission, PublicPolicyProfile
+from models.sql.user import User
+from models.sql.workspace import WorkspaceConversation, WorkspaceOperation
 from models.presentation_outline_model import (
     PresentationOutlineModel,
     SlideOutlineModel,
@@ -30,6 +34,7 @@ from services import authored_checkpoint_service as checkpoints
 from services import authored_presentation_pipeline as pipeline
 from services.authored_checkpoint_html import checkpoint_stage_html
 from services.generation_core.authoring.author_slide import Brand
+from utils.datetime_utils import get_current_utc_datetime
 from utils.runtime_settings import replace_process_runtime_settings
 from utils.renderer_isolation import RendererPolicyError
 
@@ -44,6 +49,26 @@ _STALE_PNG = _png("red")
 _RENDERED_PNG = _png("blue")
 
 
+# The complete foreign-key closure of the checkpoint tables. Rows that name a
+# parent (operation -> conversation -> presentation/user, admission -> policy)
+# are seeded with real parents, so the same fixtures hold on a database that
+# enforces every constraint.
+_CHECKPOINT_TABLES = [
+    AsyncPresentationGenerationTaskModel.__table__,
+    PresentationGenerationJob.__table__,
+    AuthoredSlideCheckpoint.__table__,
+    WorkspaceOperation.__table__,
+    # A render checkpoint asks the admission authority whether the
+    # generation is public before it writes its artifacts, so the
+    # scratch schema needs the table even for a local job.
+    PublicOperationAdmission.__table__,
+    PublicPolicyProfile.__table__,
+    WorkspaceConversation.__table__,
+    PresentationModel.__table__,
+    User.__table__,
+]
+
+
 async def _checkpoint_database(tmp_path, monkeypatch):
     engine = create_async_engine(
         f"sqlite+aiosqlite:///{tmp_path / 'authored-checkpoints.db'}"
@@ -51,16 +76,7 @@ async def _checkpoint_database(tmp_path, monkeypatch):
     async with engine.begin() as connection:
         await connection.run_sync(
             SQLModel.metadata.create_all,
-            tables=[
-                AsyncPresentationGenerationTaskModel.__table__,
-                PresentationGenerationJob.__table__,
-                AuthoredSlideCheckpoint.__table__,
-                WorkspaceOperation.__table__,
-                # A render checkpoint asks the admission authority whether the
-                # generation is public before it writes its artifacts, so the
-                # scratch schema needs the table even for a local job.
-                PublicOperationAdmission.__table__,
-            ],
+            tables=_CHECKPOINT_TABLES,
         )
     maker = async_sessionmaker(engine, expire_on_commit=False)
     monkeypatch.setattr(checkpoints, "async_session_maker", maker)
@@ -86,9 +102,143 @@ async def _running_authored_job(maker, *, total_slides=0):
         total_slides=total_slides,
     )
     async with maker() as session:
-        session.add_all((status, job))
+        # The ORM flushes unrelated mappers alphabetically, not by foreign
+        # key, so the parent row is written first on purpose.
+        session.add(status)
+        await session.flush()
+        session.add(job)
         await session.commit()
     return status, job
+
+
+async def _linked_operation(
+    maker, job, *, owner_id=None, admitted=False, fence=9, attempt="workspace-attempt"
+):
+    """Link ``job`` to a running workspace operation through real parent rows.
+
+    ``admitted`` adds the public v2 contract and its policy/admission rows, so
+    the fence also has to agree with the admission authority. Parents are
+    flushed one level at a time: the ORM does not order unrelated mappers by
+    foreign key. Returns ``(operation_id, admission_id)``.
+    """
+    deadline = get_current_utc_datetime() + timedelta(hours=1)
+    scope = str(owner_id) if owner_id is not None else "anonymous"
+    contract = (
+        {
+            "contract_version": "public-operation/v2",
+            "execution_profile_version": "public-generation-export/v2",
+            "phase": "active",
+            "deadline_at": deadline,
+        }
+        if admitted
+        else {}
+    )
+    assert owner_id is not None or not admitted, "an admission is bound to a real owner"
+    admission_id = None
+    async with maker() as session:
+        if owner_id is not None:
+            session.add(
+                User(id=owner_id, username=f"owner-{owner_id}", hashed_password="unused")
+            )
+        session.add(
+            PresentationModel(
+                id=job.presentation_id,
+                content="checkpoint fence",
+                n_slides=1,
+                language="en",
+                layout={"name": "test"},
+                mode="authored",
+            )
+        )
+        await session.flush()
+        conversation = WorkspaceConversation(
+            presentation_id=job.presentation_id, owner_id=owner_id, owner_scope=scope
+        )
+        session.add(conversation)
+        await session.flush()
+        operation = WorkspaceOperation(
+            conversation_id=conversation.id,
+            presentation_id=job.presentation_id,
+            owner_id=owner_id,
+            owner_scope=scope,
+            anchor_position=1,
+            kind="presentation.generate",
+            state="running",
+            idempotency_key_hash="d" * 64,
+            request_hash="e" * 64,
+            request_payload={},
+            attempt_token=attempt,
+            fencing_token=fence,
+            **contract,
+        )
+        session.add(operation)
+        await session.flush()
+        if admitted:
+            policy_values = {
+                column.name: 100
+                for column in PublicPolicyProfile.__table__.columns
+                if not column.nullable
+                and column.default is None
+                and column.server_default is None
+            }
+            policy_values["version"] = "checkpoint-fence-policy"
+            session.add(PublicPolicyProfile(**policy_values))
+            await session.flush()
+            admission = PublicOperationAdmission(
+                operation_id=operation.id,
+                policy_version="checkpoint-fence-policy",
+                owner_id=owner_id,
+                tenant_id="tenant-a",
+                trace_id_hash="b" * 64,
+                operation_kind="generation",
+                resource_units=1,
+                policy_digest="c" * 64,
+                deadline_at=deadline,
+                state="active",
+                fence=fence,
+                slide_count=1,
+                planned_request_limit=4,
+                retry_request_limit=4,
+                estimated_cost_limit_microunits=100,
+                actual_cost_limit_microunits=100,
+            )
+            session.add(admission)
+            await session.flush()
+            admission_id = admission.id
+        stored = await session.get(PresentationGenerationJob, job.id)
+        stored.workspace_operation_id = operation.id
+        stored.attempt_token = attempt
+        session.add(stored)
+        await session.commit()
+        operation_id = operation.id
+    job.workspace_operation_id = operation_id
+    job.attempt_token = attempt
+    return operation_id, admission_id
+
+
+async def _set_columns(maker, model, row_id, **values):
+    async with maker() as session:
+        await session.execute(update(model).where(model.id == row_id).values(**values))
+        await session.commit()
+
+
+@contextmanager
+def _principal(owner_id, tenant_id="tenant-a"):
+    """Run the block as one authenticated owner/tenant, as the request layer does."""
+    from utils.owner_context import (
+        reset_current_owner_id,
+        reset_current_tenant_id,
+        set_current_owner_id,
+        set_current_tenant_id,
+    )
+
+    owner_token = set_current_owner_id(owner_id)
+    tenant_token = set_current_tenant_id(tenant_id)
+    try:
+        yield
+    finally:
+        reset_current_tenant_id(tenant_token)
+        reset_current_owner_id(owner_token)
 
 
 def _one_slide_outline():
@@ -348,25 +498,7 @@ def test_linked_workspace_checkpoint_and_publication_require_matching_fence(
         engine, maker = await _checkpoint_database(tmp_path, monkeypatch)
         try:
             _, job = await _running_authored_job(maker)
-            async with maker() as session:
-                operation = WorkspaceOperation(
-                    conversation_id=uuid.uuid4(),
-                    presentation_id=job.presentation_id,
-                    anchor_position=1,
-                    kind="presentation.generate",
-                    state="running",
-                    idempotency_key_hash="d" * 64,
-                    request_hash="e" * 64,
-                    request_payload={},
-                    attempt_token="workspace-attempt",
-                    fencing_token=9,
-                )
-                session.add(operation)
-                await session.flush()
-                job.workspace_operation_id = operation.id
-                job.attempt_token = "workspace-attempt"
-                session.add(job)
-                await session.commit()
+            operation_id, _ = await _linked_operation(maker, job)
 
             with pytest.raises(checkpoints.AuthoredStageError) as missing:
                 await checkpoints.initialize_checkpoints(
@@ -419,7 +551,7 @@ def test_linked_workspace_checkpoint_and_publication_require_matching_fence(
                 async with maker() as takeover_session:
                     await takeover_session.execute(
                         update(WorkspaceOperation)
-                        .where(WorkspaceOperation.id == operation.id)
+                        .where(WorkspaceOperation.id == operation_id)
                         .values(attempt_token="newer-attempt", fencing_token=10)
                     )
                     await takeover_session.commit()
@@ -495,6 +627,313 @@ def test_linked_workspace_checkpoint_and_publication_require_matching_fence(
                         fencing_token=8,
                 )
                 assert publish_stale.value.code == "authored_workspace_operation_fence_lost"
+
+            # An SVG checkpoint read asserts the same fence as a plain read: it
+            # takes no row lock and rewrites no heartbeat; writes stay fenced.
+            from services import svg_presentation_checkpoint as svg_checkpoints
+
+            monkeypatch.setattr(svg_checkpoints, "async_session_maker", maker)
+
+            def svg_job(attempt, fence):
+                return SimpleNamespace(id=job.id, attempt_token=attempt,
+                                       workspace_operation_id=operation_id,
+                                       _workspace_fencing_token=fence)
+
+            async def heartbeats():
+                async with maker() as session:
+                    return (await session.scalar(select(WorkspaceOperation.heartbeat_at).where(
+                        WorkspaceOperation.id == operation_id)), await session.scalar(
+                        select(PresentationGenerationJob.heartbeat_at).where(
+                            PresentationGenerationJob.id == job.id)))
+
+            before = await heartbeats()
+            for stale, code in ((svg_job("workspace-attempt", 9), "authored_workspace_operation_fence_lost"),
+                                (svg_job("newer-attempt", None),
+                                 "authored_workspace_operation_fencing_token_required")):
+                with pytest.raises(checkpoints.AuthoredStageError) as stale_read:
+                    await svg_checkpoints._checkpoint(stale, 0)
+                assert stale_read.value.code == code
+            with pytest.raises(checkpoints.AuthoredStageError) as stale_fence:
+                await svg_checkpoints._fence_checkpoint_authority(svg_job("workspace-attempt", 9), 0)
+            assert stale_fence.value.code == "authored_workspace_operation_fence_lost"
+            current = svg_job("newer-attempt", 10)
+            assert await svg_checkpoints._checkpoint(current, 0) == {}
+            with pytest.raises(RuntimeError, match="svg_checkpoint_missing"):
+                await svg_checkpoints._checkpoint(current, 7)
+            assert await heartbeats() == before
+            await svg_checkpoints._fence_checkpoint_authority(current, 0)
+            async with maker() as session:
+                # Metadata-only reads project payload keys; absent keys are None.
+                projected = (await session.execute(select(
+                    PresentationGenerationJob.request_payload["template"].label("present"),
+                    PresentationGenerationJob.request_payload["absent"].label("absent"),
+                ).where(PresentationGenerationJob.id == job.id))).one()
+            assert (projected.present, projected.absent) == ("authored", None)
+            with pytest.raises(RuntimeError, match="svg_checkpoint_missing"):
+                await svg_checkpoints._fence_checkpoint_authority(current, 7)
+        finally:
+            await engine.dispose()
+
+    asyncio.run(scenario())
+
+
+def test_svg_checkpoint_authority_is_owner_scoped_read_only_and_write_fenced(
+    tmp_path, monkeypatch
+):
+    """Owner/tenant context decides what an SVG checkpoint read may see.
+
+    The owner and tenant criteria come from the central ORM hook, so the test
+    sets a real principal around real fenced queries. A read stays free of
+    heartbeat writes; only a write refreshes (and then maintains) the fence.
+    """
+    from services import svg_presentation_checkpoint as svg_checkpoints
+
+    lost = "authored_workspace_operation_fence_lost"
+
+    async def scenario():
+        engine, maker = await _checkpoint_database(tmp_path, monkeypatch)
+        try:
+            monkeypatch.setattr(svg_checkpoints, "async_session_maker", maker)
+            owner, foreign = uuid.uuid4(), uuid.uuid4()
+            me, other_owner, other_tenant = (
+                (owner, "tenant-a"), (foreign, "tenant-a"), (owner, "tenant-b"))
+            _, job = await _running_authored_job(maker)
+            operation_id, admission_id = await _linked_operation(
+                maker, job, owner_id=owner, admitted=True)
+            async with maker() as session:
+                session.add(AuthoredSlideCheckpoint(
+                    job_id=job.id, slide_index=0, role="content",
+                    svg_checkpoint={"seed": "page-0"}))
+                await session.commit()
+
+            def svg_job(attempt="workspace-attempt", fence=9):
+                return SimpleNamespace(id=job.id, attempt_token=attempt,
+                                       workspace_operation_id=operation_id,
+                                       _workspace_fencing_token=fence)
+
+            async def heartbeats():
+                async with maker() as session:
+                    return (await session.scalar(select(WorkspaceOperation.heartbeat_at).where(
+                        WorkspaceOperation.id == operation_id)), await session.scalar(
+                        select(PresentationGenerationJob.heartbeat_at).where(
+                            PresentationGenerationJob.id == job.id)))
+
+            async def read(who, active=None, index=0):
+                with _principal(*who):
+                    return await svg_checkpoints._checkpoint(active or svg_job(), index)
+
+            async def refused(code, who, active=None, index=0, payload=None):
+                with _principal(*who):
+                    with pytest.raises(checkpoints.AuthoredStageError) as error:
+                        if payload is None:
+                            await svg_checkpoints._checkpoint(active or svg_job(), index)
+                        else:
+                            await svg_checkpoints._checkpoint(
+                                active or svg_job(), index, payload=payload)
+                assert error.value.code == code
+
+            before = await heartbeats()
+            assert await read(me) == {"seed": "page-0"}
+            # A foreign owner or tenant never receives the page, and a lost
+            # fence takes precedence over a missing row.
+            await refused(lost, other_owner)
+            await refused(lost, other_tenant)
+            await refused(lost, other_owner, index=7)
+            with pytest.raises(RuntimeError, match="svg_checkpoint_missing"):
+                await read(me, index=7)
+            await refused(lost, me, svg_job(fence=8))
+            await refused(lost, me, svg_job("taken-over"))
+            await refused("authored_workspace_operation_fencing_token_required",
+                          me, svg_job(fence=None))
+            # Each revoked control rejects the read; restoring it re-admits.
+            for model, row_id, revoke, restore, code in (
+                (WorkspaceOperation, operation_id, {"state": "cancelled"},
+                 {"state": "running"}, lost),
+                (WorkspaceOperation, operation_id, {"attempt_token": "taken-over"},
+                 {"attempt_token": "workspace-attempt"}, lost),
+                (WorkspaceOperation, operation_id, {"fencing_token": 10},
+                 {"fencing_token": 9}, lost),
+                (PublicOperationAdmission, admission_id, {"state": "succeeded"},
+                 {"state": "active"}, lost),
+                (PublicOperationAdmission, admission_id, {"fence": 10},
+                 {"fence": 9}, lost),
+                (PublicOperationAdmission, admission_id, {"operation_kind": "export"},
+                 {"operation_kind": "generation"}, lost),
+                (PresentationGenerationJob, job.id, {"state": "cancelled"},
+                 {"state": "running"}, "authored_attempt_lost"),
+            ):
+                await _set_columns(maker, model, row_id, **revoke)
+                await refused(code, me)
+                await _set_columns(maker, model, row_id, **restore)
+                assert await read(me) == {"seed": "page-0"}
+            # Not one read above rewrote a heartbeat.
+            assert await heartbeats() == before
+
+            # Writes keep the full attempt/fence CAS: a stale fence is refused
+            # and leaves neither payload nor heartbeat behind. (The owner hook
+            # scopes SELECTs only; a write's principal binding is the admission
+            # check in ensure_recovery_authority, tested below, plus database RLS.)
+            payload = {"seed": "page-0", "step": 2}
+            await refused(lost, me, svg_job(fence=8), payload=payload)
+            assert await heartbeats() == before
+            assert await read(me) == {"seed": "page-0"}
+            with _principal(*me):
+                assert await svg_checkpoints._checkpoint(svg_job(), 0, payload=payload) == payload
+            written = await heartbeats()
+            assert None not in written and written != before
+            assert await read(me) == payload
+            assert await heartbeats() == written
+
+            # Completion times keep the first transition into completed: a
+            # later write of the same completed stage by the same attempt does
+            # not move them; leaving the stage clears it, re-entry restamps.
+            async def completed_at():
+                async with maker() as session:
+                    row = await session.scalar(select(AuthoredSlideCheckpoint).where(
+                        AuthoredSlideCheckpoint.job_id == job.id,
+                        AuthoredSlideCheckpoint.slide_index == 0))
+                    return row.author_completed_at, row.render_completed_at
+
+            rendered = {**payload, "svg_content": "<svg/>", "png_sha256": "a" * 64}
+            with _principal(*me):
+                await svg_checkpoints._checkpoint(svg_job(), 0, payload=rendered)
+            first = await completed_at()
+            assert None not in first
+            with _principal(*me):
+                await svg_checkpoints._checkpoint(svg_job(), 0, payload={**rendered, "review": 1})
+            assert await completed_at() == first
+            with _principal(*me):
+                await svg_checkpoints._checkpoint(svg_job(), 0, payload={**rendered, "png_sha256": None})
+            assert await completed_at() == (first[0], None)
+            with _principal(*me):
+                await svg_checkpoints._checkpoint(svg_job(), 0, payload=rendered)
+            restamped = await completed_at()
+            assert restamped[0] == first[0] and restamped[1] is not None
+            async with maker() as session:
+                progressed = await session.get(PresentationGenerationJob, job.id)
+                assert progressed.completed_slides == 1 and progressed.current_stage == "render"
+
+            # The payload-free fence keeps the same owner and fence contract.
+            with _principal(*me):
+                await svg_checkpoints._fence_checkpoint_authority(svg_job(), 0)
+            for who, active in ((me, svg_job(fence=8)),):
+                with _principal(*who):
+                    with pytest.raises(checkpoints.AuthoredStageError) as fence:
+                        await svg_checkpoints._fence_checkpoint_authority(active, 0)
+                assert fence.value.code == lost
+        finally:
+            await engine.dispose()
+
+    asyncio.run(scenario())
+
+
+def test_recovery_authority_runs_the_real_fenced_checkpoint_and_admission_checks(
+    tmp_path, monkeypatch
+):
+    """``ensure_recovery_authority`` against real rows, with nothing stubbed.
+
+    SQLite only: the admission contract reads the PostgreSQL control-plane
+    revision on a PostgreSQL bind, which a table-only scratch database lacks.
+    """
+    from services import svg_presentation_checkpoint as svg_checkpoints
+    from services.generation_core.drivers.svg.quality_recovery import (
+        ensure_recovery_authority,
+    )
+    from services.public_operation_admission_models import PublicAdmissionRejected
+
+    lost = "authored_workspace_operation_fence_lost"
+    snapshot = {"digest": "sha256:style", "contract_version": "svg-static/v1"}
+
+    async def scenario():
+        engine, maker = await _checkpoint_database(tmp_path, monkeypatch)
+        try:
+            monkeypatch.setattr(svg_checkpoints, "async_session_maker", maker)
+            owner, foreign = uuid.uuid4(), uuid.uuid4()
+            me = (owner, "tenant-a")
+            _, job = await _running_authored_job(maker)
+            operation_id, admission_id = await _linked_operation(
+                maker, job, owner_id=owner, admitted=True)
+            async with maker() as session:
+                stored = await session.get(PresentationGenerationJob, job.id)
+                stored.request_payload = {
+                    "_internal_svg_style_snapshot": snapshot, "common_header_mode": "free"}
+                stored.svg_style_snapshot = snapshot
+                session.add(stored)
+                session.add(AuthoredSlideCheckpoint(
+                    job_id=job.id, slide_index=0, role="content", svg_checkpoint={}))
+                await session.commit()
+            hooks = SimpleNamespace(async_session_maker=maker, recovery_snapshot=snapshot)
+
+            def svg_job(fence=9):
+                return SimpleNamespace(id=job.id, attempt_token="workspace-attempt",
+                                       workspace_operation_id=operation_id,
+                                       _workspace_fencing_token=fence)
+
+            async def check(active=None, who=me, bound=hooks):
+                with _principal(*who):
+                    await ensure_recovery_authority(active or svg_job(), bound)
+
+            async def refused(code, active=None, who=me):
+                with pytest.raises(checkpoints.AuthoredStageError) as error:
+                    await check(active, who)
+                assert error.value.code == code
+
+            await check()
+            with pytest.raises(ValueError, match="svg_quality_recovery_durable_job_required"):
+                await ensure_recovery_authority(None, hooks)
+            with pytest.raises(ValueError, match="svg_quality_recovery_durable_job_required"):
+                await ensure_recovery_authority(SimpleNamespace(workspace_operation_id=None), hooks)
+
+            # The fenced checkpoint authority runs first and is the real one.
+            await refused(lost, svg_job(fence=8))
+            await refused("authored_workspace_operation_fencing_token_required",
+                          svg_job(fence=None))
+            # A foreign tenant cannot see the tenant-scoped admission, so the
+            # fence itself is lost; a foreign owner passes the attempt/fence CAS
+            # but fails the admission principal binding right after it.
+            await refused(lost, who=(owner, "tenant-b"))
+            with pytest.raises(ValueError, match="svg_quality_recovery_authority_mismatch"):
+                await check(who=(foreign, "tenant-a"))
+            await _set_columns(maker, WorkspaceOperation, operation_id, state="cancelled")
+            await refused(lost)
+            await _set_columns(maker, WorkspaceOperation, operation_id, state="running")
+            await check()
+
+            # The admitted style snapshot must still bind the current attempt.
+            for bound in (
+                SimpleNamespace(async_session_maker=maker,
+                                recovery_snapshot={**snapshot, "digest": "sha256:other"}),
+                SimpleNamespace(async_session_maker=maker),
+            ):
+                with pytest.raises(
+                    ValueError, match="svg_quality_recovery_admission_snapshot_conflict"
+                ):
+                    await check(bound=bound)
+            await _set_columns(maker, PresentationGenerationJob, job.id, request_payload={
+                "_internal_svg_style_snapshot": {"digest": "sha256:other"}})
+            with pytest.raises(
+                ValueError, match="svg_quality_recovery_admission_snapshot_conflict"
+            ):
+                await check()
+            await _set_columns(maker, PresentationGenerationJob, job.id, request_payload={
+                "_internal_svg_style_snapshot": snapshot, "common_header_mode": "free"})
+            await check()
+
+            # The public contract and the remaining budget are checked last.
+            await _set_columns(maker, WorkspaceOperation, operation_id, phase="draining")
+            with pytest.raises(PublicAdmissionRejected) as contract:
+                await check()
+            assert contract.value.code == "public_operation_workspace_contract_conflict"
+            await _set_columns(maker, WorkspaceOperation, operation_id, phase="active")
+            await _set_columns(
+                maker, PublicOperationAdmission, admission_id,
+                estimated_consumed_microunits=101)
+            with pytest.raises(ValueError, match="svg_quality_recovery_budget_exhausted"):
+                await check()
+            await _set_columns(
+                maker, PublicOperationAdmission, admission_id,
+                estimated_consumed_microunits=0)
+            await check()
         finally:
             await engine.dispose()
 

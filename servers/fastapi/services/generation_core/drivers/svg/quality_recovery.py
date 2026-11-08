@@ -185,16 +185,24 @@ async def ensure_recovery_authority(job, hooks):
     from utils.owner_context import get_current_owner_id, get_current_tenant_id
     if job is None or getattr(job, "workspace_operation_id", None) is None:
         raise ValueError("svg_quality_recovery_durable_job_required")
-    await hooks.checkpoint(job, 0)
+    from services.svg_presentation_checkpoint import _fence_checkpoint_authority
+    # The full fenced CAS, without transferring the page-0 seed payload.
+    await _fence_checkpoint_authority(job, 0)
     async with hooks.async_session_maker() as session:
-        current_job = await session.get(PresentationGenerationJob, job.id)
+        # Only the fields compared below; the admitted request payload can
+        # carry a whole recovery archive.
+        current_job = (await session.execute(select(
+            PresentationGenerationJob.attempt_token, PresentationGenerationJob.workspace_operation_id,
+            PresentationGenerationJob.svg_style_snapshot, PresentationGenerationJob.authored_outline,
+            PresentationGenerationJob.request_payload["_internal_svg_style_snapshot"].label("admitted_snapshot"),
+            PresentationGenerationJob.request_payload["common_header_mode"].label("common_header_mode"),
+        ).where(PresentationGenerationJob.id == job.id))).one_or_none()
         expected_snapshot = getattr(hooks, "recovery_snapshot", None)
-        admitted_snapshot = ((current_job.request_payload or {}).get("_internal_svg_style_snapshot")
-            if current_job is not None else None)
+        admitted_snapshot = current_job.admitted_snapshot if current_job is not None else None
         snapshot_bound = admitted_snapshot == expected_snapshot
         if (not snapshot_bound and current_job is not None and expected_snapshot is not None
                 and expected_snapshot.get("common_header") is not None
-                and (current_job.request_payload or {}).get("common_header_mode") == "uniform"):
+                and current_job.common_header_mode == "uniform"):
             from services.svg_common_header import header_snapshot_base, validate_common_header_outline
             validate_common_header_outline(expected_snapshot, current_job.authored_outline)
             snapshot_bound = admitted_snapshot == header_snapshot_base(expected_snapshot)

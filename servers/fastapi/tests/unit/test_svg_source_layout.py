@@ -96,6 +96,50 @@ def test_merged_table_cells_keep_values_structure_and_reading_order():
     assert result.receipt["bindings"][0]["column_span"] == 2
     assert verify_source_receipt(result.svg_content, result.receipt, manifest, 0)
 
+    # W1 LLM-input view: table text kept once (cells[]), everything else and the original untouched.
+    import json
+    from services.generation_core.authoring.author_slide_svg import _llm_source_content_view
+    from services.generation_core.authoring.author_source_svg_layout import _whole_page_facts
+
+    facts = _whole_page_facts(source_pages(manifest)[0], {})
+    content = json.dumps({"source_authoring_contract": {"version": "svg-source-whole-page/v1"},
+        "source_page_id": "p0", "source_facts": facts}, ensure_ascii=False)
+    original_facts = deepcopy(facts)
+    value, receipt = _llm_source_content_view(content)
+    assert facts == original_facts and json.loads(content)["source_facts"] == original_facts
+    assert value["source_facts"][0]["cells"] == original_facts[0]["cells"]
+    assert [c["text"] for c in value["source_facts"][0]["cells"]] == ["매출 100", "A&B", "25%"]
+    rows = value["source_facts"][0]["data"]["rows"]
+    assert all("text" not in cell for cell in (rows[0][0], rows[1][0], rows[1][1]))
+    assert rows[0][1] == original_facts[0]["data"]["rows"][0][1]
+    assert rows[0][1]["mergeCovered"] is True and rows[0][0]["gridSpan"] == 2
+    assert [cell["sourceCellId"] for cell in (rows[0][0], rows[1][0], rows[1][1])] == ["cell-a", "cell-b", "cell-c"]
+    assert receipt["input_assembly_version"] == "svg-author-input-dedup/v1"
+    dedup = receipt["input_dedup"]
+    assert dedup["table_text_dup_bytes"] > 0 and dedup["json_double_escape_bytes"] > 0
+    assert dedup["total_omitted_bytes"] == dedup["table_text_dup_bytes"] + dedup["json_double_escape_bytes"]
+    # Receipt sizes are UTF-8 byte counts (the Korean text makes bytes differ from characters).
+    assert len(content.encode("utf-8")) > len(content)
+    assert dedup["json_double_escape_bytes"] == len(json.dumps(content, ensure_ascii=False).encode("utf-8")) - len(content.encode("utf-8"))
+    # Unwrap is lossless: restoring the omitted text reproduces the original fact exactly.
+    restored = deepcopy(value["source_facts"][0])
+    for cell in restored["cells"]:
+        restored["data"]["rows"][cell["row"]][cell["column"]]["text"] = cell["text"]
+    assert restored == original_facts[0]
+    # Fail-open: one mismatched cell text keeps the whole table as produced.
+    mismatched = deepcopy(facts)
+    mismatched[0]["cells"][1]["text"] = "A&B "
+    kept, kept_receipt = _llm_source_content_view(json.dumps({"source_authoring_contract": {}, "source_page_id": "p0",
+        "source_facts": mismatched}, ensure_ascii=False))
+    assert kept["source_facts"] == mismatched and kept_receipt["input_dedup"]["table_text_dup_bytes"] == 0
+    # Non-canonical or non-typed strings stay strings.
+    assert _llm_source_content_view("plain source") == ("plain source", {"input_json_unwrap": False})
+    # A lone surrogate cannot be UTF-8 encoded: the view fails open to the unmodified string, never sanitized.
+    lone = json.dumps({"source_authoring_contract": {}, "source_page_id": "p0", "source_facts": [{"t": chr(0xD800)}]},
+                      ensure_ascii=False)
+    assert chr(0xD800) in lone and _llm_source_content_view(lone) == (lone, {"input_json_unwrap": False})
+    assert _llm_source_content_view(content.replace(": ", ":", 1))[0] == content.replace(": ", ":", 1)
+
 
 @pytest.mark.parametrize("kind,payload", [("chart", {}), ("shape", {"preset": "star5"}),
     ("shape", {"preset": "diamond", "geometry": {"rotationDegrees": 45}}),

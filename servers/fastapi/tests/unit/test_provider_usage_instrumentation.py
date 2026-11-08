@@ -768,6 +768,93 @@ def test_pre_sdk_retry_admission_rejection_does_not_trip_provider_circuit(
     asyncio.run(scenario())
 
 
+@pytest.mark.parametrize(
+    ("stop", "expected_outcome", "expected_circuit_failures"),
+    [
+        ("page_dispatch_frozen", "failure", 0),
+        ("drain_before_dispatch", "failure", 0),
+        ("generic_dispatch_stopped", "retryable_failure", 1),
+        ("provider_failure", "retryable_failure", 1),
+    ],
+)
+def test_dispatch_freeze_inside_retry_admission_is_neutral_to_provider_health(
+    monkeypatch, stop, expected_outcome, expected_circuit_failures
+) -> None:
+    from services.generation_core.drivers.svg.author import PageDispatchFrozen
+    from services.provider_usage_instrumentation import _runtime_state
+    from utils.provider_overload import ProviderOutcomeError
+
+    def dispatch_stopped(*, marked: bool) -> ProviderOutcomeError:
+        error = ProviderOutcomeError(
+            "public_provider_dispatch_stopped",
+            recovery_allowed=False,
+            diagnostics={"streamStage": "before_stream", "failureKind": "dispatch_stopped"},
+        )
+        if marked:
+            error.pre_sdk_dispatch_stop = True
+        return error
+
+    errors = {
+        # The author's ``before_dispatch`` freeze: no SDK request was sent.
+        "page_dispatch_frozen": lambda: PageDispatchFrozen(0),
+        # The ``before_dispatch`` terminal-drain stop, marked the same way.
+        "drain_before_dispatch": lambda: dispatch_stopped(marked=True),
+        # Same code, unmarked: also raised from inside the SDK call, so not neutral.
+        "generic_dispatch_stopped": lambda: dispatch_stopped(marked=False),
+        "provider_failure": lambda: ProviderOutcomeError(
+            "public_provider_bridge_exception", recovery_allowed=False
+        ),
+    }
+
+    async def scenario() -> None:
+        reconciled = []
+
+        async def reserve(**_kwargs):
+            return object()
+
+        async def reconcile(lease, **kwargs):
+            reconciled.append(kwargs)
+
+        monkeypatch.setattr(
+            "services.provider_usage_instrumentation.durable_provider_runtime_required",
+            lambda: True,
+        )
+        monkeypatch.setattr(
+            "services.provider_usage_instrumentation.reserve_provider_call_detached",
+            reserve,
+        )
+        monkeypatch.setattr(
+            "services.provider_usage_instrumentation.reconcile_provider_call_detached",
+            reconcile,
+        )
+        job_id = uuid.uuid4()
+        with provider_usage_scope(
+            job_id=job_id,
+            operation="generate",
+            stage="author",
+            attempt_number=1,
+            slide_index=0,
+        ):
+            # The runtime guard permits a retry only after one initial request.
+            async with provider_call_admission():
+                pass
+            error = errors[stop]()
+            with pytest.raises(type(error)) as raised:
+                async with provider_call_admission(is_retry=True):
+                    raise error
+
+        assert raised.value is error
+        assert reconciled[-1] == {"actual_cost": None, "outcome": expected_outcome}
+        circuit = (await _runtime_state().control.snapshot())["circuit"]
+        assert circuit["consecutive_failures"] == expected_circuit_failures
+        assert circuit["state"] == "closed"
+        status = await provider_runtime_job_status(job_id)
+        assert status["retry_requests"] == 1
+        assert status["actual_cost_unavailable_count"] == 2
+
+    asyncio.run(scenario())
+
+
 def test_public_only_scope_requires_an_operation_identity():
     import pytest
     from services.provider_usage_instrumentation import provider_usage_scope

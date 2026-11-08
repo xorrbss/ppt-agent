@@ -9,6 +9,7 @@ import uuid
 import pytest
 
 from test_svg_source_layout import manifest_for, plan_for
+from models.presentation_outline_model import PresentationOutlineModel, SlideOutlineModel
 from services import svg_presentation_service as generation
 from services.authored_checkpoint_errors import AuthoredStageError
 from services.svg_source_layout import assemble_source_svg
@@ -51,6 +52,10 @@ async def test_source_generation_verifies_before_publish_and_bounds_repair(monke
         async def __aexit__(self, *_): pass
         async def scalar(self, *_): return deepcopy(seed)
         async def get(self, *_): return None
+        async def execute(self, *_):
+            # Same answer as get(): this storage-isolated fixture has no operation row.
+            return SimpleNamespace(one_or_none=lambda: None,
+                                   mappings=lambda: SimpleNamespace(one_or_none=lambda: None))
         async def commit(self): pass
         def add(self, *_): pass
 
@@ -71,7 +76,13 @@ async def test_source_generation_verifies_before_publish_and_bounds_repair(monke
     monkeypatch.setattr(generation, "require_svg_creation_admission", lambda _: None)
     monkeypatch.setattr(generation, "pin_svg_style", lambda _: snapshot)
     monkeypatch.setattr("utils.svg_template_fonts.source_font_profile", lambda _: "test-font-profile/v2")
-    monkeypatch.setattr(generation, "request_canvas_contract", lambda _: SimpleNamespace(width_px=1280, height_px=720))
+    # The real canvas contract: input preflight serializes it as typed JSON,
+    # which a bare namespace cannot be.
+    from services.authored_canvas import canvas_metadata_for_aspect_ratio
+
+    canvas = canvas_metadata_for_aspect_ratio("16:9").canvas_contract()
+    assert (canvas.width_px, canvas.height_px) == (1280, 720)
+    monkeypatch.setattr(generation, "request_canvas_contract", lambda _: canvas)
     monkeypatch.setattr(generation, "async_session_maker", Session)
     monkeypatch.setattr(generation, "owned_job", AsyncMock(return_value=job))
     monkeypatch.setattr(generation, "initialize_checkpoints", AsyncMock())
@@ -88,7 +99,7 @@ async def test_source_generation_verifies_before_publish_and_bounds_repair(monke
     monkeypatch.setattr("services.artifact_store.configured_public_artifact_service", lambda: object())
     monkeypatch.setattr("services.svg_generation_assets.publication_context", AsyncMock(return_value=(object(), 1)))
     monkeypatch.setattr("services.svg_generation_assets.prepare_source_manifest", AsyncMock(
-        return_value=(SimpleNamespace(slots=[], digest="sha256:assets"), {"ref": "test"})))
+        return_value=(SimpleNamespace(slots=[], offered_pages=[], digest="sha256:assets"), {"ref": "test"})))
     monkeypatch.setattr("services.svg_generation_assets.author_images", AsyncMock(return_value={}))
     monkeypatch.setattr("services.svg_generation_assets.screen_placement", AsyncMock(return_value=({}, None)))
     monkeypatch.setattr("services.authored_checkpoint_service.fail_stage", AsyncMock())
@@ -118,7 +129,9 @@ async def test_source_generation_verifies_before_publish_and_bounds_repair(monke
         assert kwargs["instructions"] is None
         return SimpleNamespace(png=b"png", quality={"passed": geometry_passed, "verified": False, "failures": []})
     monkeypatch.setattr("services.svg_renderer.render_svg_with_metrics", AsyncMock(side_effect=render))
-    outline = SimpleNamespace(slides=[SimpleNamespace(content="source")])
+    # The real outline model: header preparation deep-copies it and reassigns
+    # ``slides``, which a bare namespace cannot honor.
+    outline = PresentationOutlineModel(slides=[SlideOutlineModel(content="source")])
 
     if not geometry_passed:
         with pytest.raises(AuthoredStageError) as failed:
@@ -147,7 +160,7 @@ async def test_source_generation_verifies_before_publish_and_bounds_repair(monke
     ("legacy_source", 2), ("durable_source", 3),
     ("incremental_page_render_reuse", 0),
 ])
-async def test_source_structural_visual_repair_uses_existing_attempt_evidence(monkeypatch, scenario, expected_calls):
+async def test_source_structural_visual_repair_uses_existing_attempt_evidence(monkeypatch, tmp_path, scenario, expected_calls):
     from services.generation_core.drivers.svg import author, collect, render
 
     if scenario == "incremental_page_render_reuse":
@@ -458,13 +471,21 @@ async def test_source_structural_visual_repair_uses_existing_attempt_evidence(mo
             "raw_response": f"response-{provider_ordinal}"})
         return author.AuthorAttempt(svg=assembly.svg_content)
 
+    from services import svg_presentation_checkpoint as checkpoint_store
+    monkeypatch.setattr(checkpoint_store, "checkpoint_root", lambda: tmp_path)
+    metrics = {"fonts_ready": True, "elements": [{"qid": "svg-1", "owned_text": "원본 ␟", "font_size": 12.5}]}
+    hints = []
+
     async def measured(svg, **kwargs):
         assert svg == assembly.svg_content
         assert kwargs["required_text"] == ["원본 내용 125%"]
         assert kwargs["minimum_font_px"] == 7 and kwargs["instructions"] is None
+        if payload.get("repair_hint"):
+            hints.append(payload["repair_hint"])
         passed = steps[len(calls) - 1] == "pass"
         return SimpleNamespace(png=b"png", quality={"passed": passed, "verified": False,
-            "failures": [] if passed else [{"kind": "text_overlap"}]})
+            "failures": [] if passed else [{"kind": "text_overlap"}],
+            "browser_metrics": deepcopy(metrics), "overlap_basis": "ink"})
 
     from services.svg_source_layout import verify_source_receipt
     def verify(svg, receipt, source, index):
@@ -488,6 +509,39 @@ async def test_source_structural_visual_repair_uses_existing_attempt_evidence(mo
         assert result is payload and png is None
         assert payload["quality"]["passed"] is True
         assert payload["source_preservation"]["rendering_verified"] is True
+        # Metrics persist once behind an integrity-bound reference shared by
+        # every holder; repair hints still carry the exact inline metrics.
+        reference = payload["quality"]["browser_metrics_ref"]
+        assert "browser_metrics" not in payload["quality"]
+        assert list(payload["quality"]).index("browser_metrics_ref") == 3
+        assert all(item["quality"]["browser_metrics_ref"] == reference
+                   for item in payload["attempts"] if item.get("quality"))
+        assert "browser_metrics" not in payload.get("initial_quality", {})
+        assert checkpoint_store.quality_browser_metrics(payload["quality"]) == metrics
+        view = checkpoint_store.with_browser_metrics(payload["quality"])
+        assert list(view)[3] == "browser_metrics" and view["browser_metrics"] == metrics
+        assert "browser_metrics_ref" in payload["quality"]
+        visual_hints = [hint for hint in hints if "text_overlap" in hint]
+        assert visual_hints and all('"browser_metrics": {"fonts_ready": true' in hint
+                                    and "browser_metrics_ref" not in hint for hint in visual_hints)
+        legacy = {"passed": True, "browser_metrics": metrics}
+        assert checkpoint_store.quality_browser_metrics(legacy) is metrics
+        assert checkpoint_store.with_browser_metrics(legacy) is legacy
+        blob = tmp_path / "svg-metrics" / reference["sha256"][:2] / f"{reference['sha256']}.json"
+        original_blob = blob.read_bytes()
+        for corrupt in ({**payload["quality"], "browser_metrics": metrics},
+                        {"browser_metrics_ref": {**reference, "sha256": "0" * 64}},
+                        {"browser_metrics_ref": {**reference, "bytes": reference["bytes"] + 1}},
+                        {"browser_metrics_ref": {**reference, "schema": "other"}}):
+            with pytest.raises(ValueError, match="svg_browser_metrics_ref_invalid"):
+                checkpoint_store.quality_browser_metrics(corrupt)
+        blob.write_bytes(original_blob.replace(b"12.5", b"13.5"))
+        with pytest.raises(ValueError, match="svg_browser_metrics_ref_invalid"):
+            checkpoint_store.quality_browser_metrics(payload["quality"])
+        blob.unlink()
+        with pytest.raises(ValueError, match="svg_browser_metrics_ref_invalid"):
+            checkpoint_store.quality_browser_metrics(payload["quality"])
+        blob.write_bytes(original_blob)
         saved = deepcopy(payload)
         payload["attempts"].pop()
         assert render.source_structural_visual_retry(ctx, payload, index=0)
@@ -777,27 +831,408 @@ async def test_source_publish_rejects_missing_receipt_before_database_access():
 
 
 @run_async
-async def test_terminal_page_failure_cancels_waiters_without_accepting_late_results():
-    waiting = asyncio.Event()
-    cancelled = asyncio.Event()
+@pytest.mark.parametrize("failure_scope", ["global", "page_local", "admission_wait", "quality_then_global",
+                                           "retry_after_stopped", "cancel_during_record",
+                                           "record_failed_global", "record_failed_generic"])
+async def test_terminal_page_failure_global_cancels_waiters_page_local_freezes_dispatch(monkeypatch, failure_scope):
+    """A global page error still cancels waiters without accepting late results.
 
-    async def slow_provider():
-        waiting.set()
-        try:
-            await asyncio.Event().wait()
-        finally:
-            cancelled.set()
+    An exhausted page that no terminal policy rescues fails only itself: it
+    freezes dispatch, a sibling approved before the freeze finishes and is
+    checkpointed, a page never approved stays unstarted, and the deck still
+    fails closed with the page's own error.
 
-    async def failed_page():
-        await waiting.wait()
-        raise AuthoredStageError(slide_index=0, stage="author",
-            code="svg_source_plan_input_mismatch", retryable=False)
+    ``admission_wait``: the third page passed the pre-admission check before
+    the freeze and reaches ``before_dispatch`` after it; it dispatches nothing
+    and leaves the sealed ``dispatch.stopped`` witness. ``quality_then_global``:
+    a later retryable global error keeps its own type and code, and the
+    operation retry decision still refuses an automatic retry.
 
-    tasks = [asyncio.create_task(slow_provider()), asyncio.create_task(failed_page())]
-    with pytest.raises(AuthoredStageError):
-        await asyncio.wait_for(generation._collect_pages_or_fail(tasks), timeout=1)
-    assert cancelled.is_set()
-    assert all(task.done() for task in tasks)
+    ``retry_after_stopped``: the ``admission_wait`` stop on a later attempt of
+    the same job, whose page already holds an earlier attempt's sealed
+    ``dispatch.stopped`` record at ordinal 1. The real sealed writer accepts
+    the new stop at the next ordinal and leaves the old record unchanged; the
+    attempt index sent to admission, the count and the limit do not move.
+    ``cancel_during_record``: the later global error cancels the failed page
+    while its exhausted row is being written; that write completes before the
+    cancellation finishes, and no provider call follows.
+    ``record_failed_global``: that write fails after the cancellation; the
+    retryable global ``AuthoredStageError`` still propagates as itself, but its
+    existing ``retryable`` flag no longer reopens an automatic retry.
+    ``record_failed_generic``: the write itself fails with a database error
+    (its own ``code``, no ``retryable``) that propagates unchanged and keeps its
+    classification, yet neither the generic status error nor the durable
+    failure decision reopens an automatic retry.
+    """
+    if failure_scope == "global":
+        waiting = asyncio.Event()
+        cancelled = asyncio.Event()
+
+        async def slow_provider():
+            waiting.set()
+            try:
+                await asyncio.Event().wait()
+            finally:
+                cancelled.set()
+
+        async def failed_page():
+            await waiting.wait()
+            raise AuthoredStageError(slide_index=0, stage="author",
+                code="svg_source_plan_input_mismatch", retryable=False)
+
+        tasks = [asyncio.create_task(slow_provider()), asyncio.create_task(failed_page())]
+        with pytest.raises(AuthoredStageError):
+            await asyncio.wait_for(generation._collect_pages_or_fail(tasks), timeout=1)
+        assert cancelled.is_set()
+        assert all(task.done() for task in tasks)
+        return
+
+    from dataclasses import replace
+    from services.generation_core.drivers.svg import render as svg_render
+    from services.generation_core.quality.terminal_policy import TerminalPolicy
+    from services.generation_core.runtime.profile import resolve_svg_runtime_profile
+    from services.svg_contract import source_digest
+    from services.svg_presentation_prepare import GenerationContext
+
+    failed_index, sibling_index, unstarted_index = 0, 1, 2
+    profile = replace(resolve_svg_runtime_profile(source_reflow=False), terminal_policy=TerminalPolicy.FAIL)
+    # Two pages in flight: the third can only start once a page has left, and
+    # the failed page leaves by freezing dispatch first.
+    ctx = GenerationContext(
+        source_reflow=False, raster_reconstruction=False, raster_analysis=None, raster_pin=None,
+        source_document=None, source_units=None, canonical_assets=False,
+        canvas=SimpleNamespace(width_px=1280, height_px=720), physical_kwargs={}, snapshot={},
+        source_font_profile=None, count=3, roles=["cover", "content", "content"],
+        manifests=[{}, {}, {}], planned=[{}, {}, {}], source_manifest=None, source_pointer=None,
+        asset_context=None, asset_revision=None, service=None,
+        semaphore=asyncio.Semaphore(3 if failure_scope in {"admission_wait", "retry_after_stopped"} else 2),
+        render_semaphore=asyncio.Semaphore(2), runtime_profile=profile)
+    monkeypatch.setattr("services.generation_core.drivers.svg.collect._prepare_generation",
+                        AsyncMock(return_value=ctx))
+    events, saved, page_tasks = [], {}, {}
+    sibling_approved, sibling_release = asyncio.Event(), asyncio.Event()
+
+    async def checkpoint(_job, index, *, payload=None):
+        if payload is not None:
+            saved[index] = deepcopy(payload)
+            events.append(("checkpoint", index, (payload.get("quality") or {}).get("passed")))
+        return deepcopy(saved.get(index, {}))
+
+    monkeypatch.setattr(generation, "_checkpoint", checkpoint)
+    monkeypatch.setattr(generation, "_read_png", lambda _payload: None)
+    monkeypatch.setattr(generation, "_write_png", lambda _png: {"png_sha256": "test", "png_path": "test"})
+    publish = AsyncMock(return_value="published")
+    monkeypatch.setattr(generation, "_publish", publish)
+
+    async def fail_stage(**kwargs):
+        events.append(("fail_stage", kwargs["slide_index"], kwargs["error"].code))
+        sibling_release.set()
+        if failure_scope == "record_failed_generic" and kwargs["slide_index"] == failed_index:
+            events.append(("fail_stage_failed", failed_index))
+            raise database_error
+        if failure_scope in {"cancel_during_record", "record_failed_global"} and (
+                kwargs["slide_index"] == failed_index):
+            # Still writing when the sibling's global error cancels the page.
+            page_task = page_tasks[failed_index]
+            for _ in range(1000):
+                if page_task.cancelling():
+                    break
+                await asyncio.sleep(0)
+            for _ in range(3):
+                await asyncio.sleep(0)
+            assert page_task.cancelling() and not page_task.done()
+            if failure_scope != "cancel_during_record":
+                events.append(("fail_stage_failed", failed_index))
+                raise RuntimeError("checkpoint connection lost")
+            events.append(("fail_stage_committed", failed_index))
+
+    fail_stage_mock = AsyncMock(side_effect=fail_stage)
+    monkeypatch.setattr("services.authored_checkpoint_service.fail_stage", fail_stage_mock)
+    from services import svg_presentation_checkpoint as checkpoint_store
+    real_record_svg_provider_event = checkpoint_store.record_svg_provider_event
+
+    async def record_svg_provider_event(active_job, index, record):
+        if failure_scope == "retry_after_stopped":
+            # The real sealed writer over this fixture's stored row: it
+            # rejects any different record at an occupied ordinal.
+            row = SimpleNamespace(svg_checkpoint=deepcopy(saved[index]),
+                                  attempt_token=active_job.attempt_token)
+
+            class RowSession:
+                async def __aenter__(self): return self
+                async def __aexit__(self, *_): pass
+                async def scalar(self, _query): return row
+                def add(self, _row): pass
+                async def commit(self): saved[index] = deepcopy(row.svg_checkpoint)
+
+            with monkeypatch.context() as writer_scope:
+                writer_scope.setattr(checkpoint_store, "async_session_maker", RowSession)
+                writer_scope.setattr(checkpoint_store, "owned_job", AsyncMock(
+                    return_value=SimpleNamespace(workspace_operation_id=None)))
+                sealed = await real_record_svg_provider_event(active_job, index, record)
+            events.append(("sealed", index, record["terminal_event"]))
+            return sealed
+        # The real sealed writer's preconditions: the stored row carries the
+        # inflight witness of this ordinal and the same input digest.
+        assert active_job is job and saved[index]["inflight"] == record["ordinal"]
+        assert record["input_digest"] == saved[index]["input_digest"]
+        sealed = {**record, "receipt_digest": "sha256:sealed"}
+        saved[index] = {**saved[index], "inflight": None,
+                        "provider_terminal_responses": {str(record["ordinal"]): sealed}}
+        events.append(("sealed", index, record["terminal_event"]))
+        return deepcopy(sealed)
+
+    monkeypatch.setattr("services.svg_presentation_checkpoint.record_svg_provider_event",
+                        record_svg_provider_event)
+    global_error = AuthoredStageError(slide_index=sibling_index, stage="author",
+                                      code="svg_provider_transport_unavailable", retryable=True)
+    from sqlalchemy.exc import OperationalError
+
+    def connection_lost():
+        return OperationalError("UPDATE authored_slide_checkpoints", {}, ConnectionError("connection lost"))
+
+    database_error = connection_lost()
+    propagated = database_error if failure_scope == "record_failed_generic" else global_error
+
+    async def author(*, index, before_dispatch, **_kwargs):
+        if index == failed_index and index not in page_tasks:
+            page_task = page_tasks[index] = asyncio.current_task()
+            page_task.add_done_callback(
+                lambda done: events.append(("page_done", failed_index, done.cancelled())))
+        if index == unstarted_index:
+            # Entered admission before the freeze; still waiting when it lands.
+            await sibling_release.wait()
+        await before_dispatch()
+        events.append(("approved", index))
+        if index == sibling_index:
+            sibling_approved.set()
+            # In flight when the failed page freezes dispatch.
+            await sibling_release.wait()
+            if failure_scope in {"quality_then_global", "cancel_during_record", "record_failed_global"}:
+                raise global_error
+        else:
+            await sibling_approved.wait()
+        return SvgAuthorResult(f"<svg data-index='{index}'/>", "raw", {"validation_error": None})
+
+    author_mock = AsyncMock(side_effect=author)
+    monkeypatch.setattr("services.generation_core.authoring.author_slide_svg.author_slide_svg", author_mock)
+    monkeypatch.setattr("services.svg_contract.finalize_svg", lambda svg, **_kwargs: svg)
+    monkeypatch.setattr("services.svg_renderer.render_svg_with_metrics", AsyncMock(
+        side_effect=lambda svg, **_kwargs: SimpleNamespace(png=b"png", quality={
+            "passed": True, "verified": False, "failures": [], "source_digest": source_digest(svg)})))
+    real_render = svg_render.attempt_render
+
+    async def attempt_render(**kwargs):
+        if kwargs["index"] != failed_index:
+            return await real_render(**kwargs)
+        # The renderer's FAIL contract for an unpassed page: the first
+        # measurement asks for one repair, the second exhausts the page.
+        if kwargs["ordinal"] == 0:
+            kwargs["payload"]["svg_content"] = None
+            await kwargs["checkpoint"](kwargs["job"], failed_index, payload=kwargs["payload"])
+            return svg_render.RETRY
+        raise AuthoredStageError(slide_index=failed_index, stage="render",
+                                 code="svg_source_quality_failed", retryable=False)
+
+    monkeypatch.setattr(svg_render, "attempt_render", attempt_render)
+    request = SimpleNamespace(instructions=None, codex_generation_preset=None, authored_style="default",
+        include_title_slide=False, content="deck content", reference_snapshot_ids=[], strategy="svg",
+        aspect_ratio="16:9", _source_content_svg_reflow=False)
+    outline = SimpleNamespace(slides=[SimpleNamespace(content=f"slide {i} content") for i in range(3)])
+    job = SimpleNamespace(id=uuid.uuid4(), attempt_token="attempt", workspace_operation_id=None,
+                          attempt_number=1)
+    if failure_scope == "retry_after_stopped":
+        from services.svg_generation_inputs import svg_page_input_digest
+        from utils.hashing import canonical_json_sha256
+        from utils.provider_overload import safe_provider_diagnostics
+
+        stop_diagnostics = {"streamStage": "before_stream", "failureKind": "dispatch_stopped"}
+        input_digest = svg_page_input_digest(content=outline.slides[unstarted_index].content,
+            style=ctx.snapshot, index=unstarted_index, count=ctx.count, instructions=request.instructions,
+            language="ko", preset=request.codex_generation_preset, assets=ctx.manifests[unstarted_index],
+            writing_policy=None, header_page=None)
+        # An earlier attempt of this job stopped the same page before SDK I/O.
+        prior_unsigned = {"terminal_event": "dispatch.stopped", "diagnostics": dict(stop_diagnostics),
+            "schema": "svg-provider-terminal/v1", "ordinal": 1, "job_id": str(job.id), "operation_id": None,
+            "attempt_token": "attempt-previous", "fencing_token": None, "input_digest": input_digest}
+        prior_record = {**prior_unsigned, "receipt_digest": canonical_json_sha256(prior_unsigned, allow_nan=False)}
+        prior_record_digest = canonical_json_sha256(prior_record, allow_nan=False)
+        saved[unstarted_index] = {"schema_version": "svg-slide-checkpoint/v1", "source_format": "svg",
+            "input_digest": input_digest, "attempts": [], "inflight": None,
+            "provider_terminal_responses": {"1": deepcopy(prior_record)},
+            "provider_diagnostics": [{"ordinal": 1, "code": "public_provider_dispatch_stopped",
+                                      "diagnostics": dict(stop_diagnostics)}]}
+
+    with pytest.raises(type(propagated)) as failed:
+        await asyncio.wait_for(generation._generate(request, uuid.uuid4(), outline, "ko", None, job), timeout=5)
+
+    publish.assert_not_awaited()
+    # No dispatch approved after the freeze, in every case.
+    assert {event[1] for event in events if event[0] == "approved"} == {failed_index, sibling_index}
+    if failure_scope in {"record_failed_global", "record_failed_generic"}:
+        from services.presentation_generation_attempt_timing import _safe_failure
+        from services.presentation_generation_operation_handler import _generation_failure_decision
+        from services.public_generation_worker_lifecycle import durable_generation_failure
+
+        # The propagating error is the original object ...
+        assert failed.value is propagated
+        assert page_tasks[failed_index].cancelled() is (failure_scope == "record_failed_global")
+        assert events.index(("fail_stage_failed", failed_index)) < events.index(
+            ("page_done", failed_index, failure_scope == "record_failed_global"))
+        # ... the exhausted page's row was never written, and no provider call followed.
+        assert sorted(call.kwargs["index"] for call in author_mock.await_args_list) == [
+            failed_index, failed_index, sibling_index]
+        assert unstarted_index not in saved
+        if failure_scope == "record_failed_global":
+            assert global_error.retryable is False
+            assert (global_error.code, global_error.stage, global_error.slide_index) == (
+                "svg_provider_transport_unavailable", "author", sibling_index)
+            # Only the sibling's own row persisted; its status error, which the
+            # pipeline stores and the handler reads, refuses the automatic retry.
+            status_error = global_error.as_safe_dict(request_id=None, attempt_number=job.attempt_number)
+            sibling_rows = [(sibling_index, call.kwargs["error"].as_safe_dict(
+                request_id=call.kwargs["request_id"], attempt_number=job.attempt_number))
+                for call in fail_stage_mock.await_args_list if call.kwargs["slide_index"] == sibling_index]
+            assert _safe_failure(status_error) == ("svg_provider_transport_unavailable", False)
+            assert await _generation_failure_decision(SimpleNamespace(
+                execute=AsyncMock(return_value=SimpleNamespace(all=lambda: sibling_rows)),
+                rollback=AsyncMock()), job.id, status_error) == ("svg_provider_transport_unavailable", False)
+        else:
+            from fastapi import HTTPException
+            from services.presentation_generation_pipeline import (
+                _authored_vnext_generation_http_exception, _durable_generation_control_http_exception,
+                _generic_generation_failure_payload,
+            )
+
+            assert type(database_error) is OperationalError and database_error.code == "e3q8"
+            assert "retryable" not in vars(database_error)
+            assert [call.kwargs["slide_index"] for call in fail_stage_mock.await_args_list] == [failed_index]
+            # Classified exactly like the same database error without lost
+            # evidence: no control error, the same generic status code ...
+            unmarked = connection_lost()
+            for candidate in (database_error, unmarked):
+                assert _durable_generation_control_http_exception(candidate) is None
+                assert _authored_vnext_generation_http_exception(candidate) is None
+            generic = HTTPException(status_code=500, detail="Presentation generation failed")
+            status_error = _generic_generation_failure_payload(database_error, generic, request_id=None)
+            unmarked_status = _generic_generation_failure_payload(unmarked, generic, request_id=None)
+            assert {key: value for key, value in status_error.items() if key != "retryable"} == unmarked_status
+            code = _safe_failure(unmarked_status)[0]
+            assert durable_generation_failure(unmarked) == (durable_generation_failure(database_error)[0], True)
+
+            def no_failed_rows():
+                return SimpleNamespace(execute=AsyncMock(return_value=SimpleNamespace(all=lambda: [])),
+                                       rollback=AsyncMock())
+
+            # ... but the exhausted page's lost row denies the automatic retry
+            # through both the status error the handler reads and the durable
+            # failure decision; the unmarked error stays retryable.
+            assert await _generation_failure_decision(no_failed_rows(), job.id, status_error) == (code, False)
+            assert await _generation_failure_decision(no_failed_rows(), job.id, unmarked_status) == (code, True)
+            assert durable_generation_failure(database_error)[1] is False
+        return
+    if failure_scope in {"quality_then_global", "cancel_during_record"}:
+        from services.presentation_generation_attempt_timing import _safe_failure
+        from services.presentation_generation_operation_handler import _generation_failure_decision
+
+        # The later global error propagates as itself, not as the page error.
+        assert failed.value is global_error
+        assert [call.kwargs["slide_index"] for call in fail_stage_mock.await_args_list] == [
+            failed_index, sibling_index]
+        # The pipeline's status error for it is retryable on its own (the job
+        # summary ``fail_stage`` wrote last says so too) ...
+        status_error = global_error.as_safe_dict(request_id=None, attempt_number=job.attempt_number)
+        code = "svg_provider_transport_unavailable"
+        assert _safe_failure(status_error) == (code, True)
+        # ... but the persisted rows ``fail_stage`` wrote include the exhausted
+        # page, so the operation retry decision keeps the code and refuses an
+        # automatic retry that would buy that page again.
+        rows = [(call.kwargs["slide_index"], call.kwargs["error"].as_safe_dict(
+            request_id=call.kwargs["request_id"], attempt_number=job.attempt_number))
+            for call in fail_stage_mock.await_args_list]
+
+        def session_for(found):
+            return SimpleNamespace(execute=AsyncMock(return_value=SimpleNamespace(all=lambda: found)),
+                                   rollback=AsyncMock())
+
+        assert await _generation_failure_decision(session_for(rows), job.id, status_error) == (code, False)
+        # Without exhausted evidence the same failure stays retryable.
+        assert await _generation_failure_decision(session_for(rows[1:]), job.id, status_error) == (code, True)
+        # No failed rows does not block the normal retry ...
+        assert await _generation_failure_decision(session_for([]), job.id, status_error) == (code, True)
+        # ... but an unreadable failed row never reopens it.
+        sibling_row = rows[1]
+        for malformed in (None, "error", {**sibling_row[1], "code": None},
+                          {**sibling_row[1], "retryable": 0}, {**sibling_row[1], "slide_index": True},
+                          {**sibling_row[1], "slide_index": sibling_index + 1}):
+            assert await _generation_failure_decision(
+                session_for([(sibling_index, malformed)]), job.id, status_error) == (code, False)
+        if failure_scope == "cancel_during_record":
+            # Cancelled mid-write, the failed page joined its exhausted-row
+            # write before its own cancellation finished propagating ...
+            assert page_tasks[failed_index].cancelled()
+            assert events.index(("fail_stage_committed", failed_index)) < events.index(
+                ("page_done", failed_index, True))
+            # ... and no provider call followed: the unstarted page bought nothing.
+            assert sorted(call.kwargs["index"] for call in author_mock.await_args_list) == [
+                failed_index, failed_index, sibling_index]
+            assert unstarted_index not in saved
+        return
+    assert (failed.value.code, failed.value.slide_index) == ("svg_source_quality_failed", failed_index)
+    # The failed page is recorded once and bought nothing beyond its own limit.
+    fail_stage_mock.assert_awaited_once()
+    assert fail_stage_mock.await_args.kwargs["slide_index"] == failed_index
+    assert sorted(call.kwargs["index"] for call in author_mock.await_args_list) == (
+        [failed_index, failed_index, sibling_index]
+        + ([unstarted_index] if failure_scope in {"admission_wait", "retry_after_stopped"} else []))
+    if failure_scope in {"admission_wait", "retry_after_stopped"}:
+        # Stopped at ``before_dispatch`` after admission reserved the call: no
+        # SDK dispatch, no attempt and no failure record, only the sealed
+        # before-stream ``dispatch.stopped`` witness, written after its
+        # inflight checkpoint and after the freeze.
+        stopped = saved[unstarted_index]
+        assert stopped["inflight"] is None and not stopped["attempts"] and not stopped.get("svg_content")
+        from services.svg_presentation_checkpoint import _provider_attempt_count, _provider_attempt_limit
+        assert _provider_attempt_count(stopped) == 0
+        stop_ordinal = 2 if failure_scope == "retry_after_stopped" else 1
+        record = stopped["provider_terminal_responses"][str(stop_ordinal)]
+        assert record["ordinal"] == stop_ordinal and record["attempt_token"] == job.attempt_token
+        assert record["terminal_event"] == "dispatch.stopped" and record.get("response_id") is None
+        assert record["diagnostics"] == (safe_provider_diagnostics(diagnostics=stop_diagnostics)
+            if failure_scope == "retry_after_stopped"
+            else {"streamStage": "before_stream", "failureKind": "dispatch_stopped"})
+        assert record["job_id"] == str(job.id) and record["operation_id"] is None
+        assert "raw_response" not in record and "usage" not in record
+        assert stopped["provider_diagnostics"][-1]["code"] == "public_provider_dispatch_stopped"
+        assert stopped["provider_diagnostics"][-1]["ordinal"] == stop_ordinal
+        # The stop asked admission for this page's first attempt, whatever its
+        # terminal ordinal.
+        assert [call.kwargs["receipt_attempt_ordinal"] for call in author_mock.await_args_list
+                if call.kwargs["index"] == unstarted_index] == [1]
+        if failure_scope == "retry_after_stopped":
+            # The earlier attempt's sealed record is kept byte for byte, the
+            # new stop has its own greater ordinal, and neither is a purchase:
+            # the count and the page's attempt limit are those of a fresh page.
+            records = stopped["provider_terminal_responses"]
+            assert set(records) == {"1", "2"} and records["2"]["receipt_digest"]
+            assert records["1"] == prior_record
+            assert canonical_json_sha256(records["1"], allow_nan=False) == prior_record_digest
+            assert [item["ordinal"] for item in stopped["provider_diagnostics"]] == [1, 2]
+            assert _provider_attempt_limit(stopped, index=unstarted_index, job=job) == 2
+        witness_at = events.index(("checkpoint", unstarted_index, None))
+        assert events.index(("fail_stage", failed_index, "svg_source_quality_failed")) < witness_at
+        assert witness_at < events.index(("sealed", unstarted_index, "dispatch.stopped"))
+    else:
+        # Stopped before admission: no reservation, inflight witness, failure
+        # record or checkpoint.
+        assert unstarted_index not in saved
+    # The sibling approved before the freeze finished after it and its result was accepted.
+    frozen_at = events.index(("fail_stage", failed_index, "svg_source_quality_failed"))
+    accepted_at = events.index(("checkpoint", sibling_index, True))
+    assert frozen_at < accepted_at
+    assert saved[sibling_index]["quality"]["passed"] is True
+    assert saved[sibling_index]["inflight"] is None
+    assert saved[sibling_index]["svg_content"] and saved[sibling_index]["png_sha256"] == "test"
 
 
 def test_source_svg_worker_materializes_only_fixed_bundled_fonts():
@@ -887,3 +1322,246 @@ def test_composition_observes_scaled_content_excluding_chrome_without_aesthetic_
         payload["source_preservation"] = {"template_application": {"source_parallel_groups": [["a", "b"]]}}
     assert observe_svg_deck_composition(pages)["groups"][0]["observation"] == "comparison_structure_repetition"
     assert observe_svg_deck_composition([({"svg_content": "<svg>"}, None)])["observedPages"] == 0
+
+
+def _measured_overlap_page(root, monkeypatch, *, compact):
+    """A completed-but-failed source page whose browser metrics are inline or a sealed reference.
+
+    Everything is real: the source binding, the sealed terminal receipt, the
+    measured overlap and the immutable checkpoint image under ``root``. Only
+    the font profile lookup is pinned, as in the sibling recovery tests.
+    """
+    import json
+
+    from models.generate_presentation_request import GeneratePresentationRequest
+    from services import svg_partial_recovery as recovery
+    from services import svg_presentation_checkpoint as checkpoint
+    from services.generation_core.authoring.author_source_svg_layout import _whole_page_facts
+    from services.source_content.digests import digest_json
+    from services.svg_source_layout import bind_whole_page_source_svg, source_pages
+    from services.svg_text_overlap import text_overlaps
+    from utils.hashing import sha256_hex
+
+    owner, operation_id, job_id, presentation_id = (uuid.uuid4() for _ in range(4))
+    operation = SimpleNamespace(id=operation_id, owner_id=owner, error_code="svg_source_quality_failed")
+    contract = {"version": "svg-source-whole-page/v1"}
+    snapshot = dict(digest="fixture-style", source_authoring_contract=contract, authoring_profile={})
+    request = GeneratePresentationRequest(content="Fixture", strategy="svg", n_slides=2,
+        source_mode="source_content_restyle", language="en", common_header_mode="free",
+        template="authored", authored_style="fixture", content_policy={},
+        source_content_manifest_pin={"manifest_id": "fixture-manifest", "digest": "sha256:" + "f" * 64})
+    job = SimpleNamespace(id=job_id, workspace_operation_id=operation_id, request_payload={},
+        svg_style_snapshot=snapshot, total_slides=2,
+        authored_outline={"slides": [{"content": "Fixture"}, {"content": "Other page"}]})
+    source = manifest_for([("text", {"text": "A"}), ("text", {"text": "B"})])
+    packed = source.model_dump(mode="json", by_alias=True)
+    another_unit = deepcopy(packed["units"][0])
+    another_unit.update(sourceUnitId="p1", sourceIndex=1)
+    for block in another_unit["blocks"]:
+        block["sourceBlockId"] = block["sourceBlockId"].replace("p0:", "p1:", 1)
+    packed["units"].append(another_unit)
+    packed["counts"].update(sourceUnits=2, textBlocks=4)
+    packed.pop("manifestDigest")
+    packed["manifestDigest"] = digest_json(packed)
+    source = type(source).model_validate({**packed, "ownerId": source.owner_id})
+    pages = source_pages(source)
+    facts = _whole_page_facts(pages[0], {})
+    body = ''.join(f'<text id="{fact["element_id"]}" x="80" y="100" font-family="Noto Sans KR" '
+        f'font-size="40" font-weight="400" fill="#111111" text-anchor="start">{text}</text>'
+        for fact, text in zip(facts, ("A", "B")))
+    raw = f'<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720" viewBox="0 0 1280 720">{body}</svg>'
+    raw, preservation = bind_whole_page_source_svg(raw, source, 0, facts=facts, width=1280,
+        height=720, style_snapshot=snapshot, minimum_font_px=12)
+    asset = SimpleNamespace(digest="fixture-asset", presentation_id=presentation_id,
+        source_revision=1, offered_pages=[SimpleNamespace(page_index=0, slot_ids=())], slots=[])
+    monkeypatch.setattr("utils.svg_template_fonts.source_font_profile", lambda _: "fixture-font")
+    input_digest = recovery.digest({"page": recovery._expected_page_input_digest(request, job, 0, {}),
+        "source_manifest": source.manifest_digest, "font_profile": "fixture-font",
+        "source_page": pages[0].model_dump(mode="json"), "source_layout_version": "svg-source-layout/v2"})
+    source_digest = sha256_hex(raw.encode())
+    receipt = dict(contract_version="svg-static/v2", provider="fixture", requested_model="fixture-model",
+        style_digest=snapshot["digest"], authoring_profile={}, source_authoring_contract=contract,
+        attempt_ordinal=2, raw_digest="sha256:" + source_digest, source_digest="sha256:" + source_digest,
+        validation_error=None)
+    terminal = dict(schema="svg-provider-terminal/v1", terminal_event="response.completed",
+        operation_id=str(operation_id), job_id=str(job_id), owner_id=str(owner), tenant_id="fixture",
+        input_digest=input_digest, ordinal=2, raw_response=raw, output_digest=source_digest, usage={})
+    terminal["receipt_digest"] = recovery.digest(terminal)
+    box = dict(x=80, y=60, width=40, height=40)
+    metrics = {"fonts_ready": True, "elements": [dict(qid=f"svg-{i}", parent_qid="svg-0",
+        has_owned_text=True, text_fragments=[box], text_ink_fragments=[box]) for i in (1, 2)]}
+    pairs, basis = text_overlaps(metrics["elements"])
+    png = b"immutable-checkpoint-image"
+    png_digest = sha256_hex(png)
+
+    def place_png(directory):
+        path = directory / "svg" / png_digest[:2] / f"{png_digest}.png"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(png)
+
+    monkeypatch.setattr(checkpoint, "checkpoint_root", lambda: root)
+    place_png(root)
+    quality = dict(passed=False, geometry_passed=False, measurement_complete=True,
+        failures=[{"kind": "text_overlap", "pairs": pairs}], overlap_basis=basis,
+        physical_readability={"passed": True}, sourceImages=dict(used=[], offered=[], omitted=[]),
+        contract_version="svg-static/v1", renderer_version="svg-chromium/v1",
+        source_digest="sha256:" + source_digest, png_digest="sha256:" + png_digest,
+        wrapper_digest="sha256:" + "a" * 64, browser_metrics=metrics,
+        metrics_digest="sha256:" + sha256_hex(json.dumps(metrics, sort_keys=True,
+            separators=(",", ":"), ensure_ascii=False, default=str).encode()))
+    if compact:
+        # The recorded digest was sealed over the inline metrics; the sidecar
+        # blob replaces them without changing it.
+        assert checkpoint.compact_browser_metrics(quality) == metrics
+    payload = dict(svg_content=raw, source_digest=source_digest, source_preservation=preservation,
+        source_manifest_digest=asset.digest, inflight=None, input_digest=input_digest,
+        png_sha256=png_digest, quality=quality,
+        attempts=[dict(kind="provider", raw_response=raw, receipt={**deepcopy(receipt), "attempt_ordinal": 1}),
+                  dict(kind="provider", raw_response=raw, receipt=receipt)],
+        provider_terminal_responses={"2": terminal})
+    row = SimpleNamespace(slide_index=0, author_status="completed", render_status="failed",
+        persist_status="pending", svg_checkpoint=payload)
+    calls = [SimpleNamespace(slide_index=0, stage="author", state="reported", outcome="succeeded",
+        reconciled_at="reported", actual_cost_microunits=1, provider_id="fixture", model_id="fixture-model")
+        for _ in range(2)]
+    usage = [SimpleNamespace(job_id=job_id, stage="author", provider="fixture", model="fixture-model",
+        usage_state="reported", outcome="succeeded", request_count=2)]
+    kwargs = dict(completed=terminal, job=job, operation=operation, request=request, source=source,
+        seed={"source_font_profile": "fixture-font"}, asset=asset, episode_calls=calls, usage=usage,
+        owner=owner, tenant="fixture")
+    return SimpleNamespace(recovery=recovery, checkpoint=checkpoint, payload=payload, row=row,
+        kwargs=kwargs, metrics=metrics, place_png=place_png)
+
+
+def test_compact_metrics_reference_is_proven_by_the_real_recovery_row_check(tmp_path, monkeypatch):
+    """The recovery row verifier accepts only an intact, owner-bound sealed reference.
+
+    ``_completed_failed_source_quality`` is the per-row proof ``verify_episode``
+    runs for a failed source page. A legacy inline row keeps its exact proof.
+    """
+    from services.svg_partial_recovery import PartialRecoveryRejected
+
+    code = "svg_partial_recovery_failed_source_quality_unproven"
+
+    def prove(case, **override):
+        return case.recovery._completed_failed_source_quality(
+            case.payload, case.row, **{**case.kwargs, **override})
+
+    legacy = _measured_overlap_page(tmp_path / "legacy", monkeypatch, compact=False)
+    legacy_before = deepcopy(legacy.payload)
+    legacy_proof = prove(legacy)
+    assert legacy_proof["reason"] == "completed_source_quality_failed"
+    assert "browser_metrics" in legacy.payload["quality"] and legacy.payload == legacy_before
+    assert not (tmp_path / "legacy" / "svg-metrics").exists()
+
+    current = _measured_overlap_page(tmp_path / "current", monkeypatch, compact=True)
+    quality = current.payload["quality"]
+    assert "browser_metrics" not in quality and set(quality["browser_metrics_ref"]) == {
+        "schema", "sha256", "bytes"}
+    assert current.checkpoint._browser_metrics_path(quality["browser_metrics_ref"]["sha256"]).is_file()
+    current_before = deepcopy(current.payload)
+    proof = prove(current)
+    # Same measured metrics, so the same sealed metrics digest; the stored
+    # quality differs only by its reference, so its digest does too.
+    assert proof["reason"] == legacy_proof["reason"]
+    assert proof["metrics_digest"] == legacy_proof["metrics_digest"]
+    assert proof["quality_digest"] != legacy_proof["quality_digest"]
+    assert current.payload == current_before
+
+    for name in ("content", "size", "hash", "swapped_blob", "missing_sidecar",
+                 "inline_and_reference", "extra_key", "foreign_checkpoint_root", "foreign_owner"):
+        case = _measured_overlap_page(tmp_path / name, monkeypatch, compact=True)
+        assert prove(case)["reason"] == "completed_source_quality_failed"  # the control: intact passes
+        quality = case.payload["quality"]
+        reference = quality["browser_metrics_ref"]
+        blob = case.checkpoint._browser_metrics_path(reference["sha256"])
+        override = {}
+        if name == "content":
+            blob.write_bytes(blob.read_bytes().replace(b"svg-1", b"svg-9", 1))  # same size, other bytes
+        elif name == "size":
+            reference["bytes"] += 1
+        elif name == "hash":
+            reference["sha256"] = "0" * 64
+        elif name == "swapped_blob":
+            # A different but intact sealed blob: the reference resolves, the
+            # recorded metrics digest no longer matches.
+            other = {"browser_metrics": {"fonts_ready": True, "elements": []}}
+            case.checkpoint.compact_browser_metrics(other)
+            quality["browser_metrics_ref"] = other["browser_metrics_ref"]
+        elif name == "missing_sidecar":
+            blob.unlink()
+        elif name == "inline_and_reference":
+            quality["browser_metrics"] = deepcopy(case.metrics)
+        elif name == "extra_key":
+            reference["unexpected"] = 1
+        elif name == "foreign_checkpoint_root":
+            elsewhere = tmp_path / name / "elsewhere"
+            case.place_png(elsewhere)  # only the metrics sidecar is absent there
+            monkeypatch.setattr(case.checkpoint, "checkpoint_root", lambda: elsewhere)
+        else:
+            override["owner"] = uuid.uuid4()
+        with pytest.raises(PartialRecoveryRejected) as rejected:
+            prove(case, **override)
+        assert rejected.value.code == code, name
+
+
+def test_provider_permits_bound_author_attempts_prefer_repairs_and_hand_off_on_cancel():
+    """The pipelined page gate: provider permits bound concurrent author attempts.
+
+    Waiting repairs are admitted before fresh pages, a holding task re-enters
+    without waiting on itself, a cancelled waiter leaves no permit behind, and
+    a permit handed to a waiter cancelled before it resumes is passed on.
+    """
+    from services.generation_core.runtime.profile import ProviderPermits
+
+    async def scenario():
+        permits = ProviderPermits(2)
+        active, peak, order = 0, 0, []
+        gate = asyncio.Event()
+
+        async def attempt(name, repair):
+            nonlocal active, peak
+            async with permits.slot(repair=repair):
+                active += 1
+                peak = max(peak, active)
+                order.append(name)
+                async with permits.slot(repair=True):
+                    assert permits.in_use <= 2
+                await gate.wait()
+                active -= 1
+
+        first = [asyncio.create_task(attempt(f"page-{i}", False)) for i in range(2)]
+        await asyncio.sleep(0)
+        fresh = asyncio.create_task(attempt("fresh", False))
+        await asyncio.sleep(0)
+        repair = asyncio.create_task(attempt("repair", True))
+        cancelled = asyncio.create_task(attempt("cancelled", True))
+        await asyncio.sleep(0)
+        cancelled.cancel()
+        await asyncio.sleep(0)
+        assert permits.in_use == 2 and order == ["page-0", "page-1"]
+        gate.set()
+        await asyncio.gather(*first, fresh, repair)
+        assert cancelled.cancelled()
+        assert order == ["page-0", "page-1", "repair", "fresh"]
+        assert peak == 2 and permits.in_use == 0
+
+        single = ProviderPermits(1)
+        held = single.slot(repair=False)
+        await held.__aenter__()
+        waiter = asyncio.create_task(attempt_once(single))
+        await asyncio.sleep(0)
+        await held.__aexit__(None, None, None)
+        waiter.cancel()
+        await asyncio.gather(waiter, return_exceptions=True)
+        assert single.in_use == 0
+        async with single.slot(repair=False):
+            assert single.in_use == 1
+
+    async def attempt_once(permits):
+        async with permits.slot(repair=False):
+            raise AssertionError("a cancelled waiter must not run")
+
+    asyncio.run(scenario())
+    with pytest.raises(ValueError, match="svg_provider_permit_capacity_invalid"):
+        ProviderPermits(0)

@@ -501,3 +501,56 @@ def test_durable_rpm_and_circuit_are_shared_database_state(tmp_path: Path) -> No
             await engine.dispose()
 
     asyncio.run(scenario())
+
+
+def test_detached_settlement_locks_circuit_before_budget(tmp_path: Path, monkeypatch) -> None:
+    """A settlement takes the circuit row before the budget row, like a reservation.
+
+    The reverse order deadlocked a reservation and a settlement of two concurrent
+    calls of one deck on PostgreSQL (2026-10-21, provider_runtime_budgets vs
+    provider_runtime_circuits).
+    """
+    from sqlalchemy import event
+
+    from services import provider_durable_admission as admission
+
+    async def scenario() -> None:
+        engine, sessions = await _sessions(tmp_path / "lock-order.db")
+        monkeypatch.setattr(admission, "async_session_maker", sessions)
+        try:
+            async with sessions() as session:
+                budget = await register_durable_budget(
+                    session, tenant_id="tenant-test", owner_id=uuid.uuid4(), job_id=uuid.uuid4(),
+                    workspace_operation_id=None, estimated_limit=10, actual_limit=10,
+                )
+                await admit_provider_rpm_and_circuit(
+                    session, service_key="authored_generation.author", requests_per_minute=60,
+                    failure_threshold=5, reset_seconds=30,
+                )
+                lease = await reserve_provider_call(
+                    session, budget_id=budget.id,
+                    reservation_key_hash=sha256(b"lock-order").hexdigest(), estimated_cost=1,
+                )
+                await session.commit()
+            statements = []
+
+            def capture(_conn, _cursor, statement, *_args):
+                statements.append(" ".join(statement.split()).lower())
+
+            event.listen(engine.sync_engine, "before_cursor_execute", capture)
+            await admission.reconcile_provider_call_detached(
+                admission.DetachedDurableLease(lease, "authored_generation.author"),
+                actual_cost=1, outcome="success",
+            )
+            event.remove(engine.sync_engine, "before_cursor_execute", capture)
+            circuit_first = next(i for i, s in enumerate(statements) if "provider_runtime_circuits" in s)
+            budget_write = next(i for i, s in enumerate(statements)
+                                if s.startswith("update provider_runtime_budgets"))
+            assert circuit_first < budget_write
+            async with sessions() as session:
+                persisted = await session.get(ProviderRuntimeBudget, lease.budget_id)
+                assert persisted.estimated_reserved == 0 and persisted.actual_consumed == 1
+        finally:
+            await engine.dispose()
+
+    asyncio.run(scenario())

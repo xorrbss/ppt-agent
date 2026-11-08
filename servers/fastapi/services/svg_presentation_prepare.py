@@ -83,6 +83,7 @@ class GenerationContext:
     quality_recovery_source_evidence: list | None = None
     partial_recovery_manifest: dict | None = None
     header_pages: list | None = None
+    provider_permits: object = None
 
 
 def _preflight_svg_input_values(*, canvas, physical_kwargs, snapshot, source_document, source_units,
@@ -653,6 +654,10 @@ async def _prepare_generation(request, presentation_id, outline, session, job) -
                 context=current_context, presentation_id=presentation_id, operation_id=job.workspace_operation_id)
             await _preflight_required_source_assets(asset_session, configured_public_artifact_service(), inherited,
                 current_context)
+            from services.svg_source_input_snapshot import record_source_input_evidence
+            # This attempt's fresh proof; its publication may persist svg-source-input-snapshot/v1.
+            record_source_input_evidence(request, job=job, context=current_context,
+                partial_manifest=partial_recovery_manifest, inherited=inherited, pointer=binding["pointer"])
             if source_reflow:
                 source_identity_presentation_id = inherited.presentation_id
     source_image_registration = []
@@ -773,8 +778,17 @@ async def _prepare_generation(request, presentation_id, outline, session, job) -
     from services.svg_timeout_repurchase import sample_completion_runtime_profile
     runtime_profile, recovery_cached_first = await sample_completion_runtime_profile(
         session, job, runtime_profile)
-    semaphore = asyncio.Semaphore(runtime_profile.author_concurrency)
+    # A fresh attempt pipelines its pages: up to author + render pages are in
+    # flight, author attempts take a provider permit (capacity = the configured
+    # author concurrency) and renders keep their own gate, so a page renders
+    # while another authors. A timeout repurchase pins a cached-first serial
+    # profile and keeps the single page gate exactly as before.
+    from services.generation_core.runtime.profile import ProviderPermits
+    pipelined = recovery_cached_first is None
+    semaphore = asyncio.Semaphore(runtime_profile.author_concurrency
+                                  + (runtime_profile.render_concurrency if pipelined else 0))
     render_semaphore = asyncio.Semaphore(runtime_profile.render_concurrency)
+    provider_permits = ProviderPermits(runtime_profile.author_concurrency) if pipelined else None
     return GenerationContext(
         source_reflow=source_reflow, raster_reconstruction=raster_reconstruction,
         raster_analysis=raster_analysis, raster_pin=raster_pin, source_document=source_document,
@@ -783,7 +797,7 @@ async def _prepare_generation(request, presentation_id, outline, session, job) -
         count=count, roles=roles, manifests=manifests, planned=planned, source_manifest=source_manifest,
         source_pointer=source_pointer, asset_context=asset_context, asset_revision=asset_revision,
         service=service, semaphore=semaphore, render_semaphore=render_semaphore,
-        runtime_profile=runtime_profile,
+        runtime_profile=runtime_profile, provider_permits=provider_permits,
         recovery_cached_first=recovery_cached_first,
         asset_offer=asset_offer,
         visual_intents=visual_intents,

@@ -279,8 +279,12 @@ async def _load_original_bytes(
                 receipt=source_preservation,
                 memo=memo,
             )
+        from services.source_images.registry import source_image_storage_directory
+        # Pictures registered from a deck's own uploads live in registry
+        # storage; canonicalization trusts them only through an owned deck.
         binding = await canonicalize_legacy_image_asset(session, image=row,
-                                                       image_root=get_images_directory())
+                                                       image_root=get_images_directory(),
+                                                       source_image_root=source_image_storage_directory())
         gateway = AssetGateway()
         confirmed, path = await gateway.resolve_for_processing(session,
             asset_id=binding.asset_id, kind=binding.kind)

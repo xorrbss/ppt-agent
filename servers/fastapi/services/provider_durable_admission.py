@@ -10,6 +10,7 @@ from services.database import async_session_maker
 from services.provider_durable_runtime import (
     DurableReservationLease,
     admit_provider_rpm_and_circuit,
+    lock_provider_circuit,
     reconcile_provider_call,
     record_provider_circuit_outcome,
     register_durable_budget,
@@ -163,6 +164,9 @@ async def reconcile_provider_call_detached(
     outcome: str,
 ) -> None:
     async with async_session_maker() as session:
+        # Circuit before budget, the order reserve_provider_call_detached uses;
+        # the reverse order deadlocked a concurrent reservation (2026-10-21).
+        await lock_provider_circuit(session, lease.service_key)
         try:
             await reconcile_provider_call(
                 session,

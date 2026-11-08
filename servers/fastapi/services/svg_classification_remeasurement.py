@@ -164,19 +164,23 @@ async def build_classification_remeasurement_manifest(session, operation, *, pre
                    PublicProviderLogicalCall.logical_call_ordinal))))
         if [row.model_dump(mode="json") for row in original_calls] != original_manifest["old_logical_calls"]:
             _reject("svg_classification_remeasurement_provider_unresolved")
-    from services.svg_presentation_checkpoint import _read_png
+    from services.svg_presentation_checkpoint import _read_png, quality_browser_metrics
 
     pages, targets, recovery_reason = [], [], None
     for row in rows:
         p = row.svg_checkpoint or {}
         q = p.get("quality") or {}
+        try:
+            metrics = quality_browser_metrics(q)
+        except ValueError:
+            _reject()
         source = p.get("svg_content")
         attempts = p.get("attempts") or []
         if (not isinstance(source, str) or not source or not p.get("input_digest")
                 or not attempts or p.get("inflight") or p.get("terminal")
                 or (p.get("cache_only_remeasurement") and not dispatch_only) or _read_png(p) is None
                 or q.get("measurement_complete") is not True or q.get("geometry_passed") is not True
-                or not isinstance(q.get("browser_metrics"), dict)
+                or not isinstance(metrics, dict)
                 or q.get("source_digest") not in {sha256_hex(source.encode("utf-8")), "sha256:" + sha256_hex(source.encode("utf-8"))}
                 or q.get("png_digest") not in {p.get("png_sha256"), "sha256:" + str(p.get("png_sha256"))}
                 or attempts[-1].get("receipt", {}).get("validation_error")):
@@ -186,7 +190,7 @@ async def build_classification_remeasurement_manifest(session, operation, *, pre
             "row_digest": remeasurement_digest(row.model_dump(mode="json")),
             "source_sha256": sha256_hex(source.encode("utf-8")), "png_sha256": p["png_sha256"],
             "input_digest": p["input_digest"], "author_receipt_digest": author_witness_digest(p),
-            "browser_metrics_digest": remeasurement_digest(q["browser_metrics"]),
+            "browser_metrics_digest": remeasurement_digest(metrics),
         }
         if dispatch_only:
             original_page = next((page for page in original_manifest.get("pages", []) if page.get("slide_index") == row.slide_index), None)
