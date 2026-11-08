@@ -1,5 +1,12 @@
 # Remaining SVG work after the nine-case chart verification — 2026-11-08
 
+Latest continuation checkpoint: [Claude Code handoff](claude-code-svg-handoff-20261108.md).
+Codex work was stopped at the user's request. A later existing real 35-page
+document completed normal PPTX export and hash-bound Office rendering, with
+representative-page and native-table review. That evidence does not complete
+the separate nine-chart artifact's Office gap or fresh template generation,
+pictures, sizing, or measured quality acceptance described below.
+
 The nine-page synthetic chart artifact has completed actual capture and strict
 consumer verification, normal publication, ordinary HTTP PPTX export and the
 independent native-data/workbook/OOXML audit. These results are bounded to that

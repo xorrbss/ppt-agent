@@ -2,6 +2,15 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Current SVG handoff (2026-11-08)
+
+The user stopped Codex work and is transferring continuation to Claude Code.
+Read [the SVG handoff](docs/session-results/claude-code-svg-handoff-20261108.md)
+before continuing: it records the merged implementation, actual 35-page
+existing-document verification, preserved private evidence, and remaining work.
+Fresh generation was outside the pilot's final user-selected scope; do not
+restart agents or paid runs merely from historical execution instructions.
+
 ## What this is
 
 Presenton is an open-source, self-hostable AI presentation generator (Gamma/Beautiful AI alternative). It generates editable slide decks from prompts or uploaded documents, renders them with HTML+Tailwind templates, and exports to fully-editable PPTX and PDF. It ships as a Docker image and an HTTP API (plus an MCP server).
