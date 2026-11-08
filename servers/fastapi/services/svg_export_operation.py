@@ -1331,6 +1331,16 @@ async def execute_svg_workspace_export(context, *, presentation, admission, sess
                 public_attempt_number=claim.attempt_number, public_quality_digest=quality_digest,
                 public_quality_receipt=receipt)
         stages.lap("publish_artifact_sessions")
+        if (chart_paint_fallbacks is not None and header_authority is None
+                and measured_source_preservation is None):
+            # svg-native-requirements/v5 only: charts this export kept drawn as
+            # unverified continue in a background ``svg.chart.verify`` round.
+            # Header-revision and source-preserved exports verify derived pages,
+            # whose evidence the stored pages cannot reproduce, so they keep
+            # export-time verification alone.
+            from services.svg_chart_paint_followup import enqueue_after_export
+            await enqueue_after_export(session_factory, claim=claim, chart_paint_fallbacks=chart_paint_fallbacks)
+            stages.lap("chart_paint_followup_enqueue")
         stages.log(claim.operation_id, "completed")
         return WorkspaceOperationResult(
             payload={"status": "completed", "format": fmt, **result.resource_metrics}, result_revision=revision)

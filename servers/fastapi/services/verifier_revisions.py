@@ -431,6 +431,11 @@ WHOLE_PAGE_VERIFIER_LEDGER = VerifierRevisionLedger(
         # not measure) marks the glyph measurement incomplete and uses the estimated text
         # box, instead of raising and rejecting the chart. V5-only; V4 unchanged.
         "01c1677ec29d33843a78fec36abc6e346c4dd9b2aaf8cc55601c54ba7fd48214": "svg-whole-page-verifier/1",
+        # 2026-11-08 background svg.chart.verify continuation: after a published V5 PPTX
+        # export with charts kept drawn for missing evidence, a best-effort hook enqueues
+        # the follow-up verification. The export bundle, worker input, receipts, digests
+        # and the source-proved whole-page path are unchanged.
+        "6e009717bd98610d81add2699447743036d585e9fce5b1d3c938145963bc395c": "svg-whole-page-verifier/1",
     }),
 )
 

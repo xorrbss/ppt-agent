@@ -92,6 +92,10 @@ _SPECS = (
         "raster.review", False, False, False,
         "Review source regions", "Source region classification and OCR review", "Region review",
     ),
+    WorkspaceOperationKindSpec(
+        "svg.chart.verify", False, False, False,
+        "Verify native charts", "PowerPoint native charts", "Native chart verification",
+    ),
 )
 
 WORKSPACE_OPERATION_KIND_REGISTRY = MappingProxyType(

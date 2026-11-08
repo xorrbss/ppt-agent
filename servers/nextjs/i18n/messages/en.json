@@ -2902,6 +2902,7 @@
     "workspace_operation_slide_regenerate_batch": "Regenerate selected slides",
     "workspace_operation_slide_regenerate_batch_preview": "Preview regenerated slides",
     "workspace_operation_slide_regenerate_preview": "Preview regenerated slide",
+    "workspace_operation_svg_chart_verify": "Verify native charts",
     "workspace_operation_template_apply": "Apply template",
     "workspace_operation_unknown": "Workspace task",
     "workspace_operation_version_restore": "Restore version"

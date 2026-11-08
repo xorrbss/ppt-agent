@@ -1249,6 +1249,12 @@
       "retryable": false
     },
     {
+      "code": "svg_chart_verify_payload_invalid",
+      "status_code": 422,
+      "safe_message": "The operation request is invalid.",
+      "retryable": false
+    },
+    {
       "code": "svg_export_source_required",
       "status_code": 422,
       "safe_message": "The operation request is invalid.",

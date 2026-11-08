@@ -36,8 +36,10 @@ scripts/fake_llm_e2e/run_generation.sh 9
 ```
 
 The v5 chart paint proof runs inside `export.pptx` and is budgeted (about three
-charts per export of ~600 s), so a deck with more charts needs another export
-to verify the rest: `scripts/fake_llm_e2e/run_export.sh <presentation-id>`.
+charts per export of ~600 s). The rest are verified by the background
+`svg.chart.verify` rounds the export enqueues, which chain one refreshed
+`export.pptx` when a chart newly passed; `scripts/fake_llm_e2e/run_export.sh
+<presentation-id>` still admits a manual export.
 Fixtures adapt the builder output to the svg contract: 10px value labels are
 enlarged to 13px, and the example's descriptive line (e.g. "hole size 0.7") is
 drawn as a caption so the requested-text check finds it. Without

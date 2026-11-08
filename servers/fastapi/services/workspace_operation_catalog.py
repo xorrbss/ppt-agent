@@ -100,6 +100,9 @@ OPERATION_SPECS = (
     ),
     _spec("export.pptx", "workspace_quality_export_operation_handlers.WorkspaceExportOperationHandler", "export"),
     _spec("export.pdf", "workspace_quality_export_operation_handlers.WorkspaceExportOperationHandler", "export"),
+    # Deferred v5 chart paint verification enqueued by a v5 ``export.pptx``;
+    # it runs the same capture proof the export runs, so it shares its host.
+    _spec("svg.chart.verify", "svg_chart_paint_followup.SvgChartPaintVerificationOperationHandler", "export"),
     _spec(
         "presentation.delete",
         "presentation_deletion_operation_handler.PresentationDeletionOperationHandler",

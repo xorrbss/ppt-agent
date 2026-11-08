@@ -28,7 +28,7 @@ LOGGER = logging.getLogger(__name__)
 # export itself (bundle, worker, receipt, publication).
 EXPORT_RESERVE_SECONDS = 240
 # The capture client allows the worker timeout plus this cleanup window.
-_CLIENT_GRACE_SECONDS = 25
+CLIENT_GRACE_SECONDS = 25
 
 
 def deck_requirements_revision(presentation):
@@ -122,20 +122,40 @@ async def verify_slide_chart_paint(session, presentation, slide, *,
     return seal_paint_evidence(svg, manifest, content, paint)
 
 
-async def _store(session_factory, slide, record) -> None:
-    """Persist on the slide row only while it still holds the verified bytes."""
+async def store_chart_paint_evidence(session_factory, slide, record) -> bool:
+    """Persist on the slide row only while it still holds the verified bytes.
+
+    Returns whether the record was stored.
+    """
     from models.sql.slide import SlideModel
     try:
         async with session_factory() as session:
             row = await session.get(SlideModel, slide.id)
             if row is None or row.svg_content != slide.svg_content:
-                return
+                return False
             row.properties = {**(row.properties if isinstance(row.properties, dict) else {}), EVIDENCE_KEY: record}
             session.add(row)
             await session.commit()
+            return True
     except Exception:
         LOGGER.warning("SVG chart paint evidence for slide %s was not stored", getattr(slide, "id", None),
                        exc_info=True)
+        return False
+
+
+def slide_chart_paint_pending(slide, *, revision) -> bool:
+    """Whether a published page has v5-gated charts without current evidence.
+
+    ``False`` for every revision other than v5.
+    """
+    from services.generation_core.drivers.svg.native_requirements import REQUIREMENTS_VERSION_V5
+    if revision != REQUIREMENTS_VERSION_V5:
+        return False
+    content, svg = slide.content or {}, slide.svg_content
+    properties = getattr(slide, "properties", None)
+    properties = properties if isinstance(properties, dict) else {}
+    return bool(gated_chart_ids(content, _sidecar(content), revision=revision)
+                and current_paint_evidence(properties, content, svg) is None)
 
 
 async def deck_chart_paint_fallbacks(session_factory, *, presentation, slides,
@@ -164,7 +184,7 @@ async def deck_chart_paint_fallbacks(session_factory, *, presentation, slides,
         if (gated_chart_ids(content, sidecar, revision=revision)
                 and current_paint_evidence(properties, content, svg) is None
                 and remaining_seconds is not None
-                and remaining_seconds() >= capture_timeout + _CLIENT_GRACE_SECONDS + EXPORT_RESERVE_SECONDS):
+                and remaining_seconds() >= capture_timeout + CLIENT_GRACE_SECONDS + EXPORT_RESERVE_SECONDS):
             if between is not None:
                 await between()
             async with session_factory() as session:
@@ -172,10 +192,10 @@ async def deck_chart_paint_fallbacks(session_factory, *, presentation, slides,
                                                         capture_timeout=capture_timeout, render=render)
             if record is not None:
                 properties = {**properties, EVIDENCE_KEY: record}
-                await _store(session_factory, slide, record)
+                await store_chart_paint_evidence(session_factory, slide, record)
         result.append(chart_paint_fallbacks(content, properties, svg, sidecar, revision=revision))
     return result
 
 
 __all__ = ["EXPORT_RESERVE_SECONDS", "deck_chart_paint_fallbacks", "deck_requirements_revision",
-           "verify_slide_chart_paint"]
+           "slide_chart_paint_pending", "store_chart_paint_evidence", "verify_slide_chart_paint"]
