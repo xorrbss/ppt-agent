@@ -320,6 +320,9 @@ async def build_asset_offer(*, outline, brand, style, roles: Sequence[str], inst
         illustration_mode = "vector"
         illustration_parts = template_picture_policy["parts"]
         icons_only, image_service = True, None
+    # ``budget`` is the image-provider call budget (zero when icons only). Vector drawing
+    # calls are bounded and recorded separately (the vector receipt's callLimit and
+    # physicalCalls), so a template-pictures offer reports budget 0 while it may draw.
     receipt: dict = {"budget": 0 if icons_only else budget, "timeoutSeconds": timeout_seconds}
     if template_picture_policy is not None:
         receipt["templatePicturePolicy"] = template_picture_policy

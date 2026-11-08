@@ -42,6 +42,8 @@ Request path in Docker: browser → nginx:80 → (`/api/v1/*` → FastAPI, every
 
 `SVG_NATIVE_CHART_INTEGRITY_V5` is an internal, default-off selector for fresh SVG chart-integrity policy v5; the owner's acceptance requires every existing supported SVG/PPTX chart type and valid configuration to retain support, and existing pinned snapshots keep their interpretation. An artificially restricted proof is not a completed implementation.
 
+Source-content restyle admits every bundled DrawingML preset shape (`services/svg_source_preset_shapes.py`), not only the seven presets it used to: since `b392c58f7` this is ungated and unpinned (owner decision 2026-11-08 to keep it). The seven earlier presets keep their own code paths and bytes; inputs that used to fail with `svg_source_shape_unsupported` now render.
+
 **The upstream "outline → pick a React template → fill content" flow no longer exists here.** `POST /presentation/generate` accepts a `strategy` field (`models/generate_presentation_request.py`) typed `Optional[Literal["authored", "svg"]]`: omit it or pass one of the two literal values; anything else is a validation error. An omitted strategy resolves to **svg** (`services/generation_core/admission/strategy.py`), falling back to authored only for a source restyle with a page-size/orientation override or a request svg admission would reject. `endpoints/presentation_generate.py` branches on it into two live generation paths, and `services/presentation_profiles.py` (`PRESENTATION_DRIVER_REGISTRY`) is the single source of truth for which persisted-identity fields resolve to which driver:
 
 | strategy | driver_id | What it does |

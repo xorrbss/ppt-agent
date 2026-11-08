@@ -374,6 +374,11 @@ WHOLE_PAGE_VERIFIER_LEDGER = VerifierRevisionLedger(
         # integer/float parity, and unreadable fonts leave a proof incomplete. Stored
         # V4 and legacy evidence is unchanged.
         "7ba5494102fb78e6950c9933f8fe27f851d4e999785d97e20004a28f13938f03": "svg-whole-page-verifier/1",
+        # 2026-11-08 robustness: template_picture_style turns malformed projection data into
+        # ValueError (the existing style-unavailable path), the preset registry import is
+        # serialized by a lock, and the offer receipt's budget meaning is documented. No
+        # output for valid inputs changed.
+        "7d5042de89c4b9568366943a51d42bfc905472d7cca6c1d51e496b5402fbd331": "svg-whole-page-verifier/1",
     }),
 )
 
@@ -538,6 +543,11 @@ PARTIAL_RECOVERY_CODE_LEDGER = VerifierRevisionLedger(
         # integer/float parity, and unreadable fonts leave a proof incomplete. Stored
         # V4 and legacy evidence is unchanged.
         "09150788f26c372d033b53e787fd792ba01d7e1a3d951334dbe5c16504d0986d": "svg-partial-recovery-code/1",
+        # 2026-11-08 robustness: template_picture_style turns malformed projection data into
+        # ValueError (the existing style-unavailable path), the preset registry import is
+        # serialized by a lock, and the offer receipt's budget meaning is documented. No
+        # output for valid inputs changed.
+        "2390350e5558c3acd408097dce811245d3d6fe33385ac09b4b6a269810328376": "svg-partial-recovery-code/1",
     }),
 )
 
@@ -613,6 +623,11 @@ PAGE_RENDER_CODE_LEDGER = VerifierRevisionLedger(
         # integer/float parity, and unreadable fonts leave a proof incomplete. Stored
         # V4 and legacy evidence is unchanged.
         "4de79a055753a475c2dcdfca205c10106a02dbeb970d323ece4adc68c5ddf4d7": "svg-page-render-code/1",
+        # 2026-11-08 robustness: template_picture_style turns malformed projection data into
+        # ValueError (the existing style-unavailable path), the preset registry import is
+        # serialized by a lock, and the offer receipt's budget meaning is documented. No
+        # output for valid inputs changed.
+        "1aa3299244b8c6b7fafda80dc6d35d8ac16b90a9b33f94999b42204225a43691": "svg-page-render-code/1",
     }),
 )
 

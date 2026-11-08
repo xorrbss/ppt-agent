@@ -73,9 +73,17 @@ def template_picture_guidance(snapshot: dict | None, body_bbox=None) -> str:
 
 
 def template_picture_style(snapshot: dict, style):
-    """Adapt an existing style using only frozen template colors and typography."""
-    projection = snapshot["svg_template"].get("style_projection") or {}
-    tokens = projection.get("tokens") or {}
+    """Adapt an existing style using only frozen template colors and typography.
+
+    Malformed projection data raises ``ValueError`` like a missing palette, so the
+    offer degrades to its existing ``template_picture_style_unavailable`` path."""
+    projection = (snapshot.get("svg_template") or {}).get("style_projection") or {}
+    tokens = (projection.get("tokens") or {}) if isinstance(projection, dict) else None
+    fonts = (projection.get("fonts") or {}) if isinstance(projection, dict) else None
+    if (not isinstance(tokens, dict) or not isinstance(fonts, dict)
+            or not isinstance(tokens.get("palette", ()), (list, tuple))
+            or any(not isinstance(fonts.get(role) or {}, dict) for role in ("heading", "body"))):
+        raise ValueError("svg_template_picture_style_invalid")
 
     def color(key):
         value = tokens.get(key)
@@ -88,7 +96,6 @@ def template_picture_style(snapshot: dict, style):
     if not palette or background is None:
         raise ValueError("svg_template_picture_palette_missing")
     accent = accent or foreground or palette[0]
-    fonts = projection.get("fonts") or {}
     heading = (fonts.get("heading") or {}).get("family")
     body = (fonts.get("body") or {}).get("family")
     # This server-authored sentence deliberately excludes free-text template
@@ -103,4 +110,5 @@ def template_picture_style(snapshot: dict, style):
                    reference_images={}, slide_reference_images=(), slide_reference_indices=())
 
 
-__all__ = ["TEMPLATE_PICTURES_REVISION", "template_picture_policy", "template_picture_guidance"]
+__all__ = ["TEMPLATE_PICTURES_REVISION", "template_picture_guidance", "template_picture_policy",
+           "template_picture_style"]

@@ -184,3 +184,18 @@ def test_checkpoint_replay_precedes_new_policy_and_all_settings(monkeypatch, tmp
         _request(), SimpleNamespace(slides=[]), [], SimpleNamespace(id="synthetic"),
         profile=SimpleNamespace(), checkpoint=checkpoint, durable=True, style_snapshot=_snapshot()))
     assert replayed == original
+
+
+@pytest.mark.parametrize("projection", [
+    "not-a-dict",
+    {"tokens": "not-a-dict"},
+    {"tokens": {"background": "#FFFFFF", "accent": "#123456", "palette": "#ABCDEF"}},
+    {"tokens": {"background": "#FFFFFF", "accent": "#123456"}, "fonts": {"heading": "Pretendard"}},
+    {"tokens": {"background": "#FFFFFF", "accent": "#123456"}, "fonts": "Pretendard"},
+])
+def test_malformed_style_projection_is_a_value_error_not_a_crash(projection):
+    from types import SimpleNamespace
+    from services.svg_templates.picture_policy import template_picture_style
+
+    with pytest.raises(ValueError):
+        template_picture_style({"svg_template": {"style_projection": projection}}, SimpleNamespace())
