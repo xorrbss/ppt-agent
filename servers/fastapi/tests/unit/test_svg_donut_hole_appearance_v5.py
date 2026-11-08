@@ -6,9 +6,6 @@ import importlib
 import json
 import math
 from pathlib import Path
-import subprocess
-import sys
-import types
 from xml.etree import ElementTree as ET
 from zipfile import ZipFile
 
@@ -38,19 +35,6 @@ def vendor(monkeypatch):
     monkeypatch.syspath_prepend(str(VENDOR))
     return (importlib.import_module("svg_to_pptx.native_objects.chart_data"),
             importlib.import_module("svg_to_pptx.native_objects.chart_xml"))
-
-
-def _head_module(relative, package, monkeypatch):
-    """Read the actual checkout HEAD, including its historical absence behavior."""
-    path = "servers/fastapi/" + relative
-    source = subprocess.check_output(["git", "-C", str(ROOT), "show", "HEAD:" + path])
-    name = package + "._donut_head_" + Path(relative).stem
-    module = types.ModuleType(name)
-    module.__file__ = str(ROOT / path)
-    module.__package__ = package
-    monkeypatch.setitem(sys.modules, name, module)
-    exec(compile(source, module.__file__, "exec"), module.__dict__)
-    return module
 
 
 def _payload(chart_type="donut"):
@@ -146,43 +130,37 @@ def _xml(payload, vendor):
                                  chart_data=data_module._chart_data(payload))
 
 
-@pytest.mark.parametrize("revision", [None, "svg-native-requirements/v2", "svg-native-requirements/v3", "svg-native-requirements/v4"])
-@pytest.mark.parametrize("sectors", [False, True])
-def test_legacy_absent_override_matches_actual_head_wire_projection_and_xml(revision, sectors, vendor, monkeypatch):
-    package = "services.generation_core.drivers.svg"
-    head_chart = _head_module("services/generation_core/drivers/svg/native_chart.py", package, monkeypatch)
-    head_model = _head_module("services/generation_core/native_objects/model.py", "services.generation_core.native_objects", monkeypatch)
-    head_publish = _head_module("services/generation_core/drivers/svg/native_publish.py", package, monkeypatch)
-    head_project = _head_module("services/generation_core/drivers/svg/export_projection.py", package, monkeypatch)
-    head_data = _head_module("vendor/slide_master/svg_to_pptx/native_objects/chart_data.py", "svg_to_pptx.native_objects", monkeypatch)
-    head_xml = _head_module("vendor/slide_master/svg_to_pptx/native_objects/chart_xml.py", "svg_to_pptx.native_objects", monkeypatch)
-    head_publish.chart_object = head_chart.chart_object
-    head_publish.NativeObject = head_model.NativeObject
-    page = _page(sectors=sectors)
-    expected = head_publish.page_native_objects(deepcopy(page), pt_per_px=.75, revision=revision)
-    actual = page_native_objects(deepcopy(page), pt_per_px=.75, revision=revision)
+_LEGACY = json.loads((Path(__file__).resolve().parent / "fixtures" / "svg_v5_legacy_parity_v1.json")
+                     .read_text(encoding="utf-8"))
+
+
+def _text(value):
+    return value.decode("utf-8") if isinstance(value, bytes) else value
+
+
+@pytest.mark.parametrize("case", _LEGACY["donutLegacy"], ids=lambda case: f"{case['revision']}-{case['sectors']}")
+def test_legacy_absent_override_matches_frozen_pre_v5_wire_projection_and_xml(case, vendor):
+    """Frozen outputs of the pre-V5 modules (fixture baselineCommit), not the checkout's HEAD."""
+    page = _page(sectors=case["sectors"])
+    actual = page_native_objects(deepcopy(page), pt_per_px=.75, revision=case["revision"])
     assert actual[1]["accepted"] == 1
-    assert json.dumps(actual, ensure_ascii=False) == json.dumps(expected, ensure_ascii=False)
+    assert json.dumps(actual, ensure_ascii=False) == case["wire"]
     current = NativeObject.build(**actual[0]["objects"][0])
-    historical = head_model.NativeObject.build(**expected[0]["objects"][0])
     assert current.svg_appearance is None or "holeRatio" not in current.svg_appearance
     projected = converter_payload(current)
     assert "hole_size" not in projected
-    assert projected == head_project.converter_payload(historical)
-    assert vendor[0]._chart_data(projected) == head_data._chart_data(projected)
-    assert _xml(projected, vendor) == head_xml._chart_xml(
-        ET.Element("g"), projected, chart_rels_id="rId1", chart_data=head_data._chart_data(projected))
+    assert json.dumps(projected, ensure_ascii=False, separators=(",", ":")) == case["projected"]
+    assert repr(vendor[0]._chart_data(projected)) == case["chartData"]
+    assert _text(_xml(projected, vendor)) == case["xml"]
     assert ET.fromstring(_xml(projected, vendor)).find(f".//{{{C_NS}}}holeSize").get("val") == "75"
 
 
-def test_non_svg_absence_matches_actual_head_xml(vendor, monkeypatch):
+def test_non_svg_absence_matches_frozen_pre_v5_xml(vendor):
     item = NativeObject.build(id="donut", kind="chart", anchor=ANCHOR, payload=_payload())
     assert "svgAppearance" not in item.to_wire()
     payload = converter_payload(item)
     assert "hole_size" not in payload
-    head_xml = _head_module("vendor/slide_master/svg_to_pptx/native_objects/chart_xml.py", "svg_to_pptx.native_objects", monkeypatch)
-    assert _xml(payload, vendor) == head_xml._chart_xml(
-        ET.Element("g"), payload, chart_rels_id="rId1", chart_data=vendor[0]._chart_data(payload))
+    assert _text(_xml(payload, vendor)) == _LEGACY["nonSvgDonutXml"]
 
 
 @pytest.mark.parametrize("sectors", [False, True])

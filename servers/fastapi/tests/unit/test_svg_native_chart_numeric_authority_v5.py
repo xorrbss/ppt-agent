@@ -2,10 +2,7 @@
 from copy import deepcopy
 import json
 from pathlib import Path
-import subprocess
-import sys
 from types import SimpleNamespace
-import types
 from xml.etree import ElementTree as ET
 
 import pytest
@@ -36,44 +33,18 @@ def _claims(page, source, *, content=None, revision=V5, policy=None):
         pt_per_px=.75, revision=revision, quality_policy=policy)
 
 
-@pytest.fixture(scope="module")
-def head_native_requirements():
-    """Exact local HEAD parser, holding its imported dependencies at current bytes."""
-    repo = Path(__file__).resolve().parents[4]
-    path = "servers/fastapi/services/generation_core/drivers/svg/native_requirements.py"
-    source = subprocess.run(["git", "show", f"HEAD:{path}"], cwd=repo,
-                            capture_output=True, check=True).stdout
-    name = "_svg_native_requirements_numeric_span_head_baseline"
-    module = types.ModuleType(name)
-    module.__file__ = str(repo / path)
-    previous = sys.modules.get(name)
-    sys.modules[name] = module
-    try:
-        exec(compile(source, f"HEAD:{path}", "exec"), module.__dict__)
-        yield module
-    finally:
-        if previous is None:
-            sys.modules.pop(name, None)
-        else:
-            sys.modules[name] = previous
+_LEGACY = json.loads((Path(__file__).resolve().parent / "fixtures" / "svg_v5_legacy_parity_v1.json")
+                     .read_text(encoding="utf-8"))
 
 
-@pytest.mark.parametrize("revision", [None, "svg-native-requirements/v2",
-                                      "svg-native-requirements/v3", "svg-native-requirements/v4"])
-@pytest.mark.parametrize("source", [
-    "chart: Sales: Alpha 30, Beta 60, Gamma 90",
-    "chart: North: A 10%, B 20%; South: A 30%, B 40%. unit: %",
-    "chart: Series 2026: Category 2026 10 (note 77); Other 2027 20",
-    "간트 차트: Alpha 30, Beta 60\n조직 chart: A 10, B 20",
-    "chart: S1: A 10, B 20; S2: A unreadable, B 40",
-    "| Item | Value |\n| --- | --- |\n| A | 30 |\nchart: Sales: A 1,000원, B 2,000원",
-])
-def test_internal_span_collection_preserves_exact_head_legacy_requested_wire(head_native_requirements, revision, source):
+@pytest.mark.parametrize("case", _LEGACY["numericRequestedWire"],
+                         ids=lambda case: f"{case['revision']}:{case['source'][:24]}")
+def test_internal_span_collection_preserves_exact_pre_v5_legacy_requested_wire(case):
+    """Frozen outputs of the pre-V5 parser (fixture baselineCommit), not the checkout's HEAD."""
     def wire(value):
-        return json.dumps(value, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+        return json.dumps(value, ensure_ascii=False, separators=(",", ":"))
 
-    assert wire(requested_native_data(source, revision)) == wire(
-        head_native_requirements.requested_native_data(source, revision))
+    assert wire(requested_native_data(case["source"], case["revision"])) == case["requested"]
 
 
 @pytest.mark.parametrize("kind", ["bar", "column", "line", "area", "pie", "donut"])
