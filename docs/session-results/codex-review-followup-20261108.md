@@ -207,3 +207,30 @@ Further commits, each reviewed before integration:
   - `test:next-ci`: everything passes up to the renderer batch, whose 2
     failures are the frozen authored-hybrid Chrome cleanup ECONNRESET.
   - Fake-LLM V5 generation and export completed.
+
+## Real-chart V5 measurement and label rules (same day, before the Windows check)
+
+- **Fake-LLM harness:** `FAKE_LLM_CHART_FIXTURES=1` authors the 7 real-builder
+  chart examples. `run_export.sh` re-exports an existing deck.
+- **Real Chrome, Linux, V5 on, final branch:**
+  - every chart page passed render on the first attempt, including
+    marker-line after the null-ink fix;
+  - export 1 verified 3 charts in about 300 s, and export 2 brought the deck to
+    6 native charts (bar, line, stacked, doughnut, fixed-axis bar, pie, each
+    with its workbook);
+  - each chart takes 66–117 s to verify;
+  - one export verifies about 3 charts because of its deadline reserve. A
+    follow-up verification run or a deadline that scales with the chart count
+    is the open product decision.
+- **Exact V5 label rules** (`2c8b2e848` integration):
+  - half-up rounded labels and share labels, compared exactly;
+  - digit-free prefixed captions outside the plot area treated as annotations
+    and kept as drawn text on export;
+  - short-name legend swatches treated as legend;
+  - 39 positive and attack tests.
+  - On the real smoke charts, the unit-caption chart now passes and the
+    dual-axis chart fails for its real reason.
+- **Null text-ink fragments** from the renderer no longer make the V5 scene
+  reader reject a chart.
+- **Windows/PowerPoint acceptance:** see
+  `svg-v5-windows-acceptance-checklist-20261108.md`.
