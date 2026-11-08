@@ -1237,3 +1237,23 @@ def test_stylesheets_and_reference_paints_still_refuse_the_v5_scene(extras):
     from services.generation_core.drivers.svg.native_chart_evidence import chart_drawing_evidence
     page = _with_page_extras(*extras)
     assert chart_drawing_evidence(page, page["svg_content"], revision=V5) == {}
+
+
+def test_unmeasured_ink_fragments_fall_back_to_estimated_text_boxes():
+    """The renderer reports text whose ink it could not measure as a null fragment
+    (seen live on a marker-line chart); that must not crash the V5 scene reader."""
+    from services.generation_core.drivers.svg.native_chart_evidence import chart_drawing_evidence
+    from services.svg_contract import source_digest
+    page = _page()
+    svg = page["svg_content"]
+    root = ET.fromstring(svg)
+    texts = [f"svg-{index}" for index, node in enumerate(root.iter()) if node.tag == NS + "text"]
+    measurement = {
+        "measurement_complete": True, "source_digest": source_digest(svg), "wrapper_digest": "sha256:wrapper",
+        "browser_metrics": {"source_digest": "sha256:wrapper", "elements": [
+            {"qid": qid, "tag": "text", "has_owned_text": True, "text_ink_fragments": [None]} for qid in texts]},
+    }
+    measured = chart_drawing_evidence(page, svg, revision=V5, measurement=measurement)
+    static = chart_drawing_evidence(page, svg, revision=V5)
+    assert measured["native-chart-sales"]["contentGeometry"]["passed"] is True
+    assert measured["native-chart-sales"]["contentGeometry"] == static["native-chart-sales"]["contentGeometry"]

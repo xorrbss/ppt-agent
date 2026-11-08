@@ -427,6 +427,10 @@ WHOLE_PAGE_VERIFIER_LEDGER = VerifierRevisionLedger(
         # drawn text on export), and short-name legend swatches classified as legend.
         # Pages V5 passed before keep byte-identical evidence; V4 and earlier unchanged.
         "fdafa91d8814919b92504c517d8608728392cb9b81b4930612e80cb76f40d477": "svg-whole-page-verifier/1",
+        # 2026-11-08 V5 scene reader: a null text_ink_fragments entry (ink the renderer could
+        # not measure) marks the glyph measurement incomplete and uses the estimated text
+        # box, instead of raising and rejecting the chart. V5-only; V4 unchanged.
+        "01c1677ec29d33843a78fec36abc6e346c4dd9b2aaf8cc55601c54ba7fd48214": "svg-whole-page-verifier/1",
     }),
 )
 
@@ -626,6 +630,10 @@ PARTIAL_RECOVERY_CODE_LEDGER = VerifierRevisionLedger(
         # drawn text on export), and short-name legend swatches classified as legend.
         # Pages V5 passed before keep byte-identical evidence; V4 and earlier unchanged.
         "836eec60ba1a9879c3585ad94bd5bda0adf382e44674cde206102cafeaa8c6cf": "svg-partial-recovery-code/1",
+        # 2026-11-08 V5 scene reader: a null text_ink_fragments entry (ink the renderer could
+        # not measure) marks the glyph measurement incomplete and uses the estimated text
+        # box, instead of raising and rejecting the chart. V5-only; V4 unchanged.
+        "8eeebe12a360eec2b5ffe5e8396980796485b25db7648033ba9064e5d5ecdd30": "svg-partial-recovery-code/1",
     }),
 )
 
@@ -736,6 +744,10 @@ PAGE_RENDER_CODE_LEDGER = VerifierRevisionLedger(
         # drawn text on export), and short-name legend swatches classified as legend.
         # Pages V5 passed before keep byte-identical evidence; V4 and earlier unchanged.
         "e81a5267b695b6aba4c10c16537cfea80afeea02b96d8c79eea35cfb308774fd": "svg-page-render-code/1",
+        # 2026-11-08 V5 scene reader: a null text_ink_fragments entry (ink the renderer could
+        # not measure) marks the glyph measurement incomplete and uses the estimated text
+        # box, instead of raising and rejecting the chart. V5-only; V4 unchanged.
+        "55c2ed63713a2cef2f43855c9b723aca30210272a90bcfb2bc41765cfbc51576": "svg-page-render-code/1",
     }),
 )
 

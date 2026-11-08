@@ -263,14 +263,22 @@ def _v5_scene(root, measurement=None, svg=None):
                         or member.get("occluded_fraction", 0) > 0):
                     raise NativeRejection("native_chart_content_hidden")
                 from services.generation_core.drivers.svg.source_paint_occlusion import _complete_glyphs
-                clusters = [cluster for fragment in member.get("text_ink_fragments", [])
-                            for cluster in fragment.get("glyphInkClusters", [])
-                            if cluster.get("basis") == "isolated-matching-advance" and _ink_rect(cluster) is not None]
+                # The renderer reports a fragment whose ink it could not measure as
+                # null: the glyph measurement is then incomplete and the estimated
+                # text box is used, exactly as without a measurement.
+                raw_fragments = member.get("text_ink_fragments") or []
+                ink_fragments = [fragment for fragment in raw_fragments if isinstance(fragment, dict)]
+                if len(ink_fragments) != len(raw_fragments):
+                    complete_glyphs = False
+                clusters = [cluster for fragment in ink_fragments
+                            for cluster in fragment.get("glyphInkClusters") or []
+                            if isinstance(cluster, dict) and cluster.get("basis") == "isolated-matching-advance"
+                            and _ink_rect(cluster) is not None]
                 if not _complete_glyphs(member, clusters):
                     complete_glyphs = False
-                for fragment in member.get("text_ink_fragments", []):
+                for fragment in ink_fragments:
                     rect = _ink_rect(fragment)
-                    clusters = fragment.get("glyphInkClusters") or []
+                    clusters = [cluster for cluster in fragment.get("glyphInkClusters") or [] if isinstance(cluster, dict)]
                     for cluster in clusters:
                         ink = _ink_rect(cluster)
                         if ink is not None:
