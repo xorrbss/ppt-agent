@@ -19,6 +19,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from services.source_content.contracts import SourceContentManifest
 from services.source_content.digests import digest_json
 from services.source_content.pptx_custom_geometry import validate_custom_geometry, flatten_custom_geometry
+from services.svg_source_preset_shapes import supports_source_preset, source_preset_paths
 from services.svg_contract import SVG_NS, source_digest, validate_svg
 from services.authored_canvas import DEFAULT_CANVAS_HEIGHT_PX, DEFAULT_CANVAS_WIDTH_PX
 
@@ -247,9 +248,14 @@ def _validate_source_pages(manifest: SourceContentManifest, *, chart_contract=No
             if block.kind == "shape" and block.payload.get(
                 "preset") not in {"rect", "roundRect", "ellipse", "line", "straightConnector1",
                                   "parallelogram", "diamond"}:
-                if block.payload.get("preset") is not None or not block.payload.get("customGeometry"):
+                preset = block.payload.get("preset")
+                if preset is not None:
+                    if not supports_source_preset(preset):
+                        raise ValueError(f"svg_source_shape_unsupported:page={index + 1}:block={block.source_block_id}")
+                elif block.payload.get("customGeometry"):
+                    validate_custom_geometry(block.payload["customGeometry"])
+                else:
                     raise ValueError(f"svg_source_shape_unsupported:page={index + 1}:block={block.source_block_id}")
-                validate_custom_geometry(block.payload["customGeometry"])
             geometry = block.payload.get("geometry") or {}
             transform_keys = (
     "rotationDegrees",
@@ -550,6 +556,11 @@ def assemble_source_svg(manifest, page_index, plan, *, source_images, image_slot
                 x1, x2 = (p.x + p.width, p.x) if geometry.get("flipH") else (p.x, p.x + p.width)
                 y1, y2 = (p.y + p.height, p.y) if geometry.get("flipV") else (p.y, p.y + p.height)
                 _node(root, "line", id=element_id, x1=x1, y1=y1, x2=x2, y2=y2, stroke=p.stroke, stroke_width=1)
+            elif preset not in {"rect", "roundRect", "straightConnector1"}:
+                group = _node(root, "g", id=element_id)
+                for path in source_preset_paths(preset, x=p.x, y=p.y, width=p.width, height=p.height,
+                                               background=p.background, stroke=p.stroke):
+                    _node(group, "path", **path)
             else:
                 radius = (template_snapshot or {}).get("shape", {}).get("radius", 8) if preset == "roundRect" else 0
                 _node(

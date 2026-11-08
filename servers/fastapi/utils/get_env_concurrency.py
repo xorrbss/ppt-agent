@@ -323,6 +323,35 @@ def get_svg_template_body_render_excluded_pages_env(settings: RuntimeSettings | 
     return frozenset(int(item) for item in (part.strip() for part in raw.split(",")) if item.isdigit() and int(item) > 0)
 
 
+def get_svg_native_chart_integrity_v5_env(settings: RuntimeSettings | None = None) -> bool:
+    """Opt fresh SVG admissions into chart-integrity policy v5; default off.
+
+    The selected requirements revision is pinned once. Existing v2/v3/v4
+    snapshots and non-SVG engines retain their admitted interpretation.
+    """
+    from utils.get_env import get_setting_env
+    value = (get_setting_env("SVG_NATIVE_CHART_INTEGRITY_V5", settings) or "").strip().lower()
+    return value in {"on", "true", "1"}
+
+
+def get_svg_template_pictures_env(settings: RuntimeSettings | None = None) -> bool:
+    """Enable vector pictures for fresh template-redesign admissions; default off.
+
+    Admission freezes the effective policy. Existing decks never consult this
+    process setting when authoring, resuming or remaking their pages.
+    """
+    from utils.get_env import get_setting_env
+    value = (get_setting_env("SVG_TEMPLATE_PICTURES", settings) or "").strip().lower()
+    return value in {"on", "true", "1"}
+
+
+def get_svg_template_content_sizing_env(settings: RuntimeSettings | None = None) -> bool:
+    """Enable content-sized body guidance at fresh admission; default off."""
+    from utils.get_env import get_setting_env
+    value = (get_setting_env("SVG_TEMPLATE_CONTENT_SIZING", settings) or "").strip().lower()
+    return value in {"on", "true", "1"}
+
+
 def get_svg_template_component_style_env(settings: RuntimeSettings | None = None) -> bool:
     """Whether a template-redesign deck's author rules carry the template's body component styles
     (``SVG_TEMPLATE_COMPONENT_STYLE``: ``on`` / ``off``; unset or unknown: off).

@@ -75,12 +75,26 @@ NATIVE_CHART_GUIDANCE_V4 = (
     "required values and use their declared label position.\n"
 )
 
+NATIVE_CHART_GUIDANCE_V5 = (
+    "Preserve the requested chart family, category/series associations, signed or zero values and units. "
+    "Draw truthful bar/column lengths, common-scale line/area traces, or pie/donut shares; correct numeric "
+    "text alone does not prove the data drawing. Bind each series name visibly to its actual marks through "
+    "a matching legend or an unambiguous direct label. Keep every displayed value with its own datum. "
+    "Use only the existing chart declaration/export contracts, including their grouping and fixed-axis "
+    "rules. If the requested form cannot be represented faithfully, preserve its source meaning and report "
+    "the limitation; do not convert it into another family, invent data, or claim unsupported acceptance. "
+    "Safe preservation of a correctly drawn chart after an editability-only failure requires independent "
+    "data-geometry and captured-paint evidence; it does not establish native editability or release readiness.\n"
+)
+
 
 def _native_chart_rules(requirements_revision: str | None) -> str:
     # Local import: native_requirements imports native_publish, which imports this module.
-    from services.generation_core.drivers.svg.native_requirements import REQUIREMENTS_VERSION_V4
+    from services.generation_core.drivers.svg.native_requirements import REQUIREMENTS_VERSION_V4, REQUIREMENTS_VERSION_V5
 
-    return NATIVE_CHART_RULE + (NATIVE_CHART_GUIDANCE_V4 if requirements_revision == REQUIREMENTS_VERSION_V4 else "")
+    return (NATIVE_CHART_RULE
+            + (NATIVE_CHART_GUIDANCE_V4 if requirements_revision in (REQUIREMENTS_VERSION_V4, REQUIREMENTS_VERSION_V5) else "")
+            + (NATIVE_CHART_GUIDANCE_V5 if requirements_revision == REQUIREMENTS_VERSION_V5 else ""))
 
 
 #: Revision ten's stacked bar/column rule (plan item S7), appended to ``NATIVE_CHART_RULE``.

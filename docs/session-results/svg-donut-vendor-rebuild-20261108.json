@@ -1,0 +1,85 @@
+{
+  "schema": "svg-donut-vendor-rebuild/v1",
+  "status": "87 rebuilt vendor files byte-identical; only generated manifest copied",
+  "baselineRevision": "eba5e731c5fd480b891098395a981567f0fb47b3",
+  "diffBaseRevision": "8d6d21fb8611fe6b6312fc2d4ba5186406aa05d6",
+  "approvedExecutedFileScope": [
+    "servers/fastapi/vendor/slide_master/svg_to_pptx/native_objects/chart_data.py",
+    "servers/fastapi/vendor/slide_master/svg_to_pptx/native_objects/chart_xml.py"
+  ],
+  "before": {
+    "compatibility/slide-master/rebuild.py": {
+      "rawSha256": "0b4a63747c2996cf76f8d0a2092b01ea4b4c988be581b001909c189c2fa99c45",
+      "lfSha256": "e3de61950f647aec36bcefe17e0575103427382ca3f81ad7df2d26b237dfdabe"
+    },
+    "compatibility/slide-master/README.md": {
+      "rawSha256": "4135cdfaf35b23a70479e993c43e71ddd16802ce58ac5246e709be9f6c92d962",
+      "lfSha256": "693e1ec7d7cfd4b1989729ec41b2a3869a9749b5188bcbbb57e72ade55fb9ba2"
+    },
+    "servers/fastapi/vendor/slide_master/MANIFEST.json": {
+      "rawSha256": "ec2502a9a97c48d1fad9724022cc8a150bdcb8513c988538e43e4e696ae4baf6",
+      "lfSha256": "ec2502a9a97c48d1fad9724022cc8a150bdcb8513c988538e43e4e696ae4baf6"
+    },
+    "servers/fastapi/vendor/slide_master/svg_to_pptx/native_objects/chart_data.py": {
+      "rawSha256": "828081eb2128afda818309c5f3da0f261c65047bc1480584dcb2bea647064748",
+      "lfSha256": "828081eb2128afda818309c5f3da0f261c65047bc1480584dcb2bea647064748"
+    },
+    "servers/fastapi/vendor/slide_master/svg_to_pptx/native_objects/chart_xml.py": {
+      "rawSha256": "0b51015f7df6771024c1f5a519b9c925677c5256a0a41d53697546667a8ccd4d",
+      "lfSha256": "0b51015f7df6771024c1f5a519b9c925677c5256a0a41d53697546667a8ccd4d"
+    }
+  },
+  "patch": {
+    "rawSha256": "5f4e105454f439ee340757a9bf8681237ea30d872a1695d8db7da24699c3f2f9",
+    "lfSha256": "5f4e105454f439ee340757a9bf8681237ea30d872a1695d8db7da24699c3f2f9"
+  },
+  "outputDirectory": "C:\\Users\\ibiz\\AppData\\Local\\Temp\\ppt-svg-donut-rebuild-20261108-29a10041202f4c79b1a611d23811b99d",
+  "rebuildInvocationCount": 1,
+  "rebuildExitCode": 0,
+  "rebuildLog": "C:\\project\\PPT-agent\\ppt-agent\\docs\\session-results\\svg-donut-vendor-rebuild-20261108.log",
+  "coveredFileCount": 87,
+  "activeByteMismatches": [],
+  "manifestFileSetUnchanged": true,
+  "changedFileHashes": [
+    "svg_to_pptx/native_objects/chart_data.py",
+    "svg_to_pptx/native_objects/chart_xml.py"
+  ],
+  "approvedExecutedBytesUnchangedByRebuild": true,
+  "after": {
+    "compatibility/slide-master/rebuild.py": {
+      "rawSha256": "5751650aedcf49cd8a4c9b540614678c7100db029a4b8630e5dd23e48d611816",
+      "lfSha256": "b12bfc9d286d5c42bea0b7bbea741375949bed13dddb803c849069b1ecf8dcb8"
+    },
+    "compatibility/slide-master/README.md": {
+      "rawSha256": "fd8761796a1bbe81d4f99b876744e063069b3c50909476b7890ac3a3d7c242ae",
+      "lfSha256": "1ad0cae1395359f6c207b4cf3ef423c4703517be2bdfbd31ea9f354a8717323e"
+    },
+    "servers/fastapi/vendor/slide_master/MANIFEST.json": {
+      "rawSha256": "6b0c83384670cd3f1c92adf1de6b44c1878ebdb31263eefbb654cee33194cc3d",
+      "lfSha256": "6b0c83384670cd3f1c92adf1de6b44c1878ebdb31263eefbb654cee33194cc3d"
+    },
+    "servers/fastapi/vendor/slide_master/svg_to_pptx/native_objects/chart_data.py": {
+      "rawSha256": "828081eb2128afda818309c5f3da0f261c65047bc1480584dcb2bea647064748",
+      "lfSha256": "828081eb2128afda818309c5f3da0f261c65047bc1480584dcb2bea647064748"
+    },
+    "servers/fastapi/vendor/slide_master/svg_to_pptx/native_objects/chart_xml.py": {
+      "rawSha256": "0b51015f7df6771024c1f5a519b9c925677c5256a0a41d53697546667a8ccd4d",
+      "lfSha256": "0b51015f7df6771024c1f5a519b9c925677c5256a0a41d53697546667a8ccd4d"
+    },
+    "compatibility/slide-master/patches/svg-donut-hole-1.patch": {
+      "rawSha256": "5f4e105454f439ee340757a9bf8681237ea30d872a1695d8db7da24699c3f2f9",
+      "lfSha256": "5f4e105454f439ee340757a9bf8681237ea30d872a1695d8db7da24699c3f2f9"
+    }
+  },
+  "approvedDonutSourceInventory": {
+    "path": "C:\\Users\\ibiz\\orca\\workspaces\\ppt-agent\\svg-chart-render-proof-1108\\docs\\session-results\\svg-chart-render-proof-20261108\\donut-appearance-source-inventory.json",
+    "rawSha256": "90a8bdc5ce8284a66e9ff2a73b05de8e5b04fc2a0adfd23f85adf954a2ecd610",
+    "lfSha256": "90a8bdc5ce8284a66e9ff2a73b05de8e5b04fc2a0adfd23f85adf954a2ecd610"
+  },
+  "generatedManifestVersion": "vendored-20260916+document-canvas.2+text-advance.1+chart-furniture.16+native-fixed-text.1+xfrm-bounds.1+svg-donut-hole.1",
+  "limits": [
+    "Deterministic reconstruction only; no pytest, browser, provider, server, database or final PPTX execution",
+    "No source file, converter version, integrity check, revision or alias was edited by this task",
+    "Current reviewed-ledger mappings remain provisional until root final source freeze/review"
+  ]
+}

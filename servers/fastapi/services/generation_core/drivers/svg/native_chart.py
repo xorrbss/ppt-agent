@@ -279,9 +279,9 @@ def _drawn_series_name(name: str, drawn: set[str], *, declared_title: str | None
     # Candidate name proof only; requested_native_quality still checks the
     # exact source unit against this declared and visibly drawn title.
     if declared_title and normalize_text(declared_title) in drawn:
-        from services.generation_core.drivers.svg.native_requirements import REQUIREMENTS_VERSION_V4
+        from services.generation_core.drivers.svg.native_requirements import REQUIREMENTS_VERSION_V4, REQUIREMENTS_VERSION_V5
 
-        if revision == REQUIREMENTS_VERSION_V4:
+        if revision in (REQUIREMENTS_VERSION_V4, REQUIREMENTS_VERSION_V5):
             title = normalize_text(declared_title)
             # A title can name one series without repeating it in a legend.
             # Word boundaries reject unrelated substrings, including Korean

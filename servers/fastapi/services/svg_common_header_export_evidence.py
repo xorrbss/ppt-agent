@@ -24,7 +24,17 @@ COMMON_HEADER_VERIFIER_FILES = (
     "services/svg_text_overlap.py",
     "workers/svg_common_header_export_v2.py", "workers/svg_common_header_export.py",
     "services/svg_export_page_evidence.py", "services/svg_export_quality.py",
-    "services/generation_core/drivers/svg/render.py", "services/svg_master_furniture.py")
+    "services/generation_core/drivers/svg/render.py", "services/svg_master_furniture.py",
+    "utils/slide_capture.py",
+    "utils/slide_capture_chart_adapter.py", "utils/slide_capture_chart_paint.py",
+    "utils/slide_capture_chart_text.py", "utils/slide_capture_chart_support.py",
+    "utils/slide_capture_worker_client.py", "utils/renderer_isolation.py",
+    "utils/authored_renderer_worker.py", "utils/authored_renderer_session.py",
+    "utils/renderer_worker_policy.py", "utils/slide_capture_pipe_render.py",
+    "utils/slide_capture_glyph_probe.py", "utils/slide_capture_local_fit.py",
+    "utils/authored_dom_quality.py", "utils/authored_fit_edits.py",
+    "utils/authored_qid_namespace.py", "utils/authored_dom_tags.py",
+    "utils/slide_capture_chart_timing.py")
 
 
 def common_header_verifier_digest():

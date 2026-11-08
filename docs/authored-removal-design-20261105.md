@@ -1,5 +1,7 @@
 # authored generation strategy removal: design (2026-11-05)
 
+> Superseded execution direction (owner instruction, 2026-11-07): preserve and freeze every existing non-SVG mode and its dedicated tests. Do not execute this document's retirement, entry-point shutdown, code/test deletion, archival-for-retirement or database-removal phases. Its earlier removal decisions are historical. Current authority: `docs/codex-brief-svg-freeze-quality-20261107.md`. Shared-dependency evidence below remains useful but must be refreshed against current code.
+
 Status: **design only. No code was changed.** Base: `696be2ac` on `main`.
 Implementation is handed to a separate agent (Codex). Each phase in §5 is a self-contained unit with
 its own acceptance criteria; do them in order and do not merge phases into one change.

@@ -701,3 +701,72 @@ def test_source_text_lines_join_an_unpositioned_inline_run_to_its_line():
     assert source_text_lines(single) is None
     relative = ET.fromstring(f'<text xmlns="{ns}"><tspan x="1" y="2">가</tspan><tspan dy="20">나</tspan></text>')
     assert source_text_lines(relative) is None
+
+
+def test_new_svg_publication_shell_has_valid_profile_before_first_flush(monkeypatch):
+    """Exercise actual new-row publication through the real profile flush gate."""
+    import asyncio
+    from types import SimpleNamespace
+    from uuid import uuid4
+
+    from models.sql.presentation import PresentationModel
+    from services import account_deletion_service
+    from services.generation_core.drivers.svg.publish import _publish
+    from services.presentation_profile_persistence import stamp_presentation_profile
+    from utils.owner_context import reset_current_owner_id, set_current_owner_id
+
+    class FirstFlushReached(Exception):
+        pass
+
+    owner, presentation_id = uuid4(), uuid4()
+    calls = []
+
+    class NewRowSession:
+        def __init__(self):
+            self.rows = []
+
+        async def rollback(self):
+            calls.append("rollback")
+
+        async def scalar(self, statement):
+            calls.append("select-new-row")
+            return None
+
+        def add(self, row):
+            assert isinstance(row, PresentationModel)
+            self.rows.append(row)
+
+        async def flush(self):
+            calls.append("first-flush")
+            assert len(self.rows) == 1
+            row = self.rows[0]
+            # This is the same real stamper used by the before_flush listener.
+            # An unstamped default shell raises PresentationProfileError here.
+            profile = stamp_presentation_profile(row)
+            assert profile.driver_id == "svg-v1"
+            assert row.profile_driver_id == "svg-v1" and row.mode == "svg"
+            assert row.id == presentation_id and row.owner_id == owner
+            assert row.n_slides == 1
+            raise FirstFlushReached
+
+    session = NewRowSession()
+
+    async def active_account(db_session, *, user_id, expected_generation=None):
+        assert db_session is session and user_id == owner
+        assert calls == ["rollback"]
+        calls.append("active-account")
+
+    # Only the account DB boundary is replaced; actual profile derivation and
+    # the publication constructor/stamp/add/flush order remain exercised.
+    monkeypatch.setattr(account_deletion_service, "require_active_account_generation", active_account)
+    token = set_current_owner_id(owner)
+    try:
+        with pytest.raises(FirstFlushReached):
+            asyncio.run(_publish(
+                SimpleNamespace(content="New SVG publication"), presentation_id,
+                SimpleNamespace(), "ko", session, None, {}, [],
+                [({}, b"not-read-before-first-flush")],
+            ))
+    finally:
+        reset_current_owner_id(token)
+    assert calls == ["rollback", "active-account", "select-new-row", "first-flush"]

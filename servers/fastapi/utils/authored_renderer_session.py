@@ -49,14 +49,19 @@ def render_admitted_html_over_pipe(
     admitted: AdmittedHtml, timeout: int, *,
     width_px: int = DEFAULT_CANVAS_WIDTH_PX, height_px: int = DEFAULT_CANVAS_HEIGHT_PX,
     private_diagnostic_profile: str | None = None,
+    chart_witness_manifest: dict | None = None,
 ) -> tuple[bytes, Mapping[str, Any] | None]:
     """Render one admitted document in a private, single-use Chrome process."""
 
-    from utils.slide_capture_pipe_render import render_admitted_html_over_pipe as render_one
+    if chart_witness_manifest is not None:
+        from utils.slide_capture_chart_adapter import render_admitted_html_over_pipe as render_one
+    else:
+        from utils.slide_capture_pipe_render import render_admitted_html_over_pipe as render_one
 
     return render_one(
         admitted, timeout, width_px=width_px, height_px=height_px,
         private_diagnostic_profile=private_diagnostic_profile,
+        **({"chart_witness_manifest": chart_witness_manifest} if chart_witness_manifest is not None else {}),
         **_pipe_bindings(),
     )
 
@@ -130,14 +135,19 @@ class RendererChromiumSession:
         self, admitted: AdmittedHtml, timeout: int, *,
         width_px: int = DEFAULT_CANVAS_WIDTH_PX, height_px: int = DEFAULT_CANVAS_HEIGHT_PX,
         private_diagnostic_profile: str | None = None,
+        chart_witness_manifest: dict | None = None,
     ) -> tuple[bytes, Mapping[str, Any] | None]:
-        from utils.slide_capture_pipe_render import render_admitted_html_over_pipe as render_one
+        if chart_witness_manifest is not None:
+            from utils.slide_capture_chart_adapter import render_admitted_html_over_pipe as render_one
+        else:
+            from utils.slide_capture_pipe_render import render_admitted_html_over_pipe as render_one
 
         bindings = dict(_pipe_bindings())
         bindings["chrome_pipe"] = self._chrome_pipe
         result = render_one(
             admitted, timeout, width_px=width_px, height_px=height_px,
             private_diagnostic_profile=private_diagnostic_profile,
+            **({"chart_witness_manifest": chart_witness_manifest} if chart_witness_manifest is not None else {}),
             **bindings,
         )
         self._renders += 1

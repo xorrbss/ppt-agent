@@ -663,6 +663,11 @@ def _category_chart_data(
     alias_style: str | None,
 ) -> dict[str, Any]:
     source_options = {}
+    if "hole_size" in payload:
+        hole_size = payload["hole_size"]
+        if chart_type != "doughnut" or type(hole_size) is not int or not 10 <= hole_size <= 90:
+            raise RuntimeError("Native PPTX doughnut hole_size must be an integer from 10 to 90")
+        source_options["hole_size"] = hole_size
     if "vary_colors" in payload:
         source_options["vary_colors"] = _chart_bool(payload["vary_colors"])
     if "gap_width" in payload:
@@ -1308,6 +1313,8 @@ def _xy_chart_data(
 
 def _chart_data(payload: dict[str, Any]) -> dict[str, Any]:
     chart_type, alias_grouping, alias_style = _chart_kind(payload)
+    if "hole_size" in payload and chart_type != "doughnut":
+        raise RuntimeError("Native PPTX hole_size is supported for doughnut charts only")
     if (
         chart_type not in _CATEGORY_CHART_TYPES | {"combo", "stock"} | _XY_CHART_TYPES
         and _data_labels_config(payload) is not None

@@ -1,5 +1,7 @@
 # Codex brief: template-redesign decks at the template's own level (2026-11-06)
 
+> Current execution authority (owner instruction, 2026-11-07): `docs/codex-brief-svg-freeze-quality-20261107.md`. Preserve and freeze all existing non-SVG modes and their dedicated tests; no retirement or deletion. Native requirements v4 is already implemented: verify remaining chart-integrity risks instead of repeating item 1. The newer brief also controls verification scope and requires managed-stack runtime validation after development.
+
 You continue work started in another tool. Read, in this order, before changing anything:
 `AGENTS.md`, `CLAUDE.md` (especially "Never build generation on reusing original template pages as skeletons",
 "Template body composition", "SVG deck pictures and icons come from the asset offer", "Judge svg template

@@ -33,7 +33,7 @@ import re
 import unicodedata
 
 from services.generation_core.drivers.svg.native_requirements import (
-    REQUIREMENTS_VERSION_V3, REQUIREMENTS_VERSION_V4, _COMPOUND_AMOUNT_LABEL, _NUMBER,
+    REQUIREMENTS_VERSION_V3, REQUIREMENTS_VERSION_V4, REQUIREMENTS_VERSION_V5, _COMPOUND_AMOUNT_LABEL, _NUMBER,
     _UNIT_V3 as _UNIT, _split_outside_brackets,
     requested_native_data)
 
@@ -321,12 +321,12 @@ def _v4_series(content: str):
 
 def derive_chart_literals(content: str, *, revision: str = REQUIREMENTS_VERSION_V3) -> list[DerivedChart]:
     """The chart literals a slide's prose states; none when it already holds a chart literal."""
-    if revision not in (REQUIREMENTS_VERSION_V3, REQUIREMENTS_VERSION_V4) or not isinstance(content, str):
+    if revision not in (REQUIREMENTS_VERSION_V3, REQUIREMENTS_VERSION_V4, REQUIREMENTS_VERSION_V5) or not isinstance(content, str):
         return []
     if requested_native_data(content, revision).get("charts"):
         return []
     derived = []
-    if revision == REQUIREMENTS_VERSION_V4:
+    if revision in (REQUIREMENTS_VERSION_V4, REQUIREMENTS_VERSION_V5):
         candidates = _v4_series(content)
     else:
         candidates = ((index, series) for index, line in enumerate(content.split("\n"))

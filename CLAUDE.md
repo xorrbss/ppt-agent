@@ -27,6 +27,12 @@ Request path in Docker: browser → nginx:80 → (`/api/v1/*` → FastAPI, every
 
 ## Two generation pipelines
 
+**Owner decision (2026-11-07): freeze all existing non-SVG generation modes and their dedicated tests.** Preserve their behavior, entry points, stored data and test execution; do not delete, disable, move, rename or rewrite their dedicated code/tests. Focus new development on SVG. Modify genuinely shared code only when necessary for SVG while preserving existing non-SVG contracts. The earlier authored-removal design is historical and must not be executed. See `docs/codex-brief-svg-freeze-quality-20261107.md` for the current multi-agent execution and managed-stack validation brief.
+
+`SVG_TEMPLATE_PICTURES` and `SVG_TEMPLATE_CONTENT_SIZING` are internal, default-off experiments for fresh SVG template-redesign decks; their effective policy is frozen at admission, and existing non-SVG behavior and stored SVG policies remain unchanged.
+
+`SVG_NATIVE_CHART_INTEGRITY_V5` is an internal, default-off selector for fresh SVG chart-integrity policy v5; the owner's acceptance requires every existing supported SVG/PPTX chart type and valid configuration to retain support, and existing pinned snapshots keep their interpretation. An artificially restricted proof is not a completed implementation.
+
 **The upstream "outline → pick a React template → fill content" flow no longer exists here.** `POST /presentation/generate` accepts a `strategy` field (`models/generate_presentation_request.py`) typed `Optional[Literal["authored", "svg"]]`: omit it or pass one of the two literal values; anything else is a validation error. An omitted strategy resolves to **svg** (`services/generation_core/admission/strategy.py`), falling back to authored only for a source restyle with a page-size/orientation override or a request svg admission would reject. `endpoints/presentation_generate.py` branches on it into two live generation paths, and `services/presentation_profiles.py` (`PRESENTATION_DRIVER_REGISTRY`) is the single source of truth for which persisted-identity fields resolve to which driver:
 
 | strategy | driver_id | What it does |

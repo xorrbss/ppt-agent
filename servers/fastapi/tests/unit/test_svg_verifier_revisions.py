@@ -101,6 +101,142 @@ VERIFIERS = {
 NAMES = sorted(VERIFIERS)
 
 
+# Reviewed execution dependencies; independent literals, not copied from the
+# implementation's inventory at test runtime. Historical anchor inputs stay fixed.
+_PICTURE_POST_ANCHOR = frozenset({
+    "services/generation_core/assets/vector_offer.py",
+    "services/generation_core/assets/vector_illustration.py",
+    "services/svg_templates/generation.py",
+    "services/svg_templates/body_composition.py",
+    "services/svg_templates/picture_policy.py",
+    "services/generation_core/assets/infographic_plan.py",
+    "services/generation_core/assets/infographic_assets.py",
+    "utils/llm_calls/draw_vector_illustrations.py",
+})
+_CHART_POST_ANCHOR = frozenset({
+    "services/generation_core/drivers/svg/native_chart_evidence.py",
+    "services/generation_core/drivers/svg/native_chart.py",
+    "services/generation_core/drivers/svg/native_requirements.py",
+    "services/generation_core/drivers/svg/prose_chart_literal.py",
+    "services/generation_core/drivers/svg/native_geometry.py",
+    "services/generation_core/drivers/svg/chart_content_cartesian.py",
+    "services/generation_core/drivers/svg/chart_content_polar.py",
+    "services/generation_core/drivers/svg/chart_content_paint.py",
+    "services/generation_core/drivers/svg/native_chart_visual.py",
+    "services/generation_core/drivers/svg/native_paint.py",
+    "services/generation_core/drivers/svg/native_publish.py",
+    "services/generation_core/drivers/svg/native_table.py",
+    "services/generation_core/drivers/svg/export_chart_style.py",
+    "services/generation_core/drivers/svg/fixed_axis_migration.py",
+    "services/generation_core/drivers/svg/fallback.py",
+    "services/generation_core/drivers/svg/source_paint_occlusion.py",
+    "services/generation_core/drivers/svg/source_classification_association.py",
+    "services/generation_core/native_objects/__init__.py",
+    "services/generation_core/native_objects/model.py",
+    "services/generation_core/native_objects/payload.py",
+})
+_RENDERER_POST_ANCHOR = frozenset({
+    "utils/slide_capture_chart_adapter.py",
+    "utils/slide_capture_chart_paint.py",
+    "utils/slide_capture_chart_text.py",
+    "utils/slide_capture_chart_support.py",
+    "utils/slide_capture_worker_client.py",
+    "utils/renderer_isolation.py",
+    "utils/authored_renderer_worker.py",
+    "utils/authored_renderer_session.py",
+    "utils/renderer_worker_policy.py",
+    "utils/slide_capture_pipe_render.py",
+    "utils/slide_capture_glyph_probe.py",
+    "utils/slide_capture_local_fit.py",
+    "utils/authored_dom_quality.py",
+    "utils/authored_fit_edits.py",
+    "utils/authored_qid_namespace.py",
+    "utils/authored_dom_tags.py",
+    "utils/slide_capture_chart_timing.py",
+})
+_PRESET_POST_ANCHOR = frozenset({
+    "services/svg_source_preset_shapes.py",
+    "services/source_content/pptx_custom_geometry.py",
+    "vendor/slide_master/pptx_shapes/__init__.py",
+    "vendor/slide_master/pptx_shapes/errors.py",
+    "vendor/slide_master/pptx_shapes/formula.py",
+    "vendor/slide_master/pptx_shapes/loader.py",
+    "vendor/slide_master/pptx_shapes/models.py",
+    "vendor/slide_master/pptx_shapes/registry.py",
+    "vendor/slide_master/pptx_shapes/semantic_hash.py",
+    "vendor/slide_master/pptx_shapes/xml_safety.py",
+    "vendor/slide_master/pptx_shapes/data/presetShapeDefinitions.xml",
+    "vendor/slide_master/pptx_shapes/data/shape_type_values.txt",
+})
+_RECOVERY_POST_ANCHOR = (_PICTURE_POST_ANCHOR | _CHART_POST_ANCHOR
+                         | _RENDERER_POST_ANCHOR | _PRESET_POST_ANCHOR)
+_PAGE_RENDER_AUTHORITY = frozenset({
+    "services/generation_core/quality/review_coverage.py",
+    "services/svg_partial_recovery.py",
+    "services/svg_source_local_review_continuation.py",
+    "services/workspace_service.py",
+    "services/provider_durable_admission.py",
+    "services/provider_usage_instrumentation.py",
+    "services/provider_runtime_job_registration.py",
+    "services/generation_core/quality/vision_advisory.py",
+    "services/generation_core/quality/vision_advisory_prompt.py",
+    "services/generation_core/drivers/svg/quality.py",
+})
+_EXPECTED_POST_ANCHOR = {
+    "converter": frozenset({"services/svg_pptx_font_subset.py"}),
+    "common-header": _RENDERER_POST_ANCHOR | {"utils/slide_capture.py"},
+    "whole-page": (_PRESET_POST_ANCHOR | (_CHART_POST_ANCHOR - {
+        "services/generation_core/drivers/svg/native_chart.py",
+        "services/generation_core/drivers/svg/native_geometry.py",
+        "services/generation_core/drivers/svg/native_chart_visual.py",
+        "services/generation_core/drivers/svg/export_chart_style.py",
+    }) | {
+        "services/svg_pptx_font_subset.py",
+        "services/generation_core/drivers/svg/native_declarations.py",
+        "services/svg_text_overlap.py",
+        "services/generation_core/authoring/author_slide_svg.py",
+    }),
+    "partial-recovery-code": _RECOVERY_POST_ANCHOR,
+    "page-render-code": _RECOVERY_POST_ANCHOR,
+}
+
+
+def test_reviewed_post_anchor_dependency_groups_are_exact_and_disjoint():
+    groups = [_PICTURE_POST_ANCHOR, _CHART_POST_ANCHOR,
+              _RENDERER_POST_ANCHOR, _PRESET_POST_ANCHOR]
+    assert [len(group) for group in groups] == [8, 20, 17, 12]
+    assert sum(map(len, groups)) == len(_RECOVERY_POST_ANCHOR) == 57
+    assert {name: len(paths) for name, paths in _EXPECTED_POST_ANCHOR.items()} == {
+        "converter": 1, "common-header": 18, "whole-page": 32,
+        "partial-recovery-code": 57, "page-render-code": 57,
+    }
+    assert len(recovery._POST_ANCHOR_CODE_FILES) == len(set(recovery._POST_ANCHOR_CODE_FILES))
+    assert set(recovery._POST_ANCHOR_CODE_FILES) == _RECOVERY_POST_ANCHOR
+    assert _RECOVERY_POST_ANCHOR.isdisjoint(revisions.PARTIAL_RECOVERY_CODE_LEDGER.anchor_files)
+    assert recovery._PAGE_RENDER_AUTHORITY_FILES == _PAGE_RENDER_AUTHORITY
+    assert recovery.PAGE_RENDER_CODE_FILES == (
+        tuple(name for name in recovery.CODE_FILES if name not in _PAGE_RENDER_AUTHORITY)
+        + ("services/svg_final_selected_continuation.py",))
+
+
+@pytest.mark.parametrize("name", NAMES)
+def test_inventory_source_tuples_have_no_duplicates_before_mapping(name):
+    if name == "converter":
+        names = ("vendor/slide_master/MANIFEST.json", *(
+            path.relative_to(FASTAPI_ROOT).as_posix() for path in convert._PROJECTION_ADAPTER_FILES))
+    elif name == "common-header":
+        names = header_evidence.COMMON_HEADER_VERIFIER_FILES
+    elif name == "whole-page":
+        names = whole_page._FILES
+    elif name == "partial-recovery-code":
+        names = recovery.CODE_FILES
+        assert len(recovery._FINAL_SELECTED_SOURCES) == len(set(recovery._FINAL_SELECTED_SOURCES))
+        assert len(recovery.CODE_IDENTITY_FILES) == len(set(recovery.CODE_IDENTITY_FILES))
+    else:
+        names = recovery.PAGE_RENDER_CODE_FILES
+    assert len(names) == len(set(names))
+
+
 @pytest.fixture(autouse=True)
 def _reference_checkout_and_fresh_code_file_digests(monkeypatch):
     """Use the LF/POSIX reference; the Windows cases explicitly override both."""
@@ -270,13 +406,10 @@ def test_ledger_is_well_formed(name):
     for key in ledger.reviewed:
         assert key.startswith(ledger.prefix) and len(key) == len(ledger.prefix) + 64
         assert all(char in "0123456789abcdef" for char in key[len(ledger.prefix):])
-    # This dependency already executed at the anchor, but was not hashed then.
-    # Cover it now without rewriting the historical identity's preimage.
-    added = {"services/svg_pptx_font_subset.py"} if name in {"converter", "whole-page"} else set()
-    if name in {"partial-recovery-code", "page-render-code"}:
-        added = {"services/generation_core/assets/vector_offer.py",
-                 "services/generation_core/assets/vector_illustration.py"}
-    assert set(verifier.inventory()) <= set(ledger.anchor_files) | added
+    # New execution dependencies enter current source states, never the
+    # historical identity preimage. Missing and extra closure paths both fail.
+    assert set(verifier.inventory()) - set(ledger.anchor_files) == _EXPECTED_POST_ANCHOR[name]
+    assert _EXPECTED_POST_ANCHOR[name].isdisjoint(ledger.anchor_files)
     # The anchor's LF form is the stored identity and a reviewed state of its own revision.
     lf_anchor = (verifier.reviewed_formula or verifier.formula)(
         {key: entry.lf for key, entry in ledger.anchor_files.items()})

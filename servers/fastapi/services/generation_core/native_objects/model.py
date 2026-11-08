@@ -92,10 +92,20 @@ class NativeObject:
         except NativePayloadError as error:
             raise NativeObjectsError(f"native_object_payload_invalid:{error}") from error
         if svgAppearance is not None:
-            if (kind != "chart" or not isinstance(svgAppearance, dict)
-                    or not {"categoryOrder", "valueLabels", "markers"} <= set(svgAppearance)
+            if kind != "chart" or not isinstance(svgAppearance, dict):
+                raise NativeObjectsError("native_chart_appearance_invalid")
+            if "holeRatio" in svgAppearance and (
+                    canonical["chartType"] != "donut"
+                    or type(svgAppearance["holeRatio"]) not in (int, float)
+                    or not 0 < svgAppearance["holeRatio"] < 1
+                    or not math.isfinite(svgAppearance["holeRatio"])):
+                raise NativeObjectsError("native_chart_appearance_invalid")
+            # V5 may prove the hole of a declaration with no legacy appearance.
+            # That singleton carries no inferred label, title, or marker options.
+            if set(svgAppearance) != {"holeRatio"} and (
+                    not {"categoryOrder", "valueLabels", "markers"} <= set(svgAppearance)
                     or set(svgAppearance) - {"categoryOrder", "valueLabels", "markers",
-                                             "lineWidthPx", "markerDiameterPx"}
+                                             "lineWidthPx", "markerDiameterPx", "holeRatio"}
                     or svgAppearance["categoryOrder"] not in ("topToBottom", "leftToRight", "clockwise")
                     or svgAppearance["categoryOrder"] != {
                         "bar": "topToBottom", "column": "leftToRight", "line": "leftToRight",

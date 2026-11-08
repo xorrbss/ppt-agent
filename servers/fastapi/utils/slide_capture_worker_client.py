@@ -6,6 +6,7 @@ from __future__ import annotations
 import asyncio
 import json
 import hashlib
+import logging
 import tempfile
 from pathlib import Path
 import os
@@ -37,6 +38,8 @@ from utils.slide_capture_worker_session import RendererWorkerSession
 from models.canvas_defaults import DEFAULT_CANVAS_HEIGHT_PX, DEFAULT_CANVAS_WIDTH_PX, is_default_landscape
 from constants.timeouts import CAPTURE_WORKER_TERMINATE_GRACE_SECONDS
 
+_CHART_TIMING_LOGGER = logging.getLogger(__name__)
+
 async def _render_html_in_isolated_worker(  # noqa: ASYNC109
     html: str, timeout: int, *, width_px: int = DEFAULT_CANVAS_WIDTH_PX, height_px: int = DEFAULT_CANVAS_HEIGHT_PX,
     preserved_raster_svg: str | None = None, system_furniture: dict | None = None,
@@ -48,6 +51,7 @@ async def _render_html_in_isolated_worker(  # noqa: ASYNC109
     fixed_glyph_projection_digest: str | None = None,
     fixed_glyph_font_css_digest: str | None = None,
     private_diagnostic_profile: str | None = None,
+    chart_witness_manifest: dict | None = None,
 ) -> tuple[bytes, Mapping[str, Any] | None]:
     if private_diagnostic_profile is not None:
         if (private_diagnostic_profile != "fixed-glyph-dpr2/v1"
@@ -59,7 +63,8 @@ async def _render_html_in_isolated_worker(  # noqa: ASYNC109
             raise ValueError("svg_template_glyph_font_manifest_missing")
         return await _render_html_in_isolated_worker_impl(html, timeout, width_px=width_px, height_px=height_px,
             preserved_raster_svg=preserved_raster_svg, system_furniture=system_furniture,
-            canonical_svg=canonical_svg, image_bindings=image_bindings)
+            canonical_svg=canonical_svg, image_bindings=image_bindings,
+            **({"chart_witness_manifest": chart_witness_manifest} if chart_witness_manifest is not None else {}))
     from models.svg_template_frame import SvgTemplateFontManifest
     from services.svg_templates.frame_fonts import MAX_FONT_BYTES, resolve_font_manifest
     manifest = SvgTemplateFontManifest.model_validate(font_manifest)
@@ -114,7 +119,8 @@ async def _render_html_in_isolated_worker(  # noqa: ASYNC109
             fixed_glyph_font_css_digest=fixed_glyph_font_css_digest,
             private_diagnostic_profile=private_diagnostic_profile,
             fixed_glyph_authority_digest=glyph.authority_digest if fixed_glyph_preview is not None else None,
-            fixed_glyph_code_digest=glyph.materializer_code_digest if fixed_glyph_preview is not None else None)
+            fixed_glyph_code_digest=glyph.materializer_code_digest if fixed_glyph_preview is not None else None,
+            **({"chart_witness_manifest": chart_witness_manifest} if chart_witness_manifest is not None else {}))
 
 
 async def _render_html_in_isolated_worker_impl(  # noqa: ASYNC109
@@ -134,6 +140,7 @@ async def _render_html_in_isolated_worker_impl(  # noqa: ASYNC109
     private_diagnostic_profile: str | None = None,
     fixed_glyph_authority_digest: str | None = None,
     fixed_glyph_code_digest: str | None = None,
+    chart_witness_manifest: dict | None = None,
 ) -> tuple[bytes, Mapping[str, Any] | None]:
     if preserved_raster_svg is not None:
         from services.svg_renderer import admit_preserved_raster_preview
@@ -157,12 +164,13 @@ async def _render_html_in_isolated_worker_impl(  # noqa: ASYNC109
         **({"fixed_glyph_preview_ref": fixed_glyph_preview_ref} if fixed_glyph_preview_ref is not None else {}),
         **({"fixed_glyph_display_digest": fixed_glyph_display_digest} if fixed_glyph_display_digest is not None else {}),
         **({"private_diagnostic_profile": private_diagnostic_profile} if private_diagnostic_profile is not None else {}),
+        **({"chart_witness_manifest": chart_witness_manifest} if chart_witness_manifest is not None else {}),
     )
     environment = build_worker_environment()
     kwargs: dict[str, Any] = {
         "stdin": asyncio.subprocess.PIPE,
         "stdout": asyncio.subprocess.PIPE,
-        "stderr": asyncio.subprocess.DEVNULL,
+        "stderr": asyncio.subprocess.PIPE if chart_witness_manifest is not None else asyncio.subprocess.DEVNULL,
         "env": environment,
     }
     if os.name == "nt":
@@ -172,7 +180,24 @@ async def _render_html_in_isolated_worker_impl(  # noqa: ASYNC109
     process = await asyncio.create_subprocess_exec(*command, **kwargs)
     # Bind the one-shot worker to this process's lifetime; a force-killed owner
     # otherwise strands the worker and its Chromium. No-op off Windows.
-    bind_to_parent_lifetime(process)
+    timing_reader = None
+    timing_snapshots = None
+    def close_timing_stderr() -> None:
+        if chart_witness_manifest is not None:
+            try:
+                transport = getattr(process.stderr, "_transport", None)
+                if transport is not None:
+                    transport.close()
+            except Exception:
+                pass
+    if chart_witness_manifest is not None:
+        try:
+            from utils.slide_capture_chart_timing import drain_timing_stream, new_snapshot_buffer
+            timing_snapshots = new_snapshot_buffer()
+            if process.stderr is not None:
+                timing_reader = asyncio.create_task(drain_timing_stream(process.stderr, timing_snapshots))
+        except Exception:
+            close_timing_stderr()
 
     async def terminate_process_tree() -> None:
         if process.returncode is None:
@@ -187,91 +212,136 @@ async def _render_html_in_isolated_worker_impl(  # noqa: ASYNC109
                     process.kill()
             except (ProcessLookupError, PermissionError):
                 pass
+        close_timing_stderr()
         await process.wait()
 
-    async def exchange() -> bytes:
-        assert process.stdin is not None
-        assert process.stdout is not None
-        process.stdin.write(request)
-        await process.stdin.drain()
-        process.stdin.close()
-        try:
-            await process.stdin.wait_closed()
-        except (BrokenPipeError, ConnectionResetError):
-            pass
-        try:
-            output = await process.stdout.readexactly(MAX_RESPONSE_BYTES + 1)
-        except asyncio.IncompleteReadError as incomplete:
-            output = incomplete.partial
-        if len(output) > MAX_RESPONSE_BYTES:
-            await terminate_process_tree()
-        else:
-            await process.wait()
-        return output
-
     try:
-        # The production launcher owns a timeout+15s Docker cleanup window.  The
-        # author process must outlive that window; otherwise killing the launcher
-        # first can orphan its uniquely named one-shot container.
-        stdout = await asyncio.wait_for(
-            exchange(), timeout=max(25, timeout + 25)
-        )
-    except (asyncio.TimeoutError, asyncio.CancelledError) as exc:
-        await terminate_process_tree()
-        if isinstance(exc, asyncio.CancelledError):
-            raise
-        raise RendererIsolationError("authored renderer worker timed out") from exc
-    if len(stdout) > MAX_RESPONSE_BYTES:
-        raise RendererIsolationError("authored renderer response limit exceeded")
-    png, metrics = _decode_worker_response(stdout)
-    expected_digest = source_digest_for(measured_html)
-    # Admission is intentionally repeated in the worker.  The parent digest check
-    # binds the returned artifact to the exact request across an external launcher.
-    response = json.loads(stdout)
-    if admitted.source_digest != expected_digest or response.get("source_digest") != expected_digest:
-        raise RendererIsolationError("authored renderer response identity mismatch")
-    if process.returncode != 0:
-        raise RendererIsolationError("authored renderer worker failed")
-    if fixed_glyph_preview_ref is not None:
-        fixed = (metrics or {}).get("fixedGlyphPreview")
-        if (not isinstance(fixed, dict)
-                or fixed.get("displayDigest") != fixed_glyph_display_digest
-                or fixed.get("renderDigest") != fixed_glyph_render_digest
-                or fixed.get("projectionDigest") != fixed_glyph_projection_digest
-                or fixed.get("fontCssDigest") != fixed_glyph_font_css_digest
-                or fixed.get("authorityDigest") != fixed_glyph_authority_digest
-                or fixed.get("materializerCodeDigest") != fixed_glyph_code_digest):
-            raise RendererIsolationError("svg template glyph renderer identity mismatch")
-    if private_diagnostic_profile is not None:
-        from PIL import Image
-        import io
-        from utils.slide_capture_pipe_render import private_diagnostic_pipe_code_digest
+        bind_to_parent_lifetime(process)
+        async def exchange() -> bytes:
+            assert process.stdin is not None
+            assert process.stdout is not None
+            process.stdin.write(request)
+            await process.stdin.drain()
+            process.stdin.close()
+            try:
+                await process.stdin.wait_closed()
+            except (BrokenPipeError, ConnectionResetError):
+                pass
+            try:
+                output = await process.stdout.readexactly(MAX_RESPONSE_BYTES + 1)
+            except asyncio.IncompleteReadError as incomplete:
+                output = incomplete.partial
+            if len(output) > MAX_RESPONSE_BYTES:
+                await terminate_process_tree()
+            else:
+                if chart_witness_manifest is not None:
+                    # The complete stdout frame is already available. Give the
+                    # sole diagnostic reader one turn, then detach its pipe so
+                    # inherited stderr handles cannot hold process.wait open.
+                    await asyncio.sleep(0)
+                    close_timing_stderr()
+                await process.wait()
+            return output
 
-        diagnostic = (metrics or {}).get("privateDiagnosticRaster")
-        with Image.open(io.BytesIO(png)) as raster:
-            raster_size = raster.size
-        if (private_diagnostic_profile != "fixed-glyph-dpr2/v1"
-                or not isinstance(diagnostic, dict)
-                or diagnostic.get("profile") != private_diagnostic_profile
-                or diagnostic.get("logicalCanvasPx") != list(DEFAULT_CANVAS_SIZE_PX)
-                or diagnostic.get("rasterCanvasPx") != [2560, 1440]
-                or diagnostic.get("devicePixelRatio") != 2
-                or diagnostic.get("pipeCodeDigest") != private_diagnostic_pipe_code_digest()
-                or diagnostic.get("canonicalDigest") != "sha256:" + hashlib.sha256(canonical_svg.encode()).hexdigest()
-                or diagnostic.get("displayDigest") != fixed_glyph_display_digest
-                or diagnostic.get("renderDigest") != fixed_glyph_render_digest
-                or diagnostic.get("projectionDigest") != fixed_glyph_projection_digest
-                or diagnostic.get("fontCssDigest") != fixed_glyph_font_css_digest
-                or diagnostic.get("authorityDigest") != fixed_glyph_authority_digest
-                or diagnostic.get("materializerCodeDigest") != fixed_glyph_code_digest
-                or diagnostic.get("pngDigest") != "sha256:" + hashlib.sha256(png).hexdigest()
-                or raster_size != (2560, 1440)):
-            raise RendererIsolationError("svg template glyph diagnostic raster mismatch")
-    if metrics is not None and fixed_glyph_preview_ref is None:
-        _cache_browser_metrics(
-            measured_html, metrics, width_px=width_px, height_px=height_px
-        )
-    return png, metrics
+        try:
+            # The production launcher owns a timeout+15s Docker cleanup window.  The
+            # author process must outlive that window; otherwise killing the launcher
+            # first can orphan its uniquely named one-shot container.
+            stdout = await asyncio.wait_for(
+                exchange(), timeout=max(25, timeout + 25)
+            )
+        except (asyncio.TimeoutError, asyncio.CancelledError) as exc:
+            if chart_witness_manifest is None:
+                await terminate_process_tree()
+            else:
+                try:
+                    await terminate_process_tree()
+                except Exception:
+                    pass
+            if isinstance(exc, asyncio.CancelledError):
+                raise
+            raise RendererIsolationError("authored renderer worker timed out") from exc
+        if len(stdout) > MAX_RESPONSE_BYTES:
+            raise RendererIsolationError("authored renderer response limit exceeded")
+        png, metrics = _decode_worker_response(stdout)
+        expected_digest = source_digest_for(measured_html)
+        # Admission is intentionally repeated in the worker.  The parent digest check
+        # binds the returned artifact to the exact request across an external launcher.
+        response = json.loads(stdout)
+        if admitted.source_digest != expected_digest or response.get("source_digest") != expected_digest:
+            raise RendererIsolationError("authored renderer response identity mismatch")
+        if process.returncode != 0:
+            raise RendererIsolationError("authored renderer worker failed")
+        if fixed_glyph_preview_ref is not None:
+            fixed = (metrics or {}).get("fixedGlyphPreview")
+            if (not isinstance(fixed, dict)
+                    or fixed.get("displayDigest") != fixed_glyph_display_digest
+                    or fixed.get("renderDigest") != fixed_glyph_render_digest
+                    or fixed.get("projectionDigest") != fixed_glyph_projection_digest
+                    or fixed.get("fontCssDigest") != fixed_glyph_font_css_digest
+                    or fixed.get("authorityDigest") != fixed_glyph_authority_digest
+                    or fixed.get("materializerCodeDigest") != fixed_glyph_code_digest):
+                raise RendererIsolationError("svg template glyph renderer identity mismatch")
+        if private_diagnostic_profile is not None:
+            from PIL import Image
+            import io
+            from utils.slide_capture_pipe_render import private_diagnostic_pipe_code_digest
+
+            diagnostic = (metrics or {}).get("privateDiagnosticRaster")
+            with Image.open(io.BytesIO(png)) as raster:
+                raster_size = raster.size
+            if (private_diagnostic_profile != "fixed-glyph-dpr2/v1"
+                    or not isinstance(diagnostic, dict)
+                    or diagnostic.get("profile") != private_diagnostic_profile
+                    or diagnostic.get("logicalCanvasPx") != list(DEFAULT_CANVAS_SIZE_PX)
+                    or diagnostic.get("rasterCanvasPx") != [2560, 1440]
+                    or diagnostic.get("devicePixelRatio") != 2
+                    or diagnostic.get("pipeCodeDigest") != private_diagnostic_pipe_code_digest()
+                    or diagnostic.get("canonicalDigest") != "sha256:" + hashlib.sha256(canonical_svg.encode()).hexdigest()
+                    or diagnostic.get("displayDigest") != fixed_glyph_display_digest
+                    or diagnostic.get("renderDigest") != fixed_glyph_render_digest
+                    or diagnostic.get("projectionDigest") != fixed_glyph_projection_digest
+                    or diagnostic.get("fontCssDigest") != fixed_glyph_font_css_digest
+                    or diagnostic.get("authorityDigest") != fixed_glyph_authority_digest
+                    or diagnostic.get("materializerCodeDigest") != fixed_glyph_code_digest
+                    or diagnostic.get("pngDigest") != "sha256:" + hashlib.sha256(png).hexdigest()
+                    or raster_size != (2560, 1440)):
+                raise RendererIsolationError("svg template glyph diagnostic raster mismatch")
+        if chart_witness_manifest is not None:
+            from utils.slide_capture_chart_paint import validate_chart_paint_binding
+            validate_chart_paint_binding(
+                metrics, png, chart_witness_manifest, wrapper_html=measured_html,
+                width_px=width_px, height_px=height_px,
+                **({"device_scale_factor": 2} if private_diagnostic_profile is not None else {}),
+            )
+        if metrics is not None and fixed_glyph_preview_ref is None and chart_witness_manifest is None:
+            _cache_browser_metrics(
+                measured_html, metrics, width_px=width_px, height_px=height_px
+            )
+        return png, metrics
+    finally:
+        if chart_witness_manifest is not None:
+            if process.returncode is None:
+                try:
+                    await terminate_process_tree()
+                except (asyncio.CancelledError, Exception):
+                    pass
+            if timing_reader is not None:
+                timing_reader.cancel()
+            close_timing_stderr()
+            if timing_reader is not None:
+                try:
+                    # The sole reader awaits StreamReader.read and rethrows
+                    # cancellation; joining it consumes no second grace window.
+                    await timing_reader
+                except (asyncio.CancelledError, Exception):
+                    pass
+            if timing_snapshots is not None:
+                try:
+                    from utils.slide_capture_chart_timing import log_timing_snapshots
+                    log_timing_snapshots(_CHART_TIMING_LOGGER, timing_snapshots)
+                except Exception:
+                    pass
 
 
 async def render_with_lease(  # noqa: ASYNC109
