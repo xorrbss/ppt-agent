@@ -141,6 +141,16 @@ def _targets(manifest):
                     owned_ranges.append({key: relation[key] for key in ("qid", "start", "length")})
                 elif kind == "marker-on-datum" and relation["datumId"] in datum_ids:
                     own(relation["qid"], "all")
+                elif kind == "datum-on-baseline-axis" and datum is None and relation.get("qid") == qid:
+                    datum_qids = {value for item in chart["datums"] for value in item["primitiveQids"]}
+                    occluders = relation.get("occluderQids")
+                    if (chart["chartType"] not in {"bar", "column"} or not isinstance(occluders, list) or not occluders
+                            or len(set(occluders)) != len(occluders)
+                            or any(value not in datum_qids or int(value[4:]) <= int(qid[4:]) for value in occluders)):
+                        raise ValueError("chart_baseline_axis_relation_invalid")
+                    for occluder in occluders:
+                        own(occluder, "all")
+                    local_relationships.append(dict(relation))
                 for overlap in relation.get("localOverlaps", []):
                     if overlap.get("datumId") in datum_ids and overlap.get("targetQid") == qid:
                         if (datum is None or overlap.get("geometrySupportDigest") != datum.get("geometrySupport", {}).get("geometryDigest")

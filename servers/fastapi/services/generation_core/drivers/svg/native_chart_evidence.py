@@ -1285,6 +1285,24 @@ def build_chart_witness_manifest(payload: dict, svg: str, *, revision: str) -> d
                 relationships.append({"kind": "proved-donut-hole", "qid": qid(node)})
             elif geometry.get("calibrated") and node.tag.rsplit("}", 1)[-1] == "line":
                 relationships.append({"kind": "calibrated-axis", "qid": qid(node)})
+            if (chart["chartType"] in {"bar", "column"} and node.tag.rsplit("}", 1)[-1] == "line"
+                    and isinstance(geometry.get("baseline"), (int, float))):
+                # A baseline axis drawn before the bars that rest on it: the bars
+                # cover part of its stroke by construction. Only an axis line on
+                # the proven baseline, across the value direction, qualifies.
+                line = shapes[index]["shape"]
+                horizontal_bars = chart["chartType"] == "bar"
+                across = line.box.x0 == line.box.x1 if horizontal_bars else line.box.y0 == line.box.y1
+                position = line.box.x0 if horizontal_bars else line.box.y0
+                if across and abs(position - geometry["baseline"]) <= line.stroke_width / 2:
+                    axis_qid = qid(node)
+                    resting = sorted({qid(shapes[point["shapeIndex"]]["node"]) for point in geometry["points"]
+                                      if isinstance(point.get("shapeIndex"), int)
+                                      and int(qid(shapes[point["shapeIndex"]]["node"])[4:]) > int(axis_qid[4:])},
+                                     key=lambda value: int(value[4:]))
+                    if resting:
+                        relationships.append({"kind": "datum-on-baseline-axis", "qid": axis_qid,
+                                              "occluderQids": resting})
         from services.generation_core.drivers.svg.native_requirements import _series_name_unit, _unit_key
         from decimal import Decimal
         data_qids = {value for datum in datums for value in datum["primitiveQids"]}

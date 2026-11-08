@@ -1322,3 +1322,70 @@ def test_won_magnitude_synonym_is_v5_only():
     assert _v5_unit_key("만") == _v5_unit_key("만원")
     assert _v5_unit_key("억") != _v5_unit_key("억명")
     assert _unit_key("억") != _unit_key("억원")
+
+
+def _axis_page(*, axis_first=True, offset=0):
+    """A column chart whose x axis lies on the proven baseline (y=450)."""
+    page = _page()
+    root = ET.fromstring(page["svg_content"])
+    group = next(node for node in root.iter(NS + "g") if node.get("id") == "native-chart-sales")
+    axis = ET.Element(NS + "line", {"x1": "200", "y1": str(450 + offset), "x2": "620", "y2": str(450 + offset),
+                                    "stroke": "#64748B", "stroke-width": "2"})
+    group.insert(2 if axis_first else len(group), axis)
+    svg = ET.tostring(root, encoding="unicode")
+    declarations = page["nativeDeclarations"]
+    page = {"svg_content": svg}
+    bind_native_declarations(page, svg, declarations)
+    return page
+
+
+def _baseline_axis_relations(page):
+    from services.generation_core.drivers.svg.native_chart_evidence import build_chart_witness_manifest
+    manifest = build_chart_witness_manifest(page, page["svg_content"], revision=V5)
+    return manifest, [relation for chart in manifest["charts"] for relation in chart["compositionGroup"]["relationships"]
+                      if relation["kind"] == "datum-on-baseline-axis"]
+
+
+def test_bars_resting_on_an_earlier_baseline_axis_own_their_overlap():
+    """Seen live on every real bar chart: the axis drawn first, the bars on top of
+    it. The bars may cover the axis stroke; both capture and consumer agree."""
+    from services.generation_core.drivers.svg import chart_content_paint
+    from utils import slide_capture_chart_paint
+    manifest, relations = _baseline_axis_relations(_axis_page())
+    assert len(relations) == 1 and len(relations[0]["occluderQids"]) == 3
+    datum_qids = {qid for chart in manifest["charts"] for datum in chart["datums"] for qid in datum["primitiveQids"]}
+    assert set(relations[0]["occluderQids"]) == datum_qids
+    consumer, _, _ = chart_content_paint._targets(manifest)
+    capture = slide_capture_chart_paint._targets(manifest)
+    for targets in (consumer, capture):
+        axis = next(target for target in targets if target.get("qid") == relations[0]["qid"])
+        assert axis["datumIds"] == [] and axis["ownedQids"] == relations[0]["occluderQids"]
+        assert all(axis["ownedPaints"][qid] == "all" for qid in axis["ownedQids"])
+    def strip(targets):
+        return [{key: value for key, value in target.items() if key != "geometrySupport"} for target in targets]
+    assert strip(consumer) == strip(capture)
+
+
+@pytest.mark.parametrize("kwargs", [{"axis_first": False}, {"offset": 12}])
+def test_baseline_axis_ownership_needs_an_earlier_axis_on_the_baseline(kwargs):
+    _manifest, relations = _baseline_axis_relations(_axis_page(**kwargs))
+    assert relations == []
+
+
+@pytest.mark.parametrize("tamper", ["foreign", "earlier", "extra_key"])
+def test_tampered_baseline_axis_relation_is_refused(tamper):
+    from services.generation_core.drivers.svg import chart_content_paint
+    from utils import slide_capture_chart_paint
+    manifest, relations = _baseline_axis_relations(_axis_page())
+    relation = relations[0]
+    if tamper == "foreign":
+        relation["occluderQids"] = [*relation["occluderQids"], "svg-999"]
+    elif tamper == "earlier":
+        relation["occluderQids"] = ["svg-1", *relation["occluderQids"]]
+    else:
+        relation["localOverlaps"] = []
+    with pytest.raises(ValueError):
+        chart_content_paint._targets(manifest)
+    if tamper != "extra_key":
+        with pytest.raises(ValueError):
+            slide_capture_chart_paint._targets(manifest)

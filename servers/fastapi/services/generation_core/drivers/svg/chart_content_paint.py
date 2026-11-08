@@ -773,6 +773,18 @@ def _targets(manifest):
                 elif kind == "marker-on-datum" and relation["datumId"] in owners:
                     _require(_qid(relation.get("qid")), "manifest_relationship_invalid")
                     own(relation["qid"], "all")
+                elif kind == "datum-on-baseline-axis" and datum is None and relation.get("qid") == qid:
+                    # Bars resting on a baseline axis drawn before them may cover its
+                    # stroke; the axis must still contribute paint of its own.
+                    datum_qids = {value for item in datums for value in item["primitiveQids"]}
+                    occluders = relation.get("occluderQids")
+                    _require(chart["chartType"] in {"bar", "column"} and set(relation) == {"kind", "qid", "occluderQids"}
+                             and _unique_strings(occluders, qids=True) and occluders
+                             and all(value in datum_qids and int(value[4:]) > int(qid[4:]) for value in occluders),
+                             "manifest_relationship_invalid")
+                    for occluder in occluders:
+                        own(occluder, "all")
+                    local.append(dict(relation))
                 overlaps = relation.get("localOverlaps", [])
                 _require(isinstance(overlaps, list), "manifest_relationship_invalid")
                 for overlap in overlaps:
