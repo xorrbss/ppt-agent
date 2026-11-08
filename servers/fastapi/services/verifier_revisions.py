@@ -191,6 +191,13 @@ CONVERTER_LEDGER = VerifierRevisionLedger(
         # integer/float parity, and unreadable fonts leave a proof incomplete. Stored
         # V4 and legacy evidence is unchanged.
         "5f216f163c2bd855aba4b8257e74a3be9e9d3f3aba8a17747efe4c4567f34a6c": "svg-pptx-converter/1",
+        # 2026-11-08 V5 chart paint proof moved off the render path (default-off V5 only): the
+        # unchanged proof and validator run in export.pptx for freely composed V5 charts and
+        # seal digest-bound evidence in slide.properties; unverified charts export drawn.
+        # Preserved source charts that must export natively keep their in-render proof.
+        # Chart-proof Chrome launches add frame-pacing flags; the default argv is unchanged.
+        # V4, earlier revisions and non-SVG paths are unchanged; no stored V5 proofs exist.
+        "611d90f3c7fa580ea98fc1df2ad62ca21eb074ae3fab74f1b2aab973fdbe959c": "svg-pptx-converter/1",
     }),
 )
 
@@ -287,6 +294,13 @@ COMMON_HEADER_VERIFIER_LEDGER = VerifierRevisionLedger(
         # 2026-11-08 repository lint tests: bare timeout/poll literals named as module
         # constants with the same values; no behaviour changed.
         "sha256:2437145fd9981f189fc88b935805fa8c830be5a9e61deb0a3e81f9167f9d6e39": "svg-common-header-verifier/1",
+        # 2026-11-08 V5 chart paint proof moved off the render path (default-off V5 only): the
+        # unchanged proof and validator run in export.pptx for freely composed V5 charts and
+        # seal digest-bound evidence in slide.properties; unverified charts export drawn.
+        # Preserved source charts that must export natively keep their in-render proof.
+        # Chart-proof Chrome launches add frame-pacing flags; the default argv is unchanged.
+        # V4, earlier revisions and non-SVG paths are unchanged; no stored V5 proofs exist.
+        "sha256:69a1a1959c3697d7e4bd1b9155ebeba4a4563b2fd1564c26f2556d99686d1e6e": "svg-common-header-verifier/1",
     }),
 )
 
@@ -400,6 +414,13 @@ WHOLE_PAGE_VERIFIER_LEDGER = VerifierRevisionLedger(
         # optimizeForSpeed (identical decoded pixels) and numpy mask statistics with
         # exact parity to the byte loops they replace.
         "1247bee2ae8175e4132bb85b2ede679451c882e9bf3c7baed8fa1cd89c035d14": "svg-whole-page-verifier/1",
+        # 2026-11-08 V5 chart paint proof moved off the render path (default-off V5 only): the
+        # unchanged proof and validator run in export.pptx for freely composed V5 charts and
+        # seal digest-bound evidence in slide.properties; unverified charts export drawn.
+        # Preserved source charts that must export natively keep their in-render proof.
+        # Chart-proof Chrome launches add frame-pacing flags; the default argv is unchanged.
+        # V4, earlier revisions and non-SVG paths are unchanged; no stored V5 proofs exist.
+        "12cc5a2279b80d00c9ada261977fad45bc27dd6422b69ce9058140a3fcca3f02": "svg-whole-page-verifier/1",
     }),
 )
 
@@ -586,6 +607,13 @@ PARTIAL_RECOVERY_CODE_LEDGER = VerifierRevisionLedger(
         # 2026-11-08 repository lint tests: bare timeout/poll literals named as module
         # constants with the same values; no behaviour changed.
         "58d7befea47942dced7e6ed8aa5a9b9861b5e3e7697b226281df4044a36aec61": "svg-partial-recovery-code/1",
+        # 2026-11-08 V5 chart paint proof moved off the render path (default-off V5 only): the
+        # unchanged proof and validator run in export.pptx for freely composed V5 charts and
+        # seal digest-bound evidence in slide.properties; unverified charts export drawn.
+        # Preserved source charts that must export natively keep their in-render proof.
+        # Chart-proof Chrome launches add frame-pacing flags; the default argv is unchanged.
+        # V4, earlier revisions and non-SVG paths are unchanged; no stored V5 proofs exist.
+        "11bbfd050fb794d35c03ca898e0bd71e40fa69a8812519f55b9d574eee65820b": "svg-partial-recovery-code/1",
     }),
 )
 
@@ -683,6 +711,13 @@ PAGE_RENDER_CODE_LEDGER = VerifierRevisionLedger(
         # 2026-11-08 repository lint tests: bare timeout/poll literals named as module
         # constants with the same values; no behaviour changed.
         "fa9cdd4becdc96548c6eba1a7972ab7203f70f6c9e551c19a6619d84f543e3c0": "svg-page-render-code/1",
+        # 2026-11-08 V5 chart paint proof moved off the render path (default-off V5 only): the
+        # unchanged proof and validator run in export.pptx for freely composed V5 charts and
+        # seal digest-bound evidence in slide.properties; unverified charts export drawn.
+        # Preserved source charts that must export natively keep their in-render proof.
+        # Chart-proof Chrome launches add frame-pacing flags; the default argv is unchanged.
+        # V4, earlier revisions and non-SVG paths are unchanged; no stored V5 proofs exist.
+        "4fc28d1478d21aa67ae46bb59a48712df82e32de0e03a9f35b0a0f9d1fe4c5a3": "svg-page-render-code/1",
     }),
 )
 

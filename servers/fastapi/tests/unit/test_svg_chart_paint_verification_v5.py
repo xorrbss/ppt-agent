@@ -122,10 +122,16 @@ def test_preserved_v5_gate_defers_paint_only_when_asked():
 def test_render_and_remake_passes_send_no_chart_witness_manifest():
     from services import svg_page_remake
     from services.generation_core.drivers.svg import render
-    for module in (render, svg_page_remake):
-        source = inspect.getsource(module)
-        assert "chart_witness_render_kwargs" not in source and "chart_witness_manifest" not in source
-        assert "paint_deferred=True" in source or '"paint_deferred": True' in source
+    remake = inspect.getsource(svg_page_remake)
+    assert "chart_witness_render_kwargs" not in remake and "chart_witness_manifest" not in remake
+    assert "paint_deferred=True" in remake
+    # Render sends a witness manifest only for preserved source charts that the
+    # export must emit natively; every other chart's proof is deferred.
+    source = inspect.getsource(render)
+    assert source.count("chart_witness_render_kwargs(") == 1
+    assert "if _required_source_native_charts(ctx, payload) else {}" in source
+    assert '"paint_deferred": True' in source
+    assert "paint_deferred=not _required_source_native_charts(ctx, payload)" in source
 
 
 @pytest.mark.parametrize("revision", [None, V4])
@@ -403,3 +409,17 @@ def test_verification_render_inputs_follow_the_published_page():
     assert {"width", "height"} <= set(inputs) and "materialized_svg" not in inputs
     raster = _slide({**content, "svgReceipt": {**receipt, "rasterApprovalPin": {}}}, page["svg_content"])
     assert asyncio.run(service._render_inputs(None, presentation, raster)) is None
+
+
+def test_preserved_source_charts_keep_their_paint_proof_in_render():
+    """A source chart the export must emit natively has no drawn fallback, so its
+    V5 paint proof is not deferred to export (that would export it unproven)."""
+    from types import SimpleNamespace
+    from services.generation_core.drivers.svg.render import _required_source_native_charts
+
+    reflow = SimpleNamespace(source_reflow=True, raster_reconstruction=False)
+    composed = SimpleNamespace(source_reflow=False, raster_reconstruction=False)
+    assert _required_source_native_charts(reflow, {"source_preservation": {"whole_page_native_groups": [{"element_id": "c"}]}})
+    assert _required_source_native_charts(reflow, {"source_preservation": {"source_native_charts": [{"element_id": "c"}]}})
+    assert not _required_source_native_charts(reflow, {"source_preservation": {}})
+    assert not _required_source_native_charts(composed, {"source_preservation": {"source_native_charts": [{"element_id": "c"}]}})
