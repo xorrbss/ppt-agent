@@ -421,6 +421,12 @@ WHOLE_PAGE_VERIFIER_LEDGER = VerifierRevisionLedger(
         # Chart-proof Chrome launches add frame-pacing flags; the default argv is unchanged.
         # V4, earlier revisions and non-SVG paths are unchanged; no stored V5 proofs exist.
         "12cc5a2279b80d00c9ada261977fad45bc27dd6422b69ce9058140a3fcca3f02": "svg-whole-page-verifier/1",
+        # 2026-11-08 exact V5 label rules (default-off V5 only): ROUND_HALF_UP rounded value
+        # labels and share labels (pie/donut/percentStacked) compared exactly, prefixed
+        # digit-free captions outside the plot area classified as annotations (kept as
+        # drawn text on export), and short-name legend swatches classified as legend.
+        # Pages V5 passed before keep byte-identical evidence; V4 and earlier unchanged.
+        "fdafa91d8814919b92504c517d8608728392cb9b81b4930612e80cb76f40d477": "svg-whole-page-verifier/1",
     }),
 )
 
@@ -614,6 +620,12 @@ PARTIAL_RECOVERY_CODE_LEDGER = VerifierRevisionLedger(
         # Chart-proof Chrome launches add frame-pacing flags; the default argv is unchanged.
         # V4, earlier revisions and non-SVG paths are unchanged; no stored V5 proofs exist.
         "11bbfd050fb794d35c03ca898e0bd71e40fa69a8812519f55b9d574eee65820b": "svg-partial-recovery-code/1",
+        # 2026-11-08 exact V5 label rules (default-off V5 only): ROUND_HALF_UP rounded value
+        # labels and share labels (pie/donut/percentStacked) compared exactly, prefixed
+        # digit-free captions outside the plot area classified as annotations (kept as
+        # drawn text on export), and short-name legend swatches classified as legend.
+        # Pages V5 passed before keep byte-identical evidence; V4 and earlier unchanged.
+        "836eec60ba1a9879c3585ad94bd5bda0adf382e44674cde206102cafeaa8c6cf": "svg-partial-recovery-code/1",
     }),
 )
 
@@ -718,6 +730,12 @@ PAGE_RENDER_CODE_LEDGER = VerifierRevisionLedger(
         # Chart-proof Chrome launches add frame-pacing flags; the default argv is unchanged.
         # V4, earlier revisions and non-SVG paths are unchanged; no stored V5 proofs exist.
         "4fc28d1478d21aa67ae46bb59a48712df82e32de0e03a9f35b0a0f9d1fe4c5a3": "svg-page-render-code/1",
+        # 2026-11-08 exact V5 label rules (default-off V5 only): ROUND_HALF_UP rounded value
+        # labels and share labels (pie/donut/percentStacked) compared exactly, prefixed
+        # digit-free captions outside the plot area classified as annotations (kept as
+        # drawn text on export), and short-name legend swatches classified as legend.
+        # Pages V5 passed before keep byte-identical evidence; V4 and earlier unchanged.
+        "e81a5267b695b6aba4c10c16537cfea80afeea02b96d8c79eea35cfb308774fd": "svg-page-render-code/1",
     }),
 )
 
