@@ -109,8 +109,14 @@ restart, unless you decide to keep V5 on.
   deadline reserve. Background verification and the automatic refreshed export
   complete the rest.
 - **Background verification limits:**
-  - at most 5 rounds per deck revision;
-  - charts still unverified after that wait for the next manual export;
+  - at most 5 rounds per deck revision, counting the rounds after every
+    export of that revision;
+  - a manual export of the same revision continues with the next unused
+    round; after the fifth, unverified charts wait for an edit (a new
+    revision);
+  - pages are verified cheapest first; a chart with many targets (for
+    example 3 series with 9 labelled bars) can exceed the 120 s capture
+    limit and then stays drawn;
   - editing the deck stops the current chain, because evidence is bound to the
     revision;
   - if the refreshed export is refused (for example on capacity), it is not

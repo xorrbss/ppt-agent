@@ -158,6 +158,25 @@ def slide_chart_paint_pending(slide, *, revision) -> bool:
                 and current_paint_evidence(properties, content, svg) is None)
 
 
+def verification_cost(slide) -> int:
+    """The number of capture targets a page's proof walks (its capture time grows with it)."""
+    manifest = verification_manifest(slide.content or {}, slide.svg_content)
+    if manifest is None:
+        return 0
+    return sum(len(chart["compositionGroup"]["primitiveQids"])
+               + sum(len(glyph["ranges"]) for glyph in chart["glyphs"]) for chart in manifest["charts"])
+
+
+def order_by_verification_cost(slides) -> list:
+    """Pages cheapest capture first, deck order among equals.
+
+    One page with many targets can exceed a capture's timeout; verifying it
+    first would spend the budget the cheaper pages could have used.
+    """
+    return [slide for _, _, slide in sorted(
+        (verification_cost(slide), position, slide) for position, slide in enumerate(slides))]
+
+
 async def deck_chart_paint_fallbacks(session_factory, *, presentation, slides,
                                      remaining_seconds: Callable[[], int] | None = None,
                                      capture_timeout: int = VERIFICATION_TIMEOUT_SECONDS,
@@ -175,27 +194,36 @@ async def deck_chart_paint_fallbacks(session_factory, *, presentation, slides,
     from services.generation_core.drivers.svg.native_requirements import REQUIREMENTS_VERSION_V5
     if revision != REQUIREMENTS_VERSION_V5:
         return None
-    result = []
-    for slide in slides:
-        content, svg = slide.content or {}, slide.svg_content
-        sidecar = _sidecar(content)
+    def properties_of(slide):
         properties = getattr(slide, "properties", None)
-        properties = properties if isinstance(properties, dict) else {}
-        if (gated_chart_ids(content, sidecar, revision=revision)
-                and current_paint_evidence(properties, content, svg) is None
-                and remaining_seconds is not None
-                and remaining_seconds() >= capture_timeout + CLIENT_GRACE_SECONDS + EXPORT_RESERVE_SECONDS):
+        return properties if isinstance(properties, dict) else {}
+
+    verified = {}
+    if remaining_seconds is not None:
+        pending = [slide for slide in slides
+                   if gated_chart_ids(slide.content or {}, _sidecar(slide.content or {}), revision=revision)
+                   and current_paint_evidence(properties_of(slide), slide.content or {}, slide.svg_content) is None]
+        for slide in order_by_verification_cost(pending):
+            if remaining_seconds() < capture_timeout + CLIENT_GRACE_SECONDS + EXPORT_RESERVE_SECONDS:
+                break
             if between is not None:
                 await between()
             async with session_factory() as session:
                 record = await verify_slide_chart_paint(session, presentation, slide,
                                                         capture_timeout=capture_timeout, render=render)
             if record is not None:
-                properties = {**properties, EVIDENCE_KEY: record}
+                verified[id(slide)] = record
                 await store_chart_paint_evidence(session_factory, slide, record)
-        result.append(chart_paint_fallbacks(content, properties, svg, sidecar, revision=revision))
+    result = []
+    for slide in slides:
+        content, svg = slide.content or {}, slide.svg_content
+        properties = properties_of(slide)
+        if id(slide) in verified:
+            properties = {**properties, EVIDENCE_KEY: verified[id(slide)]}
+        result.append(chart_paint_fallbacks(content, properties, svg, _sidecar(content), revision=revision))
     return result
 
 
 __all__ = ["EXPORT_RESERVE_SECONDS", "deck_chart_paint_fallbacks", "deck_requirements_revision",
+           "order_by_verification_cost", "verification_cost",
            "slide_chart_paint_pending", "store_chart_paint_evidence", "verify_slide_chart_paint"]

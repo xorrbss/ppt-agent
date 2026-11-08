@@ -9,7 +9,8 @@ user waits for keeps its length:
 * a successful v5 ``export.pptx`` whose bundle still kept charts drawn as
   unverified enqueues round 1 (``enqueue_after_export``);
 * each round runs the unchanged proof (``verify_slide_chart_paint``) page by
-  page in deck order while its own budget allows, stores the same
+  page, cheapest capture first (``order_by_verification_cost``), while its
+  own budget allows, stores the same
   digest-bound evidence in ``slide.properties`` and re-enqueues the next round
   only when it was cut short with pages left, up to ``MAX_ROUNDS``;
 * when the chain ends and at least one additional chart passed, it submits one
@@ -18,7 +19,9 @@ user waits for keeps its length:
 
 Bounds: the idempotency key is bound to (presentation, revision, round), so a
 revision has at most ``MAX_ROUNDS`` follow-ups, and no follow-up is enqueued
-while another one of the presentation is in flight. A deck revision change
+while another one of the presentation is in flight. A later manual export at
+the same revision continues with the next unused round; a chain's own
+refreshed export (keyed by its final round) starts nothing. A deck revision change
 stops the chain without applying anything (evidence is digest-bound anyway).
 A capture error or timeout stores nothing (as in the export) and only counts
 as unverified; a round that attempted every remaining page does not
@@ -58,9 +61,10 @@ def followup_idempotency_key(*, presentation_id: uuid.UUID, revision: int, round
     return f"svg-chart-verify:{digest}"
 
 
-def refresh_export_idempotency_key(*, presentation_id: uuid.UUID, revision: int) -> str:
+def refresh_export_idempotency_key(*, presentation_id: uuid.UUID, revision: int, round_number: int) -> str:
+    """One refreshed export per (presentation, revision, final round of a chain)."""
     from utils.hashing import sha256_hex
-    digest = sha256_hex(f"{OPERATION_KIND}.refresh:{presentation_id}:{revision}".encode("utf-8"))
+    digest = sha256_hex(f"{OPERATION_KIND}.refresh:{presentation_id}:{revision}:{round_number}".encode("utf-8"))
     return f"svg-chart-verify-export:{digest}"
 
 
@@ -171,8 +175,38 @@ async def enqueue_chart_paint_followup(session_factory, *, owner_id, owner_scope
     return operation.id
 
 
+async def _round_after_export(session_factory, *, claim) -> int | None:
+    """The next free round of ``claim``'s revision, or ``None`` when none may start.
+
+    A chain's own refreshed export never starts another chain. Any other export
+    (the first one, or a later manual one at the same revision) continues with
+    the round after the last one used, so a revision still has at most
+    ``MAX_ROUNDS`` rounds in total.
+    """
+    from models.sql.workspace import WorkspaceOperation
+    from services.workspace_service import workspace_idempotency_hash
+    presentation_id, revision = claim.presentation_id, claim.expected_revision
+    rounds = range(1, MAX_ROUNDS + 1)
+    refresh_hashes = {workspace_idempotency_hash(refresh_export_idempotency_key(
+        presentation_id=presentation_id, revision=revision, round_number=number)) for number in rounds}
+    round_hashes = {workspace_idempotency_hash(followup_idempotency_key(
+        presentation_id=presentation_id, revision=revision, round_number=number)): number for number in rounds}
+    async with session_factory() as session:
+        source = await session.scalar(select(WorkspaceOperation.idempotency_key_hash).where(
+            WorkspaceOperation.id == claim.operation_id))
+        if source in refresh_hashes:
+            return None
+        used = (await session.execute(select(WorkspaceOperation.idempotency_key_hash).where(
+            WorkspaceOperation.owner_scope == claim.owner_scope,
+            WorkspaceOperation.presentation_id == presentation_id,
+            WorkspaceOperation.kind == OPERATION_KIND,
+            WorkspaceOperation.idempotency_key_hash.in_(tuple(round_hashes))))).scalars().all()
+    following = max((round_hashes[value] for value in used), default=0) + 1
+    return following if following <= MAX_ROUNDS else None
+
+
 async def enqueue_after_export(session_factory, *, claim, chart_paint_fallbacks) -> uuid.UUID | None:
-    """Round 1 after a successful v5 ``export.pptx`` that kept charts unverified.
+    """The next round after a successful v5 ``export.pptx`` that kept charts unverified.
 
     Never raises: a missing follow-up only leaves the charts drawn, as before.
     """
@@ -180,10 +214,13 @@ async def enqueue_after_export(session_factory, *, claim, chart_paint_fallbacks)
         return None
     try:
         from services.workspace_operation_principal import submitting_principal_tenant
+        round_number = await _round_after_export(session_factory, claim=claim)
+        if round_number is None:
+            return None
         return await enqueue_chart_paint_followup(
             session_factory, owner_id=claim.owner_id, owner_scope=claim.owner_scope,
             conversation_id=claim.conversation_id, presentation_id=claim.presentation_id,
-            revision=claim.expected_revision, round_number=1, passed_so_far=0,
+            revision=claim.expected_revision, round_number=round_number, passed_so_far=0,
             export_context=refresh_export_context(claim.request_payload),
             source_export_operation_id=claim.operation_id,
             account_deletion_generation=claim.request_payload.get("account_deletion_generation"),
@@ -194,7 +231,7 @@ async def enqueue_after_export(session_factory, *, claim, chart_paint_fallbacks)
         return None
 
 
-async def submit_refresh_export(session_factory, *, presentation_id: uuid.UUID, revision: int,
+async def submit_refresh_export(session_factory, *, presentation_id: uuid.UUID, revision: int, round_number: int,
                                 export_context: Mapping[str, Any]) -> uuid.UUID | None:
     """Submit one refreshed ``export.pptx`` at ``revision``; ``None`` when refused."""
     from models.workspace import WorkspaceCommandRequest
@@ -205,7 +242,7 @@ async def submit_refresh_export(session_factory, *, presentation_id: uuid.UUID, 
                 request=WorkspaceCommandRequest(
                     command=REFRESH_EXPORT_COMMAND_TEXT, command_type="export.pptx",
                     idempotency_key=refresh_export_idempotency_key(presentation_id=presentation_id,
-                                                                   revision=revision),
+                                                                   revision=revision, round_number=round_number),
                     expected_revision=revision, context=dict(export_context), asset_ids=[]))
             await session.commit()
     except Exception:
@@ -258,8 +295,8 @@ class SvgChartPaintVerificationOperationHandler:
         from services.generation_core.drivers.svg.chart_paint_verification import VERIFICATION_TIMEOUT_SECONDS
         from services.generation_core.drivers.svg.native_requirements import REQUIREMENTS_VERSION_V5
         from services.svg_chart_paint_verification import (
-            CLIENT_GRACE_SECONDS, deck_requirements_revision, slide_chart_paint_pending, store_chart_paint_evidence,
-            verify_slide_chart_paint,
+            CLIENT_GRACE_SECONDS, deck_requirements_revision, order_by_verification_cost, slide_chart_paint_pending,
+            store_chart_paint_evidence, verify_slide_chart_paint,
         )
         from services.workspace_operation_handler_registry import NonRetryableWorkspaceOperationError
         claim, sessions = context.claim, self._sessions()
@@ -288,7 +325,8 @@ class SvgChartPaintVerificationOperationHandler:
                 or any(slide.source_format != "svg" or not slide.svg_content or slide.owner_id != claim.owner_id
                        for slide in slides)):
             return {**result, "outcome": "not_applicable"}
-        pending = [slide for slide in slides if slide_chart_paint_pending(slide, revision=requirements)]
+        pending = order_by_verification_cost(
+            [slide for slide in slides if slide_chart_paint_pending(slide, revision=requirements)])
         await context.extend_lease(seconds=self._round_seconds + _LEASE_MARGIN_SECONDS)
         per_page = VERIFICATION_TIMEOUT_SECONDS + CLIENT_GRACE_SECONDS
         attempted, cut = 0, None
@@ -334,7 +372,8 @@ class SvgChartPaintVerificationOperationHandler:
         if passed_total <= 0:
             return {**result, "outcome": "completed"}
         export_id = await submit_refresh_export(sessions, presentation_id=claim.presentation_id,
-                                                revision=revision, export_context=payload["export_context"])
+                                                revision=revision, round_number=round_number,
+                                                export_context=payload["export_context"])
         return {**result, "outcome": "completed", "charts_passed_total": passed_total,
                 **({"refresh_export_operation_id": str(export_id)} if export_id is not None else {})}
 
