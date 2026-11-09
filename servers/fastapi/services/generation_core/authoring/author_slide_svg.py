@@ -718,6 +718,8 @@ def svg_author_rules(style_snapshot: dict, body_floor: float, *, new_copy: bool 
         source_grounded=quality_policy is not None and quality_policy["version"] == 2,
         requirements_revision=requirements_revision(style_snapshot),
     )
+    from services.generation_core.drivers.svg.server_chart import server_chart_rule
+    native_rules += server_chart_rule(style_snapshot)
     author_rules = SVG_NEW_COPY_AUTHOR_RULES if new_copy else SVG_AUTHOR_RULES
     if (source_preserved
             and style_snapshot.get("source_authoring_contract") == {"version": "svg-source-whole-page/v1"}):
@@ -1020,7 +1022,8 @@ async def author_slide_svg(content: str, style_snapshot: dict, role: str, index:
                            author_attempt_identity: dict | None = None,
                            output_view: dict | None = None,
                            source_facts: list | None = None,
-                           template_chapter: dict | None = None) -> SvgAuthorResult:
+                           template_chapter: dict | None = None,
+                           previous_native_declarations: dict | None = None) -> SvgAuthorResult:
     manifest = preflight_svg_source_images(source_images)
     # The job's pinned source output view (whole-page source authoring only): the model
     # reads and writes the compact form, and its response is restored to the canonical
@@ -1125,6 +1128,11 @@ async def author_slide_svg(content: str, style_snapshot: dict, role: str, index:
         from services.svg_templates.frame_composition import strip_template_furniture
 
         shown_previous_svg = strip_template_furniture(shown_previous_svg)
+    if shown_previous_svg and previous_native_declarations:
+        # Server-drawn charts are shown as their placeholders, so a correction keeps them
+        # declared instead of copying the drawn bars (server_chart.placeholder_view).
+        from services.generation_core.drivers.svg.server_chart import placeholder_view
+        shown_previous_svg = placeholder_view(shown_previous_svg, previous_native_declarations)
     prompt_previous_svg, previous_svg_compacted = outbound_previous_svg(shown_previous_svg, view_plan)
     previous_svg_shown = False
     if quality_policy is not None and active_correction:

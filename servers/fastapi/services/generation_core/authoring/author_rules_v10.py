@@ -21,6 +21,7 @@ import re
 from models.canvas_defaults import DEFAULT_CANVAS_HEIGHT_PX, DEFAULT_CANVAS_WIDTH_PX
 from services.generation_core.drivers.svg.native_declarations import native_author_rules_v10
 from services.generation_core.drivers.svg.native_requirements import requirements_revision
+from services.generation_core.drivers.svg.server_chart import server_chart_rule
 
 #: Revision ten's rule layout identifier, for receipts and tests.
 LAYERED_RULES_VERSION = "svg-author-layered-rules/v1"
@@ -202,6 +203,7 @@ def svg_author_rules_v10(style_snapshot: dict, design: dict, body_floor: float, 
         design_rules = design_rules.replace("the title states it, its strongest", "its strongest")
     return (PRIORITY_LINE + OUTPUT_CONTRACT_RULES.lstrip("\n") + canvas_line + physical_rules
             + native_author_rules_v10(requirements_revision=requirements_revision(style_snapshot))
+            + server_chart_rule(style_snapshot)
             + design_rules + scale_text + korean
             + CONTENT_FIDELITY_RULES + writing_policy)
 

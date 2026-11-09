@@ -305,6 +305,19 @@ COMMON_HEADER_VERIFIER_LEDGER = VerifierRevisionLedger(
         # gains title/shared-scale/axis-beneath-bars sentences); V4 and earlier prompt
         # bytes and the common-header verifier behaviour are unchanged.
         "sha256:b734900b117bf44e6a80e8be6e583365b38ca9eb276d4778c70be9114c3ade6d": "svg-common-header-verifier/1",
+        # 2026-11-08: server-rendered chart prototype (SVG_SERVER_CHARTS, default off).
+        # A placeholder marked data-chart-render="server" is drawn from its declaration
+        # inside extract_native_declarations, and its values must occur in the source.
+        # Raw responses without the marker (every stored deck) are unchanged.
+        "sha256:59436a56947d3238163e32efaa26ccf600d1bc1498eaff173a5acb2e458a7d61": "svg-common-header-verifier/1",
+        # 2026-11-08: server chart prototype, revision dispatch (data-chart-render names a
+        # frozen renderer revision), stored box, placeholder view for correction prompts and
+        # category/series association grounding. Raw responses without the marker are unchanged.
+        "sha256:0d2f22d07b19f2e4dd8f9797c0a9047d7d3767e94e7499ffe9dcfaaf8ce3883c": "svg-common-header-verifier/1",
+        # 2026-11-09: server chart prototype only (SVG_SERVER_CHARTS decks): stacked and
+        # percent-stacked server charts, and undeclared bar/column charts recorded as the
+        # layout failure undeclared_chart_drawn with a declare hint. Other decks unchanged.
+        "sha256:ee408d01f37bd96b23b6a4a4514bcd8e8d111e4e9707fcc9029bcafbf353efc4": "svg-common-header-verifier/1",
     }),
 )
 
@@ -450,6 +463,15 @@ WHOLE_PAGE_VERIFIER_LEDGER = VerifierRevisionLedger(
         # and consumer); v5 author guidance asks for axes beneath bars. V4 and earlier
         # revisions are unchanged.
         "333c627fddd7c6b4d5f3a8d7c052f27f6a834de6fb6c1bf110001e3990579ae4": "svg-whole-page-verifier/1",
+        # 2026-11-08: server-rendered chart prototype (SVG_SERVER_CHARTS, default off).
+        # A placeholder marked data-chart-render="server" is drawn from its declaration
+        # inside extract_native_declarations, and its values must occur in the source.
+        # Raw responses without the marker (every stored deck) are unchanged.
+        "acadc5ae08f322954423f7c4d6404f6fa6b30dff1ee7913684f7ce57c249a573": "svg-whole-page-verifier/1",
+        # 2026-11-08: server chart prototype, revision dispatch (data-chart-render names a
+        # frozen renderer revision), stored box, placeholder view for correction prompts and
+        # category/series association grounding. Raw responses without the marker are unchanged.
+        "d951f920c7a1731ef47960830ebfe543b9288464b1d6df5aab1ce5f7aae9be7c": "svg-whole-page-verifier/1",
     }),
 )
 
@@ -663,6 +685,19 @@ PARTIAL_RECOVERY_CODE_LEDGER = VerifierRevisionLedger(
         # and consumer); v5 author guidance asks for axes beneath bars. V4 and earlier
         # revisions are unchanged.
         "2377b41e5958078a28ae9344236fae353e885a7696d6d96dc48e4c8f1dcceb05": "svg-partial-recovery-code/1",
+        # 2026-11-08: server-rendered chart prototype (SVG_SERVER_CHARTS, default off).
+        # A placeholder marked data-chart-render="server" is drawn from its declaration
+        # inside extract_native_declarations, and its values must occur in the source.
+        # Raw responses without the marker (every stored deck) are unchanged.
+        "631f0ea4d491ef06ff0739dedf82e91c7645ba3e078df2e280b005363ceac86e": "svg-partial-recovery-code/1",
+        # 2026-11-08: server chart prototype, revision dispatch (data-chart-render names a
+        # frozen renderer revision), stored box, placeholder view for correction prompts and
+        # category/series association grounding. Raw responses without the marker are unchanged.
+        "63394255264e8cf0d8d26c63a6b0df15bf6d699a10b573e688c92f3d30357590": "svg-partial-recovery-code/1",
+        # 2026-11-09: server chart prototype only (SVG_SERVER_CHARTS decks): stacked and
+        # percent-stacked server charts, and undeclared bar/column charts recorded as the
+        # layout failure undeclared_chart_drawn with a declare hint. Other decks unchanged.
+        "de9c46b30bb7303d4807ba3d8ebe5658fd7ee60819ea508022919346dfbf505d": "svg-partial-recovery-code/1",
     }),
 )
 
@@ -787,6 +822,19 @@ PAGE_RENDER_CODE_LEDGER = VerifierRevisionLedger(
         # and consumer); v5 author guidance asks for axes beneath bars. V4 and earlier
         # revisions are unchanged.
         "8c2aec90a1a0f93d069c7353a0e9afc01bf4780a7286300d892b34af7a097cc7": "svg-page-render-code/1",
+        # 2026-11-08: server-rendered chart prototype (SVG_SERVER_CHARTS, default off).
+        # A placeholder marked data-chart-render="server" is drawn from its declaration
+        # inside extract_native_declarations, and its values must occur in the source.
+        # Raw responses without the marker (every stored deck) are unchanged.
+        "e5a36a0d7c05a6d8d5d836e86cc3d39323046a4e75742764b7b7a8939cbd9410": "svg-page-render-code/1",
+        # 2026-11-08: server chart prototype, revision dispatch (data-chart-render names a
+        # frozen renderer revision), stored box, placeholder view for correction prompts and
+        # category/series association grounding. Raw responses without the marker are unchanged.
+        "ab2e332c1b6a7b1547a1735e90450035371698449e1cd09e6274c0f44f71554d": "svg-page-render-code/1",
+        # 2026-11-09: server chart prototype only (SVG_SERVER_CHARTS decks): stacked and
+        # percent-stacked server charts, and undeclared bar/column charts recorded as the
+        # layout failure undeclared_chart_drawn with a declare hint. Other decks unchanged.
+        "b9d94004927243d65c32550317edf89d2c95e1e0fece14f7a30e06fda2998c06": "svg-page-render-code/1",
     }),
 )
 

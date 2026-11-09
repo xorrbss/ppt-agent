@@ -948,6 +948,13 @@ async def _attempt_render(*, ctx, request, presentation_id, index, content, payl
             revision=requirements_revision(ctx.snapshot),
             **({"render_capture": rendered, "post_render": True, "paint_deferred": True}
                if requirements_revision(ctx.snapshot) == REQUIREMENTS_VERSION_V5 else {}))
+        from services.generation_core.drivers.svg.server_chart import (
+            apply_server_chart_grounding, server_chart_policy)
+        if server_chart_policy(ctx.snapshot):
+            apply_server_chart_grounding(rendered.quality, payload, final,
+                                         [native_source, getattr(request, "content", None)])
+            from services.generation_core.drivers.svg.undeclared_chart import apply_undeclared_chart_quality
+            apply_undeclared_chart_quality(rendered.quality, final)
     elif ctx.source_reflow and payload.get("source_preservation", {}).get("whole_page_native_groups"):
         from services.authored_canvas import request_canvas_metadata
         from services.generation_core.drivers.svg.native_publish import canvas_point_per_px, page_native_objects
@@ -1091,6 +1098,8 @@ async def _attempt_render(*, ctx, request, presentation_id, index, content, payl
             native_chart_repair_hint, requirements_revision,
         )
         chart_hint = native_chart_repair_hint(measured(), revision=requirements_revision(ctx.snapshot))
+        from services.generation_core.drivers.svg.undeclared_chart import undeclared_chart_repair_hint
+        undeclared_hint = undeclared_chart_repair_hint(rendered.quality)
         if paint_occlusion.get("status") in {"occluded", "unproven"}:
             from services.generation_core.drivers.svg.source_paint_occlusion import source_paint_repair_hint
 
@@ -1123,6 +1132,8 @@ async def _attempt_render(*, ctx, request, presentation_id, index, content, payl
             repair_cause = static_cause(validation_error="svg_common_header_body_intrusion")
         elif chart_hint:
             hint = chart_hint
+        elif undeclared_hint:
+            hint = undeclared_hint
         elif table_pitch:
             hint = json.dumps({"kind": "svg_readability_repair", "native_table_line_pitch": table_pitch},
                 ensure_ascii=False, separators=(",", ":"))[:3000]
