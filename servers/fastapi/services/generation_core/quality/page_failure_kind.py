@@ -71,6 +71,9 @@ LAYOUT_FAILURE_KINDS = frozenset({
     # A chart drawn as plain shapes: its data is visible, only native editability is lost
     # (SVG_SERVER_CHARTS decks, ``drivers/svg/undeclared_chart.py``).
     "undeclared_chart_drawn",
+    # Something painted over a server chart accepted without a paint proof: the chart
+    # is correct, only covered (``drivers/svg/server_chart.server_chart_occlusions``).
+    "server_chart_occluded",
     "text_overlap",
     "small_body_text",
     "font_unresolved",

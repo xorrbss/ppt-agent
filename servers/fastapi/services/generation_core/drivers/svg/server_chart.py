@@ -27,10 +27,17 @@ series, values zero or above, a zero-based value axis; several lines carry no
 value labels, as the native line contract labels one line only) and pie and
 donut charts (one series, at most eight positive slices, clockwise from twelve
 o'clock; values sit in their slice, or beside the slice name when one does not
-fit). Fresh admissions freeze revision two; decks admitted with revision one
-keep it and its author rule. Admission enables it for V4 decks only: the V5 unit
-grammar does not read every unit a label may carry (만명, 점). Any other form
-leaves the placeholder empty and records why; nothing is guessed.
+fit). Revision three draws exactly what revision two draws and is **trusted by
+construction** (owner decision 2026-11-09, ``TRUSTED_RENDERERS``): while its
+group still holds exactly what the renderer draws from the stored declaration
+and style (:func:`trusted_server_chart_ids`), the chart skips the drawing proof
+(V4 geometry, V5 content geometry) and the V5 paint proof; the source literal is
+matched against the declaration, the values are grounded as before, and the
+deck instead checks that nothing is painted over the chart and that every
+server chart names the deck's frozen revision (:func:`apply_server_chart_admission`).
+Fresh admissions, V4 and V5, freeze revision three; decks admitted with revision
+one or two keep it, its author rule and its proofs. Any form a revision cannot
+draw leaves the placeholder empty and records why; nothing is guessed.
 """
 from __future__ import annotations
 
@@ -44,6 +51,7 @@ from xml.etree import ElementTree as ET
 
 SERVER_CHART_REVISION = "svg-server-chart/v1"
 SERVER_CHART_REVISION_V2 = "svg-server-chart/v2"
+SERVER_CHART_REVISION_V3 = "svg-server-chart/v3"
 SNAPSHOT_KEY = "server_chart_render"
 RENDER_ATTRIBUTE = "data-chart-render"
 BOX_ATTRIBUTE = "data-chart-box"
@@ -65,7 +73,7 @@ class ServerChartUnsupported(ValueError):
 def server_chart_policy(style_snapshot: dict | None) -> bool:
     """Whether a deck was admitted with server-rendered charts (frozen at admission)."""
     return isinstance(style_snapshot, dict) and style_snapshot.get(SNAPSHOT_KEY) in (
-        SERVER_CHART_REVISION, SERVER_CHART_REVISION_V2)
+        SERVER_CHART_REVISION, SERVER_CHART_REVISION_V2, SERVER_CHART_REVISION_V3)
 
 
 SERVER_CHART_RULE = (
@@ -99,7 +107,10 @@ SERVER_CHART_RULE_V2 = (
     "one series, at most 8 positive slices. Charts with negative values are drawn by you as before. When "
     "previous_svg shows such a placeholder, keep it as a placeholder.\n"
 )
-_RULES = {SERVER_CHART_REVISION: SERVER_CHART_RULE, SERVER_CHART_REVISION_V2: SERVER_CHART_RULE_V2}
+#: Revision three draws what revision two draws; only the marker the author writes differs.
+SERVER_CHART_RULE_V3 = SERVER_CHART_RULE_V2.replace(f'"{SERVER_CHART_REVISION_V2}"', f'"{SERVER_CHART_REVISION_V3}"')
+_RULES = {SERVER_CHART_REVISION: SERVER_CHART_RULE, SERVER_CHART_REVISION_V2: SERVER_CHART_RULE_V2,
+          SERVER_CHART_REVISION_V3: SERVER_CHART_RULE_V3}
 
 
 def server_chart_rule(style_snapshot: dict | None) -> str:
@@ -279,10 +290,11 @@ def _label_unit(title: str | None, series: list[dict]) -> str:
 class _Layout:
     """Everything a drawing needs except the value label position."""
 
-    def __init__(self, root, node, raw, validate=None):
+    def __init__(self, root, node, raw, validate=None, style=None):
         self.x0, self.y0, self.width, self.height = _box(node)
         self.chart_type, self.categories, self.series = (validate or _validated)(raw)
-        self.font, self.ink, self.size = _page_style(root, node)
+        # A replay passes the style the first drawing recorded (see ``trusted_server_chart_ids``).
+        self.font, self.ink, self.size = style if style is not None else _page_style(root, node)
         self.title_size = self.size + 2
         self.horizontal = self.chart_type == "bar"
         title = raw.get("title")
@@ -502,7 +514,8 @@ def _draw_stacked(layout: _Layout, node, position: str, show_values: bool) -> bo
     return fits
 
 
-def render_server_chart_v1(root: ET.Element, node: ET.Element, raw: dict) -> list[float]:
+def render_server_chart_v1(root: ET.Element | None, node: ET.Element, raw: dict, *,
+                           style: tuple[str, str, float] | None = None) -> list[float]:
     """Revision one: replace ``node``'s children with the chart ``raw`` declares, inside its box.
 
     Returns the box. Raises :class:`ServerChartUnsupported` (and leaves
@@ -511,7 +524,7 @@ def render_server_chart_v1(root: ET.Element, node: ET.Element, raw: dict) -> lis
     """
     for child in list(node):
         node.remove(child)
-    layout = _Layout(root, node, raw)
+    layout = _Layout(root, node, raw, style=style)
     box = [layout.x0, layout.y0, layout.width, layout.height]
     for key in (RENDER_ATTRIBUTE, BOX_ATTRIBUTE):
         node.attrib.pop(key, None)
@@ -745,15 +758,16 @@ def _clear(node) -> None:
         node.remove(child)
 
 
-def render_server_chart_v2(root: ET.Element, node: ET.Element, raw: dict) -> list[float]:
+def render_server_chart_v2(root: ET.Element | None, node: ET.Element, raw: dict, *,
+                           style: tuple[str, str, float] | None = None) -> list[float]:
     """Revision two: revision one's bar and column charts, plus line, area, pie and donut.
 
     Same contract as :func:`render_server_chart_v1`.
     """
     if raw.get("chartType") in _FAMILIES:
-        return render_server_chart_v1(root, node, raw)
+        return render_server_chart_v1(root, node, raw, style=style)
     _clear(node)
-    layout = _Layout(root, node, raw, validate=_validated_v2)
+    layout = _Layout(root, node, raw, validate=_validated_v2, style=style)
     box = [layout.x0, layout.y0, layout.width, layout.height]
     for key in (RENDER_ATTRIBUTE, BOX_ATTRIBUTE):
         node.attrib.pop(key, None)
@@ -794,21 +808,116 @@ def render_server_chart_v2(root: ET.Element, node: ET.Element, raw: dict) -> lis
     return box
 
 
+def render_server_chart_v3(root: ET.Element | None, node: ET.Element, raw: dict, *,
+                           style: tuple[str, str, float] | None = None) -> list[float]:
+    """Revision three: revision two's drawing, trusted by construction (``TRUSTED_RENDERERS``)."""
+    return render_server_chart_v2(root, node, raw, style=style)
+
+
 #: Published renderer revisions. A revision's output never changes once published.
-RENDERERS = {SERVER_CHART_REVISION: render_server_chart_v1, SERVER_CHART_REVISION_V2: render_server_chart_v2}
+RENDERERS = {SERVER_CHART_REVISION: render_server_chart_v1, SERVER_CHART_REVISION_V2: render_server_chart_v2,
+             SERVER_CHART_REVISION_V3: render_server_chart_v3}
+#: Revisions whose charts are accepted by construction instead of by a drawing proof
+#: (owner decision 2026-11-09): a chart is trusted only while its drawing in the page
+#: is exactly what its renderer draws from its stored declaration (see
+#: :func:`trusted_server_chart_ids`); otherwise it takes the ordinary proof.
+TRUSTED_RENDERERS = frozenset({SERVER_CHART_REVISION_V3})
 #: The revision a fresh admission freezes.
-SERVER_CHART_CURRENT = SERVER_CHART_REVISION_V2
+SERVER_CHART_CURRENT = SERVER_CHART_REVISION_V3
 
 
-def render_server_chart(root: ET.Element, node: ET.Element, raw: dict) -> tuple[str, list[float]]:
-    """Draw ``node`` with the renderer its marker names; ``(revision, box)``."""
+def render_server_chart(root: ET.Element, node: ET.Element, raw: dict) -> tuple[str, list[float], dict]:
+    """Draw ``node`` with the renderer its marker names; ``(revision, box, record extras)``.
+
+    A trusted revision also records the page style it drew with, so a replay
+    (:func:`trusted_server_chart_ids`) draws the same tree after the page is
+    composed into a template frame.
+    """
     revision = node.get(RENDER_ATTRIBUTE)
     renderer = RENDERERS.get(revision)
     if renderer is None:
         node.attrib.pop(RENDER_ATTRIBUTE, None)
         node.attrib.pop(BOX_ATTRIBUTE, None)
         raise ServerChartUnsupported("server_chart_render_invalid")
-    return revision, renderer(root, node, raw)
+    if revision not in TRUSTED_RENDERERS:
+        return revision, renderer(root, node, raw), {}
+    font, ink, size = _page_style(root, node)
+    box = renderer(root, node, raw, style=(font, ink, size))
+    return revision, box, {"style": {"font": font, "ink": ink, "size": size}}
+
+
+def _replay_style(item: dict) -> tuple[str, str, float] | None:
+    style = item.get("style")
+    if (not isinstance(style, dict) or set(style) != {"font", "ink", "size"}
+            or not isinstance(style["font"], str) or not isinstance(style["ink"], str)
+            or isinstance(style["size"], bool) or not isinstance(style["size"], (int, float))
+            or not math.isfinite(style["size"])):
+        return None
+    return style["font"], style["ink"], float(style["size"])
+
+
+def _same_children(expected: ET.Element, actual: ET.Element) -> bool:
+    """Whether ``actual`` holds exactly ``expected``'s drawing.
+
+    An ``id`` the replay did not draw is ignored: template composition names
+    every id-less body node (``body-node-N``) without changing what it draws.
+    """
+    if len(expected) != len(actual):
+        return False
+    for want, have in zip(expected, actual, strict=True):
+        attributes = dict(have.attrib)
+        if "id" not in want.attrib:
+            attributes.pop("id", None)
+        if (want.tag != have.tag or dict(want.attrib) != attributes
+                or (want.text or "").strip() != (have.text or "").strip()
+                or not _same_children(want, have)):
+            return False
+    return True
+
+
+def trusted_server_chart_ids(record: dict | None, svg: str | None) -> frozenset[str]:
+    """Ids of bound chart declarations accepted by construction in ``svg``.
+
+    A declaration qualifies when a trusted revision drew it and its group in
+    ``svg`` still holds exactly what that revision draws from the stored
+    declaration and style. Any other state -- an unbound record, an edited or
+    moved drawing, a missing style -- is not trusted and takes the ordinary
+    drawing proof, so trust never outlives the drawing it was granted for.
+    """
+    from services.generation_core.drivers.svg.native_declarations import native_binding_digest
+
+    if not isinstance(record, dict) or not isinstance(svg, str) or not svg:
+        return frozenset()
+    candidates = [item for item in record.get("objects") or []
+                  if isinstance(item, dict) and item.get("kind") == "chart"
+                  and item.get("render") in TRUSTED_RENDERERS and isinstance(item.get("id"), str)
+                  and isinstance(item.get("raw"), dict) and isinstance(item.get("box"), list)
+                  and len(item["box"]) == 4]
+    if not candidates or record.get("svgDigest") != native_binding_digest(svg):
+        return frozenset()
+    try:
+        root = ET.fromstring(svg)
+    except ET.ParseError:
+        return frozenset()
+    groups: dict[str, list[ET.Element]] = {}
+    for node in root.iter(_SVG + "g"):
+        if node.get("id"):
+            groups.setdefault(node.get("id"), []).append(node)
+    trusted = set()
+    for item in candidates:
+        found, style = groups.get(item["id"]) or [], _replay_style(item)
+        if len(found) != 1 or style is None:
+            continue
+        raw = json.loads(json.dumps(item["raw"]))
+        probe = ET.Element(_SVG + "g", {"id": item["id"], RENDER_ATTRIBUTE: item["render"],
+                                        BOX_ATTRIBUTE: " ".join(_fmt(value) for value in item["box"])})
+        try:
+            RENDERERS[item["render"]](None, probe, raw, style=style)
+        except (ServerChartUnsupported, TypeError, ValueError, KeyError, IndexError, ArithmeticError):
+            continue
+        if raw == item["raw"] and _same_children(probe, found[0]):
+            trusted.add(item["id"])
+    return frozenset(trusted)
 
 
 def placeholder_view(svg: str, declarations: dict | None) -> str:
@@ -841,6 +950,189 @@ def placeholder_view(svg: str, declarations: dict | None) -> str:
         node.set(BOX_ATTRIBUTE, " ".join(_fmt(value) for value in item["box"]))
         changed = True
     return ET.tostring(root, encoding="unicode") if changed else svg
+
+
+_DRAWN_TAGS = frozenset({"rect", "circle", "ellipse", "line", "polyline", "polygon", "path", "text", "image", "use",
+                         "foreignObject"})
+_TRANSLATE = re.compile(r"\s*translate\(\s*([-+\d.eE]+)(?:[\s,]+([-+\d.eE]+))?\s*\)\s*")
+_MATRIX = re.compile(r"\s*matrix\(([^)]*)\)\s*")
+#: Overlap below this (px, both directions) is antialiasing contact, not occlusion.
+_OCCLUSION_MIN_PX = 1.0
+
+
+def _translation(node: ET.Element) -> tuple[float, float] | None:
+    """The node's own offset when its transform is a pure translation; ``None`` otherwise."""
+    value = node.get("transform")
+    if not value:
+        return 0.0, 0.0
+    found = _TRANSLATE.fullmatch(value)
+    if found:
+        return float(found[1]), float(found[2] or 0)
+    found = _MATRIX.fullmatch(value)
+    if found:
+        parts = [float(part) for part in re.split(r"[\s,]+", found[1].strip()) if part]
+        if len(parts) == 6 and parts[:4] == [1.0, 0.0, 0.0, 1.0]:
+            return parts[4], parts[5]
+    return None
+
+
+def _visible(node: ET.Element) -> bool:
+    if node.get("display") == "none" or node.get("visibility") in ("hidden", "collapse"):
+        return False
+    try:
+        if float(node.get("opacity", "1")) <= 0:
+            return False
+    except ValueError:
+        pass
+    return True
+
+
+def _drawn_box(node: ET.Element, tag: str) -> tuple[float, float, float, float] | None:
+    """``(x0, y0, x1, y1)`` of one drawn element in its own coordinates, estimated; ``None`` if unknown."""
+    def number(key, default=0.0):
+        try:
+            return float(node.get(key, default))
+        except ValueError:
+            return None
+    if tag in ("rect", "image", "use", "foreignObject"):
+        x, y, width, height = number("x"), number("y"), number("width"), number("height")
+        if None in (x, y, width, height) or width <= 0 or height <= 0:
+            return None
+        if tag == "rect" and node.get("fill", "black") == "none" and node.get("stroke") in (None, "none"):
+            return None
+        return x, y, x + width, y + height
+    if tag in ("circle", "ellipse"):
+        cx, cy = number("cx"), number("cy")
+        rx = number("r") if tag == "circle" else number("rx")
+        ry = number("r") if tag == "circle" else number("ry")
+        if None in (cx, cy, rx, ry) or rx <= 0 or ry <= 0:
+            return None
+        return cx - rx, cy - ry, cx + rx, cy + ry
+    if tag == "line":
+        x1, y1, x2, y2 = number("x1"), number("y1"), number("x2"), number("y2")
+        if None in (x1, y1, x2, y2):
+            return None
+        return min(x1, x2), min(y1, y2), max(x1, x2), max(y1, y2)
+    if tag in ("polyline", "polygon", "path"):
+        from services.generation_core.drivers.svg.native_geometry import _path_points
+        try:
+            if tag == "path":
+                points = _path_points(node.get("d", ""))
+            else:
+                values = [float(part) for part in re.split(r"[\s,]+", node.get("points", "").strip()) if part]
+                points = list(zip(values[::2], values[1::2], strict=False))
+        except ValueError:
+            return None
+        if not points:
+            return None
+        xs, ys = [point[0] for point in points], [point[1] for point in points]
+        return min(xs), min(ys), max(xs), max(ys)
+    if tag == "text":
+        boxes = []
+        for part in (node, *node.iter(_SVG + "tspan")):
+            content = part.text or ""
+            try:
+                x = float(part.get("x", node.get("x", "0")))
+                y = float(part.get("y", node.get("y", "0")))
+                size = float(part.get("font-size", node.get("font-size", "16")))
+            except ValueError:
+                continue
+            if not content.strip():
+                continue
+            width = _text_width(content, size)
+            anchor = part.get("text-anchor", node.get("text-anchor", "start"))
+            left = x - width if anchor == "end" else x - width / 2 if anchor == "middle" else x
+            boxes.append((left, y - size * 0.8, left + width, y + size * 0.25))
+        if not boxes:
+            return None
+        return (min(box[0] for box in boxes), min(box[1] for box in boxes),
+                max(box[2] for box in boxes), max(box[3] for box in boxes))
+    return None
+
+
+def server_chart_occlusions(record: dict | None, svg: str | None) -> list[dict]:
+    """Elements painted after a server chart that cover part of its box.
+
+    The chart box is drawn by the server and accepted without a paint proof
+    (``TRUSTED_RENDERERS``), so what the paint proof used to catch -- a later
+    element over the chart -- is checked here geometrically. Elements under a
+    transform other than a translation are skipped (their box is not
+    estimated), so a miss is preferred to a false alarm. Elements painted
+    before the chart (backgrounds, panels) never occlude it.
+    """
+    charts = {item["id"]: item for item in (record or {}).get("objects") or []
+              if isinstance(item, dict) and item.get("render") in RENDERERS and isinstance(item.get("id"), str)
+              and isinstance(item.get("box"), list) and len(item["box"]) == 4}
+    if not charts or not isinstance(svg, str):
+        return []
+    try:
+        root = ET.fromstring(svg)
+    except ET.ParseError:
+        return []
+    found: list[dict] = []
+    painted: list[tuple[str, tuple[float, float, float, float]]] = []
+
+    def visit(node, offset):
+        if not _visible(node):
+            return
+        own = _translation(node)
+        offset = None if offset is None or own is None else (offset[0] + own[0], offset[1] + own[1])
+        identifier = node.get("id")
+        if identifier in charts:
+            if offset is not None:
+                x, y, width, height = (float(value) for value in charts[identifier]["box"])
+                painted.append((identifier, (x + offset[0], y + offset[1], x + width + offset[0],
+                                             y + height + offset[1])))
+            return
+        tag = node.tag.removeprefix(_SVG)
+        if tag in _DRAWN_TAGS and offset is not None and painted:
+            box = _drawn_box(node, tag)
+            if box is not None:
+                box = (box[0] + offset[0], box[1] + offset[1], box[2] + offset[0], box[3] + offset[1])
+                for chart_id, chart_box in painted:
+                    if (min(box[2], chart_box[2]) - max(box[0], chart_box[0]) > _OCCLUSION_MIN_PX
+                            and min(box[3], chart_box[3]) - max(box[1], chart_box[1]) > _OCCLUSION_MIN_PX):
+                        found.append({"declarationId": chart_id, "element": tag,
+                                      "box": [round(box[0], 1), round(box[1], 1), round(box[2] - box[0], 1),
+                                              round(box[3] - box[1], 1)]})
+        if tag != "text":
+            for child in node:
+                visit(child, offset)
+
+    visit(root, (0.0, 0.0))
+    return found
+
+
+OCCLUDED_KIND = "server_chart_occluded"
+
+
+def apply_server_chart_admission(quality: dict, payload: dict, svg: str, style_snapshot: dict | None) -> None:
+    """Checks a deck admitted with a trusted renderer revision needs instead of the paint proof.
+
+    * every server chart names the deck's frozen revision (trust is never taken
+      from a marker the deck was not admitted with);
+    * nothing painted after a server chart covers its box (``OCCLUDED_KIND``, a
+      layout failure: the chart is correct, only covered).
+
+    Decks admitted with an untrusted revision keep their existing checks.
+    """
+    from services.generation_core.drivers.svg.native_declarations import bound_declarations
+
+    pinned = (style_snapshot or {}).get(SNAPSHOT_KEY) if isinstance(style_snapshot, dict) else None
+    record, current = bound_declarations(payload, svg)
+    if record is None or not current:
+        return
+    failures = []
+    for item in record.get("objects") or []:
+        render = item.get("render") if isinstance(item, dict) else None
+        if render is not None and render != pinned and (render in TRUSTED_RENDERERS or pinned in TRUSTED_RENDERERS):
+            failures.append({"kind": "native_requested_chart_missing", "declarationId": item.get("id"),
+                             "reason": "server_chart_revision_not_admitted"})
+    if pinned in TRUSTED_RENDERERS:
+        failures.extend({"kind": OCCLUDED_KIND, **item} for item in server_chart_occlusions(record, svg))
+    if failures:
+        quality["passed"] = False
+        quality.setdefault("failures", []).extend(failures)
 
 
 _SOURCE_NUMBER = re.compile(r"(?<![\d.])\d{1,3}(?:,\d{3})+(?:\.\d+)?|(?<![\d.,])\d+(?:\.\d+)?")
@@ -960,7 +1252,10 @@ def apply_server_chart_grounding(quality: dict, payload: dict, svg: str, sources
 
 
 __all__ = ["BOX_ATTRIBUTE", "RENDERERS", "RENDER_ATTRIBUTE", "SERVER_CHART_CURRENT", "SERVER_CHART_REVISION",
-           "SERVER_CHART_REVISION_V2", "SERVER_CHART_RULE", "SERVER_CHART_RULE_V2", "SNAPSHOT_KEY",
+           "SERVER_CHART_REVISION_V2", "SERVER_CHART_REVISION_V3", "SERVER_CHART_RULE", "SERVER_CHART_RULE_V2",
+           "SERVER_CHART_RULE_V3", "SNAPSHOT_KEY", "TRUSTED_RENDERERS", "trusted_server_chart_ids",
+           "OCCLUDED_KIND", "apply_server_chart_admission", "server_chart_occlusions",
+           "render_server_chart_v3",
            "ServerChartUnsupported", "apply_server_chart_grounding", "placeholder_view", "render_server_chart",
            "render_server_chart_v1", "render_server_chart_v2", "server_chart_policy", "server_chart_rule",
            "source_numbers"]

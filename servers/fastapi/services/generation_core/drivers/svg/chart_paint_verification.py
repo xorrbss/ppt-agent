@@ -68,8 +68,23 @@ def verification_manifest(content, svg: str | None) -> dict | None:
             or not isinstance(source["declarations"], dict) or not svg):
         return None
     from services.generation_core.drivers.svg.native_chart_evidence import chart_witness_render_kwargs
-    return chart_witness_render_kwargs({PAYLOAD_KEY: source["declarations"]}, svg,
+    declarations = source["declarations"]
+    trusted = _trusted_ids(content, svg)
+    if trusted:
+        # Trusted server charts need no paint proof, so the capture never walks them.
+        declarations = {**declarations, "objects": [item for item in declarations.get("objects") or []
+                                                    if not (isinstance(item, dict) and item.get("id") in trusted)]}
+    return chart_witness_render_kwargs({PAYLOAD_KEY: declarations}, svg,
                                        revision=REQUIREMENTS_VERSION_V5).get("chart_witness_manifest")
+
+
+def _trusted_ids(content, svg: str | None) -> frozenset:
+    """Server charts of the published page accepted by construction (``server_chart``)."""
+    source = (content or {}).get(WITNESS_SOURCE_KEY) if isinstance(content, dict) else None
+    if not isinstance(source, dict) or not isinstance(source.get("declarations"), dict) or not svg:
+        return frozenset()
+    from services.generation_core.drivers.svg.server_chart import trusted_server_chart_ids
+    return trusted_server_chart_ids(source["declarations"], svg)
 
 
 def _native_objects_digest(content) -> str:
@@ -116,21 +131,23 @@ def _required_source_chart_ids(content) -> set:
             for item in receipt.get(key) or [] if isinstance(item, dict)}
 
 
-def gated_chart_ids(content, sidecar, *, revision) -> list[str]:
+def gated_chart_ids(content, sidecar, *, revision, svg: str | None = None) -> list[str]:
     """Sidecar charts whose native export needs post-publication paint evidence.
 
     Source-preserved charts keep their own sealed source authority (their
     export already fails closed on any numeric mismatch); they are not gated.
+    With ``svg``, neither are trusted server charts whose drawing still replays
+    from their published declaration.
     """
     if not _v5(revision) or sidecar is None:
         return []
-    required = _required_source_chart_ids(content)
-    return sorted(item.id for item in sidecar.objects if item.kind == "chart" and item.id not in required)
+    excluded = _required_source_chart_ids(content) | _trusted_ids(content, svg)
+    return sorted(item.id for item in sidecar.objects if item.kind == "chart" and item.id not in excluded)
 
 
 def chart_paint_fallbacks(content, properties, svg: str | None, sidecar, *, revision) -> list[dict]:
     """``[{"id", "reason"}]`` for every gated chart that must stay drawn."""
-    gated = gated_chart_ids(content, sidecar, revision=revision)
+    gated = gated_chart_ids(content, sidecar, revision=revision, svg=svg)
     if not gated:
         return []
     record = current_paint_evidence(properties, content, svg)

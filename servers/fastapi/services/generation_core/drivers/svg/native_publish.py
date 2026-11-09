@@ -86,7 +86,7 @@ def _entry(root: ET.Element, declaration: dict, *, width: float, height: float,
            source_preservation: dict | None, native_group_ids: frozenset[str],
            native_group_ids_complete: bool, binding_digest: str,
            verified_fixed_axis_migration: dict | None = None,
-           revision: str | None = None) -> NativeObject:
+           revision: str | None = None, trusted: bool = False) -> NativeObject:
     kind, group_id = declaration.get("kind"), declaration.get("id")
     if kind not in ("table", "chart") or not isinstance(group_id, str):
         raise NativeRejection("native_declaration_invalid")
@@ -116,9 +116,16 @@ def _entry(root: ET.Element, declaration: dict, *, width: float, height: float,
             if not native_group_ids_complete:
                 raise NativeRejection("native_chart_sibling_ownership_unproven")
             canvas_texts = _sibling_canvas_texts(root, native_group_ids)
-        anchor, payload, appearance = chart_object(
-            raw, prims, canvas_texts=canvas_texts, revision=revision,
-        )
+        try:
+            anchor, payload, appearance = chart_object(
+                raw, prims, canvas_texts=canvas_texts, revision=revision,
+            )
+        except NativeRejection:
+            if not trusted:
+                raise
+            # A trusted server chart is accepted by construction: its payload comes from
+            # the declaration its drawing was replayed from, not from a drawing proof.
+            anchor, payload, appearance = _trusted_chart_object(declaration)
         from services.generation_core.drivers.svg.native_requirements import REQUIREMENTS_VERSION_V5
         if revision == REQUIREMENTS_VERSION_V5 and payload["chartType"] == "donut":
             from services.generation_core.drivers.svg.native_chart import _model_chart
@@ -145,6 +152,25 @@ def _entry(root: ET.Element, declaration: dict, *, width: float, height: float,
     if not entry.anchor.within(width, height):
         raise NativeRejection("native_anchor_outside_canvas")
     return entry
+
+
+def _trusted_chart_object(declaration: dict) -> tuple[dict, dict, dict | None]:
+    """``(anchor, payload, appearance)`` of a trusted server chart, from its declaration alone."""
+    from services.generation_core.drivers.svg.native_chart import _model_chart
+
+    raw = declaration["raw"]
+    payload = _model_chart(raw)
+    for item, declared in zip(payload["series"], raw["series"], strict=True):
+        colors = declared.get("pointColors")
+        if payload["chartType"] not in ("pie", "donut") and isinstance(colors, list) and len(set(colors)) == 1:
+            item["color"] = colors[0]
+    style = declaration.get("style")
+    if isinstance(style, dict) and isinstance(style.get("font"), str):
+        payload["fontFamily"] = style["font"]
+    appearance = ({key: raw[key] for key in ("categoryOrder", "valueLabels", "markers")}
+                  if {"categoryOrder", "valueLabels", "markers"} <= set(raw) else None)
+    x, y, width, height = (float(value) for value in declaration["box"])
+    return {"x": x, "y": y, "width": width, "height": height}, payload, appearance
 
 
 def _canvas_size(root: ET.Element) -> tuple[float, float]:
@@ -178,6 +204,8 @@ def page_native_objects(payload: dict, *, pt_per_px: float,
         if isinstance(item.get("id"), str) and item["id"]
     )
     native_group_ids_complete = len(native_group_ids) == len(bound_items)
+    from services.generation_core.drivers.svg.server_chart import trusted_server_chart_ids
+    trusted = trusted_server_chart_ids(record, svg)
     accepted: list[NativeObject] = []
     for item in objects:
         try:
@@ -189,7 +217,7 @@ def page_native_objects(payload: dict, *, pt_per_px: float,
                            native_group_ids_complete=native_group_ids_complete,
                            binding_digest=record["svgDigest"],
                            verified_fixed_axis_migration=verified,
-                           revision=revision)
+                           revision=revision, trusted=item.get("id") in trusted)
         except (NativeRejection, NativeObjectsError) as error:
             dropped.append({"id": item.get("id"), "kind": item.get("kind"), "reason": str(error)})
             continue
