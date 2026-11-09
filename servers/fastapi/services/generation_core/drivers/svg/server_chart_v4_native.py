@@ -69,7 +69,10 @@ def _relative(box: tuple[float, float, float, float], frame: tuple[float, float,
 
 
 def _decimals(value: Decimal) -> int:
-    exponent = value.normalize().as_tuple().exponent
+    from services.generation_core.drivers.svg.server_chart_v4 import AS_WRITTEN
+
+    # Under AS_WRITTEN a label keeps the value's written digits (9.0), so the format must too.
+    exponent = (value if AS_WRITTEN.get() else value.normalize()).as_tuple().exponent
     return max(-exponent, 0) if isinstance(exponent, int) else 0
 
 

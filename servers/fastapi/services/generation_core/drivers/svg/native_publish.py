@@ -186,7 +186,10 @@ def _trusted_v4_chart_object(declaration: dict, offset: tuple) -> tuple[dict, di
     The payload is the declaration's (as for every trusted chart) with each series in the colour
     the drawing gave it; ``appearance["serverChartStyle"]`` is ``server_chart_v4_native``'s spec.
     """
-    from services.generation_core.drivers.svg.server_chart import ServerChartUnsupported, _replay_style, drawing_box
+    from services.generation_core.drivers.svg.server_chart import (
+        AS_WRITTEN_RENDERERS, ServerChartUnsupported, _replay_style, drawing_box,
+    )
+    from services.generation_core.drivers.svg.server_chart_v4 import AS_WRITTEN
     from services.generation_core.drivers.svg.server_chart_v4_native import native_style
 
     if len(offset) != 2:
@@ -198,10 +201,13 @@ def _trusted_v4_chart_object(declaration: dict, offset: tuple) -> tuple[dict, di
     style = _replay_style(declaration)
     if appearance is None or style is None:
         raise NativeRejection("native_chart_server_style_unavailable")
+    token = AS_WRITTEN.set(declaration.get("render") in AS_WRITTEN_RENDERERS)
     try:
         colors, spec = native_style(json.loads(json.dumps(declaration["raw"])), style, box)
     except (ServerChartUnsupported, TypeError, ValueError, KeyError, IndexError, ArithmeticError) as error:
         raise NativeRejection("native_chart_server_style_unavailable") from error
+    finally:
+        AS_WRITTEN.reset(token)
     if payload["chartType"] not in ("pie", "donut"):
         for index, item in enumerate(payload["series"]):
             item["color"] = colors[index]

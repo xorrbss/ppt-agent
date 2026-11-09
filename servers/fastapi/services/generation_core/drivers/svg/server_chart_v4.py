@@ -39,6 +39,7 @@ import colorsys
 import math
 import re
 from collections import Counter
+from contextvars import ContextVar
 from decimal import Decimal
 from xml.etree import ElementTree as ET
 
@@ -46,6 +47,25 @@ from services.generation_core.drivers.svg.server_chart import (
     BOX_ATTRIBUTE, RENDER_ATTRIBUTE, ServerChartUnsupported, _box, _clear, _contrast, _element, _fmt,
     _label, _label_unit, _number, _page_style, _text, _text_width, _FAMILIES, _POSITIONS, _STACKED, _SVG,
 )
+
+#: Whether value labels keep each value's decimals as written (``9.0`` stays ``9.0``). Off for
+#: revisions four to six (their published output); revision seven turns it on while it draws
+#: and while its native style is derived (``server_chart.AS_WRITTEN_RENDERERS``).
+AS_WRITTEN = ContextVar("server_chart_labels_as_written", default=False)
+
+
+def value_label(value) -> str:
+    """A value label's number: revision one's form, or the declaration's own digits under ``AS_WRITTEN``."""
+    if not AS_WRITTEN.get():
+        return _label(value)
+    number = _number(value)
+    text = format(number, "f")
+    sign = "-" if text.startswith("-") else ""
+    whole, _, fraction = text.lstrip("-").partition(".")
+    if len(whole) > 3:
+        whole = f"{int(whole):,}"
+    return sign + whole + (f".{fraction}" if fraction else "")
+
 
 _ALL_FAMILIES = _FAMILIES | {"line", "area", "pie", "donut"}
 _TREND = ("line", "area")
@@ -382,7 +402,7 @@ class _Plan:
         self.values = [[float(_number(value)) for value in item["values"]] for item in self.series]
         if not all(math.isfinite(value) for row in self.values for value in row):
             raise ServerChartUnsupported("server_chart_value_invalid")
-        self.labels = [[_label(value) + self.unit for value in item["values"]] for item in self.series]
+        self.labels = [[value_label(value) + self.unit for value in item["values"]] for item in self.series]
         declared_labels = raw.get("valueLabels") if isinstance(raw.get("valueLabels"), dict) else {}
         self.wants_labels = declared_labels.get("shown", True) is not False
         self.position_preference = declared_labels.get("position")

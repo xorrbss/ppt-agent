@@ -709,7 +709,7 @@ async def _attempt_render(*, ctx, request, presentation_id, index, content, payl
                 getattr(request, "content", None), payload.get("nativeRequirements"),
                 (payload.get("source_preservation") or {}).get("bindings") or (),
                 payload.get("rasterContentLedger"), header_contract=ctx.snapshot.get("common_header"),
-                header_binding=header_page,
+                header_binding=header_page, middle_dot_names=True,
             ) + tuple(required_text)
             # Verbatim and immutable replay paths retain their exact candidate.
             if (not ctx.source_reflow and not ctx.raster_reconstruction
