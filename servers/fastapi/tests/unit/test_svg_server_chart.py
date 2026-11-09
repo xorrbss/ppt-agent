@@ -313,3 +313,162 @@ def test_admission_pins_server_charts_for_v4_decks_only():
     from services import svg_generation_admission
     source = inspect.getsource(svg_generation_admission)
     assert "get_svg_server_charts_env() and frozen[SNAPSHOT_REVISION_KEY] != REQUIREMENTS_VERSION_V5" in source
+
+
+# --- Revision two: line, area, pie and donut ------------------------------------------------
+
+V2_CASES = {
+    "line": ({"chartType": "line", "categories": ["2022년", "2023년", "2024년", "2025년"],
+              "series": [{"name": "매출", "values": [120, 150, 180, 210]}], "title": "연도별 매출 (억원)"},
+             "chart: 매출: 2022년 120억원, 2023년 150억원, 2024년 180억원, 2025년 210억원"),
+    "lines": ({"chartType": "line", "categories": ["1분기", "2분기", "3분기", "4분기"],
+               "series": [{"name": "국내", "values": [30, 42, 51, 60]}, {"name": "해외", "values": [12, 20, 33, 48]}],
+               "title": "분기별 매출 (억원)"},
+              "chart: 국내: 1분기 30, 2분기 42, 3분기 51, 4분기 60; 해외: 1분기 12, 2분기 20, 3분기 33, 4분기 48. 단위: 억원"),
+    "area": ({"chartType": "area", "categories": ["2022년", "2023년", "2024년", "2025년"],
+              "series": [{"name": "방문자", "values": [40, 55, 70, 64]}], "title": "방문자 (명)"},
+             "chart: 방문자: 2022년 40명, 2023년 55명, 2024년 70명, 2025년 64명"),
+    "areas": ({"chartType": "area", "categories": ["1월", "2월", "3월", "4월"],
+               "series": [{"name": "신규", "values": [20, 35, 30, 50]}, {"name": "재방문", "values": [60, 70, 90, 110]}],
+               "title": "방문자 (명)"},
+              "chart: 신규: 1월 20, 2월 35, 3월 30, 4월 50; 재방문: 1월 60, 2월 70, 3월 90, 4월 110. 단위: 명"),
+    "pie": ({"chartType": "pie", "categories": ["국내", "해외", "온라인"],
+             "series": [{"name": "비중", "values": [55, 30, 15]}], "title": "매출 비중 (%)"},
+            "chart: 비중: 국내 55%, 해외 30%, 온라인 15%"),
+    "pie_small_slices": ({"chartType": "pie", "categories": ["국내", "해외", "온라인", "기타"],
+                          "series": [{"name": "비중", "values": [70, 22, 6, 2]}], "title": "매출 비중 (%)"},
+                         "chart: 비중: 국내 70%, 해외 22%, 온라인 6%, 기타 2%"),
+    "donut": ({"chartType": "donut", "categories": ["국내", "해외", "온라인", "기타"],
+               "series": [{"name": "비중", "values": [48, 32, 15, 5]}], "title": "매출 비중 (%)"},
+              "chart: 비중: 국내 48%, 해외 32%, 온라인 15%, 기타 5%"),
+}
+V2 = server_chart.SERVER_CHART_REVISION_V2
+
+
+def _v2_page(name, box="64 140 700 460"):
+    raw, _source = V2_CASES[name]
+    return _extract(_raw_svg(json.loads(json.dumps(raw)), render=V2, box=box).replace(
+        'font-size="36"', 'font-size="18"'))
+
+
+@pytest.mark.parametrize("name", list(V2_CASES))
+@pytest.mark.parametrize("revision", [V4, V5])
+def test_revision_two_passes_the_unchanged_native_contract_against_the_source(name, revision):
+    page, record = _v2_page(name)
+    assert record["dropped"] == [] and record["objects"][0]["render"] == V2
+    for content in (V2_CASES[name][1], ""):
+        quality = {"passed": True, "failures": []}
+        apply_requested_native_quality(quality, page, page["svg_content"], content, pt_per_px=.75,
+                                       revision=revision, paint_deferred=True)
+        assert quality["failures"] == []
+    wire, _summary = page_native_objects(page, pt_per_px=.75, revision=revision)
+    (chart,) = wire["objects"]
+    assert chart["kind"] == "chart" and chart["payload"]["chartType"] == V2_CASES[name][0]["chartType"]
+
+
+@pytest.mark.parametrize("raw", [SALES, CHANNELS, SCORES, SHARES])
+def test_revision_two_draws_bar_and_column_charts_exactly_as_revision_one(raw):
+    first, first_record = _extract(_raw_svg(json.loads(json.dumps(raw))))
+    second, second_record = _extract(_raw_svg(json.loads(json.dumps(raw)), render=V2))
+    assert first["svg_content"] == second["svg_content"]
+    assert first_record["objects"][0]["raw"] == second_record["objects"][0]["raw"]
+
+
+def test_several_lines_carry_no_value_labels():
+    page, record = _v2_page("lines")
+    assert record["objects"][0]["raw"]["valueLabels"] == {"shown": False, "position": None}
+    assert not any(node.text and node.text[0].isdigit() and node.text[-1] != "기"
+                   for node in _group(page).iter(NS + "text"))
+
+
+def test_one_line_and_areas_label_every_value_above_its_point():
+    for name in ("line", "areas"):
+        _page, record = _v2_page(name)
+        assert record["objects"][0]["raw"]["valueLabels"] == {"shown": True, "position": "above"}
+
+
+def test_a_slice_too_small_for_its_value_moves_every_value_beside_its_name():
+    _page, record = _v2_page("pie_small_slices")
+    assert record["objects"][0]["raw"]["valueLabels"] == {"shown": True, "position": "outsideEnd"}
+    _page, record = _v2_page("pie")
+    assert record["objects"][0]["raw"]["valueLabels"] == {"shown": True, "position": "center"}
+
+
+def test_polar_charts_are_clockwise_with_one_distinct_colour_per_slice():
+    _page, record = _v2_page("donut")
+    raw = record["objects"][0]["raw"]
+    assert raw["categoryOrder"] == "clockwise" and "grouping" not in raw
+    assert len(set(raw["series"][0]["pointColors"])) == 4
+
+
+@pytest.mark.parametrize("raw,reason", [
+    ({**V2_CASES["line"][0], "series": [{"name": "s", "values": [3, -1, 2, 1]}]}, "server_chart_value_negative"),
+    ({**V2_CASES["line"][0], "series": [{"name": "s", "values": [0, 0, 0, 0]}]}, "server_chart_value_not_positive"),
+    ({**V2_CASES["line"][0], "categories": ["2025년"], "series": [{"name": "s", "values": [3]}]},
+     "server_chart_trend_needs_categories"),
+    ({**V2_CASES["area"][0], "grouping": "stacked"}, "server_chart_grouping_unsupported"),
+    ({**V2_CASES["pie"][0], "series": [{"name": "a", "values": [1, 2, 3]}, {"name": "b", "values": [1, 2, 3]}]},
+     "server_chart_polar_needs_one_series"),
+    ({**V2_CASES["pie"][0], "series": [{"name": "a", "values": [5, 0, 3]}]}, "server_chart_value_not_positive"),
+    ({"chartType": "donut", "categories": [f"항목{index}" for index in range(9)],
+      "series": [{"name": "a", "values": [1] * 9}]}, "server_chart_too_many_slices"),
+    ({"chartType": "pie", "categories": ["가", "나", "다", "라", "마", "바"],
+      "series": [{"name": "비중", "values": [90, 2, 2, 2, 2, 2]}]}, "server_chart_slice_labels_collide"),
+    ({**V2_CASES["pie"][0], "chartType": "radar"}, "server_chart_type_unsupported"),
+])
+def test_revision_two_drops_what_it_cannot_draw_with_a_reason(raw, reason):
+    page, record = _extract(_raw_svg(json.loads(json.dumps(raw)), render=V2))
+    assert record["objects"] == [] and record["dropped"][0]["reason"] == reason
+    assert len(_group(page)) == 0
+
+
+def test_revision_one_still_leaves_line_charts_to_the_author():
+    page, record = _extract(_raw_svg(json.loads(json.dumps(V2_CASES["line"][0]))))
+    assert record["dropped"][0]["reason"] == "server_chart_type_unsupported"
+
+
+def test_a_correction_sees_revision_two_charts_as_their_placeholders():
+    page, _record = _v2_page("donut")
+    view = server_chart.placeholder_view(page["svg_content"], page["nativeDeclarations"])
+    group = next(node for node in ET.fromstring(view).iter(NS + "g") if node.get("id"))
+    assert len(group) == 0 and group.get(server_chart.RENDER_ATTRIBUTE) == V2
+    again, _ = _extract(view)
+    assert again["svg_content"] == page["svg_content"]
+
+
+def test_pie_values_are_grounded_against_their_category():
+    page, _record = _v2_page("pie")
+    quality = {"passed": True, "failures": []}
+    server_chart.apply_server_chart_grounding(quality, page, page["svg_content"], ["국내 55%, 해외 30%, 온라인 15%"])
+    assert quality["failures"] == []
+    server_chart.apply_server_chart_grounding(quality, page, page["svg_content"], ["국내 30%, 해외 55%, 온라인 15%"])
+    assert quality["failures"][0]["values"] == ["국내=55", "해외=30"]
+
+
+def test_each_deck_gets_the_rule_of_the_revision_it_was_admitted_with():
+    assert server_chart.server_chart_rule({"server_chart_render": server_chart.SERVER_CHART_REVISION}) == (
+        server_chart.SERVER_CHART_RULE)
+    rule = server_chart.server_chart_rule({"server_chart_render": V2})
+    assert rule == server_chart.SERVER_CHART_RULE_V2 and f'data-chart-render="{V2}"' in rule
+    assert server_chart.server_chart_policy({"server_chart_render": V2})
+    assert server_chart.SERVER_CHART_CURRENT == V2
+
+
+#: Published output of revision two for the families it adds (bar and column are
+#: pinned through revision one, which revision two reproduces).
+V2_DIGESTS = {
+    "line": "sha256:71ed8456b46b76c125a609d9ce30f154d29bd6a7e71bd51bae1c16cda4202335",
+    "lines": "sha256:540ab8c446641729ac86723a8eb40d18ffd494987cbe5d93ea782b9df02d2c4f",
+    "area": "sha256:6968cfb36a327526560028f90c973f9a666a4ce0d5fc5306bd6e73f620a265c8",
+    "areas": "sha256:89f130a31a7e4998d5f781a6427d11de6d00303e4de6333f2737cdd427b4fc9b",
+    "pie": "sha256:a6f4448094bb53d858e1878f14000a93e57bb4ab22aedcb3b4a7c4ba157055a6",
+    "pie_small_slices": "sha256:bab96b184128623554a5ca46fbda5d584eead59a26f8938d19fe004b44873596",
+    "donut": "sha256:9fd19833e712844d7f9c8dcd4c02f65bf6745135d8c47becfad62248b44b8b68",
+}
+
+
+@pytest.mark.parametrize("name", list(V2_DIGESTS))
+def test_revision_two_output_is_frozen(name):
+    from services.svg_contract import source_digest
+    page, _ = _v2_page(name)
+    assert source_digest(page["svg_content"]) == V2_DIGESTS[name]

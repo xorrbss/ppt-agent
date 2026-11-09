@@ -197,7 +197,8 @@ fixes):
 
 ## What it does not solve yet
 
-- Line, area, pie, donut and stacked charts are still author-drawn.
+- Line, area, pie and donut charts were still author-drawn (added in renderer
+  revision two, below).
 - A chart lost because its page fell back to the last valid version.
 - **V5 decks:** a server-drawn chart is correct by construction, so its paint
   proof proves nothing new. Skipping it for server charts needs an owner
@@ -209,8 +210,50 @@ fixes):
 
 1. Decide the default for V4 decks. If it is turned on, keep the knob as
    the way back.
-2. Extend the renderer to line, area, pie and donut, each with the same
-   "unchanged native checks pass" tests.
+2. ~~Extend the renderer to line, area, pie and donut~~ (done in revision two,
+   below; not yet measured on real decks).
 3. Decide V5: whether it skips the paint proof for server charts, and whether
    its unit grammar reads 만명/점-style units.
 4. Have the template eval judge compare chart page design.
+
+## Renderer revision two: line, area, pie and donut (2026-11-09)
+
+A published revision never changes its output, so the new families are a new
+revision, `svg-server-chart/v2`. Fresh `SVG_SERVER_CHARTS` admissions freeze it
+(`SERVER_CHART_CURRENT`); decks admitted with v1 keep the v1 renderer and v1
+author rule (`server_chart_rule` dispatches on the frozen revision).
+
+**What v2 draws:**
+- Bar and column charts: the same code as v1. A test asserts identical SVG and
+  normalised JSON for v1 and v2 markers; the v1 digests are unchanged.
+- Line and area: two or more categories, one or more series, values zero or
+  above, a zero-based value axis drawn before the series, value labels above
+  each point. Areas are filled at 30% opacity under a full-colour outline so
+  overlapping series and their labels stay readable. Two value labels of one
+  category closer than a line height drop every label.
+- Several lines carry no value labels. The existing native appearance contract
+  (`native_chart_visual.py`) proves value labels against a single line only,
+  and a multi-line chart with labels was exported as a picture.
+- Pie and donut: exactly one series, at most 8 positive slices, clockwise from
+  twelve o'clock, one distinct colour per slice (declared colours kept when
+  they are valid and distinct). Slice names sit beyond their slice. Values sit
+  inside the slice (`center`); when one does not fit, every value moves under
+  its slice name (`outsideEnd`). Slice names that would overprint each other
+  (one large slice and several tiny ones) refuse the chart with
+  `server_chart_slice_labels_collide`, and the author draws it.
+
+**Refusal reasons added:** `server_chart_value_negative`,
+`server_chart_trend_needs_categories`, `server_chart_polar_needs_one_series`,
+`server_chart_too_many_slices`, `server_chart_slice_labels_collide`.
+
+**Checks (`test_svg_server_chart.py`):**
+- Seven cases (one line, two lines, one area, two areas, a pie, a pie with
+  small slices, a donut) pass the unchanged V4 and V5 requirement checks against
+  a `chart:` source literal and without one, and export as native charts.
+- V2 output is pinned by digest tests like v1.
+
+**Not done yet:**
+- No measurement on real decks; the v2 author rule is unmeasured.
+- V5 decks stay excluded (the unit grammar does not read 만명 or 점).
+- The PPTX colour of an area series is the exporter's default: the
+  existing `_series_colors` reads colours for bar, column and line only.
