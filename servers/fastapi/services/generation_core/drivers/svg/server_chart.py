@@ -945,7 +945,14 @@ def placeholder_view(svg: str, declarations: dict | None) -> str:
             continue
         for child in list(node):
             node.remove(child)
-        node.set("data-native-chart", json.dumps(item["raw"], ensure_ascii=False, separators=(",", ":")))
+        shown = item["raw"]
+        if item.get("dataRef") is not None:
+            # A chart drawn by reference is shown as its reference (server_chart_data_ref).
+            from services.generation_core.drivers.svg.server_chart_data_ref import REF_ATTRIBUTE, reference_view
+
+            shown = reference_view(item["raw"])
+            node.set(REF_ATTRIBUTE, item["dataRef"])
+        node.set("data-native-chart", json.dumps(shown, ensure_ascii=False, separators=(",", ":")))
         node.set(RENDER_ATTRIBUTE, item["render"])
         node.set(BOX_ATTRIBUTE, " ".join(_fmt(value) for value in item["box"]))
         changed = True
@@ -1208,13 +1215,53 @@ def _associated(text: str, category: str, series: str | None, value: Decimal, ot
     return False
 
 
+_SENTENCE_END = re.compile(r"[.!?。](?!\d)|\n|;")
+_WORD_CHAR = re.compile(r"\w")
+
+
+def _elided_associated(text: str, category: str, value: Decimal, categories: list[str], numbers) -> bool:
+    """Whether ``text`` states ``value`` for ``category`` with its leading words elided.
+
+    A source lists ``2026년 1분기 1,120억원, 2분기 1,190억원``: the second category
+    ``2026년 2분기`` is written as its tail ``2분기``. The tail counts only when the
+    nearest earlier leading part of any category with the same number of words is
+    exactly the elided prefix (``2026년``, not ``2025년``), in the same sentence, and
+    ``value`` is the first number right after the tail.
+    """
+    words = category.split()
+    for cut in range(1, len(words)):
+        prefix, tail = " ".join(words[:cut]), " ".join(words[cut:])
+        siblings = {" ".join(other.split()[:cut]) for other in categories if len(other.split()) > cut}
+        tails = {" ".join(other.split()[cut:]) for other in categories if other != category}
+        for match in re.finditer(re.escape(tail), text):
+            start, end = match.start(), match.end()
+            if start and _WORD_CHAR.match(text[start - 1]):
+                continue
+            leading = [(found.start(), found.end(), sibling) for sibling in siblings
+                       for found in re.finditer(re.escape(sibling), text[:start])]
+            if not leading:
+                continue
+            _begin, finish, nearest = max(leading, key=lambda item: (item[1], item[1] - item[0]))
+            if nearest != prefix or _SENTENCE_END.search(text, finish, start):
+                continue
+            stops = [text.find(other, end) for other in (*categories, *tails) if other != category
+                     and other not in tail]
+            stops += [text.find(mark, end) for mark in ("\n", ";")]
+            stop = min([position for position in stops if position >= 0] or [len(text)])
+            if _near_after(numbers, end, stop) == value:
+                return True
+    return False
+
+
 def apply_server_chart_grounding(quality: dict, payload: dict, svg: str, sources: list[str] | str) -> None:
     """Fail a server-rendered chart whose values the source does not state for their category.
 
     The drawing is derived from the declaration, so the declaration's data is
     the only thing left to check: each value must be stated next to its
     category (and its series, with several series) in one of ``sources``.
-    Derived numbers (shares, totals) are not charted by this revision.
+    Derived numbers (shares, totals) are not charted by this revision. A chart
+    drawn by reference (``"dataRef"``, server_chart_data_ref) took its values from
+    the slide's literal and is not checked again.
     """
     from services.generation_core.drivers.svg.native_declarations import bound_declarations
 
@@ -1224,7 +1271,7 @@ def apply_server_chart_grounding(quality: dict, payload: dict, svg: str, sources
     texts = [sources] if isinstance(sources, str) else [text for text in sources if isinstance(text, str)]
     failures = []
     for item in record.get("objects") or []:
-        if not isinstance(item, dict) or item.get("render") not in RENDERERS:
+        if not isinstance(item, dict) or item.get("render") not in RENDERERS or item.get("dataRef") is not None:
             continue
         categories = item["raw"].get("categories", [])
         series = item["raw"].get("series", [])
@@ -1241,6 +1288,7 @@ def apply_server_chart_grounding(quality: dict, payload: dict, svg: str, sources
                 if not any(_associated(text, category, name, number, categories, numbers, first)
                            or (name is not None
                                and _associated(text, name, category, number, names, numbers, False))
+                           or (name is None and _elided_associated(text, category, number, categories, numbers))
                            for text, numbers, first in views):
                     missing.append(f"{category}={_label(value)}" if name is None else f"{name}/{category}={_label(value)}")
         if missing:

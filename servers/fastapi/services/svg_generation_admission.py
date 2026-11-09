@@ -342,6 +342,13 @@ def pin_svg_style(request: object) -> dict:
                     from services.generation_core.drivers.svg.server_chart import (
                         SERVER_CHART_CURRENT, SNAPSHOT_KEY as SERVER_CHART_KEY)
                     frozen[SERVER_CHART_KEY] = SERVER_CHART_CURRENT
+                    if getattr(request, "source_mode", None) is None:
+                        # Charts by reference to the slide's chart literal (server_chart_data_ref.py),
+                        # pinned separately so decks admitted before keep their exact behaviour.
+                        # Source modes author from source facts, not outline literals.
+                        from services.generation_core.drivers.svg.server_chart_data_ref import (
+                            DATA_REF_REVISION, SNAPSHOT_KEY as DATA_REF_KEY)
+                        frozen[DATA_REF_KEY] = DATA_REF_REVISION
                 from services.generation_core.drivers.svg.icon_flatten import (
                     ASSET_PROJECTION_CURRENT, ASSET_PROJECTION_KEY,
                 )

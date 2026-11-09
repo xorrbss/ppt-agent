@@ -2259,6 +2259,22 @@ def _frozen_vector_offer(seed_row, job, operation, owner, tenant):
         "plan_digest": digest(seed), "files": files}
 
 
+def _replay_chart_literals(job, index):
+    """The chart literals the page's author was given (server charts by reference only).
+
+    The author resolved ``data-chart-ref`` from the pinned outline slide content, the
+    same content :func:`_expected_page_input_digest` binds; a replay resolves from it too.
+    """
+    from services.generation_core.drivers.svg.server_chart_data_ref import chart_literals, data_ref_policy
+    if not data_ref_policy(job.svg_style_snapshot):
+        return None
+    try:
+        content = job.authored_outline["slides"][index]["content"]
+    except (TypeError, KeyError, IndexError) as error:
+        raise PartialRecoveryRejected("svg_partial_recovery_author_transform_unproven") from error
+    return chart_literals(job.svg_style_snapshot, content)
+
+
 def _expected_page_input_digest(request, job, index, page_assets):
     from services.svg_generation_inputs import svg_page_input_digest
     _verify_frozen_header_outline(job)
@@ -2423,7 +2439,7 @@ def _author_render_chain(payload, raw, receipt, *, request, job, asset, index,
         root, _ = parse_author_response(raw, view=view, source_facts=view_facts)
     except ET.ParseError as error:
         raise PartialRecoveryRejected("svg_partial_recovery_author_transform_unproven") from error
-    declarations = extract_native_declarations(root)
+    declarations = extract_native_declarations(root, chart_literals=_replay_chart_literals(job, index))
     if declaration_receipt(declarations).get("native_declarations") != receipt.get("native_declarations"):
         reject("svg_partial_recovery_author_declarations_changed")
     from services.generation_core.drivers.svg.embed_assets import replace_vector_icon_images, vector_icon_id_prefix
@@ -2765,7 +2781,7 @@ def _replay_sealed_author_transform(payload, raw, *, request, job, asset, index,
         root, view_receipt = parse_author_response(raw, view=view, source_facts=view_facts)
     except ET.ParseError as error:
         raise PartialRecoveryRejected('svg_partial_recovery_author_transform_unproven') from error
-    declarations = extract_native_declarations(root)
+    declarations = extract_native_declarations(root, chart_literals=_replay_chart_literals(job, index))
     from services.generation_core.drivers.svg.embed_assets import replace_vector_icon_images, vector_icon_id_prefix
     used = replace_vector_icon_images(root, vectors, id_prefix=vector_icon_id_prefix(job.svg_style_snapshot)) if vectors else set()
     for node in root.iter():
@@ -2891,7 +2907,8 @@ async def _completed_repair_author_projection(payload, row, *, job, operation, s
     from services.svg_author_output_view import parse_author_response
     view, view_facts = _replay_output_view(job, source, row.slide_index, _source_validation)
     native = extract_native_declarations(parse_author_response(
-        completed['raw_response'], view=view, source_facts=view_facts)[0])
+        completed['raw_response'], view=view, source_facts=view_facts)[0],
+        chart_literals=_replay_chart_literals(job, row.slide_index))
     bound, binding_valid = bound_declarations(payload, payload['svg_content'])
     if (native is None) != (bound is None) or (native is not None and (not binding_valid or not isinstance(bound, dict) or native.get('objects') != bound.get('objects') or (native.get('dropped') != bound.get('dropped')))):
         reject('svg_partial_recovery_completed_native_unproven')
@@ -3799,7 +3816,7 @@ async def _completed_invalid_source_output(payload, row, *, completed, job, oper
     historical_grid = None
     try:
         root, _ = parse_author_response(raw, view=view, source_facts=view_facts)
-        declarations = extract_native_declarations(root)
+        declarations = extract_native_declarations(root, chart_literals=_replay_chart_literals(job, row.slide_index))
         from services.generation_core.drivers.svg.embed_assets import replace_vector_icon_images, vector_icon_id_prefix
         used = replace_vector_icon_images(root, vectors, id_prefix=vector_icon_id_prefix(job.svg_style_snapshot)) if vectors else set()
         if sorted(used) != sorted(receipt.get("vector_icons_used") or []):

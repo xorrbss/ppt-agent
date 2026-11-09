@@ -428,6 +428,7 @@ tests/unit/test_svg_review_retry_interruptions.py
 tests/unit/test_svg_review_status_contract.py
 tests/unit/test_svg_runtime_profile_identity.py
 tests/unit/test_svg_server_chart.py
+tests/unit/test_svg_server_chart_data_ref.py
 tests/unit/test_svg_smoke_regressions.py
 tests/unit/test_svg_source_generation_flow.py
 tests/unit/test_svg_source_input_snapshot.py
