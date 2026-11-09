@@ -1,5 +1,7 @@
 # Codex execution brief: improve SVG and freeze other modes (2026-11-07)
 
+> Superseded for authored (owner decision 2026-11-09): the authored strategy is being removed; see `docs/authored-removal-execution-20261109.md`. The freeze still applies to every other non-SVG mode.
+
 Status: execution handoff for a new session; no implementation or server validation is claimed here.
 Multi-session execution refinement: `docs/svg-freeze-multisession-20261107/00-coordinator.md` and its four session specs now define independent Orca sessions. Each session uses a bounded internal implementation/review team with role-specific models. This overrides the earlier ban on internal delegation and the earlier single-session concurrency description; no further coordinator hierarchy is allowed. The root retains shared-file integration and managed-stack/runtime/PPTX validation.
 Authority: the owner's latest instruction in this conversation on 2026-11-07.
