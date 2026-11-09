@@ -146,6 +146,55 @@ Each prompt ran 2 decks per arm, with real `claude-sonnet-5-5` and V4 checks:
   committed rule is the one measured.
 - The sample is still small: 2 decks per cell.
 
+## Undeclared charts, stacks, units and the larger measurement (2026-11-09)
+
+**Changes:**
+- **Undeclared charts** (`undeclared_chart.py`). The detector looks for three
+  or more bars or columns that share an edge and thickness, differ in length,
+  carry numeric labels and sit outside any declaration.
+  - Run over 264 stored real pages, it found 12, and all 12 were genuine
+    undeclared data charts.
+  - In server chart decks such a page gets the **layout** failure
+    `undeclared_chart_drawn` (the data is still visible, so the page is never
+    replaced by a fallback) and a declare-it repair hint.
+- **Stacked and percent-stacked server charts.**
+- **Series-first grounding.** The grounding check accepts either order with
+  several series ("2025년 A사 61" as well as "A사 2025년 61"). It had rejected
+  correct brand-awareness charts, which became fallback pages. Replayed on all
+  237 stored bar/column declarations, it rejects none.
+- **Value labels carry the title's unit** ("38억원", "22%", "88.1점"). A page
+  must contain the source's number-plus-unit literals, and unit-less labels
+  turned chart pages into fallback pages.
+- **V4 decks only.** Admission enables server charts for V4 decks only,
+  because the V5 unit grammar does not read units such as 만명 or 점.
+
+**Measurement.** Same three prompts, real `claude-sonnet-5-5`:
+- Server arm: the final code, 3 decks per prompt.
+- Author-drawn arm: 5 decks per prompt. Its code path is unchanged by this
+  work.
+
+| | Author-drawn (15 decks) | Server-rendered (9 decks) |
+|---|---|---|
+| Declared charts in final pages | 55 | 31 |
+| Native charts in the PPTX | 32 (58%) | 28 (**90%**) |
+| Native charts per deck | 2.13 | **3.11 (+46%)** |
+| Undeclared bar charts left per deck | 0.20 | **0.00** |
+| Fallback pages per deck | 0.27 | **0.11** |
+| Cost per deck | $0.85 | **$0.68 (-20%)** |
+| Generation time per deck (mean) | 129 s | **115 s (-11%)** |
+
+**What the intermediate runs showed** (15 server decks before the last two
+fixes):
+- 93-95% native share already.
+- More fallback pages (7-8) than author-drawn (4). Two causes, both fixed above:
+  - the series-first grounding miss;
+  - unit-less value labels.
+
+**Caveats:**
+- The server arm with the final code is 3 decks per prompt.
+- The arms were run at different times of the day.
+- Visual quality was checked on rendered pages, not by the judge.
+
 ## What it does not solve yet
 
 - Line, area, pie, donut and stacked charts are still author-drawn.
@@ -158,13 +207,10 @@ Each prompt ran 2 decks per arm, with real `claude-sonnet-5-5` and V4 checks:
 
 ## Next steps (proposed)
 
-1. **Detect undeclared charts:** a group of three or more bars or columns
-   sharing a baseline, with value texts, outside any declaration. Make it a
-   quality failure with a "declare it" repair hint, measured as advisory first.
-   This is now the main loss in both arms.
-2. Extend the renderer to stacked, line, area, pie and donut, each with the
-   same "unchanged native checks pass" tests. Stacked share charts are where
-   the model drew undeclared bars.
-3. Decide whether V5 skips the paint proof for server-rendered charts.
-4. Measure with 5+ decks per cell and the template eval judge. Then decide the
-   default.
+1. Decide the default for V4 decks. If it is turned on, keep the knob as
+   the way back.
+2. Extend the renderer to line, area, pie and donut, each with the same
+   "unchanged native checks pass" tests.
+3. Decide V5: whether it skips the paint proof for server charts, and whether
+   its unit grammar reads 만명/점-style units.
+4. Have the template eval judge compare chart page design.

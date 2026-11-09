@@ -20,7 +20,9 @@ contract (one baseline and scale, value labels with their datum, the axis
 beneath the bars), so the unchanged requirement checks and exporter apply to it.
 
 Revision one draws bar and column charts: clustered (one or more series) and
-stacked or percent-stacked (two or more series), positive values. Any other form leaves the placeholder empty and records why;
+stacked or percent-stacked (two or more series), positive values. Value labels
+carry the title's unit. Admission enables it for V4 decks only: the V5 unit
+grammar does not read every unit a label may carry (만명, 점). Any other form leaves the placeholder empty and records why;
 nothing is guessed.
 """
 from __future__ import annotations
@@ -63,7 +65,8 @@ SERVER_CHART_RULE = (
     "contract; do not draw its bars, axes, labels, legend or title yourself. The box is where the whole "
     "chart (its title, legend, category and value labels included) will be drawn: at least 360x240 px, "
     "clear of every other element; put captions, unit notes and callouts outside it. Chart only numbers "
-    "the source states, each with the category it belongs to; values must be positive. Use "
+    "the source states, each with the category it belongs to; values must be positive. Put the unit in the "
+    "title in parentheses, such as \"(억원)\", \"(%)\" or \"(점)\": value labels show it. Use "
     "\"grouping\":\"clustered\" (or omit it), or \"stacked\"/\"percentStacked\" with two or more series "
     "for parts of a whole. Line, area, pie, donut charts and charts with zero or negative values are drawn by "
     "you as before. When previous_svg shows such a placeholder, keep "
@@ -223,6 +226,27 @@ def _text(parent, lines, x, y, *, size, font, fill, anchor="start", weight=None,
     return node
 
 
+def _label_unit(title: str | None, series: list[dict]) -> str:
+    """The unit value labels carry: the title's ``(unit)``, else one unit shared by every series name.
+
+    A source states "38억" or "22%"; a label without the unit would drop that
+    literal from the page. Only a short word the label grammar reads as a
+    suffix is used.
+    """
+    from services.generation_core.drivers.svg.native_requirements import _series_name_unit
+
+    def trailing(text):
+        found = re.search(r"\(([^()]+)\)\s*$", text or "")
+        return found[1].strip() if found else None
+
+    unit = (_series_name_unit(title) or trailing(title)) if title else None
+    if unit is None:
+        units = {_series_name_unit(item["name"]) or trailing(item["name"]) for item in series}
+        unit = units.pop() if len(units) == 1 else None
+    unit = (unit or "").strip()
+    return unit if re.fullmatch(r"%|[A-Za-z가-힣]{1,4}", unit) else ""
+
+
 class _Layout:
     """Everything a drawing needs except the value label position."""
 
@@ -249,7 +273,8 @@ class _Layout:
                 declared = [_DEFAULT_COLORS[index % len(_DEFAULT_COLORS)]] * len(self.categories)
             self.colors.append(declared)
         self.high = float(max(_number(value) for item in self.series for value in item["values"]))
-        self.labels = [[_label(value) for value in item["values"]] for item in self.series]
+        self.unit = _label_unit(self.title, self.series)
+        self.labels = [[_label(value) + self.unit for value in item["values"]] for item in self.series]
 
 
 def _legend(layout: _Layout, node, top: float) -> float:
@@ -652,10 +677,16 @@ def apply_server_chart_grounding(quality: dict, payload: dict, svg: str, sources
         missing = []
         views = [(text, _numbers_with_positions(text)) for text in texts]
         views = [(text, numbers, _value_first(text, categories, numbers)) for text, numbers in views]
+        names = [item_series.get("name") for item_series in series]
         for item_series in series:
             name = item_series.get("name") if len(series) > 1 else None
             for category, value in zip(categories, item_series.get("values", []), strict=False):
-                if not any(_associated(text, category, name, _number(value), categories, numbers, first)
+                number = _number(value)
+                # With several series the source may name either first: "A사 2025년 61" or
+                # "2025년 A사 61" (category and series swap roles).
+                if not any(_associated(text, category, name, number, categories, numbers, first)
+                           or (name is not None
+                               and _associated(text, name, category, number, names, numbers, False))
                            for text, numbers, first in views):
                     missing.append(f"{category}={_label(value)}" if name is None else f"{name}/{category}={_label(value)}")
         if missing:

@@ -334,7 +334,9 @@ def pin_svg_style(request: object) -> dict:
                     REQUIREMENTS_VERSION_V5 if get_svg_native_chart_integrity_v5_env()
                     else ADMITTED_REQUIREMENTS_REVISION)
                 from utils.get_env_concurrency import get_svg_server_charts_env
-                if get_svg_server_charts_env():
+                if get_svg_server_charts_env() and frozen[SNAPSHOT_REVISION_KEY] != REQUIREMENTS_VERSION_V5:
+                    # V4 decks only: server value labels carry units (만명, 점) that the V5
+                    # unit grammar does not read; the combination is not supported yet.
                     # Bar/column charts drawn by the server from the declaration
                     # (server_chart.py), pinned like the revision above.
                     from services.generation_core.drivers.svg.server_chart import (

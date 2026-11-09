@@ -74,7 +74,7 @@ def test_axis_is_drawn_before_the_bars_and_value_text_keeps_contrast():
     tags = [child.tag.removeprefix(NS) for child in group]
     assert tags.index("line") < tags.index("rect")
     labels = {node.text: node.get("fill") for node in group.iter(NS + "text")}
-    assert labels["420"] == "#FFFFFF" and labels["315"] == "#0F172A"
+    assert labels["420억원"] == "#FFFFFF" and labels["315억원"] == "#0F172A"
 
 
 @pytest.mark.parametrize("raw,box,reason", [
@@ -137,6 +137,14 @@ def test_several_series_bind_each_value_to_category_and_series():
     assert _grounding(CHANNELS, [stated])["failures"] == []
     wrong = stated.replace("해외 32%", "해외 23%")
     assert _grounding(CHANNELS, [wrong])["failures"][0]["values"] == ["해외/2025년=32"]
+
+
+def test_several_series_may_name_the_series_first():
+    brands = {"chartType": "column", "categories": ["A사", "B사", "C사"],
+              "series": [{"name": "2025년", "values": [61, 48, 33]}, {"name": "2026년", "values": [66, 52, 41]}]}
+    stated = "2025년 인지도는 A사 61%, B사 48%, C사 33%였고, 2026년에는 A사 66%, B사 52%, C사 41%로 올랐다."
+    assert _grounding(brands, [stated])["failures"] == []
+    assert _grounding(brands, [stated.replace("B사 52%", "B사 25%")])["failures"][0]["values"] == ["2026년/B사=52"]
 
 
 def test_a_value_written_before_its_category_counts():
@@ -205,6 +213,14 @@ def test_long_category_names_wrap_onto_two_lines_and_still_prove(chart_type):
         assert quality["failures"] == []
 
 
+def test_value_labels_carry_the_title_unit_so_source_literals_stay_on_the_page():
+    page, _ = _extract(_raw_svg(json.loads(json.dumps(CHANNELS))))
+    texts = {node.text for node in _group(page).iter(NS + "text")}
+    assert {"55%", "30%", "15%"} <= texts
+    unitless, _ = _extract(_raw_svg(json.loads(json.dumps(SCORES))))
+    assert "87.4" in {node.text for node in _group(unitless).iter(NS + "text")}
+
+
 def test_chart_text_follows_the_pages_body_size_within_bounds():
     def sizes(body):
         svg = _raw_svg(SALES).replace('font-size="36"', f'font-size="{body}"')
@@ -230,9 +246,9 @@ def test_a_correction_sees_server_charts_as_their_placeholders():
 #: Published output of revision one. A change here means a stored deck would
 #: replay differently: publish a new revision instead of editing v1.
 V1_DIGESTS = {
-    "shares": "sha256:22dc71c1d216b60389cd4a043210e98bd6a7d3164ff80082698b655e563bc65e",
-    "sales": "sha256:96207f11d95f3734759532564b62d15bce01641620d253d8a5f50cb9030cc4e6",
-    "channels": "sha256:9114d0d2c574ebd39a783287d38dfa199e74a2f05d298a4232b23740a20a8977",
+    "shares": "sha256:3bceaa3ac3b02208b4afd3a1fa91c8792b9f3bacdfcba155a249039645b45c11",
+    "sales": "sha256:300e84101fffa9c0c3077541c39c1f141aaee4f3d0ed1a802db07354f1da2bc7",
+    "channels": "sha256:5bd8090c4e0bff662b29a529fc316d7f6426bc3087f9a0a3637c7eb2689f9962",
     "scores": "sha256:0083fcc4371df58bbccd9c9c6156330ee8b672f9ed4e4f5e295f5f50732472b0",
 }
 
@@ -280,3 +296,20 @@ def test_a_stack_whose_segments_cannot_hold_their_labels_drops_the_labels():
     quality = {"passed": True, "failures": []}
     apply_requested_native_quality(quality, page, page["svg_content"], "", pt_per_px=.75, revision=V4)
     assert quality["failures"] == []
+
+
+def test_value_labels_carry_a_title_unit_outside_the_v4_unit_list():
+    raw = {"chartType": "bar", "categories": ["가", "나", "다"], "title": "연간 방문자 수 (만명)",
+           "series": [{"name": "방문자", "values": [128.4, 46.2, 39.8]}]}
+    page, _ = _extract(_raw_svg(raw))
+    assert {"128.4만명", "46.2만명", "39.8만명"} <= {node.text for node in _group(page).iter(NS + "text")}
+    quality = {"passed": True, "failures": []}
+    apply_requested_native_quality(quality, page, page["svg_content"], "", pt_per_px=.75, revision=V4)
+    assert quality["failures"] == []
+
+
+def test_admission_pins_server_charts_for_v4_decks_only():
+    import inspect
+    from services import svg_generation_admission
+    source = inspect.getsource(svg_generation_admission)
+    assert "get_svg_server_charts_env() and frozen[SNAPSHOT_REVISION_KEY] != REQUIREMENTS_VERSION_V5" in source
