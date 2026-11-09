@@ -2179,9 +2179,13 @@ def test_authoring_profile_staging_preserves_legacy_and_frozen_new_identity(monk
     assert payload[INTERNAL_SVG_AUTHORING_PROFILE_KEY] == expected
     assert snapshot["authoring_profile"] == expected
     new_contract_keys = ({"readability_policy", "common_header_design_plan", "native_requirements_revision",
-                          "page_number_ink", "asset_projection_revision"}
+                          "page_number_ink", "asset_projection_revision",
+                          "server_chart_render", "server_chart_data_ref"}
                          if profile_id is None else set())
     if profile_id is None:
+        # Server charts are on by default for fresh admissions (2026-11-09).
+        assert snapshot["server_chart_render"] == "svg-server-chart/v7"
+        assert snapshot["server_chart_data_ref"] == "svg-server-chart-data-ref/v1"
         from services.document_canvas_generation import validate_svg_readability_policy
         from services.svg_common_header_design_plan import validate_header_design_plan
 
