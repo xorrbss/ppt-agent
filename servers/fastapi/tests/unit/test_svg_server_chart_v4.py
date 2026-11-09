@@ -138,7 +138,7 @@ def _text_boxes(page):
 def test_revision_four_is_registered_trusted_current_and_has_its_own_rule():
     assert R4 == "svg-server-chart/v4"
     assert server_chart.RENDERERS[R4] is server_chart.render_server_chart_v4
-    assert R4 in server_chart.TRUSTED_RENDERERS and server_chart.SERVER_CHART_CURRENT == R4
+    assert R4 in server_chart.TRUSTED_RENDERERS and server_chart.SERVER_CHART_CURRENT == server_chart.SERVER_CHART_REVISION_V5
     assert server_chart.server_chart_policy({"server_chart_render": R4})
     rule = server_chart.server_chart_rule({"server_chart_render": R4})
     assert rule == server_chart.SERVER_CHART_RULE_V4 and f'data-chart-render="{R4}"' in rule

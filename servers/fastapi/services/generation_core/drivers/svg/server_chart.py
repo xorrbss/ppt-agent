@@ -59,6 +59,7 @@ SERVER_CHART_REVISION = "svg-server-chart/v1"
 SERVER_CHART_REVISION_V2 = "svg-server-chart/v2"
 SERVER_CHART_REVISION_V3 = "svg-server-chart/v3"
 SERVER_CHART_REVISION_V4 = "svg-server-chart/v4"
+SERVER_CHART_REVISION_V5 = "svg-server-chart/v5"
 SNAPSHOT_KEY = "server_chart_render"
 RENDER_ATTRIBUTE = "data-chart-render"
 BOX_ATTRIBUTE = "data-chart-box"
@@ -80,7 +81,8 @@ class ServerChartUnsupported(ValueError):
 def server_chart_policy(style_snapshot: dict | None) -> bool:
     """Whether a deck was admitted with server-rendered charts (frozen at admission)."""
     return isinstance(style_snapshot, dict) and style_snapshot.get(SNAPSHOT_KEY) in (
-        SERVER_CHART_REVISION, SERVER_CHART_REVISION_V2, SERVER_CHART_REVISION_V3, SERVER_CHART_REVISION_V4)
+        SERVER_CHART_REVISION, SERVER_CHART_REVISION_V2, SERVER_CHART_REVISION_V3, SERVER_CHART_REVISION_V4,
+        SERVER_CHART_REVISION_V5)
 
 
 SERVER_CHART_RULE = (
@@ -127,8 +129,12 @@ SERVER_CHART_RULE_V4 = SERVER_CHART_RULE_V2.replace(
     "The server chooses the value axis, gridlines, colours (from the page's accent colours) and the "
     "label layout, and gives a pie with many or crowded slices a legend: do not write any of them. Charts "
     "with negative values are drawn by you as before.")
+#: Revision five draws what revision four draws with its lines kept inside the box; only the
+#: marker the author writes differs.
+SERVER_CHART_RULE_V5 = SERVER_CHART_RULE_V4.replace(f'"{SERVER_CHART_REVISION_V4}"', f'"{SERVER_CHART_REVISION_V5}"')
 _RULES = {SERVER_CHART_REVISION: SERVER_CHART_RULE, SERVER_CHART_REVISION_V2: SERVER_CHART_RULE_V2,
-          SERVER_CHART_REVISION_V3: SERVER_CHART_RULE_V3, SERVER_CHART_REVISION_V4: SERVER_CHART_RULE_V4}
+          SERVER_CHART_REVISION_V3: SERVER_CHART_RULE_V3, SERVER_CHART_REVISION_V4: SERVER_CHART_RULE_V4,
+          SERVER_CHART_REVISION_V5: SERVER_CHART_RULE_V5}
 
 
 def server_chart_rule(style_snapshot: dict | None) -> str:
@@ -839,16 +845,51 @@ def render_server_chart_v4(root: ET.Element | None, node: ET.Element, raw: dict,
     return render(root, node, raw, style=style)
 
 
+def _inset_lines(node: ET.Element, box: list[float]) -> None:
+    """Keep every drawn line's stroke inside ``box``: endpoints move in by half the stroke width.
+
+    Revision four drew its baseline and gridlines from the box edge, so half of each stroke
+    fell outside the box -- and outside the page body when an author placed the box at the
+    body's edge, which the common-header check rejects (``svg_common_header_body_intrusion``,
+    measured 2026-11-09). Only coordinates on or past a box edge move.
+    """
+    x0, y0, width, height = box
+    for line in node.iter(_SVG + "line"):
+        try:
+            half = float(line.get("stroke-width", "1")) / 2
+        except ValueError:
+            continue
+        for key, low, high in (("x1", x0, x0 + width), ("x2", x0, x0 + width),
+                               ("y1", y0, y0 + height), ("y2", y0, y0 + height)):
+            try:
+                value = float(line.get(key, "0"))
+            except ValueError:
+                continue
+            clamped = min(max(value, low + half), high - half)
+            if clamped != value:
+                line.set(key, _fmt(clamped))
+
+
+def render_server_chart_v5(root: ET.Element | None, node: ET.Element, raw: dict, *, style=None) -> list[float]:
+    """Revision five: revision four's drawing with every line stroke kept inside the box."""
+    box = render_server_chart_v4(root, node, raw, style=style)
+    _inset_lines(node, box)
+    return box
+
+
 #: Published renderer revisions. A revision's output never changes once published.
 RENDERERS = {SERVER_CHART_REVISION: render_server_chart_v1, SERVER_CHART_REVISION_V2: render_server_chart_v2,
-             SERVER_CHART_REVISION_V3: render_server_chart_v3, SERVER_CHART_REVISION_V4: render_server_chart_v4}
+             SERVER_CHART_REVISION_V3: render_server_chart_v3, SERVER_CHART_REVISION_V4: render_server_chart_v4,
+             SERVER_CHART_REVISION_V5: render_server_chart_v5}
+#: Revisions that draw with revision four's planner (palette in the replay style, native style spec).
+V4_FAMILY = frozenset({SERVER_CHART_REVISION_V4, SERVER_CHART_REVISION_V5})
 #: Revisions whose charts are accepted by construction instead of by a drawing proof
 #: (owner decision 2026-11-09): a chart is trusted only while its drawing in the page
 #: is exactly what its renderer draws from its stored declaration (see
 #: :func:`trusted_server_chart_ids`); otherwise it takes the ordinary proof.
-TRUSTED_RENDERERS = frozenset({SERVER_CHART_REVISION_V3, SERVER_CHART_REVISION_V4})
+TRUSTED_RENDERERS = frozenset({SERVER_CHART_REVISION_V3, SERVER_CHART_REVISION_V4, SERVER_CHART_REVISION_V5})
 #: The revision a fresh admission freezes.
-SERVER_CHART_CURRENT = SERVER_CHART_REVISION_V4
+SERVER_CHART_CURRENT = SERVER_CHART_REVISION_V5
 
 
 def render_server_chart(root: ET.Element, node: ET.Element, raw: dict) -> tuple[str, list[float], dict]:
@@ -866,8 +907,8 @@ def render_server_chart(root: ET.Element, node: ET.Element, raw: dict) -> tuple[
         raise ServerChartUnsupported("server_chart_render_invalid")
     if revision not in TRUSTED_RENDERERS:
         return revision, renderer(root, node, raw), {}
-    if revision == SERVER_CHART_REVISION_V4:
-        # Revision four also records the palette it derived from the page.
+    if revision in V4_FAMILY:
+        # Revision four (and five) also records the palette it derived from the page.
         from services.generation_core.drivers.svg.server_chart_v4 import page_style, style_record
 
         styled = page_style(root, node)
@@ -879,7 +920,7 @@ def render_server_chart(root: ET.Element, node: ET.Element, raw: dict) -> tuple[
 
 def _replay_style(item: dict) -> tuple | None:
     style = item.get("style")
-    if item.get("render") == SERVER_CHART_REVISION_V4:
+    if item.get("render") in V4_FAMILY:
         from services.generation_core.drivers.svg.server_chart_v4 import replay_style
 
         return replay_style(style)
@@ -1145,6 +1186,21 @@ def server_chart_occlusions(record: dict | None, svg: str | None) -> list[dict]:
     return found
 
 
+def server_chart_group_ids(payload: dict, svg: str | None) -> tuple[str, ...]:
+    """Ids of the server-drawn chart groups bound to ``svg`` (empty without a bound record).
+
+    Their text is the declaration drawn by the server: the writing policy neither rewrites nor
+    judges it (a rewritten category no longer matches its source or its replay).
+    """
+    from services.generation_core.drivers.svg.native_declarations import bound_declarations
+
+    record, current = bound_declarations(payload, svg)
+    if record is None or not current:
+        return ()
+    return tuple(item["id"] for item in record.get("objects") or []
+                 if isinstance(item, dict) and item.get("render") in RENDERERS and isinstance(item.get("id"), str))
+
+
 OCCLUDED_KIND = "server_chart_occluded"
 
 
@@ -1335,7 +1391,9 @@ def apply_server_chart_grounding(quality: dict, payload: dict, svg: str, sources
 
 
 __all__ = ["BOX_ATTRIBUTE", "RENDERERS", "RENDER_ATTRIBUTE", "SERVER_CHART_CURRENT", "SERVER_CHART_REVISION",
-           "SERVER_CHART_REVISION_V2", "SERVER_CHART_REVISION_V3", "SERVER_CHART_REVISION_V4", "SERVER_CHART_RULE",
+           "SERVER_CHART_REVISION_V2", "SERVER_CHART_REVISION_V3", "SERVER_CHART_REVISION_V4",
+           "SERVER_CHART_REVISION_V5", "SERVER_CHART_RULE_V5", "V4_FAMILY", "render_server_chart_v5",
+           "server_chart_group_ids", "SERVER_CHART_RULE",
            "SERVER_CHART_RULE_V2", "SERVER_CHART_RULE_V3", "SERVER_CHART_RULE_V4", "render_server_chart_v4", "SNAPSHOT_KEY", "TRUSTED_RENDERERS", "trusted_server_chart_ids",
            "OCCLUDED_KIND", "apply_server_chart_admission", "server_chart_occlusions",
            "render_server_chart_v3",

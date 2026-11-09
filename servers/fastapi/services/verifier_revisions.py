@@ -331,6 +331,12 @@ COMMON_HEADER_VERIFIER_LEDGER = VerifierRevisionLedger(
         # deck checks occlusion and the admitted revision instead. No stored deck carries a
         # v3 marker, so every stored page keeps its interpretation.
         "sha256:238c3731603432bf2d0804e792b406f3ecba975477041b02951c0bdc087216e4": "svg-common-header-verifier/1",
+        # 2026-11-09: server chart prototype only (SVG_SERVER_CHARTS decks): renderer revision
+        # svg-server-chart/v5 (v4 with every line stroke kept inside the chart box) becomes the
+        # admitted revision, and the writing policy neither rewrites nor judges the text of a
+        # server-drawn chart group. No stored deck carries a v5 marker, and decks without server
+        # charts are unchanged.
+        "sha256:fccecadd419010748a755d1c3200a369fdbd46078db05e86b351c4ce44626237": "svg-common-header-verifier/1",
     }),
 )
 
@@ -502,6 +508,12 @@ WHOLE_PAGE_VERIFIER_LEDGER = VerifierRevisionLedger(
         # from it. Every other chart and every stored deck keeps its exact sidecar and converter
         # input (pinned by tests/unit/test_svg_server_chart_native_style.py).
         "593e10e616bd5677d4f056136f2027666b6eb83ea78dfd047858afac51559af1": "svg-whole-page-verifier/1",
+        # 2026-11-09: server chart prototype only (SVG_SERVER_CHARTS decks): renderer revision
+        # svg-server-chart/v5 (v4 with every line stroke kept inside the chart box) becomes the
+        # admitted revision, and the writing policy neither rewrites nor judges the text of a
+        # server-drawn chart group. No stored deck carries a v5 marker, and decks without server
+        # charts are unchanged.
+        "20bcd816ff90afcd48d073345f1273e67aa5741981b9f2b65b0f5cfa3189bfda": "svg-whole-page-verifier/1",
     }),
 )
 
@@ -745,6 +757,12 @@ PARTIAL_RECOVERY_CODE_LEDGER = VerifierRevisionLedger(
         # stored deck keeps its exact sidecar and converter input (pinned by
         # tests/unit/test_svg_server_chart_native_style.py).
         "3480c4c1d005f3a5c29ab260ad312d26464f9d7f7dc672109cd530225166a4c9": "svg-partial-recovery-code/1",
+        # 2026-11-09: server chart prototype only (SVG_SERVER_CHARTS decks): renderer revision
+        # svg-server-chart/v5 (v4 with every line stroke kept inside the chart box) becomes the
+        # admitted revision, and the writing policy neither rewrites nor judges the text of a
+        # server-drawn chart group. No stored deck carries a v5 marker, and decks without server
+        # charts are unchanged.
+        "1d06de03416b2293801a8ffb6870ea6307c804b8605f2b8bc019cece4dbb8b8d": "svg-partial-recovery-code/1",
     }),
 )
 
@@ -899,6 +917,12 @@ PAGE_RENDER_CODE_LEDGER = VerifierRevisionLedger(
         # stored deck keeps its exact sidecar and converter input (pinned by
         # tests/unit/test_svg_server_chart_native_style.py).
         "fdd0671c024284f56a2231616723c3aca1cd9345962606bed2c981fe8840702f": "svg-page-render-code/1",
+        # 2026-11-09: server chart prototype only (SVG_SERVER_CHARTS decks): renderer revision
+        # svg-server-chart/v5 (v4 with every line stroke kept inside the chart box) becomes the
+        # admitted revision, and the writing policy neither rewrites nor judges the text of a
+        # server-drawn chart group. No stored deck carries a v5 marker, and decks without server
+        # charts are unchanged.
+        "89a46d6aa7f94ba999c9124f5c0a12c129856a94e3ff1a13ef6b7a858b6f2242": "svg-page-render-code/1",
     }),
 )
 

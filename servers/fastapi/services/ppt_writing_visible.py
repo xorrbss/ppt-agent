@@ -45,7 +45,7 @@ def _template_furniture(node: ET.Element) -> bool:
     return node_id.startswith(_TEMPLATE_FURNITURE_PREFIX) and node_id != _TEMPLATE_BODY_ID
 
 
-def _svg_text_records(svg: str) -> tuple[dict, ...]:
+def _svg_text_records(svg: str, excluded_ids: Sequence[str] = ()) -> tuple[dict, ...]:
     root = ET.fromstring(svg)
     qids = {node: f"svg-{index}" for index, node in enumerate(root.iter())}
     texts: list[dict] = []
@@ -54,7 +54,7 @@ def _svg_text_records(svg: str) -> tuple[dict, ...]:
         tag = _tag(node.tag)
         style = (node.get("style") or "").replace(" ", "").lower()
         hidden = hidden or tag in _SVG_EXCLUDED or node.get("display") == "none" or "display:none" in style
-        if hidden or _template_furniture(node):
+        if hidden or _template_furniture(node) or (excluded_ids and node.get("id") in excluded_ids):
             return
         if tag == "text":
             value = "".join(node.itertext()).strip()
@@ -68,9 +68,13 @@ def _svg_text_records(svg: str) -> tuple[dict, ...]:
     return tuple(texts)
 
 
-def svg_text_nodes(svg: str) -> tuple[str, ...]:
-    """Read only displayed SVG text elements, never attributes or path data."""
-    return tuple(record["text"] for record in _svg_text_records(svg))
+def svg_text_nodes(svg: str, *, excluded_ids: Sequence[str] = ()) -> tuple[str, ...]:
+    """Read only displayed SVG text elements, never attributes or path data.
+
+    Text under an element whose id is in ``excluded_ids`` (server-drawn chart groups) is
+    skipped; the default reads everything, as before.
+    """
+    return tuple(record["text"] for record in _svg_text_records(svg, excluded_ids))
 
 
 def substitute_svg_visible_symbols(
@@ -325,12 +329,12 @@ def assess_visible_nodes(
 
 def svg_writing_repair_witnesses(svg: str, *, source_values: Sequence[str] = (),
                                  limit: int = 12, max_text_chars: int = 180,
-                                 total_text_chars: int = 720) -> list[dict]:
+                                 total_text_chars: int = 720, excluded_ids: Sequence[str] = ()) -> list[dict]:
     """Bounded transient repair context; never add visible text to quality receipts."""
     if limit <= 0 or max_text_chars <= 0 or total_text_chars <= 0:
         return []
     candidates = []
-    for record in _svg_text_records(svg):
+    for record in _svg_text_records(svg, excluded_ids):
         text = record["text"]
         spans = _provenance_spans(text, source_values)
         scan = (scan_visible_text(text, source_text=text)

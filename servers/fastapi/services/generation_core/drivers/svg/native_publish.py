@@ -117,8 +117,8 @@ def _entry(root: ET.Element, declaration: dict, *, width: float, height: float,
             if not native_group_ids_complete:
                 raise NativeRejection("native_chart_sibling_ownership_unproven")
             canvas_texts = _sibling_canvas_texts(root, native_group_ids)
-        from services.generation_core.drivers.svg.server_chart import SERVER_CHART_REVISION_V4
-        if trusted and declaration.get("render") == SERVER_CHART_REVISION_V4:
+        from services.generation_core.drivers.svg.server_chart import V4_FAMILY
+        if trusted and declaration.get("render") in V4_FAMILY:
             # Revision four: one spec, two outputs. The native chart follows the renderer's own
             # decisions (a replay of the stored declaration), not what a proof infers back.
             anchor, payload, appearance = _trusted_v4_chart_object(declaration, offset)
