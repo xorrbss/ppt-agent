@@ -118,7 +118,7 @@ def test_svg_template_canvas_matches_create_without_changing_legacy_selectors():
     request = GeneratePresentationRequest(
         content="canvas fixture", strategy="svg", aspect_ratio="16:9", **template,
     )
-    created = asyncio.run(admitted_create_canvas(None, None, None, "16:9", strategy="svg"))
+    created = asyncio.run(admitted_create_canvas(None, None, None, "16:9", strategy="svg", svg_template_pinned=True))
     assert request_canvas_metadata(request) == created
     assert created["contractVersion"] == "document-canvas/v1"
     assert created["physicalSize"] == {"widthEmu": 12192000, "heightEmu": 6858000}
@@ -127,6 +127,12 @@ def test_svg_template_canvas_matches_create_without_changing_legacy_selectors():
     assert request_canvas_metadata(legacy) == canvas_metadata_for_aspect_ratio("16:9").model_dump(
         mode="json", by_alias=True,
     )
+    # Without a pin, create stores what the generation request resolves, so the
+    # create-then-generate flow (the upload page) admits a plain 16:9 svg deck.
+    assert asyncio.run(admitted_create_canvas(None, None, None, "16:9", strategy="svg")) == request_canvas_metadata(legacy)
+    for aspect_ratio in ("4:3", "9:16", "1:1"):
+        plain = GeneratePresentationRequest(content="plain", strategy="svg", aspect_ratio=aspect_ratio)
+        assert asyncio.run(admitted_create_canvas(None, None, None, aspect_ratio, strategy="svg")) == request_canvas_metadata(plain)
     frozen_mismatch = GeneratePresentationRequest(
         content="canvas fixture", strategy="svg", aspect_ratio="16:9", **template,
     )

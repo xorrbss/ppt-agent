@@ -193,10 +193,6 @@ def test_v1_async_generation_uses_strict_v2_admission_before_claim(
                 n_slides=3,
                 language="en",
                 strategy="svg",
-                # svg /create stamps a 16:9 deck with a document canvas that a
-                # 16:9 svg request does not reproduce; 4:3 resolves the same svg
-                # canvas on both sides.
-                aspect_ratio="4:3",
                 providerCostCapMicrounits=12_500_000,
             )
             async with maker() as session:
@@ -485,7 +481,7 @@ async def _create(
     # svg is the only generation strategy since authored generation was
     # removed (2026-11-09).
     strategy: str = "svg",
-    aspect_ratio: str = "4:3",
+    aspect_ratio: str = "16:9",
 ):
     return await presentation_crud.create_presentation(
         content=content,
@@ -700,7 +696,9 @@ def test_create_persists_theme_but_only_safe_theme_metadata_in_first_message(
             stamped_theme = first.theme
             assert {key: stamped_theme[key] for key in theme} == theme
             assert stamped_theme["mode"] == "svg"
-            assert stamped_theme["documentCanvas"]["contractVersion"] == "document-canvas/v1"
+            # A plain 16:9 svg deck keeps the authored canvas metadata, as the
+            # generation request for it resolves.
+            assert stamped_theme["authored_vnext"]["canvas"]["contractVersion"] == "authored-canvas/v1"
 
             async with maker() as session:
                 stored = await session.get(PresentationModel, presentation_id)
@@ -791,9 +789,9 @@ def test_legacy_create_ignores_chat_first_theme_admission(tmp_path: Path, monkey
                 )
             assert created.lifecycle_status == PRESENTATION_LIFECYCLE_PUBLISHED
             # The legacy path drops the caller theme entirely: what remains is
-            # only the server-issued svg marker and canvas.
+            # only the server-issued svg marker and the 16:9 canvas.
             assert created.theme["mode"] == "svg"
-            assert created.theme["documentCanvas"]["contractVersion"] == "document-canvas/v1"
+            assert created.theme["authored_vnext"]["canvas"]["contractVersion"] == "authored-canvas/v1"
             async with maker() as session:
                 assert await session.scalar(
                     select(func.count()).select_from(WorkspaceMessage)
@@ -972,10 +970,6 @@ def test_generate_activates_and_links_bootstrap_operation(tmp_path: Path, monkey
             n_slides=8,
             language="en",
             strategy="svg",
-            # svg /create stamps a 16:9 deck with a document canvas that a
-            # 16:9 svg request does not reproduce; 4:3 resolves the same svg
-            # canvas on both sides.
-            aspect_ratio="4:3",
             files=["C:/temporary-upload/source.txt"],
         )
         validated_files: list[list[str]] = []
@@ -1217,10 +1211,6 @@ def test_generate_admission_rejection_is_atomic_and_replays_failed_task(
             n_slides=8,
             language="en",
             strategy="svg",
-            # svg /create stamps a 16:9 deck with a document canvas that a
-            # 16:9 svg request does not reproduce; 4:3 resolves the same svg
-            # canvas on both sides.
-            aspect_ratio="4:3",
         )
         try:
             async with maker() as session:
@@ -1288,7 +1278,7 @@ def test_generate_admission_rejection_is_atomic_and_replays_failed_task(
                     "include_table_of_contents": True,
                     "include_title_slide": True,
                     "web_search": False,
-                    "aspect_ratio": "4:3",
+                    "aspect_ratio": "16:9",
                 }
                 assert operation.state == "failed"
                 assert operation.error_code == "template_v2_generation_invalid"
@@ -1413,10 +1403,6 @@ def test_raw_path_admission_failure_requires_reattach_without_persisting_locator
             n_slides=8,
             language="en",
             strategy="svg",
-            # svg /create stamps a 16:9 deck with a document canvas that a
-            # 16:9 svg request does not reproduce; 4:3 resolves the same svg
-            # canvas on both sides.
-            aspect_ratio="4:3",
             files=["C:/temporary-upload/source.txt"],
         )
         try:
@@ -1554,10 +1540,6 @@ def test_admission_projection_race_does_not_mark_the_response(
             n_slides=8,
             language="en",
             strategy="svg",
-            # svg /create stamps a 16:9 deck with a document canvas that a
-            # 16:9 svg request does not reproduce; 4:3 resolves the same svg
-            # canvas on both sides.
-            aspect_ratio="4:3",
         )
         try:
             async with maker() as session:
@@ -1722,10 +1704,6 @@ def test_chat_first_generate_rejects_unlinked_legacy_idempotency_replay(
             n_slides=8,
             language="en",
             strategy="svg",
-            # svg /create stamps a 16:9 deck with a document canvas that a
-            # 16:9 svg request does not reproduce; 4:3 resolves the same svg
-            # canvas on both sides.
-            aspect_ratio="4:3",
         )
         try:
             async with maker() as session:
