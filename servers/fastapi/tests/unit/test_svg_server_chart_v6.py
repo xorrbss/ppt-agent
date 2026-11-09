@@ -89,7 +89,7 @@ def test_revision_six_lines_stay_inside_its_drawing_box(name):
 
 
 def test_revision_six_is_current_and_has_its_own_rule():
-    assert server_chart.SERVER_CHART_CURRENT == R6 and R6 in server_chart.TRUSTED_RENDERERS
+    assert R6 in server_chart.TRUSTED_RENDERERS
     rule = server_chart.server_chart_rule({"server_chart_render": R6})
     assert rule == server_chart.SERVER_CHART_RULE_V4.replace(f'"{R4}"', f'"{R6}"')
 

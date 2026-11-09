@@ -61,6 +61,7 @@ SERVER_CHART_REVISION_V3 = "svg-server-chart/v3"
 SERVER_CHART_REVISION_V4 = "svg-server-chart/v4"
 SERVER_CHART_REVISION_V5 = "svg-server-chart/v5"
 SERVER_CHART_REVISION_V6 = "svg-server-chart/v6"
+SERVER_CHART_REVISION_V7 = "svg-server-chart/v7"
 SNAPSHOT_KEY = "server_chart_render"
 RENDER_ATTRIBUTE = "data-chart-render"
 BOX_ATTRIBUTE = "data-chart-box"
@@ -83,7 +84,7 @@ def server_chart_policy(style_snapshot: dict | None) -> bool:
     """Whether a deck was admitted with server-rendered charts (frozen at admission)."""
     return isinstance(style_snapshot, dict) and style_snapshot.get(SNAPSHOT_KEY) in (
         SERVER_CHART_REVISION, SERVER_CHART_REVISION_V2, SERVER_CHART_REVISION_V3, SERVER_CHART_REVISION_V4,
-        SERVER_CHART_REVISION_V5, SERVER_CHART_REVISION_V6)
+        SERVER_CHART_REVISION_V5, SERVER_CHART_REVISION_V6, SERVER_CHART_REVISION_V7)
 
 
 SERVER_CHART_RULE = (
@@ -133,11 +134,14 @@ SERVER_CHART_RULE_V4 = SERVER_CHART_RULE_V2.replace(
 #: Revision five draws what revision four draws with its lines kept inside the box; only the
 #: marker the author writes differs.
 SERVER_CHART_RULE_V5 = SERVER_CHART_RULE_V4.replace(f'"{SERVER_CHART_REVISION_V4}"', f'"{SERVER_CHART_REVISION_V5}"')
+#: Revision seven draws revision six with value labels as written; only the marker differs.
+SERVER_CHART_RULE_V7 = SERVER_CHART_RULE_V4.replace(f'"{SERVER_CHART_REVISION_V4}"', f'"{SERVER_CHART_REVISION_V7}"')
 #: Revision six draws revision five inside side margins; only the marker differs.
 SERVER_CHART_RULE_V6 = SERVER_CHART_RULE_V4.replace(f'"{SERVER_CHART_REVISION_V4}"', f'"{SERVER_CHART_REVISION_V6}"')
 _RULES = {SERVER_CHART_REVISION: SERVER_CHART_RULE, SERVER_CHART_REVISION_V2: SERVER_CHART_RULE_V2,
           SERVER_CHART_REVISION_V3: SERVER_CHART_RULE_V3, SERVER_CHART_REVISION_V4: SERVER_CHART_RULE_V4,
-          SERVER_CHART_REVISION_V5: SERVER_CHART_RULE_V5, SERVER_CHART_REVISION_V6: SERVER_CHART_RULE_V6}
+          SERVER_CHART_REVISION_V5: SERVER_CHART_RULE_V5, SERVER_CHART_REVISION_V6: SERVER_CHART_RULE_V6,
+          SERVER_CHART_REVISION_V7: SERVER_CHART_RULE_V7}
 
 
 def server_chart_rule(style_snapshot: dict | None) -> str:
@@ -891,7 +895,7 @@ def drawing_box(item: dict) -> list[float]:
     anchor follow the drawing.
     """
     x, y, width, height = (float(value) for value in item["box"])
-    if item.get("render") == SERVER_CHART_REVISION_V6:
+    if item.get("render") in (SERVER_CHART_REVISION_V6, SERVER_CHART_REVISION_V7):
         return [x + _V6_SIDE_MARGIN, y, width - 2 * _V6_SIDE_MARGIN, height]
     return [x, y, width, height]
 
@@ -914,20 +918,48 @@ def render_server_chart_v6(root: ET.Element | None, node: ET.Element, raw: dict,
     return declared
 
 
+def render_server_chart_v7(root: ET.Element | None, node: ET.Element, raw: dict, *, style=None) -> list[float]:
+    """Revision seven: revision six with each value label keeping its declared digits.
+
+    Revisions one to six write a value through ``Decimal.normalize``, so a declared ``9.0``
+    became the label ``9``: the source literal ``9.0%`` was then missing from the page
+    (``required_text_missing``, the cause of the remaining fallback pages measured
+    2026-11-09). Revision seven writes ``9.0``; its native number format follows.
+    """
+    from services.generation_core.drivers.svg.server_chart_v4 import AS_WRITTEN
+
+    token = AS_WRITTEN.set(True)
+    try:
+        declared = list(_box(node))
+        inner = drawing_box({"render": SERVER_CHART_REVISION_V7, "box": declared})
+        node.set(BOX_ATTRIBUTE, " ".join(_fmt(value) for value in inner))
+        render_server_chart_v4(root, node, raw, style=style)
+        _inset_lines(node, inner)
+        return declared
+    finally:
+        AS_WRITTEN.reset(token)
+
+
+#: Revisions whose value labels keep the declared digits (their native style follows).
+AS_WRITTEN_RENDERERS = frozenset({SERVER_CHART_REVISION_V7})
+
+
 #: Published renderer revisions. A revision's output never changes once published.
 RENDERERS = {SERVER_CHART_REVISION: render_server_chart_v1, SERVER_CHART_REVISION_V2: render_server_chart_v2,
              SERVER_CHART_REVISION_V3: render_server_chart_v3, SERVER_CHART_REVISION_V4: render_server_chart_v4,
-             SERVER_CHART_REVISION_V5: render_server_chart_v5, SERVER_CHART_REVISION_V6: render_server_chart_v6}
+             SERVER_CHART_REVISION_V5: render_server_chart_v5, SERVER_CHART_REVISION_V6: render_server_chart_v6,
+             SERVER_CHART_REVISION_V7: render_server_chart_v7}
 #: Revisions that draw with revision four's planner (palette in the replay style, native style spec).
-V4_FAMILY = frozenset({SERVER_CHART_REVISION_V4, SERVER_CHART_REVISION_V5, SERVER_CHART_REVISION_V6})
+V4_FAMILY = frozenset({SERVER_CHART_REVISION_V4, SERVER_CHART_REVISION_V5, SERVER_CHART_REVISION_V6,
+                       SERVER_CHART_REVISION_V7})
 #: Revisions whose charts are accepted by construction instead of by a drawing proof
 #: (owner decision 2026-11-09): a chart is trusted only while its drawing in the page
 #: is exactly what its renderer draws from its stored declaration (see
 #: :func:`trusted_server_chart_ids`); otherwise it takes the ordinary proof.
 TRUSTED_RENDERERS = frozenset({SERVER_CHART_REVISION_V3, SERVER_CHART_REVISION_V4, SERVER_CHART_REVISION_V5,
-                               SERVER_CHART_REVISION_V6})
+                               SERVER_CHART_REVISION_V6, SERVER_CHART_REVISION_V7})
 #: The revision a fresh admission freezes.
-SERVER_CHART_CURRENT = SERVER_CHART_REVISION_V6
+SERVER_CHART_CURRENT = SERVER_CHART_REVISION_V7
 
 
 def render_server_chart(root: ET.Element, node: ET.Element, raw: dict) -> tuple[str, list[float], dict]:
@@ -1432,6 +1464,7 @@ __all__ = ["BOX_ATTRIBUTE", "RENDERERS", "RENDER_ATTRIBUTE", "SERVER_CHART_CURRE
            "SERVER_CHART_REVISION_V2", "SERVER_CHART_REVISION_V3", "SERVER_CHART_REVISION_V4",
            "SERVER_CHART_REVISION_V5", "SERVER_CHART_RULE_V5", "V4_FAMILY", "render_server_chart_v5",
            "SERVER_CHART_REVISION_V6", "SERVER_CHART_RULE_V6", "drawing_box", "render_server_chart_v6",
+           "SERVER_CHART_REVISION_V7", "SERVER_CHART_RULE_V7", "AS_WRITTEN_RENDERERS", "render_server_chart_v7",
            "server_chart_group_ids", "SERVER_CHART_RULE",
            "SERVER_CHART_RULE_V2", "SERVER_CHART_RULE_V3", "SERVER_CHART_RULE_V4", "render_server_chart_v4", "SNAPSHOT_KEY", "TRUSTED_RENDERERS", "trusted_server_chart_ids",
            "OCCLUDED_KIND", "apply_server_chart_admission", "server_chart_occlusions",

@@ -216,12 +216,22 @@ def _provenance_spans(text: str, values: Sequence[str]) -> tuple[ProtectedSpan, 
     return tuple(sorted(spans, key=lambda span: span.start))
 
 
+#: A name the source joins with a middle dot (강원·제주권, 금융·보험업): the dot belongs to it.
+_MIDDLE_DOT_NAME = re.compile(r"(?<![\w·ㆍ‧∙⋅])[0-9A-Za-z가-힣]+(?:[·ㆍ‧∙⋅][0-9A-Za-z가-힣]+)+(?![\w·ㆍ‧∙⋅])")
+
+
 def literal_source_values(source_text: str | None = None, native: Mapping | None = None,
                           bindings: Sequence[Mapping] = (),
                           raster_ledger: Mapping | None = None, *,
                           header_contract: Mapping | None = None,
-                          header_binding: Mapping | None = None) -> tuple[str, ...]:
-    """Pick explicit literal evidence: quotations, names with symbols, native cells/labels."""
+                          header_binding: Mapping | None = None,
+                          middle_dot_names: bool = False) -> tuple[str, ...]:
+    """Pick explicit literal evidence: quotations, names with symbols, native cells/labels.
+
+    ``middle_dot_names`` also keeps every word the source itself joins with a middle dot
+    (the policy otherwise rewrites ``강원·제주권`` to ``강원, 제주권`` and flags it where the
+    text is frozen, such as a common header title copied from the outline).
+    """
     values: set[str] = set()
     if (header_contract and header_contract.get("version") == "svg-common-header/v2"
             and header_binding and header_binding.get("applied") is True):
@@ -243,6 +253,8 @@ def literal_source_values(source_text: str | None = None, native: Mapping | None
             values.add(match.group(1))
         for match in re.finditer(r'(?im)^(?:제품명|브랜드명|공식명칭|모델명|product name|brand name|model name)\s*[:：]\s*([^\n]{2,120})', source_text):
             values.add(match.group(1).strip())
+        if middle_dot_names:
+            values.update(match.group(0) for match in _MIDDLE_DOT_NAME.finditer(source_text))
     for binding in bindings:
         if binding.get("kind") in {"text", "table_cell", "chart_label", "chart_title"}:
             value = binding.get("text")

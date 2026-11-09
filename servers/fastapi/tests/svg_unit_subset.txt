@@ -433,6 +433,7 @@ tests/unit/test_svg_server_chart_native_style.py
 tests/unit/test_svg_server_chart_v4.py
 tests/unit/test_svg_server_chart_v5.py
 tests/unit/test_svg_server_chart_v6.py
+tests/unit/test_svg_server_chart_v7.py
 tests/unit/test_svg_smoke_regressions.py
 tests/unit/test_svg_source_generation_flow.py
 tests/unit/test_svg_source_input_snapshot.py

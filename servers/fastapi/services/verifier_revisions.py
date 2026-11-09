@@ -337,6 +337,11 @@ COMMON_HEADER_VERIFIER_LEDGER = VerifierRevisionLedger(
         # server-drawn chart group. No stored deck carries a v5 marker, and decks without server
         # charts are unchanged.
         "sha256:fccecadd419010748a755d1c3200a369fdbd46078db05e86b351c4ce44626237": "svg-common-header-verifier/1",
+        # 2026-11-09: renderer revision svg-server-chart/v7 (v6 with value labels keeping their
+        # declared digits, 9.0 stays "9.0") becomes the admitted server chart revision, and the svg
+        # writing policy protects names the request source joins with a middle dot (강원·제주권).
+        # No stored deck carries a v7 marker; stored pages are not re-rendered by this change.
+        "sha256:3ccbf3f484cfc74eec0f8dd9888f51f66f5a6549cc2d4a13302d86dcbd9606c5": "svg-common-header-verifier/1",
     }),
 )
 
@@ -519,6 +524,11 @@ WHOLE_PAGE_VERIFIER_LEDGER = VerifierRevisionLedger(
         # wider than its estimate stays in the box) becomes the admitted revision. No stored deck
         # carries a v6 marker; every other page is unchanged.
         "3ff42a892823f3ff6c0d89e1ad55d5cffd6438e903adfa9a73ad4fe63893337d": "svg-whole-page-verifier/1",
+        # 2026-11-09: renderer revision svg-server-chart/v7 (v6 with value labels keeping their
+        # declared digits, 9.0 stays "9.0") becomes the admitted server chart revision, and the svg
+        # writing policy protects names the request source joins with a middle dot (강원·제주권).
+        # No stored deck carries a v7 marker; stored pages are not re-rendered by this change.
+        "82c637f944f651a023012f7a92efcc0d6e037173e3bf65244d331d9c457c3573": "svg-whole-page-verifier/1",
     }),
 )
 
@@ -773,6 +783,11 @@ PARTIAL_RECOVERY_CODE_LEDGER = VerifierRevisionLedger(
         # wider than its estimate stays in the box) becomes the admitted revision. No stored deck
         # carries a v6 marker; every other page is unchanged.
         "dc02a8aa9d8f5cdcf2ed94966afcf44bce83f5631ed7d1652e83c63b2bc166cf": "svg-partial-recovery-code/1",
+        # 2026-11-09: renderer revision svg-server-chart/v7 (v6 with value labels keeping their
+        # declared digits, 9.0 stays "9.0") becomes the admitted server chart revision, and the svg
+        # writing policy protects names the request source joins with a middle dot (강원·제주권).
+        # No stored deck carries a v7 marker; stored pages are not re-rendered by this change.
+        "0708f189eb82bdb51f8232f6ca2f0607cb8ac97ae9280aee428dfa6671526d09": "svg-partial-recovery-code/1",
     }),
 )
 
@@ -938,6 +953,11 @@ PAGE_RENDER_CODE_LEDGER = VerifierRevisionLedger(
         # wider than its estimate stays in the box) becomes the admitted revision. No stored deck
         # carries a v6 marker; every other page is unchanged.
         "b73ba23cf70af94be426684f977a5b7b1fb4bec8d731b7ab14b3b4e69172200a": "svg-page-render-code/1",
+        # 2026-11-09: renderer revision svg-server-chart/v7 (v6 with value labels keeping their
+        # declared digits, 9.0 stays "9.0") becomes the admitted server chart revision, and the svg
+        # writing policy protects names the request source joins with a middle dot (강원·제주권).
+        # No stored deck carries a v7 marker; stored pages are not re-rendered by this change.
+        "285bbc810c4a0237b230bf32760d90ee57e951a6fcf39c429c70d138dcefa9a9": "svg-page-render-code/1",
     }),
 )
 
