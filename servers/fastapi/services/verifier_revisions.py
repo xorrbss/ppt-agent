@@ -484,6 +484,11 @@ WHOLE_PAGE_VERIFIER_LEDGER = VerifierRevisionLedger(
         # deck checks occlusion and the admitted revision instead. No stored deck carries a
         # v3 marker, so every stored page keeps its interpretation.
         "08ddd5e164a7c475be445d340336056a143eee47522fa5d244a7061c7423ba55": "svg-whole-page-verifier/1",
+        # 2026-11-09: server chart prototype only (SVG_SERVER_CHARTS decks): charts by reference
+        # (server_chart_data_ref, a new policy frozen at admission as server_chart_data_ref, so
+        # no stored deck resolves references), and grounding accepts a category whose leading
+        # words the source elides ("2026년 1분기 1,120, 2분기 1,190"). Other decks unchanged.
+        "89dee0a42f77ae1a6c4d69a3261f86aa79539a4854b600b35a16b123d2beab23": "svg-whole-page-verifier/1",
     }),
 )
 
@@ -716,6 +721,11 @@ PARTIAL_RECOVERY_CODE_LEDGER = VerifierRevisionLedger(
         # deck checks occlusion and the admitted revision instead. No stored deck carries a
         # v3 marker, so every stored page keeps its interpretation.
         "f2afbfaf458c700fa4705da0b472c2aa7ce20fd6b647cfa0bbfba6eb7b1edcfa": "svg-partial-recovery-code/1",
+        # 2026-11-09: server chart prototype only (SVG_SERVER_CHARTS decks): charts by reference
+        # (server_chart_data_ref, a new policy frozen at admission as server_chart_data_ref, so
+        # no stored deck resolves references), and grounding accepts a category whose leading
+        # words the source elides ("2026년 1분기 1,120, 2분기 1,190"). Other decks unchanged.
+        "1161fb4e381321b44530be8978692017f685452ab5b53e9b7ab90c98c69d0613": "svg-partial-recovery-code/1",
     }),
 )
 
@@ -859,6 +869,11 @@ PAGE_RENDER_CODE_LEDGER = VerifierRevisionLedger(
         # deck checks occlusion and the admitted revision instead. No stored deck carries a
         # v3 marker, so every stored page keeps its interpretation.
         "2b2e046a00cec4549e24a18b280c042a06bca81f78698e26de773be6d34aed75": "svg-page-render-code/1",
+        # 2026-11-09: server chart prototype only (SVG_SERVER_CHARTS decks): charts by reference
+        # (server_chart_data_ref, a new policy frozen at admission as server_chart_data_ref, so
+        # no stored deck resolves references), and grounding accepts a category whose leading
+        # words the source elides ("2026년 1분기 1,120, 2분기 1,190"). Other decks unchanged.
+        "6a316caad10721eb69abd2c2349f65e8b56140c9a7055292fac7da30c1db7f8d": "svg-page-render-code/1",
     }),
 )
 
