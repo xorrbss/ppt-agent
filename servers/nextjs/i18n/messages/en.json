@@ -1188,7 +1188,9 @@
       "sourcePromptLabel": "Additional design request",
       "sourcePromptPlaceholder": "Example: Emphasize key figures and keep explanations concise",
       "preserveSource": "Preserve source content",
-      "preserveSourceDescription": "Keep text and images while applying the selected style."
+      "preserveSourceDescription": "Keep text and images while applying the selected style.",
+      "useCompanyTemplate": "Use company template",
+      "companyTemplateDescription": "Apply your organization’s logo, colors, and formatting."
     },
     "rasterReview": {
       "visionUnavailableTitle": "Text stays as images",
@@ -1314,6 +1316,18 @@
       "valueSourceRegion": "{value0} source region",
       "wholeImage": "Whole image",
       "zoomSourceRegion": "Zoom source region"
+    },
+    "master": {
+      "title": "Company standard",
+      "optional": "If you do not select one, the presentation is generated without a company standard.",
+      "required": "Choose a published company standard to generate with this AI-authored style.",
+      "unavailable": "The selected company standard is no longer available. Choose a published company standard to continue.",
+      "choose": "Choose company standard",
+      "change": "Change company standard",
+      "selected": "{name} · v{version} / PPT Master based · {layouts} layouts",
+      "unnamed": "Company standard",
+      "defaultFont": "Default font",
+      "aiCreate": "Create company standard from PPT"
     }
   },
   "generation": {
@@ -2646,7 +2660,9 @@
     "reviewRequest": "Review request",
     "slides": "slides",
     "v": "· v",
-    "viewOutline": "View outline"
+    "viewOutline": "View outline",
+    "pleaseCheckThePptMasterAgain": "Please check the PPT master again",
+    "theMasterChangedOrIsNotPublished": "The master changed or is not published. Apply the latest master and generate again."
   },
   "uploadExtras": {
     "approximateSourcePreview": "This source preview is an approximate LibreOffice rendering. Text position and line spacing can differ slightly from PowerPoint; register on Windows with PowerPoint when you need an exact comparison.",
@@ -2762,7 +2778,9 @@
     "svgReferenceRegistrationRequired": "Register the design reference",
     "svgReferenceRegistrationRequiredBody": "Register or clear the selected design reference file.",
     "canvasTemplateLocked": "Template-based redesign generates only at the template's own slide size.",
-    "chapterTabFilled": "Chapter tab: number and name are filled with the generated deck's own chapters."
+    "chapterTabFilled": "Chapter tab: number and name are filled with the generated deck's own chapters.",
+    "svgReferenceSelectionConflict": "Check the design reference selection",
+    "svgReferenceSelectionConflictBody": "Select only one of a design reference file, registered design, or company standard."
   },
   "authoredStyleSamples": {
     "allSlides": "All slides · {count}",

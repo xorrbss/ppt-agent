@@ -7,6 +7,7 @@ import { NextIntlClientProvider } from "next-intl";
 import koMessages from "@/i18n/messages/ko.json";
 import { Toaster } from "@/components/ui/sonner";
 import { makeStore } from "@/store/store";
+import { setPptGenUploadState } from "@/store/slices/presentationGenUpload";
 import UploadPage from "./UploadPage";
 import { useSupportingFiles } from "./upload-page/useSupportingFiles";
 
@@ -74,7 +75,7 @@ describe("<UploadPage /> authored-only creation", () => {
       <NextIntlClientProvider locale="ko" messages={koMessages} timeZone="Asia/Seoul">
         <AppRouterContext.Provider value={router as any}>
           <Provider store={makeStore()}>
-            <UploadPage />
+            <UploadPage masterFeatureEnabled={false} />
             <Toaster />
           </Provider>
         </AppRouterContext.Provider>
@@ -100,7 +101,7 @@ describe("<UploadPage /> authored-only creation", () => {
       <NextIntlClientProvider locale="ko" messages={koMessages} timeZone="Asia/Seoul">
         <AppRouterContext.Provider value={router as any}>
           <Provider store={makeStore()}>
-            <UploadPage />
+            <UploadPage masterFeatureEnabled />
             <Toaster />
           </Provider>
         </AppRouterContext.Provider>
@@ -120,20 +121,36 @@ describe("<UploadPage /> authored-only creation", () => {
     cy.get('[data-testid="upload-master-selection"]').should("not.exist");
   });
 
-  it("offers neither a generation-strategy choice nor a company standard", () => {
+  it("starts without a company standard and discards a stale browser preference", () => {
+    cy.window().then((browserWindow) => {
+      browserWindow.localStorage.setItem(
+        "presenton:authored-master:last-used-id:v1",
+        "master:sample-data-insight",
+      );
+    });
+
+    const store = makeStore();
+
     mount(
       <NextIntlClientProvider locale="ko" messages={koMessages} timeZone="Asia/Seoul">
         <AppRouterContext.Provider value={router as any}>
-          <Provider store={makeStore()}>
-            <UploadPage />
+          <Provider store={store}>
+            <UploadPage masterFeatureEnabled />
             <Toaster />
           </Provider>
         </AppRouterContext.Provider>
       </NextIntlClientProvider>,
     );
 
-    cy.get('[data-testid="generation-strategy-selector"]').should("not.exist");
-    cy.get('[data-testid="upload-master-selection"]').should("not.exist");
-    cy.get('[data-testid="open-master-catalog"]').should("not.exist");
+    cy.get('[data-testid="upload-master-selection"]')
+      .should("contain", koMessages.upload.simplify.companyTemplateDescription)
+      .and("not.contain", "데이터 인사이트");
+    cy.window().then((browserWindow) => {
+      expect(
+        browserWindow.localStorage.getItem(
+          "presenton:authored-master:last-used-id:v1",
+        ),
+      ).to.equal(null);
+    });
   });
 });

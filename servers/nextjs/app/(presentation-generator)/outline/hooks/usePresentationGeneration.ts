@@ -1,7 +1,8 @@
 import { useSavedSvgTemplate } from "./useSavedSvgTemplate";
 import { AUTH_SESSION_EXPIRED_EVENT } from "../../services/api/api-error-handler";
 import { commonHeaderDesignForConfig, hasCommonHeader } from "@/lib/common-header-design";
-import { isAmbiguousGenerationTransportError, isRetryableGenerationStartError, hasRecoverableChatFirstWorkspace } from "./generationStartErrors";
+import { isAmbiguousGenerationTransportError, isRetryableGenerationStartError, hasRecoverableChatFirstWorkspace, isCompanyStandardAdmissionError } from "./generationStartErrors";
+import { useTranslations as useA2bTranslations } from "next-intl";
 import { useState, useCallback, useEffect, useRef } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { RootState } from "@/store/store";
@@ -27,6 +28,7 @@ import {
   saveDurableGenerationTask,
   updateDurableGenerationTask,
 } from "./durableGenerationTask";
+import { generationMasterPin } from "@/lib/authored-vnext/master/selection-storage";
 import { SOURCE_CONTENT_POLICY } from "../../services/api/source-content/contract";
 import { documentCanvasForOrientation } from "@/lib/document-canvas";
 
@@ -44,7 +46,9 @@ const AUTHORED_TIMEOUT_MS = 30 * 60 * 1000;
 export const usePresentationGeneration = (
   presentationId: string | null,
   outlines: { content: string }[] | null,
+  onMasterRequired?: () => void,
 ) => {
+  const tA2b = useA2bTranslations("outlineExtras");
   const t = useTranslations("generation");
   const tTemplate = useTranslations("svgTemplatePicker");
   const dispatch = useDispatch();
@@ -52,6 +56,9 @@ export const usePresentationGeneration = (
   const templateRestoreState = useSavedSvgTemplate(presentationId);
   const authoredStyle = useSelector(
     (s: RootState) => s.pptGenUpload.authoredStyle
+  );
+  const companyStandard = useSelector(
+    (s: RootState) => s.pptGenUpload.companyStandard
   );
   // The deck language chosen in the upload flow; threaded into the authored request
   // so the backend picks language-aware fonts (e.g. Noto Sans KR) instead of falling
@@ -307,6 +314,9 @@ export const usePresentationGeneration = (
       ...(generationConfig?.codexGenerationPreset
         ? { codexGenerationPreset: generationConfig.codexGenerationPreset }
         : {}),
+      ...(companyStandard && !isSourceContentGeneration
+        ? { masterPin: generationMasterPin(companyStandard) }
+        : {}),
       ...(sourceContentMode && sourceContentAdmission
         ? {
             sourceMode: "source_content_restyle" as const,
@@ -374,6 +384,7 @@ export const usePresentationGeneration = (
             : authoredRequest.sourceMode === "source_content_restyle" && authoredRequest.strategy === "svg" ? {}
             : { aspect_ratio: "16:9" }),
         codex_generation_preset: authoredRequest.codexGenerationPreset,
+        masterPin: authoredRequest.masterPin,
         sourceMode: authoredRequest.sourceMode,
         rasterApprovalPin: "rasterApprovalPin" in authoredRequest ? authoredRequest.rasterApprovalPin : undefined,
         referenceSnapshotIds: authoredRequest.sourceMode === "raster_reconstruction"
@@ -399,6 +410,16 @@ export const usePresentationGeneration = (
       if (!isActiveRun()) return;
       setLoadingState({ ...DEFAULT_LOADING_STATE, message: error instanceof Error ? error.message : "제작 요청을 접수하지 못했습니다. 다시 확인해 주세요." });
       setStartRecovery(isAmbiguousGenerationTransportError(error) ? "receipt" : isRetryableGenerationStartError(error) ? "retry" : null);
+      if (isCompanyStandardAdmissionError(error)) {
+        clearDurableGenerationTask(durableTask.idempotencyKey);
+        startingDurableTaskRef.current = null;
+        notify.warning(
+          tA2b("pleaseCheckThePptMasterAgain"),
+          tA2b("theMasterChangedOrIsNotPublished")
+        );
+        onMasterRequired?.();
+        return;
+      }
       if (openRecoverableWorkspace(error, durableTask.idempotencyKey)) {
         return;
       }
@@ -418,6 +439,8 @@ export const usePresentationGeneration = (
     sourceContentMode,
     sourceContentAdmission,
     authoredStyle,
+    companyStandard,
+    onMasterRequired,
     openWorkspace,
     openRecoverableWorkspace,
     reportDurableGenerationFailure,

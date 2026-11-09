@@ -31,6 +31,7 @@ interface ConfigurationSelectsProps {
     onConfigChange: (key: keyof PresentationConfig, value: any) => void;
     sourceContentMode?: boolean;
     authoredStyle: string;
+    hasCompanyStandard?: boolean;
     sourceDocumentCanvas?: DocumentCanvas | null;
 }
 
@@ -169,6 +170,7 @@ export function ConfigurationSelects({
     onConfigChange,
     sourceContentMode = false,
     authoredStyle,
+    hasCompanyStandard = false,
     sourceDocumentCanvas = null,
 }: ConfigurationSelectsProps) {
     const [openSlides, setOpenSlides] = useState(false);
@@ -187,6 +189,7 @@ export function ConfigurationSelects({
                 onConfigChange={onConfigChange}
                 sourceContentMode={sourceContentMode}
                 authoredStyle={authoredStyle}
+                hasCompanyStandard={hasCompanyStandard}
                 sourceDocumentCanvas={sourceDocumentCanvas}
             />
             <div className="flex items-center gap-2 text-sm text-slate-700">

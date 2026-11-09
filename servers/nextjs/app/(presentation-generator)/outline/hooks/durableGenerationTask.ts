@@ -53,6 +53,11 @@ export interface DurableGenerationTask {
     /** Server-derived source geometry retained for UI/resume identity only. */
     documentCanvas?: DocumentCanvas;
     codexGenerationPreset?: CodexGenerationPresetId;
+    masterPin?: {
+      masterId: string;
+      revision: number;
+      digest: `sha256:${string}`;
+    };
     sourceMode?: "source_content_restyle" | "raster_reconstruction";
     rasterApprovalPin?: RasterApprovalPinWire;
     referenceSnapshotIds?: string[];

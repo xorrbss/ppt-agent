@@ -36,12 +36,21 @@ describe("usePresentationGeneration svg-only generation", () => {
     store.dispatch(
       setPptGenUploadState({
         authoredStyle: "strategic-navy",
+        companyStandard: {
+          masterId: "master:company-standard",
+          revision: 3,
+          digest: `sha256:${"a".repeat(64)}`,
+          name: "회사 표준",
+          hasLogo: true,
+          primaryFont: "Noto Sans KR",
+          layoutCount: 4,
+        },
         config: null,
       }),
     );
   });
 
-  it("starts the svg driver with the selected style and no removed authored options", () => {
+  it("starts the svg driver with independent style and company pins", () => {
     cy.stub(router, "replace").as("replace");
     cy.stub(PresentationGenerationApi, "generateAuthoredAsync")
       .resolves({ id: "task-authored", status: "running" } as any)
@@ -64,13 +73,17 @@ describe("usePresentationGeneration svg-only generation", () => {
         presentation_id: "outline-shell-test",
         authored_style: "strategic-navy",
         strategy: "svg",
+        masterPin: {
+          masterId: "master:company-standard",
+          revision: 3,
+          digest: `sha256:${"a".repeat(64)}`,
+        },
       }),
     );
     cy.get("@generateAuthored").should(
       "have.been.calledWith",
       Cypress.sinon.match(
-        (body: Record<string, unknown>) =>
-          !("vision_qa" in body) && !("masterPin" in body),
+        (body: Record<string, unknown>) => !("vision_qa" in body),
       ),
     );
   });

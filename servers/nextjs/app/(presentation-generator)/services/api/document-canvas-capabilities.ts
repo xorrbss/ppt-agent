@@ -25,6 +25,7 @@ export interface DocumentCanvasSelection {
   generationStrategy: "svg";
   authoredStyle: string;
   sourceContentMode: boolean;
+  hasCompanyStandard: boolean;
 }
 
 export function normalizeDocumentCanvasCapabilities(

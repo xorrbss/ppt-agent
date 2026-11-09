@@ -1188,7 +1188,9 @@
       "sourcePromptLabel": "추가 디자인 요청",
       "sourcePromptPlaceholder": "예: 핵심 수치는 크게, 설명은 간결하게 배치해 주세요",
       "preserveSource": "원본 내용 유지",
-      "preserveSourceDescription": "텍스트와 이미지를 유지하고 선택한 스타일로 다시 구성해요."
+      "preserveSourceDescription": "텍스트와 이미지를 유지하고 선택한 스타일로 다시 구성해요.",
+      "useCompanyTemplate": "회사 양식 사용",
+      "companyTemplateDescription": "로고, 색상, 서식을 회사 기준에 맞춰요."
     },
     "rasterReview": {
       "visionUnavailableTitle": "글자가 이미지로 유지됩니다",
@@ -1314,6 +1316,18 @@
       "valueSourceRegion": "{value0} 원본 영역",
       "wholeImage": "전체 이미지",
       "zoomSourceRegion": "원본 영역 확대"
+    },
+    "master": {
+      "title": "회사 표준",
+      "optional": "선택하지 않으면 회사 표준 없이 생성합니다.",
+      "required": "이 AI 작성 스타일로 생성하려면 게시된 회사 표준을 선택하세요.",
+      "unavailable": "선택한 회사 표준을 더 이상 사용할 수 없습니다. 계속하려면 게시된 회사 표준을 선택하세요.",
+      "choose": "회사 표준 선택",
+      "change": "회사 표준 변경",
+      "selected": "{name} · v{version} / PPT 마스터 기반 · 레이아웃 {layouts}개",
+      "unnamed": "회사 표준",
+      "defaultFont": "기본 글꼴",
+      "aiCreate": "PPT에서 회사 표준 만들기"
     }
   },
   "generation": {
@@ -2646,7 +2660,9 @@
     "reviewRequest": "요청 검토",
     "slides": "장",
     "v": "· v",
-    "viewOutline": "구성 보기"
+    "viewOutline": "구성 보기",
+    "pleaseCheckThePptMasterAgain": "PPT 마스터를 다시 확인해 주세요",
+    "theMasterChangedOrIsNotPublished": "마스터가 변경되었거나 게시 상태가 아닙니다. 최신 마스터를 적용한 뒤 다시 생성하세요."
   },
   "uploadExtras": {
     "approximateSourcePreview": "이 원본 미리보기는 LibreOffice로 만든 근사 렌더링입니다. PowerPoint 화면과 글자 위치·줄 간격이 조금 다를 수 있으니, 정확한 비교가 필요하면 Windows의 PowerPoint 환경에서 등록해 주세요.",
@@ -2762,7 +2778,9 @@
     "svgReferenceRegistrationRequired": "디자인 참고 등록 필요",
     "svgReferenceRegistrationRequiredBody": "선택한 디자인 참고 파일을 등록하거나 선택을 해제해 주세요.",
     "canvasTemplateLocked": "양식 기반 재디자인은 템플릿 원본 크기로만 생성합니다.",
-    "chapterTabFilled": "장 탭: 번호와 장 이름은 생성되는 문서의 장 구성으로 채웁니다."
+    "chapterTabFilled": "장 탭: 번호와 장 이름은 생성되는 문서의 장 구성으로 채웁니다.",
+    "svgReferenceSelectionConflict": "디자인 참고 선택 확인",
+    "svgReferenceSelectionConflictBody": "디자인 참고 파일, 등록 디자인, 회사 표준 중 하나만 선택해 주세요."
   },
   "authoredStyleSamples": {
     "allSlides": "전체 슬라이드 · {count}",

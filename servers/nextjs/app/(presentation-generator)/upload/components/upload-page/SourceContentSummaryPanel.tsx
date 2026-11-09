@@ -1,6 +1,6 @@
 /**
  * Read-only summary of the "preserve original content" selection: which
- * generation path will run, and
+ * generation path will run, whether a company-standard master applies, and
  * (once analysis has run) how much of the source content it found. Extracted
  * from UploadPage.tsx (file-size ratchet split); behaviour unchanged, only
  * the module boundary moved.

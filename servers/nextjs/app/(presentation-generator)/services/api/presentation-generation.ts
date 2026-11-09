@@ -768,6 +768,11 @@ export class PresentationGenerationApi {
     svgTemplateFrameMap?: Record<string, string>;
     page_size?: "A4";
       orientation?: "landscape" | "portrait";
+      masterPin?: {
+        masterId: string;
+        revision: number;
+        digest: `sha256:${string}`;
+      };
       sourceMode?: "source_content_restyle" | "raster_reconstruction";
       rasterApprovalPin?: import("./source-content/raster-contract").RasterApprovalPinWire;
       referenceSnapshotIds?: string[];
@@ -815,6 +820,7 @@ export class PresentationGenerationApi {
                 : body.aspect_ratio ? { aspect_ratio: body.aspect_ratio }
                 : body.sourceMode === "source_content_restyle" && resolvedStrategy === "svg" ? {}
                 : { aspect_ratio: "16:9" }),
+            ...(body.masterPin ? { masterPin: body.masterPin } : {}),
             ...(body.sourceMode ? { sourceMode: body.sourceMode } : {}),
             ...(body.rasterApprovalPin ? { rasterApprovalPin: body.rasterApprovalPin } : {}),
             ...(body.sourceMode === "raster_reconstruction" && body.referenceSnapshotIds

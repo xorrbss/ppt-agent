@@ -61,3 +61,9 @@ test("the vision-QA toggle is gone from generation", () => {
   assert.doesNotMatch(sources.handlers, /visionQa/);
   assert.doesNotMatch(sources.api.slice(sources.api.indexOf("generateAuthoredAsync")), /vision_qa: resolvedStrategy/);
 });
+
+test("company-standard pins still reach the svg request", () => {
+  assert.match(sources.outlineGeneration, /masterPin: generationMasterPin\(companyStandard\)/);
+  assert.match(sources.api, /masterPin\?: \{/);
+  assert.match(sources.uploadPage, /upload-master-selection/);
+});

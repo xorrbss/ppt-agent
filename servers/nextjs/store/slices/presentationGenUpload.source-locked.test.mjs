@@ -79,8 +79,7 @@ test("source-content analyze-confirm flow preserves the admitted pin into the au
   assert.match(uploadPage, /data-testid="source-content-mode-checkbox"/);
   assert.match(uploadPage, /sourceContentMode/);
   assert.match(uploadPage, /<TemplateSelection\s*\/>/);
-  // Company-standard (master) selection only served authored generation.
-  assert.doesNotMatch(uploadPage, /upload-master-selection/);
+  assert.match(uploadPage, /data-testid="upload-master-selection"/);
   assert.match(advanceSettings, /sourceContentMode \? t\('sourceContentInstructionsLabel'\) : t\('instructionsLabel'\)/);
   // The analysis gate (analyze/cleanupDocumentAdmission) was extracted into
   // useSourceContentAdmission.ts by commit 6da74cf8a ("redesign from a

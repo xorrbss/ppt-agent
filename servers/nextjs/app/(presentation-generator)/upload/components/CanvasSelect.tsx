@@ -34,6 +34,7 @@ interface CanvasSelectProps {
     onConfigChange: (key: keyof PresentationConfig, value: any) => void;
     sourceContentMode?: boolean;
     authoredStyle: string;
+    hasCompanyStandard?: boolean;
     sourceDocumentCanvas?: DocumentCanvas | null;
 }
 
@@ -65,6 +66,7 @@ export function CanvasSelect({
     onConfigChange,
     sourceContentMode = false,
     authoredStyle,
+    hasCompanyStandard = false,
     sourceDocumentCanvas = null,
 }: CanvasSelectProps) {
     const tA2b = useA2bTranslations("uploadExtras");
@@ -89,13 +91,13 @@ export function CanvasSelect({
         let cancelled = false;
         setA4Enabled(null);
         void AuthoredStylesApi.getDocumentCanvasCapabilities({
-            generationStrategy: "svg", authoredStyle, sourceContentMode,
+            generationStrategy: "svg", authoredStyle, sourceContentMode, hasCompanyStandard,
         }).then((capabilities) => {
             if (cancelled) return;
             setA4Enabled(capabilities.a4.enabled);
         });
         return () => { cancelled = true; };
-    }, [authoredStyle, sourceContentMode]);
+    }, [authoredStyle, sourceContentMode, hasCompanyStandard]);
 
     function describeRow(id: CanvasRowId): { title: string; description: string } {
         switch (id) {

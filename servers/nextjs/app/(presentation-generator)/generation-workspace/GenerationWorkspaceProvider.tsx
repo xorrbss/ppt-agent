@@ -26,7 +26,7 @@ export interface GenerationAdmissionRecovery {
   auto: boolean;
   request: Parameters<typeof PresentationGenerationApi.createPresentation>[0];
   config: PresentationConfig;
-  uploadState: Pick<RootState["pptGenUpload"], "sourceContentMode" | "sourceContentAdmission" | "authoredStyle">;
+  uploadState: Pick<RootState["pptGenUpload"], "sourceContentMode" | "sourceContentAdmission" | "authoredStyle" | "companyStandard">;
 }
 export interface GenerationWorkspaceView {
   composerFocused?: boolean;

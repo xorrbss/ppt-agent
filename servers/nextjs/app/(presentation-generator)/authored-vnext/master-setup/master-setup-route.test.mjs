@@ -96,15 +96,27 @@ test("catalog selection commits only on Apply and draft cards remain edit-only",
   assert.doesNotMatch(`${catalogDialog}\n${catalogCard}`, /publishedDigest/);
 });
 
-test("Upload no longer offers company-standard selection (authored generation is removed)", () => {
-  assert.doesNotMatch(uploadPage, /setPptGenUploadState\(\{ companyStandard/);
-  assert.doesNotMatch(uploadPage, /master-admission-error|MasterCatalogDialog|masterBlocksGeneration/);
-  assert.doesNotMatch(uploadState, /masterClient|resolveMasterForGeneration/);
+test("Upload keeps master preference separate and defaults to one-shot generation", () => {
+  // 1fc2b169a ("fix(presentation): complete authored source-content reflow")
+  // deliberately dropped last-used-preference auto-resolution: a fresh
+  // upload must never inherit browser state from another document, so the
+  // mount effect now resets and clears any stored pin instead of loading it.
+  assert.match(uploadPage, /dispatch\(setPptGenUploadState\(\{ companyStandard: null \}\)\)/);
+  assert.match(uploadPage, /clearLastUsedMasterId\(\)/);
+  assert.doesNotMatch(uploadPage, /readStoredCompanyStandardPreference/);
+  assert.match(uploadPage, /onApply=\{applyMaster\}/);
+  assert.match(uploadPage, /masterBlocksGeneration/);
+  assert.match(uploadPage, /data-testid="master-admission-error"/);
+  assert.match(uploadPage, /handleReviewOutline/);
+  assert.match(uploadState, /masterClient\.getPublished\(requested\.masterId\)/);
+  assert.match(uploadState, /companyStandardRef\.current\?\.masterId !== requested\.masterId/);
   assert.match(uploadState, /startPresentation\(true\)/);
   assert.match(uploadState, /startPresentation\(false\)/);
   assert.match(uploadGenerationHandlers, /\/outline\?auto=1&id=/);
   assert.match(outlinePage, /autoIntentState === "checking"/);
-  assert.doesNotMatch(presentationGeneration, /generationMasterPin|masterPin/);
+  assert.match(outlinePage, /masterDefaultResolved/);
+  assert.match(presentationGeneration, /generationMasterPin\(companyStandard\)/);
+  assert.match(presentationGeneration, /authoredRequest\.masterPin/);
 });
 
 test("Master Setup route supports an explicit emergency-disable feature flag", () => {

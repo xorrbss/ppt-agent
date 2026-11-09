@@ -15,7 +15,10 @@ import {
   sourceContentSelectionErrorMessage,
   validateSourceContentFiles,
 } from "../../../services/api/source-content/contract";
-import { setPptGenUploadState } from "@/store/slices/presentationGenUpload";
+import {
+  setPptGenUploadState,
+  type CompanyStandardSelection,
+} from "@/store/slices/presentationGenUpload";
 import { RootState } from "@/store/store";
 import AuthoredStylesApi from "../../../services/api/authored";
 import { abortDocumentProcessing } from "./abortDocumentProcessing";
@@ -25,6 +28,12 @@ import {
   type SourceContentAdmission,
 } from "./useSourceContentAdmission";
 import { LoadingState } from "./types";
+import { AuthoredVnextMasterClient } from "@/lib/authored-vnext/master/client";
+import {
+  isAuthoredVnextMasterEnabled,
+  type MasterRevisionEnvelope,
+} from "@/lib/authored-vnext/master/contracts";
+import { masterSelectionFromPublished } from "@/lib/authored-vnext/master/selection-storage";
 import { createUploadGenerationHandlers } from "./uploadGenerationHandlers";
 import { useGenerationWorkspace } from "../../../generation-workspace/GenerationWorkspaceProvider";
 import { PresentationGenerationApi } from "../../../services/api/presentation-generation";
@@ -40,10 +49,16 @@ import { useRasterSessionRecovery } from "./useRasterSessionRecovery";
 import { createRasterRedesignStarter } from "./createRasterRedesignStarter";
 import { useGenerationGuard } from "./useGenerationGuard";
 
+const masterClient = new AuthoredVnextMasterClient();
+
+export type UploadMasterAdmissionError = "required" | "unavailable";
+
 interface UseUploadPageStateArgs {
   files: File[];
   filesRef?: RefObject<File[]>;
   selectedThemeId: string | null;
+  masterFeatureEnabled?: boolean;
+  onMasterRequired?: () => void;
 }
 
 /**
@@ -57,6 +72,8 @@ export const useUploadPageState = ({
   files,
   filesRef,
   selectedThemeId,
+  masterFeatureEnabled = isAuthoredVnextMasterEnabled(),
+  onMasterRequired,
 }: UseUploadPageStateArgs) => {
   const tA2b = useA2bTranslations("uploadExtras");
   const tTemplate = useA2bTranslations("svgTemplatePicker");
@@ -93,6 +110,9 @@ export const useUploadPageState = ({
   }, []);
   const dispatch = useDispatch();
   const llmConfig = useSelector((state: RootState) => state.userConfig.llm_config);
+  const companyStandard = useSelector(
+    (state: RootState) => state.pptGenUpload.companyStandard,
+  );
   const svgTemplateSelection = useSelector((state: RootState) => state.pptGenUpload.svgTemplateSelection);
   const authoredStyle = useSelector(
     (state: RootState) => state.pptGenUpload.authoredStyle,
@@ -104,6 +124,9 @@ export const useUploadPageState = ({
     pendingPresentationId,
     setLoadingState: (state) => setLoadingState(state),
   });
+  const [masterAdmissionError, setMasterAdmissionError] =
+    useState<UploadMasterAdmissionError | null>(null);
+  const [isMasterResolving, setIsMasterResolving] = useState(false);
 
   const [config, setConfig] = useState<PresentationConfig>({
     slides: "8",
@@ -153,14 +176,12 @@ export const useUploadPageState = ({
     setRasterAdvancedReview(false);
   }, [selectedFileIdentity]);
   const decomposeAbortControllerRef = useRef<AbortController | null>(null);
+  const companyStandardRef = useRef(companyStandard);
 
   const startInFlightRef = useRef(false);
   const [canCancelDocumentProcessing, setCanCancelDocumentProcessing] =
     useState(false);
 
-  // The factory only captures the refs; it reads `.current` inside the async
-  // handlers it returns, never during render.
-  /* eslint-disable react-hooks/refs */
   const { handleDocumentProcessing, handleDirectPresentationGeneration,
     handleGenerationError, ensureStockImageProviderReady } = createUploadGenerationHandlers({
       config, sourceContentMode, pendingPresentationId, selectedThemeId,
@@ -175,7 +196,6 @@ export const useUploadPageState = ({
         return () => aliveRef.current && lifecycleEpochRef.current === epoch;
       },
     });
-  /* eslint-enable react-hooks/refs */
 
   const rasterReviewState = useRasterReviewActions({
     rasterRecovery,
@@ -249,6 +269,61 @@ export const useUploadPageState = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dispatch, selectedFileIdentity, sourceContentMode]);
 
+  useEffect(() => {
+    setMasterAdmissionError(null);
+  }, [
+    companyStandard?.masterId,
+    companyStandard?.revision,
+    companyStandard?.digest,
+  ]);
+
+  companyStandardRef.current = companyStandard;
+
+  const resolveMasterForGeneration = async (): Promise<
+    CompanyStandardSelection | null | undefined
+  > => {
+    if (!masterFeatureEnabled) return undefined;
+    // A master is an optional structural layer.  Authored styles still own
+    // the full-canvas path when no master was selected, so do not make the
+    // ordinary template-only flow wait for a catalog choice.
+    if (!companyStandard) return undefined;
+
+    setIsMasterResolving(true);
+    setMasterAdmissionError(null);
+    try {
+      // The preference stores identity only. Pin the owner's current published
+      // pointer at the explicit generate click so a newly published revision is
+      // used by this new document while existing documents keep their old pin.
+      // Applying a different catalog card while this request is pending must
+      // never let the older response overwrite the new choice. Resolve again
+      // until the response matches the identity that is currently selected.
+      for (;;) {
+        const requested = companyStandardRef.current;
+        if (!requested) {
+          return undefined;
+        }
+        let published: MasterRevisionEnvelope;
+        try {
+          published = await masterClient.getPublished(requested.masterId);
+        } catch (error) {
+          if (companyStandardRef.current?.masterId !== requested.masterId) continue;
+          throw error;
+        }
+        if (companyStandardRef.current?.masterId !== requested.masterId) continue;
+        const selection = masterSelectionFromPublished(published);
+        companyStandardRef.current = selection;
+        dispatch(setPptGenUploadState({ companyStandard: selection }));
+        return selection;
+      }
+    } catch {
+      setMasterAdmissionError("unavailable");
+      onMasterRequired?.();
+      return null;
+    } finally {
+      setIsMasterResolving(false);
+    }
+  };
+
   const handleConfigChange = (key: keyof PresentationConfig, value: unknown) => {
     setConfig((prev) => ({ ...prev, [key]: value } as PresentationConfig));
   };
@@ -267,6 +342,9 @@ export const useUploadPageState = ({
     }
     if (config.svgDesignReferencePending) {
       notify.warning(tA2b("svgReferenceRegistrationRequired"), tA2b("svgReferenceRegistrationRequiredBody")); return false;
+    }
+    if (config.svgDesignReferenceSnapshotId && companyStandard) {
+      notify.warning(tA2b("svgReferenceSelectionConflict"), tA2b("svgReferenceSelectionConflictBody")); return false;
     }
     if (sourceContentMode) {
       const sourceContentError = validateSourceContentFiles(selectedFiles);
@@ -328,6 +406,7 @@ export const useUploadPageState = ({
         generationStrategy: "svg",
         authoredStyle,
         sourceContentMode: true,
+        hasCompanyStandard: false,
       });
       if (!capability.sourceContentSvg.enabled) {
         notify.warning(
@@ -421,6 +500,7 @@ export const useUploadPageState = ({
         generationStrategy: "svg",
         authoredStyle,
         sourceContentMode: true,
+        hasCompanyStandard: false,
       });
       if (!capability.sourceContentSvg.enabled) {
         notify.warning(tA2b("svgSourcePreservationGenerationLimitation"), tA2b("sourceContentPreservingSvgGenerationIsNot"));
@@ -437,12 +517,19 @@ export const useUploadPageState = ({
       abandonRun(reason);
       return;
     }
+    const resolvedMaster = await resolveMasterForGeneration();
+    if (resolvedMaster === null) {
+      abandonRun("회사 표준 마스터를 확인하지 못해 생성을 시작하지 않았습니다. 회사 표준 설정을 확인해 주세요.");
+      return;
+    }
     if (!sourceContentMode) {
       // Check even before the settings effect has upgraded the initial config.
       const capability = await AuthoredStylesApi.getDocumentCanvasCapabilities({
         generationStrategy: "svg",
         authoredStyle,
         sourceContentMode,
+        // Match stageAutoAuthoredGeneration: source restyle omits masterPin.
+        hasCompanyStandard: Boolean(resolvedMaster) && !sourceContentMode,
       });
       if (capability.a4.reason === "document_canvas_capability_unavailable") {
         notify.warning(tA2b("couldNotCheckPageSettings"), tA2b("couldNotCheckTheServerSPaper"));
@@ -470,11 +557,12 @@ export const useUploadPageState = ({
         await handleDocumentProcessing(
           selectedFiles,
           auto,
+          resolvedMaster,
           admitted,
           runConfig,
         );
       } else {
-        await handleDirectPresentationGeneration(auto, runConfig);
+        await handleDirectPresentationGeneration(auto, resolvedMaster, runConfig);
       }
     } catch (error) {
       handleGenerationError(error);
@@ -517,6 +605,8 @@ export const useUploadPageState = ({
     handleGeneratePresentation,
     handleReviewOutline,
     generationGuard,
+    masterAdmissionError,
+    isMasterResolving,
     sourceContentSummary: sourceContentGate.summary,
     sourceContentCanvas: sourceContentGate.admission?.analysis.documentCanvas ?? null,
     isSourceContentAnalyzing: sourceContentGate.isAnalyzing,

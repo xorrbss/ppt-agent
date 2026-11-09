@@ -5,7 +5,7 @@ import type { Dispatch, SetStateAction, MutableRefObject } from "react";
 import type { useRouter } from "next/navigation";
 import type { Dispatch as ReduxDispatch, UnknownAction } from "redux";
 import { clearOutlines, setPresentationId } from "@/store/slices/presentationGeneration";
-import { setPptGenUploadState } from "@/store/slices/presentationGenUpload";
+import { setPptGenUploadState, type CompanyStandardSelection } from "@/store/slices/presentationGenUpload";
 import type { RootState } from "@/store/store";
 import { requestVerbosity } from "../../utils/requestVerbosity";
 import { documentCanvasRequestForConfig, LanguageType, type PresentationConfig } from "../../type";
@@ -58,6 +58,7 @@ export function createUploadGenerationHandlers({
 
   const stageAutoGeneration = (
     presentationId: string,
+    master: CompanyStandardSelection | undefined,
     sourceContent: SourceContentAnalysisResponseV1 | null = null,
     config: PresentationConfig = initialConfig,
   ) => {
@@ -122,6 +123,15 @@ export function createUploadGenerationHandlers({
               contentPolicy: SOURCE_CONTENT_POLICY,
             }
           : {}),
+        ...(master && !sourceContent
+          ? {
+              masterPin: {
+                masterId: master.masterId,
+                revision: master.revision,
+                digest: master.digest,
+              },
+            }
+          : {}),
       },
     });
   };
@@ -164,6 +174,7 @@ export function createUploadGenerationHandlers({
   const handleDocumentProcessing = async (
     selectedFiles: File[],
     auto: boolean,
+    resolvedMaster: CompanyStandardSelection | undefined,
     admittedSourceContent: SourceContentAdmission | null = null,
     config: PresentationConfig = initialConfig,
   ) => {
@@ -310,9 +321,10 @@ export function createUploadGenerationHandlers({
     saveAdmission?.(null);
     };
     recoverCreateRef.current = submitPreparedRequest;
-    if (auto) stageAutoGeneration(presentationId, sourceContentAnalysis, config);
+    if (auto) stageAutoGeneration(presentationId, resolvedMaster, sourceContentAnalysis, config);
     saveAdmission?.({ presentationId, auto, request: createRequest, config, uploadState: {
       sourceContentMode, authoredStyle,
+      companyStandard: resolvedMaster ?? null,
       sourceContentAdmission: sourceContentAnalysis ? {
         manifestPin: sourceContentAnalysis.manifestPin,
         referenceSnapshotId: sourceContentAnalysis.referenceSnapshotBinding.referenceSnapshotId,
@@ -329,6 +341,7 @@ export function createUploadGenerationHandlers({
    */
   const handleDirectPresentationGeneration = async (
     auto: boolean,
+    resolvedMaster: CompanyStandardSelection | undefined,
     config: PresentationConfig = initialConfig,
   ) => {
     const isLive = captureLiveness();
@@ -386,9 +399,10 @@ export function createUploadGenerationHandlers({
     saveAdmission?.(null);
     };
     recoverCreateRef.current = submitPreparedRequest;
-    if (auto) stageAutoGeneration(presentationId, null, config);
+    if (auto) stageAutoGeneration(presentationId, resolvedMaster, null, config);
     saveAdmission?.({ presentationId, auto, request: createRequest, config, uploadState: {
       sourceContentMode: false, sourceContentAdmission: null, authoredStyle,
+      companyStandard: resolvedMaster ?? null,
     } });
     await submitPreparedRequest();
   };
