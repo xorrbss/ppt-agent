@@ -314,6 +314,10 @@ COMMON_HEADER_VERIFIER_LEDGER = VerifierRevisionLedger(
         # frozen renderer revision), stored box, placeholder view for correction prompts and
         # category/series association grounding. Raw responses without the marker are unchanged.
         "sha256:0d2f22d07b19f2e4dd8f9797c0a9047d7d3767e94e7499ffe9dcfaaf8ce3883c": "svg-common-header-verifier/1",
+        # 2026-11-09: server chart prototype only (SVG_SERVER_CHARTS decks): stacked and
+        # percent-stacked server charts, and undeclared bar/column charts recorded as the
+        # layout failure undeclared_chart_drawn with a declare hint. Other decks unchanged.
+        "sha256:ee408d01f37bd96b23b6a4a4514bcd8e8d111e4e9707fcc9029bcafbf353efc4": "svg-common-header-verifier/1",
     }),
 )
 
@@ -690,6 +694,10 @@ PARTIAL_RECOVERY_CODE_LEDGER = VerifierRevisionLedger(
         # frozen renderer revision), stored box, placeholder view for correction prompts and
         # category/series association grounding. Raw responses without the marker are unchanged.
         "63394255264e8cf0d8d26c63a6b0df15bf6d699a10b573e688c92f3d30357590": "svg-partial-recovery-code/1",
+        # 2026-11-09: server chart prototype only (SVG_SERVER_CHARTS decks): stacked and
+        # percent-stacked server charts, and undeclared bar/column charts recorded as the
+        # layout failure undeclared_chart_drawn with a declare hint. Other decks unchanged.
+        "de9c46b30bb7303d4807ba3d8ebe5658fd7ee60819ea508022919346dfbf505d": "svg-partial-recovery-code/1",
     }),
 )
 
@@ -823,6 +831,10 @@ PAGE_RENDER_CODE_LEDGER = VerifierRevisionLedger(
         # frozen renderer revision), stored box, placeholder view for correction prompts and
         # category/series association grounding. Raw responses without the marker are unchanged.
         "ab2e332c1b6a7b1547a1735e90450035371698449e1cd09e6274c0f44f71554d": "svg-page-render-code/1",
+        # 2026-11-09: server chart prototype only (SVG_SERVER_CHARTS decks): stacked and
+        # percent-stacked server charts, and undeclared bar/column charts recorded as the
+        # layout failure undeclared_chart_drawn with a declare hint. Other decks unchanged.
+        "b9d94004927243d65c32550317edf89d2c95e1e0fece14f7a30e06fda2998c06": "svg-page-render-code/1",
     }),
 )
 

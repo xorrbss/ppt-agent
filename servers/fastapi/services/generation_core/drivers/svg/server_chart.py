@@ -19,8 +19,8 @@ revision with its own marker. The drawing obeys the existing native chart
 contract (one baseline and scale, value labels with their datum, the axis
 beneath the bars), so the unchanged requirement checks and exporter apply to it.
 
-Revision one draws bar and column charts (clustered, one or more series,
-positive values). Any other form leaves the placeholder empty and records why;
+Revision one draws bar and column charts: clustered (one or more series) and
+stacked or percent-stacked (two or more series), positive values. Any other form leaves the placeholder empty and records why;
 nothing is guessed.
 """
 from __future__ import annotations
@@ -44,6 +44,7 @@ _DARK = "#0F172A"
 _MIN_BOX = (160.0, 120.0)
 _LABEL_PX_RANGE = (14.0, 20.0)
 _POSITIONS = ("outsideEnd", "insideEnd", "center", "insideBase")
+_STACKED = ("stacked", "percentStacked")
 
 
 class ServerChartUnsupported(ValueError):
@@ -63,8 +64,9 @@ SERVER_CHART_RULE = (
     "chart (its title, legend, category and value labels included) will be drawn: at least 360x240 px, "
     "clear of every other element; put captions, unit notes and callouts outside it. Chart only numbers "
     "the source states, each with the category it belongs to; values must be positive. Use "
-    "\"grouping\":\"clustered\" (or omit grouping). Line, area, pie, donut, stacked charts and charts with "
-    "zero or negative values are drawn by you as before. When previous_svg shows such a placeholder, keep "
+    "\"grouping\":\"clustered\" (or omit it), or \"stacked\"/\"percentStacked\" with two or more series "
+    "for parts of a whole. Line, area, pie, donut charts and charts with zero or negative values are drawn by "
+    "you as before. When previous_svg shows such a placeholder, keep "
     "it as a placeholder.\n"
 )
 
@@ -158,8 +160,11 @@ def _validated(raw: dict) -> tuple[str, list[str], list[dict]]:
     chart_type = raw.get("chartType")
     if chart_type not in _FAMILIES:
         raise ServerChartUnsupported("server_chart_type_unsupported")
-    if raw.get("grouping") not in (None, "clustered"):
+    if raw.get("grouping") not in (None, "clustered", "stacked", "percentStacked"):
         raise ServerChartUnsupported("server_chart_grouping_unsupported")
+    if raw.get("grouping") in _STACKED and (not isinstance(raw.get("series"), list) or len(raw["series"]) < 2):
+        # A stack needs two or more series (the native stack contract).
+        raise ServerChartUnsupported("server_chart_stack_needs_series")
     categories, series = raw.get("categories"), raw.get("series")
     if (not isinstance(categories, list) or not categories or not all(isinstance(item, str) and item.strip()
                                                                        for item in categories)
@@ -232,9 +237,13 @@ class _Layout:
             # A single series is named by its drawn title (the native contract's legend rule).
             title = self.series[0]["name"]
         self.title = title if isinstance(title, str) and title.strip() else None
+        self.grouping = raw.get("grouping") if raw.get("grouping") in _STACKED else "clustered"
         self.colors = []
         for index, item in enumerate(self.series):
             declared = item.get("pointColors")
+            if self.grouping in _STACKED and isinstance(declared, list) and declared:
+                # One colour per series in a stack (the native stack contract).
+                declared = [declared[0]] * len(self.categories)
             if not (isinstance(declared, list) and len(declared) == len(self.categories)
                     and all(isinstance(color, str) and re.fullmatch(r"#[0-9A-Fa-f]{6}", color) for color in declared)):
                 declared = [_DEFAULT_COLORS[index % len(_DEFAULT_COLORS)]] * len(self.categories)
@@ -348,6 +357,97 @@ def _draw(layout: _Layout, node, position: str, show_values: bool) -> bool:
     return fits
 
 
+def _draw_stacked(layout: _Layout, node, position: str, show_values: bool) -> bool:
+    """A stacked or percent-stacked chart; ``False`` when a segment label does not fit its segment."""
+    size, font, ink = layout.size, layout.font, layout.ink
+    top = layout.y0
+    if layout.title:
+        _text(node, layout.title, layout.x0, top + layout.title_size, size=layout.title_size, font=font,
+              fill=ink, weight="bold")
+        top += layout.title_size + 14
+    top = _legend(layout, node, top)
+    bottom = layout.y0 + layout.height
+    columns = list(zip(*[[float(_number(value)) for value in item["values"]] for item in layout.series], strict=True))
+    totals = [sum(column) for column in columns]
+    high = max(totals)
+    percent = layout.grouping == "percentStacked"
+    fits = True
+
+    def segments(c_index, extent):
+        """``(series index, start offset, length)`` along the value axis for one category."""
+        scale = extent / (totals[c_index] if percent else high)
+        offset = 0.0
+        for s_index, value in enumerate(columns[c_index]):
+            length = value * scale
+            yield s_index, offset, length
+            offset += length
+
+    def label_fits(label, length, thickness):
+        across = _text_width(label, size) + 8
+        return (across <= length and size + 4 <= thickness) if layout.horizontal else (
+            size + 6 <= length and across <= thickness)
+
+    if layout.horizontal:
+        category_size, lines = _wrap_all(layout.categories, size, layout.width * 0.38 - 14)
+        label_width = max(_text_width(line, category_size) for wrapped in lines for line in wrapped) + 14
+        zero = layout.x0 + label_width
+        extent = layout.width - label_width - 4
+        band = (bottom - top) / len(layout.categories)
+        thickness = min(band * 0.6, 64)
+        if extent < 80 or band < max(category_size * 1.25 * max(map(len, lines)), size + 6):
+            raise ServerChartUnsupported("server_chart_box_too_small")
+        _element(node, "line", x1=_fmt(zero), y1=_fmt(top), x2=_fmt(zero), y2=_fmt(bottom), stroke=_AXIS,
+                 stroke_width="2")
+        for c_index, wrapped in enumerate(lines):
+            center = top + band * (c_index + 0.5)
+            first_baseline = center + category_size * 0.35 - (len(wrapped) - 1) * category_size * 0.625
+            _text(node, wrapped, layout.x0, first_baseline, size=category_size, font=font, fill=ink)
+            bar_y = center - thickness / 2
+            for s_index, offset, length in segments(c_index, extent):
+                color = layout.colors[s_index][c_index]
+                _element(node, "rect", x=_fmt(zero + offset), y=_fmt(bar_y), width=_fmt(length),
+                         height=_fmt(thickness), fill=color)
+                if not show_values:
+                    continue
+                label = layout.labels[s_index][c_index]
+                fits = fits and label_fits(label, length, thickness)
+                x, anchor = {"center": (zero + offset + length / 2, "middle"),
+                             "insideEnd": (zero + offset + length - 4, "end"),
+                             "insideBase": (zero + offset + 4, "start")}[position]
+                _text(node, label, x, center + size * 0.35, size=size, font=font, fill=_contrast(color),
+                      anchor=anchor, weight="bold")
+        return fits
+
+    band = layout.width / len(layout.categories)
+    category_size, lines = _wrap_all(layout.categories, size, band - 8)
+    zero = bottom - (category_size * 1.25 * max(map(len, lines)) + 10)
+    extent = zero - top - 4
+    thickness = min(band * 0.6, 72)
+    if extent < 60:
+        raise ServerChartUnsupported("server_chart_box_too_small")
+    _element(node, "line", x1=_fmt(layout.x0), y1=_fmt(zero), x2=_fmt(layout.x0 + layout.width), y2=_fmt(zero),
+             stroke=_AXIS, stroke_width="2")
+    for c_index, wrapped in enumerate(lines):
+        center = layout.x0 + band * (c_index + 0.5)
+        _text(node, wrapped, center, zero + category_size + 6, size=category_size, font=font, fill=ink,
+              anchor="middle")
+        bar_x = center - thickness / 2
+        for s_index, offset, length in segments(c_index, extent):
+            color = layout.colors[s_index][c_index]
+            _element(node, "rect", x=_fmt(bar_x), y=_fmt(zero - offset - length), width=_fmt(thickness),
+                     height=_fmt(length), fill=color)
+            if not show_values:
+                continue
+            label = layout.labels[s_index][c_index]
+            fits = fits and label_fits(label, length, thickness)
+            y = {"center": zero - offset - length / 2 + size * 0.35,
+                 "insideEnd": zero - offset - length + size + 2,
+                 "insideBase": zero - offset - 4}[position]
+            _text(node, label, center, y, size=size, font=font, fill=_contrast(color), anchor="middle",
+                  weight="bold")
+    return fits
+
+
 def render_server_chart_v1(root: ET.Element, node: ET.Element, raw: dict) -> list[float]:
     """Revision one: replace ``node``'s children with the chart ``raw`` declares, inside its box.
 
@@ -364,6 +464,21 @@ def render_server_chart_v1(root: ET.Element, node: ET.Element, raw: dict) -> lis
     labels = raw.get("valueLabels") if isinstance(raw.get("valueLabels"), dict) else {}
     show_values = labels.get("shown", True) is not False
     position = labels.get("position") if labels.get("position") in _POSITIONS else "outsideEnd"
+    if layout.grouping in _STACKED:
+        # Stack labels sit on their segment (center/insideEnd/insideBase only).
+        position = position if position in ("center", "insideEnd", "insideBase") else "center"
+        try:
+            if not _draw_stacked(layout, node, position, show_values) and show_values:
+                # A segment too short for its label: the stack is drawn without value labels.
+                for child in list(node):
+                    node.remove(child)
+                show_values = False
+                _draw_stacked(layout, node, position, show_values)
+        except ServerChartUnsupported:
+            for child in list(node):
+                node.remove(child)
+            raise
+        return _normalised(raw, layout, show_values, position, box)
     if len(layout.series) > 1:
         position = "outsideEnd"
     try:
@@ -378,9 +493,14 @@ def render_server_chart_v1(root: ET.Element, node: ET.Element, raw: dict) -> lis
         for child in list(node):
             node.remove(child)
         raise
+    return _normalised(raw, layout, show_values, position, box)
+
+
+def _normalised(raw: dict, layout: _Layout, show_values: bool, position: str, box: list[float]) -> list[float]:
+    """Write what was drawn back into ``raw``, so the export and the preview read one source."""
     raw["valueLabels"] = {"shown": show_values, "position": position}
     raw["categoryOrder"] = "topToBottom" if layout.horizontal else "leftToRight"
-    raw["grouping"] = "clustered"
+    raw["grouping"] = layout.grouping
     raw["markers"] = False
     if layout.title:
         raw["title"] = layout.title

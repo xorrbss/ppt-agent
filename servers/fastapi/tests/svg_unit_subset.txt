@@ -484,6 +484,7 @@ tests/unit/test_svg_text_overlap_browser.py
 tests/unit/test_svg_timeout_repurchase_incident.py
 tests/unit/test_svg_timing_memo_followups.py
 tests/unit/test_svg_trusted_fonts.py
+tests/unit/test_svg_undeclared_chart.py
 tests/unit/test_svg_utility_layering.py
 tests/unit/test_svg_vector_paint.py
 tests/unit/test_svg_vector_pdf_export.py

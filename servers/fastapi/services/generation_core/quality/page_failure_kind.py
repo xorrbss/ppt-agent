@@ -68,6 +68,9 @@ CONTENT_FAILURE_KINDS = frozenset({
 LAYOUT_FAILURE_KINDS = frozenset({
     # V4 emits this only after exact bound data and visible values are proven.
     "native_requested_chart_not_editable",
+    # A chart drawn as plain shapes: its data is visible, only native editability is lost
+    # (SVG_SERVER_CHARTS decks, ``drivers/svg/undeclared_chart.py``).
+    "undeclared_chart_drawn",
     "text_overlap",
     "small_body_text",
     "font_unresolved",

@@ -79,7 +79,8 @@ def test_axis_is_drawn_before_the_bars_and_value_text_keeps_contrast():
 
 @pytest.mark.parametrize("raw,box,reason", [
     ({**SALES, "chartType": "line"}, "64 140 700 460", "server_chart_type_unsupported"),
-    ({**CHANNELS, "grouping": "stacked"}, "64 140 700 460", "server_chart_grouping_unsupported"),
+    ({**CHANNELS, "grouping": "overlap"}, "64 140 700 460", "server_chart_grouping_unsupported"),
+    ({**SALES, "grouping": "stacked"}, "64 140 700 460", "server_chart_stack_needs_series"),
     ({**SALES, "series": [{"name": "s", "values": [3, -1, 2, 1]}]}, "64 140 700 460",
      "server_chart_value_not_positive"),
     (SALES, "64 140 100 80", "server_chart_box_too_small"),
@@ -229,14 +230,53 @@ def test_a_correction_sees_server_charts_as_their_placeholders():
 #: Published output of revision one. A change here means a stored deck would
 #: replay differently: publish a new revision instead of editing v1.
 V1_DIGESTS = {
+    "shares": "sha256:22dc71c1d216b60389cd4a043210e98bd6a7d3164ff80082698b655e563bc65e",
     "sales": "sha256:96207f11d95f3734759532564b62d15bce01641620d253d8a5f50cb9030cc4e6",
     "channels": "sha256:9114d0d2c574ebd39a783287d38dfa199e74a2f05d298a4232b23740a20a8977",
     "scores": "sha256:0083fcc4371df58bbccd9c9c6156330ee8b672f9ed4e4f5e295f5f50732472b0",
 }
 
 
-@pytest.mark.parametrize("name,raw", [("sales", SALES), ("channels", CHANNELS), ("scores", SCORES)])
+@pytest.mark.parametrize("name,raw", [("sales", SALES), ("channels", CHANNELS), ("scores", SCORES),
+                                      ("shares", "SHARES")])
 def test_revision_one_output_is_frozen(name, raw):
+    raw = json.loads(json.dumps(SHARES if raw == "SHARES" else raw))
     from services.svg_contract import source_digest
     page, _ = _extract(_raw_svg(raw))
     assert source_digest(page["svg_content"]) == V1_DIGESTS[name]
+
+
+SHARES = {"chartType": "bar", "categories": ["2024년", "2025년", "2026년"], "grouping": "percentStacked",
+          "series": [{"name": "국내", "values": [55, 48, 42], "pointColors": ["#2563EB", "#000000", "#000000"]},
+                     {"name": "해외", "values": [30, 32, 33]}, {"name": "온라인", "values": [15, 20, 25]}],
+          "valueLabels": {"shown": True, "position": "outsideEnd"}, "title": "채널 비중 (%)"}
+
+
+@pytest.mark.parametrize("grouping", ["stacked", "percentStacked"])
+@pytest.mark.parametrize("chart_type", ["bar", "column"])
+@pytest.mark.parametrize("revision", [V4, V5])
+def test_stacks_pass_the_unchanged_native_contract(grouping, chart_type, revision):
+    raw = {**SHARES, "grouping": grouping, "chartType": chart_type}
+    page, record = _extract(_raw_svg(json.loads(json.dumps(raw))))
+    assert record["dropped"] == []
+    declared = record["objects"][0]["raw"]
+    assert declared["grouping"] == grouping and declared["valueLabels"]["position"] == "center"
+    assert all(len(set(series["pointColors"])) == 1 for series in declared["series"])
+    quality = {"passed": True, "failures": []}
+    apply_requested_native_quality(quality, page, page["svg_content"], "", pt_per_px=.75, revision=revision,
+                                   paint_deferred=True)
+    assert quality["failures"] == []
+    wire, _summary = page_native_objects(page, pt_per_px=.75, revision=revision)
+    assert len(wire["objects"]) == 1
+
+
+def test_a_stack_whose_segments_cannot_hold_their_labels_drops_the_labels():
+    raw = {**json.loads(json.dumps(SHARES)), "series": [
+        {"name": "큰 몫", "values": [97, 96, 95]}, {"name": "작은 몫", "values": [3, 4, 5]}]}
+    page, record = _extract(_raw_svg(raw, box="64 140 420 300"))
+    assert record["objects"][0]["raw"]["valueLabels"]["shown"] is False
+    texts = {node.text for node in _group(page).iter(NS + "text")}
+    assert "97" not in texts and "3" not in texts
+    quality = {"passed": True, "failures": []}
+    apply_requested_native_quality(quality, page, page["svg_content"], "", pt_per_px=.75, revision=V4)
+    assert quality["failures"] == []
