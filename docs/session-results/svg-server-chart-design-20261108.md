@@ -366,3 +366,35 @@ of v2/v3 converts to PPTX; `test_svg_server_chart_v4.py` converts every v4 case.
 
 **Not done yet:** no real-deck measurement; the PNG checks used a serif fallback font
 (widths are the estimator's).
+
+### Native export style of revision four: one spec, two outputs (2026-11-09)
+
+The PPTX native chart of a trusted v4 chart used to be rebuilt from the JSON plus what
+`chart_object` and `apply_drawn_chart_style` could infer back from the drawing, so area
+colours, axis bounds, ticks, label formats, legend and palette fell back to converter
+defaults or guesses. `server_chart_v4_native.native_style` now replays the stored
+declaration and replay style through the same renderer (`server_chart_v4._render`, whose
+drawing is unchanged and still digest-pinned) and returns its decisions as a spec:
+font family, text colour, chart text size, title size and position, plot area, value axis
+(visible, gridlines, 0..max, major unit, tick number format; a percent stack runs 0..1 with
+`0%`), bar gap and overlap, line width and marker size, area opacity, data labels (shown,
+position, size, weight, colour or per-point contrast colours, number format with the unit),
+legend (shown, position, layout) and the donut hole. Publication stores it as
+`svgAppearance["serverChartStyle"]` (validated in `native_objects/model.py`); no declaration
+state is added. `export_projection._server_chart` writes it field by field in the vendored
+converter vocabulary, and the export scene skips the drawn-style inference for such charts.
+The vendored converter is not patched: every field already existed there.
+
+Charts without the key (author-drawn, v1/v2/v3 server charts, a v4 chart whose trust was
+lost, every stored deck) keep their exact sidecar and converter input:
+`tests/unit/test_svg_server_chart_native_style.py` pins 54 such cases with digests computed
+before the change. Every v4 case exports one native chart whose XML carries the spec.
+
+**What the native chart cannot express without a converter patch:** per-point label
+placement (line labels moved above or below a point, end labels of several lines), the area
+plot between category centres (no `crossBetween` for non-date area charts, so LibreOffice
+draws the area edge to edge), a value axis without its axis line (one axis colour for both
+axes), translucent gridlines (blended to an opaque colour), the separator between a slice
+name and its value, per-series label colours in a stack, and a data-label position on a
+doughnut (the converter always writes one). Pie and donut values drawn inside their slices
+keep their place; the slice names drawn beside them become a legend.

@@ -389,6 +389,8 @@ class _Plan:
         self.colors = self._colors(raw)
         self.percent = self.grouping == "percentStacked"
         self.suffix = "%" if self.unit == "%" or self.percent else ""
+        #: Furniture boxes of the current drawing attempt (title, legend), for the native style.
+        self.drawn: dict = {}
 
     def _colors(self, raw) -> list[list[str]]:
         count = len(self.categories)
@@ -424,6 +426,7 @@ class _Plan:
 
     def title_block(self, g, size: float) -> float:
         """Draw the title (at most two lines) and return the next free y."""
+        self.drawn = {}
         if not self.title:
             return self.y0
         title_size = size + 2
@@ -432,13 +435,16 @@ class _Plan:
             raise _Retry("server_chart_title_too_wide")
         _text(g, lines, self.x0, self.y0 + title_size, size=title_size, font=self.font, fill=self.ink,
               weight="bold", line_height=title_size * 1.25)
-        return self.y0 + title_size + (len(lines) - 1) * title_size * 1.25 + 14
+        bottom = self.y0 + title_size + (len(lines) - 1) * title_size * 1.25 + 14
+        self.drawn["title"] = (self.x0, self.y0, max(_bold_width(line, title_size) for line in lines),
+                               bottom - 14 + title_size * 0.3 - self.y0, title_size)
+        return bottom
 
     def legend(self, g, size: float, top: float) -> float:
         if len(self.series) < 2:
             return top
         row_height = size + 10
-        cursor, row = self.x0, 0
+        cursor, row, used = self.x0, 0, 0.0
         for index, item in enumerate(self.series):
             width = 20 + _text_width(item["name"], size)
             if width > self.width:
@@ -449,7 +455,9 @@ class _Plan:
             _element(g, "rect", x=_fmt(cursor), y=_fmt(y), width="14", height="14",
                      fill=self.colors[index][0])
             self.text(g, item["name"], cursor + 20, y + 13, size)
+            used = max(used, cursor + width - self.x0)
             cursor += width + 24
+        self.drawn["legend"] = (self.x0, top, used, (row + 1) * row_height)
         return top + (row + 1) * row_height + 4
 
 
@@ -623,7 +631,13 @@ def _bars(plan: _Plan, size: float, g, *, axis: bool, labels: bool) -> dict:
             if position == "outsideEnd":
                 ink.add(box)
             plan.text(g, text, x, y, size, fill=fill, anchor=anchor, weight="bold")
-    return {"shown": labels, "position": position, "axis": axis}
+    if horizontal:
+        plot = (zero, top, zero + extent, bottom)
+    else:
+        plot = (left, zero - extent, right, zero)
+    return {"shown": labels, "position": position, "axis": axis, "axisMax": axis_max,
+            "majorUnit": axis_max / (len(ticks) - 1) if axis else None, "plot": plot,
+            "band": band, "thickness": thickness, "slots": slots, **plan.drawn}
 
 
 def _draw_bars(plan: _Plan, node, size: float) -> dict:
@@ -743,7 +757,8 @@ def _trend(plan: _Plan, size: float, g, mode: str) -> dict:
                       weight="bold")
     # The native area plot takes no label position (the converter rejects one); a line labels above.
     return {"shown": mode == "all", "position": "above" if mode == "all" and not area else None,
-            "axis": True, "markers": not area}
+            "axis": True, "markers": not area, "axisMax": axis_max, "majorUnit": axis_max / (len(ticks) - 1),
+            "plot": (left, zero - extent, right, zero), "trendLabels": mode, **plan.drawn}
 
 
 def _draw_trend(plan: _Plan, node, size: float) -> dict:
@@ -814,6 +829,7 @@ def _polar_direct(plan: _Plan, size: float, g, inside: bool) -> bool:
     if radius < 60:
         raise _Retry("server_chart_box_too_small")
     cx, cy = plan.x0 + plan.width / 2, (top + bottom) / 2
+    plan.drawn["pie"] = (cx, cy, radius)
     middles = _slices(plan, g, cx, cy, radius, colors)
     boxes = []
     for (middle, _sweep), name, text, width in zip(middles, plan.categories, plan.labels[0], widths, strict=True):
@@ -872,6 +888,7 @@ def _polar_legend(plan: _Plan, size: float, g) -> None:
     _slices(plan, g, cx, cy, radius, colors)
     legend_x = start + 2 * radius + 40
     y = cy - total / 2
+    plan.drawn.update(pie=(cx, cy, radius), legend=(legend_x, y, legend_w, total))
     for item, row, color, text in zip(names, rows, colors, plan.labels[0], strict=True):
         middle = y + row / 2
         _element(g, "rect", x=_fmt(legend_x), y=_fmt(middle - 7), width="14", height="14", fill=color)
@@ -897,7 +914,8 @@ def _draw_polar(plan: _Plan, node, size: float) -> dict:
                 continue
             for child in list(scratch):
                 node.append(child)
-            return {"shown": plan.wants_labels, "position": "center" if inside else "outsideEnd"}
+            return {"shown": plan.wants_labels, "position": "center" if inside else "outsideEnd",
+                    "legendMode": False, **plan.drawn}
     scratch = ET.Element(_SVG + "g")
     try:
         _polar_legend(plan, size, scratch)
@@ -905,7 +923,7 @@ def _draw_polar(plan: _Plan, node, size: float) -> dict:
         raise failure if failure and str(failure) != "server_chart_slice_labels_collide" else error from None
     for child in list(scratch):
         node.append(child)
-    return {"shown": plan.wants_labels, "position": "outsideEnd"}
+    return {"shown": plan.wants_labels, "position": "outsideEnd", "legendMode": True, **plan.drawn}
 
 
 # --- Entry point -----------------------------------------------------------------------------
@@ -917,6 +935,11 @@ def render_server_chart_v4(root: ET.Element | None, node: ET.Element, raw: dict,
     Same contract as ``render_server_chart_v1``; ``style`` is a replay of the style the first
     drawing recorded (``style_record``), ``None`` reads it from the page.
     """
+    return _render(root, node, raw, style)[0]
+
+
+def _render(root, node, raw, style) -> tuple[list[float], _Plan, dict]:
+    """The drawing of :func:`render_server_chart_v4`, plus its plan and decisions (``info``)."""
     _clear(node)
     if style is None:
         style = page_style(root, node)
@@ -938,6 +961,7 @@ def render_server_chart_v4(root: ET.Element | None, node: ET.Element, raw: dict,
             failure = error
             _clear(node)
             continue
+        info["size"] = size
         break
     if info is None:
         _clear(node)
@@ -956,4 +980,4 @@ def render_server_chart_v4(root: ET.Element | None, node: ET.Element, raw: dict,
         item["pointColors"] = list(colors if plan.chart_type not in _TREND else [colors[0]] * len(plan.categories))
     if plan.chart_type in _POLAR:
         raw["series"][0]["pointColors"] = list(plan.colors[0])
-    return box
+    return box, plan, info

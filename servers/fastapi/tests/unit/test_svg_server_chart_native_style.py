@@ -1,7 +1,7 @@
 """The native PPTX chart of a trusted ``svg-server-chart/v4`` chart follows the renderer's decisions.
 
-One spec, two outputs: ``server_chart_v4.native_style`` replays the stored declaration and
-style and records what the drawing decided (colours, fonts, axis bounds, gridlines, labels,
+One spec, two outputs: ``server_chart_v4_native.native_style`` replays the stored declaration
+and style and records what the drawing decided (colours, fonts, axis bounds, gridlines, labels,
 legend, plot area); publication stores it as ``svgAppearance["serverChartStyle"]`` and the
 export projection builds the converter payload from it alone.
 
@@ -172,3 +172,150 @@ def test_other_charts_keep_their_exact_sidecar_and_converter_input(key, tmp_path
 
 def test_every_fixture_is_pinned():
     assert set(PRE_CHANGE_DIGESTS) == set(_FIXTURES)
+
+
+# --- Trusted v4: the sidecar carries the renderer's spec --------------------------------------
+
+def _v4_chart(name: str) -> tuple[dict, dict]:
+    """``(record object, published sidecar chart)`` of a v4 case."""
+    page, record = _page(CASES[name][0])
+    _svg, content = _published(page)
+    (chart,) = content["nativeObjects"]["objects"]
+    return record["objects"][0], chart
+
+
+@pytest.mark.parametrize("name", list(CASES))
+def test_a_trusted_v4_sidecar_carries_the_spec_its_drawing_replays(name):
+    from services.generation_core.drivers.svg.server_chart_v4_native import native_style
+
+    item, chart = _v4_chart(name)
+    spec = chart["svgAppearance"]["serverChartStyle"]
+    colors, replayed = native_style(json.loads(json.dumps(item["raw"])), server_chart._replay_style(item), item["box"])
+    assert spec == replayed
+    assert chart["anchor"] == dict(zip(("x", "y", "width", "height"), item["box"], strict=True))
+    if CASES[name][0]["chartType"] not in ("pie", "donut"):
+        assert [series["color"] for series in chart["payload"]["series"]] == [colors[i] for i in range(len(colors))]
+    # The spec is the page's own style: font, ink and the palette that leads the series.
+    assert spec["fontFamily"] == item["style"]["font"] and spec["textColor"] == item["style"]["ink"].upper()
+    assert spec["textPx"] <= item["style"]["size"]
+
+
+def test_the_spec_follows_the_drawings_axis_label_and_legend_decisions():
+    specs = {name: _v4_chart(name)[1]["svgAppearance"]["serverChartStyle"] for name in CASES}
+    # A single series of few categories: clean bars with labels, no axis; the longest bar fills the plot.
+    assert specs["column"]["valueAxis"] == {"visible": False, "gridlines": False, "minimum": 0, "maximum": 210,
+                                            "numberFormat": "#,##0"}
+    assert specs["column"]["dataLabels"]["numberFormat"] == '#,##0"억원"'
+    # Several series: ticks, gridlines and the nice axis the drawing used.
+    assert specs["clustered"]["valueAxis"] == {"visible": True, "gridlines": True, "minimum": 0, "maximum": 80,
+                                               "majorUnit": 20, "numberFormat": "#,##0"}
+    assert specs["clustered"]["legend"]["visible"] and specs["clustered"]["legend"]["position"] == "top"
+    assert specs["clustered"]["dataLabels"] == {"shown": False}
+    # A percent stack: the native axis runs 0..1 with percent ticks; labels keep the raw value and unit.
+    assert specs["percent"]["valueAxis"]["maximum"] == 1 and specs["percent"]["valueAxis"]["numberFormat"] == "0%"
+    assert specs["percent"]["dataLabels"]["numberFormat"] == '#,##0"%"'
+    # Stacks put labels in the segment, in the contrast colour.
+    assert specs["stacked"]["dataLabels"]["position"] == "center"
+    assert specs["stacked"]["bars"]["overlap"] == 100
+    # Lines are 3 px with 9 px markers; areas 2 px, translucent, unlabelled position.
+    assert specs["line"]["line"] == {"widthPx": 3.0, "markerPx": 9.0}
+    assert specs["area"]["line"] == {"widthPx": 2.0, "markerPx": None} and specs["area"]["fillOpacity"] == 0.3
+    assert specs["area"]["dataLabels"]["position"] is None
+    assert specs["lines_many"]["dataLabels"] == {"shown": False}
+    # Pie and donut: a legend layout when the drawing used one; the donut keeps its hole.
+    assert specs["donut"]["holeRatio"] == 0.58
+    assert "layout" in specs["donut_legend"]["legend"]
+    assert specs["pie_small"]["dataLabels"]["showCategory"] is True
+
+
+@pytest.mark.parametrize("mutate", [
+    lambda spec: spec.update(version="svg-server-chart-native-style/v0"),
+    lambda spec: spec.update(textColor="red"),
+    lambda spec: spec["valueAxis"].update(minimum=5),
+    lambda spec: spec["valueAxis"].update(numberFormat="0.0E+00"),
+    lambda spec: spec["dataLabels"].update(position="bestFit"),
+    lambda spec: spec.update(extra=True),
+    lambda spec: spec["bars"].update(gapWidth=900),
+])
+def test_a_malformed_spec_is_not_a_valid_sidecar(mutate):
+    from services.generation_core.native_objects import NativeObjects, NativeObjectsError
+
+    _item, chart = _v4_chart("column")
+    wire = {"schemaVersion": "native-objects/v1", "objects": [json.loads(json.dumps(chart))]}
+    NativeObjects.from_wire(wire)
+    mutate(wire["objects"][0]["svgAppearance"]["serverChartStyle"])
+    with pytest.raises(NativeObjectsError, match="native_chart_appearance_invalid"):
+        NativeObjects.from_wire(wire)
+
+
+# --- Trusted v4: the PPTX chart XML carries the spec -----------------------------------------
+
+_C = "{http://schemas.openxmlformats.org/drawingml/2006/chart}"
+_A = "{http://schemas.openxmlformats.org/drawingml/2006/main}"
+
+
+def _chart_xml(name: str, tmp_path: Path):
+    from tests.unit.test_svg_native_objects_end_to_end import _export, _frames
+
+    page, _record = _page(CASES[name][0])
+    svg, content = _published(page)
+    deck, evidence = _export(tmp_path, [svg], [content])
+    charts = [shape for shape in _frames(deck.slides[0]) if shape.has_chart]
+    assert len(charts) == 1
+    assert evidence["structuralReadback"]["nativeObjects"] == {"offered": 1, "native": 1, "fellBack": 0, "reasons": []}
+    return content["nativeObjects"]["objects"][0], ET.fromstring(charts[0].chart._chartSpace.xml)
+
+
+def _val(node, path):
+    found = node.find(path)
+    return None if found is None else found.get("val")
+
+
+@pytest.mark.parametrize("name", list(CASES))
+def test_every_v4_case_exports_one_native_chart_styled_by_its_spec(name, tmp_path):
+    chart, space = _chart_xml(name, tmp_path)
+    spec, payload = chart["svgAppearance"]["serverChartStyle"], chart["payload"]
+    plot = space.find(f"{_C}chart/{_C}plotArea")
+    series = plot.findall(f".//{_C}ser")
+    assert len(series) == len(payload["series"])
+    # Colours: every series (area included) in the drawing's colour; area fills keep their opacity.
+    if payload["chartType"] in ("pie", "donut"):
+        fills = [_val(point, f"{_C}spPr/{_A}solidFill/{_A}srgbClr") for point in series[0].findall(f"{_C}dPt")]
+        assert fills == [color[1:] for color in payload["series"][0]["pointColors"]]
+    else:
+        fills = [_val(item, f"{_C}spPr/{_A}solidFill/{_A}srgbClr") for item in series]
+        assert fills == [item["color"][1:] for item in payload["series"]]
+    if payload["chartType"] == "area":
+        assert all(_val(item, f"{_C}spPr/{_A}solidFill/{_A}srgbClr/{_A}alpha") == "30000" for item in series)
+    # The page font on every text run.
+    faces = {node.get("typeface") for node in space.iter(f"{_A}latin")}
+    assert faces == {spec["fontFamily"]}
+    # Value axis: bounds, ticks, gridlines and visibility as drawn.
+    if "valueAxis" in spec:
+        axis, value_axis = spec["valueAxis"], plot.find(f"{_C}valAx")
+        assert float(_val(value_axis, f"{_C}scaling/{_C}max")) == axis["maximum"]
+        assert float(_val(value_axis, f"{_C}scaling/{_C}min")) == 0
+        assert (value_axis.find(f"{_C}majorGridlines") is not None) is axis["gridlines"]
+        assert _val(value_axis, f"{_C}delete") == ("0" if axis["visible"] else "1")
+        assert value_axis.find(f"{_C}numFmt").get("formatCode") == axis["numberFormat"]
+        if "majorUnit" in axis:
+            assert float(_val(value_axis, f"{_C}majorUnit")) == axis["majorUnit"]
+    # Labels: shown or not, in the drawing's size, weight and number format.
+    labels = spec["dataLabels"]
+    shown = [_val(node, f"{_C}showVal") for node in plot.iter(f"{_C}dLbls")]
+    if labels["shown"]:
+        assert shown and set(shown) == {"1"}
+        dlbls = next(plot.iter(f"{_C}dLbls"))
+        size = dlbls.find(f".//{_A}defRPr")
+        assert size.get("sz") == str(round(labels["px"] * 0.75 * 100))
+        assert (size.get("b") == "1") is labels["bold"]
+        assert dlbls.find(f"{_C}numFmt").get("formatCode") == labels["numberFormat"]
+    else:
+        assert not shown
+    # Legend: present exactly when drawn.
+    legend = space.find(f"{_C}chart/{_C}legend")
+    assert (legend is not None) is spec["legend"]["visible"]
+    if legend is not None:
+        assert _val(legend, f"{_C}legendPos") == {"top": "t", "right": "r"}[spec["legend"]["position"]]
+    if "holeRatio" in spec:
+        assert _val(plot, f"{_C}doughnutChart/{_C}holeSize") == "58"

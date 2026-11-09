@@ -272,7 +272,8 @@ def _annotate(root: ET.Element, entries: list[tuple[NativeObject, bool]], index:
             _source_table_vertical_padding(root, item, projected, pt_per_px=pt_per_px)
         source_legend = None
         source_underlays = []
-        if item.kind == "chart":
+        if item.kind == "chart" and "serverChartStyle" not in (item.svg_appearance or {}):
+            # A trusted v4 server chart's spec already carries every style its drawing has.
             from services.generation_core.drivers.svg.export_chart_style import apply_drawn_chart_style
             from services.generation_core.drivers.svg.native_geometry import NativeRejection
 
