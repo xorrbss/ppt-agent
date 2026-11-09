@@ -313,3 +313,56 @@ decks out.
 - Occlusion box estimates for text are approximate.
 - A later revision can now draw axis ticks, gridlines and labels on several
   lines, but none does yet.
+
+## Renderer revision four: a designed trusted drawing (2026-11-09)
+
+`svg-server-chart/v4` (`server_chart_v4.py`) is trusted like v3 (`TRUSTED_RENDERERS`)
+and is what fresh admissions freeze (`SERVER_CHART_CURRENT`). v1, v2 and v3 draw
+byte-for-byte what they drew (digest tests unchanged); decks admitted with them keep
+their revision, rule and proofs. Being trusted, v4 is not bound by what the native
+drawing verifier can read, so it draws what v3 could not.
+
+**What v4 draws (decision rules):**
+- **Value axis.** Zero-based, 1-2-5 "nice" ticks (at most six intervals, fewer when the
+  plot is short or the tick labels are wide), light gridlines (horizontal for column,
+  line, area; vertical for bar), tick labels without a unit (only `%` for a `(%)` unit or
+  a percent-stacked chart). Drawn for line and area charts, for two or more series, for
+  seven or more categories, and whenever value labels are hidden or cannot be placed.
+  A single series of at most six categories keeps clean bars with value labels.
+- **Value labels never overprint.** Each label is checked against the bars, points,
+  line segments and labels already drawn. Bars: outside the bar end, else all labels
+  dropped and the axis forced. Stacks: inside the segment, else dropped and the axis forced.
+  One line or area: above its point, else below, else beside it. Several lines: every
+  point labelled (above, below or beside, whichever is free) up to 12 points, else the
+  last point of each line at the right with labels pushed apart, else none.
+- **Palette from the deck.** Saturated, mid-light fills and strokes outside the chart,
+  weighted by painted area (full-canvas backgrounds ignored, near duplicates merged, at
+  most three) lead the series and slice colours, followed by a neutral and shades and
+  tints of the lead accent; eight distinct colours. Declared `pointColors` still win.
+  The palette is recorded in the replay style; the first drawing's colours also land in
+  the declaration's `pointColors`, which is what the replay draws from.
+- **Fallbacks.** The whole chart shrinks from the page body size to the 14 px floor before
+  it is refused. Category names wrap to three lines (at spaces, or between Korean/Chinese
+  characters) and are never rotated, abbreviated or changed. A pie or donut keeps names
+  beside its slices up to six slices; more slices, or names that would collide or not fit,
+  get a legend (swatch, name, value, names wrapped to two lines). Titles wrap to two lines.
+  Zero values draw in clustered bar and column charts (an empty bar with its label).
+- **Replay.** The one layout decision the normalised declaration cannot express (line
+  labels at their ends record `valueLabels.shown` false, like no labels) is recorded in
+  the replay style (`trendLabels`) and forced on replay.
+
+**Refusals that remain:** negative values (the source grounding reads unsigned numbers),
+zero or negative stacked segments and pie slices, a pie with more than one series or
+eight slices, a trend with one category, shape-invalid JSON or non-finite numbers, a box
+below 160x120 px or too small even at 14 px, category names that cannot wrap into three
+lines at the floor (a Latin word wider than its column), and a legend entry wider than
+the box.
+
+**Finding on the way (affects v2 and v3, not changed):** the native converter rejects a
+data-label position on an area chart (`Native PPTX area data labels do not support label
+position`), so a v2/v3 area chart with value labels (recorded position `above`) falls back
+to drawn shapes in the PPTX. v4 records no position for areas. Nothing in the unit tests
+of v2/v3 converts to PPTX; `test_svg_server_chart_v4.py` converts every v4 case.
+
+**Not done yet:** no real-deck measurement; the PNG checks used a serif fallback font
+(widths are the estimator's).
