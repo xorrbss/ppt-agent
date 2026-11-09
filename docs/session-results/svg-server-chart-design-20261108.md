@@ -398,3 +398,49 @@ axes), translucent gridlines (blended to an opaque colour), the separator betwee
 name and its value, per-series label colours in a stack, and a data-label position on a
 doughnut (the converter always writes one). Pie and donut values drawn inside their slices
 keep their place; the slice names drawn beside them become a legend.
+
+## Measurement of revision four, data references and native style (2026-11-09)
+
+**Setup** (`servers/fastapi/scripts/server_chart_eval/`, real `claude-sonnet-5-5`):
+- Three 7-slide chart-heavy Korean prompts (`prompts.json`): business review, consumer survey, library statistics.
+- 3 decks per prompt and arm, each deck on a fresh backend and database, with the chained PPTX export.
+- Prices: $3/$15 per million tokens, assumed, so costs are comparable within this table only.
+- Arms:
+  - author-drawn charts (`SVG_SERVER_CHARTS=off`), V4 and V5;
+  - server charts with the final code (renderer v4 trusted, data references, native style), V4 and V5.
+
+| | Author V4 | Author V5 | Server V4 | Server V5 |
+|---|---|---|---|---|
+| Decks | 9 | 9 | 9 | 9 |
+| Native charts in the PPTX | **1** (0.1/deck) | **0** | **26** (2.9/deck) | **29** (3.2/deck) |
+| Fallback pages (of 63) | 5 (8%) | 30 (48%) | 14 (22%) | 9 (14%) |
+| V5 charts gated on paint evidence | - | 3 (0 proven) | - | 0 (trusted) |
+| Cost per deck (median) | $1.6 | $1.7 | $1.4 | $1.5 |
+| Generation time per deck (median) | 167 s | 167 s | 153 s | 154 s |
+
+**What it shows:**
+- With author-drawn charts, almost no chart becomes native. The prompts state their numbers in prose, without a `chart:` literal, so V4 asks for no declaration. The author draws bars, lines and donuts as plain shapes, which export as pictures.
+- V5 turns those same pages into fallbacks: `drawing_content_unproven`, 34 first-attempt failures.
+- Server charts make nearly every chart native in both revisions, and cost and take a little less.
+- Server V5 needs no paint proof, so its charts export natively at once.
+
+**Why server pages still fell back** (14 in V4, 9 in V5, concentrated in the library prompt):
+1. **Header-band intrusion** (`svg_common_header_body_intrusion`): 7 of the 14 V4 fallbacks have only this failure.
+   - The body box starts at x=64, and authors place the chart box at x=64.
+   - Every axis and gridline the renderer draws from the box edge has a 1-2 px stroke, and half of it falls outside the body box.
+   - The intrusion check exempts centred strokes of rect/circle/ellipse only, not lines.
+   - Fix: a renderer revision that insets stroked lines by half their stroke width inside the box. Not yet published, because a published revision never changes its output.
+2. **Visible-symbol rewriting** (`writing_policy_visible_symbols`), 3 pages per arm, the same page every run.
+   - The source category "강원·제주권" reached the declaration as "강원, 제주권", so grounding failed (`server_chart_value_ungrounded`).
+   - In V5, the rewritten chart text no longer replays from the declaration, so trust was lost and the ordinary proof failed (`drawing_content_unproven`).
+   - Fix: grounding should compare category names with separators normalised, and the writing policy should not rewrite text inside a server chart group (or the replay should apply the same rewrite).
+3. A few `required_text_missing` pages, as in the author arms.
+
+**Spend:**
+- Author arms $31.1, server arms $26.9, and the harness pilot $3.5: about $61.5 in all.
+- Raw results: `/var/tmp/server-chart-eval/{main,server}/` on the measuring VM. These are not preserved in the repository.
+
+**Caveats:**
+- Three prompts, 3 decks per cell.
+- Arms ran at the same time on two backends.
+- Visual quality was checked on rendered samples only, not by the judge.
