@@ -308,11 +308,13 @@ def test_value_labels_carry_a_title_unit_outside_the_v4_unit_list():
     assert quality["failures"] == []
 
 
-def test_admission_pins_server_charts_for_v4_decks_only():
+def test_admission_pins_the_current_trusted_revision_for_v4_and_v5_decks():
     import inspect
     from services import svg_generation_admission
     source = inspect.getsource(svg_generation_admission)
-    assert "get_svg_server_charts_env() and frozen[SNAPSHOT_REVISION_KEY] != REQUIREMENTS_VERSION_V5" in source
+    assert "if get_svg_server_charts_env():\n" in source
+    assert "frozen[SERVER_CHART_KEY] = SERVER_CHART_CURRENT" in source
+    assert "REQUIREMENTS_VERSION_V5:\n" not in source.split("if get_svg_server_charts_env():")[1][:400]
 
 
 # --- Revision two: line, area, pie and donut ------------------------------------------------
@@ -451,7 +453,9 @@ def test_each_deck_gets_the_rule_of_the_revision_it_was_admitted_with():
     rule = server_chart.server_chart_rule({"server_chart_render": V2})
     assert rule == server_chart.SERVER_CHART_RULE_V2 and f'data-chart-render="{V2}"' in rule
     assert server_chart.server_chart_policy({"server_chart_render": V2})
-    assert server_chart.SERVER_CHART_CURRENT == V2
+    v3 = server_chart.server_chart_rule({"server_chart_render": server_chart.SERVER_CHART_REVISION_V3})
+    assert v3 == rule.replace(V2, server_chart.SERVER_CHART_REVISION_V3)
+    assert server_chart.SERVER_CHART_CURRENT == server_chart.SERVER_CHART_REVISION_V3
 
 
 #: Published output of revision two for the families it adds (bar and column are
@@ -472,3 +476,204 @@ def test_revision_two_output_is_frozen(name):
     from services.svg_contract import source_digest
     page, _ = _v2_page(name)
     assert source_digest(page["svg_content"]) == V2_DIGESTS[name]
+
+
+# --- Revision three: trusted by construction (owner decision 2026-11-09) ------------------
+
+from services.generation_core.drivers.svg.chart_paint_verification import (  # noqa: E402
+    gated_chart_ids, verification_manifest, witness_source,
+)
+from services.generation_core.native_objects import NativeObjects  # noqa: E402
+
+V3 = server_chart.SERVER_CHART_REVISION_V3
+SNAPSHOT_V3 = {"server_chart_render": V3}
+
+
+def _v3_page(raw, *, box="64 140 700 460", body="18"):
+    return _extract(_raw_svg(json.loads(json.dumps(raw)), render=V3, box=box).replace(
+        'font-size="36"', f'font-size="{body}"'))
+
+
+def _rebind(page, svg):
+    record = dict(page["nativeDeclarations"])
+    page = {"svg_content": svg}
+    bind_native_declarations(page, svg, record)
+    return page
+
+
+def _trusted(page):
+    return server_chart.trusted_server_chart_ids(page["nativeDeclarations"], page["svg_content"])
+
+
+ALL_CASES = {**{name: raw for name, (raw, _source) in V2_CASES.items()},
+             "sales": SALES, "channels": CHANNELS, "scores": SCORES, "shares": SHARES}
+
+
+@pytest.mark.parametrize("name", list(ALL_CASES))
+def test_revision_three_draws_exactly_revision_two_and_records_its_style(name):
+    raw = ALL_CASES[name]
+    v2, v2_record = _extract(_raw_svg(json.loads(json.dumps(raw)), render=V2))
+    v3, v3_record = _extract(_raw_svg(json.loads(json.dumps(raw)), render=V3))
+    assert v2["svg_content"] == v3["svg_content"]
+    assert v2_record["objects"][0]["raw"] == v3_record["objects"][0]["raw"]
+    assert "style" not in v2_record["objects"][0]
+    assert v3_record["objects"][0]["style"] == {"font": "Noto Sans KR", "ink": "#0F172A", "size": 20.0}
+
+
+@pytest.mark.parametrize("name", list(ALL_CASES))
+def test_a_revision_three_chart_is_trusted_while_its_drawing_replays(name):
+    page, _ = _v3_page(ALL_CASES[name])
+    assert _trusted(page) == {"native-chart-x"}
+    untrusted, _ = _extract(_raw_svg(json.loads(json.dumps(ALL_CASES[name])), render=V2))
+    assert _trusted(untrusted) == frozenset()
+
+
+@pytest.mark.parametrize("edit", ["bar_height", "label_text", "extra_shape", "style_missing", "stale_binding"])
+def test_trust_never_outlives_the_drawing_it_was_granted_for(edit):
+    page, _ = _v3_page(SALES)
+    root = ET.fromstring(page["svg_content"])
+    group = _group(page)
+    if edit == "bar_height":
+        rect = next(node for node in root.iter(NS + "rect") if node.get("fill") == "#2563EB")
+        rect.set("width", str(float(rect.get("width")) - 30))
+    elif edit == "label_text":
+        next(node for node in root.iter(NS + "text") if node.text == "420억원").text = "520억원"
+    elif edit == "extra_shape":
+        next(node for node in root.iter(NS + "g") if node.get("id") == group.get("id")).append(
+            ET.Element(NS + "rect", {"x": "70", "y": "150", "width": "10", "height": "10", "fill": "#000000"}))
+    if edit == "style_missing":
+        record = page["nativeDeclarations"]
+        record["objects"][0].pop("style")
+        assert _trusted(page) == frozenset()
+        return
+    svg = ET.tostring(root, encoding="unicode")
+    if edit == "stale_binding":
+        svg = svg.replace("Title", "Changed title")
+        page["svg_content"] = svg
+        assert _trusted(page) == frozenset()
+        return
+    assert _trusted(_rebind(page, svg)) == frozenset()
+
+
+def test_trust_survives_template_composition_of_the_page():
+    """The frame wraps the body in a translated group, names id-less nodes and adds its own texts."""
+    page, _ = _v3_page(V2_CASES["donut"][0])
+    root = ET.fromstring(page["svg_content"])
+    chart = next(node for node in root.iter(NS + "g") if node.get("id") == "native-chart-x")
+    for index, node in enumerate(chart.iter()):
+        if node is not chart:
+            node.set("id", f"body-node-{index}")
+    root.remove(chart)
+    body = ET.SubElement(root, NS + "g", {"id": "svg-system-template-body", "transform": "translate(0,40)"})
+    body.append(chart)
+    for size in ("40", "40", "40"):
+        ET.SubElement(root, NS + "text", {"x": "1100", "y": "40", "font-size": size,
+                                          "font-family": "Frame Sans", "fill": "#FF0000"}).text = "frame"
+    assert _trusted(_rebind(page, ET.tostring(root, encoding="unicode"))) == {"native-chart-x"}
+
+
+AREA_MAN = ({"chartType": "area", "categories": ["2022년", "2023년", "2024년"],
+             "series": [{"name": "방문자", "values": [40, 55, 70]}], "title": "방문자 (만명)"},
+            "chart: 방문자: 2022년 40만명, 2023년 55만명, 2024년 70만명")
+
+
+@pytest.mark.parametrize("name", [*V2_CASES, "area_man"])
+def test_v5_accepts_trusted_charts_without_drawing_or_paint_proof(name):
+    raw, source = AREA_MAN if name == "area_man" else V2_CASES[name]
+    page, _ = _v3_page(raw)
+    quality = {"passed": True, "failures": []}
+    apply_requested_native_quality(quality, page, page["svg_content"], source, pt_per_px=.75, revision=V5,
+                                   paint_deferred=True)
+    assert quality["failures"] == []
+    assert "native-chart-x" not in quality["requestedNativeObjects"]["paintEvidence"]
+
+
+@pytest.mark.parametrize("revision", [V4, V5])
+def test_a_trusted_chart_must_still_match_the_source_literal(revision):
+    raw, source = V2_CASES["pie"]
+    page, _ = _v3_page(raw)
+    quality = {"passed": True, "failures": []}
+    apply_requested_native_quality(quality, page, page["svg_content"], source.replace("30%", "35%"),
+                                   pt_per_px=.75, revision=revision, paint_deferred=True)
+    assert [item["kind"] for item in quality["failures"]] == ["native_requested_chart_missing"]
+
+
+def _published_content(page):
+    wire, _summary = page_native_objects(page, pt_per_px=.75, revision=V5)
+    content = {"nativeObjects": wire, **{key: value for key, value in page.items() if key != "svg_content"}}
+    witness = witness_source(page, page["svg_content"], revision=V5)
+    content["nativeChartWitnessSource"] = witness
+    return content, NativeObjects.from_wire(wire)
+
+
+def test_the_export_does_not_wait_for_paint_evidence_of_a_trusted_chart():
+    page, _ = _v3_page(V2_CASES["donut"][0])
+    content, sidecar = _published_content(page)
+    assert gated_chart_ids(content, sidecar, revision=V5, svg=page["svg_content"]) == []
+    assert verification_manifest(content, page["svg_content"]) is None
+    untrusted, _ = _extract(_raw_svg(json.loads(json.dumps(V2_CASES["donut"][0])), render=V2))
+    content, sidecar = _published_content(untrusted)
+    assert gated_chart_ids(content, sidecar, revision=V5, svg=untrusted["svg_content"]) == ["native-chart-x"]
+
+
+def test_a_trusted_chart_is_projected_from_its_declaration_even_if_the_drawing_proof_rejects(monkeypatch):
+    from services.generation_core.drivers.svg import native_publish
+    from services.generation_core.drivers.svg.native_geometry import NativeRejection
+
+    def reject(*_args, **_kwargs):
+        raise NativeRejection("native_chart_text_unaccounted")
+    monkeypatch.setattr(native_publish, "chart_object", reject)
+    page, _ = _v3_page(SALES)
+    wire, summary = page_native_objects(page, pt_per_px=.75, revision=V4)
+    (chart,) = wire["objects"]
+    assert chart["anchor"] == {"x": 64.0, "y": 140.0, "width": 700.0, "height": 460.0}
+    assert chart["payload"]["series"][0]["values"] == [420, 315, 268, 142]
+    untrusted, _ = _extract(_raw_svg(json.loads(json.dumps(SALES)), render=V2))
+    wire, summary = page_native_objects(untrusted, pt_per_px=.75, revision=V4)
+    assert wire is None and summary["dropped"][0]["reason"] == "native_chart_text_unaccounted"
+
+
+def _admission(page, snapshot=SNAPSHOT_V3):
+    quality = {"passed": True, "failures": []}
+    server_chart.apply_server_chart_admission(quality, page, page["svg_content"], snapshot)
+    return quality
+
+
+def _with(page, element, *, before=False):
+    root = ET.fromstring(page["svg_content"])
+    if before:
+        root.insert(0, element)
+    else:
+        root.append(element)
+    return _rebind(page, ET.tostring(root, encoding="unicode"))
+
+
+def test_something_painted_over_a_trusted_chart_is_a_layout_failure():
+    page, _ = _v3_page(SALES)
+    assert _admission(page) == {"passed": True, "failures": []}
+    note = ET.Element(NS + "text", {"x": "300", "y": "300", "font-size": "18", "fill": "#0F172A"})
+    note.text = "callout"
+    quality = _admission(_with(page, note))
+    assert quality["passed"] is False and quality["failures"][0]["kind"] == server_chart.OCCLUDED_KIND
+    from services.generation_core.quality.page_failure_kind import LAYOUT_FAILURE_KINDS
+    assert server_chart.OCCLUDED_KIND in LAYOUT_FAILURE_KINDS
+
+
+def test_backgrounds_and_elements_outside_the_box_do_not_occlude():
+    page, _ = _v3_page(SALES)
+    panel = ET.Element(NS + "rect", {"x": "40", "y": "120", "width": "760", "height": "500", "fill": "#F1F5F9"})
+    assert _admission(_with(page, panel, before=True))["failures"] == []
+    aside = ET.Element(NS + "rect", {"x": "900", "y": "140", "width": "200", "height": "200", "fill": "#2563EB"})
+    assert _admission(_with(page, aside))["failures"] == []
+    rotated = ET.Element(NS + "g", {"transform": "rotate(5)"})
+    ET.SubElement(rotated, NS + "rect", {"x": "300", "y": "300", "width": "50", "height": "50", "fill": "#000000"})
+    assert _admission(_with(page, rotated))["failures"] == []
+
+
+def test_a_server_chart_must_name_the_revision_its_deck_was_admitted_with():
+    v2_page, _ = _extract(_raw_svg(json.loads(json.dumps(SALES)), render=V2))
+    assert _admission(v2_page)["failures"][0]["reason"] == "server_chart_revision_not_admitted"
+    v3_page, _ = _v3_page(SALES)
+    assert _admission(v3_page, {"server_chart_render": V2})["failures"][0]["reason"] == (
+        "server_chart_revision_not_admitted")
+    assert _admission(v2_page, {"server_chart_render": V2})["failures"] == []

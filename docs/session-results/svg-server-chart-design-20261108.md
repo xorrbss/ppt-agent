@@ -257,3 +257,59 @@ author rule (`server_chart_rule` dispatches on the frozen revision).
 - V5 decks stay excluded (the unit grammar does not read 만명 or 점).
 - The PPTX colour of an area series is the exporter's default: the
   existing `_series_colors` reads colours for bar, column and line only.
+
+## Renderer revision three: trusted by construction (2026-11-09)
+
+**Decision (owner, 2026-11-09):** option A1 for V4 and V5 decks. A server chart
+is accepted by construction instead of by a drawing proof.
+
+**Why.** The drawing proofs (V4 static geometry, V5 content geometry and the
+55-105 s Chrome paint proof) exist because an author writes the drawing and the
+JSON separately. A server chart's drawing is a deterministic function of its
+JSON, so the proofs re-establish a known fact. They also bound the renderer to
+the verifier's rules (no axis ticks, no labels on several lines) and kept V5
+decks out.
+
+**What replaces the proof** (`server_chart.py`):
+1. **Replay identity** (`trusted_server_chart_ids`). A v3 declaration records
+   the page style it was drawn with (`style`: font, ink, body size). A chart is
+   trusted only while its group in the page holds exactly what the renderer
+   draws again from the stored declaration and style, and the record is bound
+   to the page. An `id` the replay did not draw is ignored, because template
+   composition names every id-less body node. An edited, moved or stale drawing
+   takes the ordinary proof again. Trust never outlives the drawing it was
+   granted for.
+2. **Declaration matching.** A `chart:` source literal is matched against the
+   chart's declaration (`_chart_matches`, as V4 does), not against a proof.
+3. **Grounding**, unchanged: each value must be stated next to its category.
+4. **Occlusion** (`server_chart_occlusions`, layout failure
+   `server_chart_occluded`). An element painted after the chart whose box
+   overlaps the chart box. Backgrounds painted before the chart never count.
+   Elements under a non-translation transform are skipped (a miss is preferred
+   to a false alarm).
+5. **Admitted revision.** A server chart whose marker is not the deck's frozen
+   revision fails (`server_chart_revision_not_admitted`) whenever either side
+   is trusted. Trust is never taken from a marker the deck was not admitted
+   with.
+
+**Where trust applies:**
+- Requirement checks (`apply_requested_native_quality`): trusted charts are
+  excluded from drawing evidence and paint evidence.
+- V5 pre-render numeric claims.
+- Projection (`page_native_objects`): if the drawing proof rejects a trusted
+  chart, its payload comes from the declaration. The current drawing passes
+  the proof, so this only matters for a later revision.
+- Export gating (`gated_chart_ids`, `verification_manifest`): a trusted chart
+  is never gated on paint evidence, and the capture never walks it.
+
+**Compatibility.**
+- v3 draws byte-for-byte what v2 draws (tested for every case).
+- No stored deck carries a v3 marker, and decks admitted with v1/v2 keep their
+  revision, rule and proofs. The verifier ledgers were re-pinned as reviewed
+  states for that reason.
+
+**Not done yet:**
+- No real-deck measurement.
+- Occlusion box estimates for text are approximate.
+- A later revision can now draw axis ticks, gridlines and labels on several
+  lines, but none does yet.

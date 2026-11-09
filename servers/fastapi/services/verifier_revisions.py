@@ -318,6 +318,12 @@ COMMON_HEADER_VERIFIER_LEDGER = VerifierRevisionLedger(
         # percent-stacked server charts, and undeclared bar/column charts recorded as the
         # layout failure undeclared_chart_drawn with a declare hint. Other decks unchanged.
         "sha256:ee408d01f37bd96b23b6a4a4514bcd8e8d111e4e9707fcc9029bcafbf353efc4": "svg-common-header-verifier/1",
+        # 2026-11-09: server chart prototype only (SVG_SERVER_CHARTS decks): renderer revision
+        # svg-server-chart/v3 is trusted by construction (owner decision): a v3 chart whose
+        # drawing replays from its declaration skips the drawing and paint proofs, and its
+        # deck checks occlusion and the admitted revision instead. No stored deck carries a
+        # v3 marker, so every stored page keeps its interpretation.
+        "sha256:238c3731603432bf2d0804e792b406f3ecba975477041b02951c0bdc087216e4": "svg-common-header-verifier/1",
     }),
 )
 
@@ -472,6 +478,12 @@ WHOLE_PAGE_VERIFIER_LEDGER = VerifierRevisionLedger(
         # frozen renderer revision), stored box, placeholder view for correction prompts and
         # category/series association grounding. Raw responses without the marker are unchanged.
         "d951f920c7a1731ef47960830ebfe543b9288464b1d6df5aab1ce5f7aae9be7c": "svg-whole-page-verifier/1",
+        # 2026-11-09: server chart prototype only (SVG_SERVER_CHARTS decks): renderer revision
+        # svg-server-chart/v3 is trusted by construction (owner decision): a v3 chart whose
+        # drawing replays from its declaration skips the drawing and paint proofs, and its
+        # deck checks occlusion and the admitted revision instead. No stored deck carries a
+        # v3 marker, so every stored page keeps its interpretation.
+        "08ddd5e164a7c475be445d340336056a143eee47522fa5d244a7061c7423ba55": "svg-whole-page-verifier/1",
     }),
 )
 
@@ -698,6 +710,12 @@ PARTIAL_RECOVERY_CODE_LEDGER = VerifierRevisionLedger(
         # percent-stacked server charts, and undeclared bar/column charts recorded as the
         # layout failure undeclared_chart_drawn with a declare hint. Other decks unchanged.
         "de9c46b30bb7303d4807ba3d8ebe5658fd7ee60819ea508022919346dfbf505d": "svg-partial-recovery-code/1",
+        # 2026-11-09: server chart prototype only (SVG_SERVER_CHARTS decks): renderer revision
+        # svg-server-chart/v3 is trusted by construction (owner decision): a v3 chart whose
+        # drawing replays from its declaration skips the drawing and paint proofs, and its
+        # deck checks occlusion and the admitted revision instead. No stored deck carries a
+        # v3 marker, so every stored page keeps its interpretation.
+        "f2afbfaf458c700fa4705da0b472c2aa7ce20fd6b647cfa0bbfba6eb7b1edcfa": "svg-partial-recovery-code/1",
     }),
 )
 
@@ -835,6 +853,12 @@ PAGE_RENDER_CODE_LEDGER = VerifierRevisionLedger(
         # percent-stacked server charts, and undeclared bar/column charts recorded as the
         # layout failure undeclared_chart_drawn with a declare hint. Other decks unchanged.
         "b9d94004927243d65c32550317edf89d2c95e1e0fece14f7a30e06fda2998c06": "svg-page-render-code/1",
+        # 2026-11-09: server chart prototype only (SVG_SERVER_CHARTS decks): renderer revision
+        # svg-server-chart/v3 is trusted by construction (owner decision): a v3 chart whose
+        # drawing replays from its declaration skips the drawing and paint proofs, and its
+        # deck checks occlusion and the admitted revision instead. No stored deck carries a
+        # v3 marker, so every stored page keeps its interpretation.
+        "2b2e046a00cec4549e24a18b280c042a06bca81f78698e26de773be6d34aed75": "svg-page-render-code/1",
     }),
 )
 

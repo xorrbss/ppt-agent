@@ -219,13 +219,14 @@ def extract_native_declarations(root: ET.Element) -> dict | None:
                 BOX_ATTRIBUTE, RENDER_ATTRIBUTE, ServerChartUnsupported, render_server_chart,
             )
             try:
-                revision, box = render_server_chart(root, node, raw)
+                revision, box, extras = render_server_chart(root, node, raw)
             except ServerChartUnsupported as error:
                 node.attrib.pop(RENDER_ATTRIBUTE, None)
                 node.attrib.pop(BOX_ATTRIBUTE, None)
                 _drop(dropped, node, kind, str(error))
                 continue
-            objects.append({"id": node.get("id"), "kind": kind, "raw": raw, "render": revision, "box": box})
+            objects.append({"id": node.get("id"), "kind": kind, "raw": raw, "render": revision, "box": box,
+                            **extras})
             continue
         objects.append({"id": node.get("id"), "kind": kind, "raw": raw})
     return {"objects": objects, "dropped": dropped}

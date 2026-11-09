@@ -154,7 +154,7 @@ def slide_chart_paint_pending(slide, *, revision) -> bool:
     content, svg = slide.content or {}, slide.svg_content
     properties = getattr(slide, "properties", None)
     properties = properties if isinstance(properties, dict) else {}
-    return bool(gated_chart_ids(content, _sidecar(content), revision=revision)
+    return bool(gated_chart_ids(content, _sidecar(content), revision=revision, svg=svg)
                 and current_paint_evidence(properties, content, svg) is None)
 
 
@@ -201,7 +201,8 @@ async def deck_chart_paint_fallbacks(session_factory, *, presentation, slides,
     verified = {}
     if remaining_seconds is not None:
         pending = [slide for slide in slides
-                   if gated_chart_ids(slide.content or {}, _sidecar(slide.content or {}), revision=revision)
+                   if gated_chart_ids(slide.content or {}, _sidecar(slide.content or {}), revision=revision,
+                                      svg=slide.svg_content)
                    and current_paint_evidence(properties_of(slide), slide.content or {}, slide.svg_content) is None]
         for slide in order_by_verification_cost(pending):
             if remaining_seconds() < capture_timeout + CLIENT_GRACE_SECONDS + EXPORT_RESERVE_SECONDS:

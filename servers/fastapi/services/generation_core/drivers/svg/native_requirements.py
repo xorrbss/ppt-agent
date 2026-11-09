@@ -433,11 +433,20 @@ def required_numeric_claims_with_native_charts(content: str, payload: dict, svg:
             return legacy
         from services.generation_core.drivers.svg.native_chart_evidence import chart_drawing_evidence
 
+        from services.generation_core.drivers.svg.native_declarations import bound_declarations
+        from services.generation_core.drivers.svg.server_chart import trusted_server_chart_ids
+
         evidence = chart_drawing_evidence(payload, svg, revision=revision)
+        record, _ = bound_declarations(payload, svg)
+        trusted = {item["id"]: item["raw"] for item in (record or {}).get("objects") or []
+                   if isinstance(item, dict) and item.get("id") in trusted_server_chart_ids(record, svg)}
         candidates = []
         for expected in requested:
-            matches = []
+            # A trusted server chart draws its declaration by construction.
+            matches = [identifier for identifier, raw in trusted.items() if _chart_matches(raw, expected)]
             for identifier, proof in evidence.items():
+                if identifier in trusted:
+                    continue
                 if proof.get("missingLabels") or proof.get("contentGeometry", {}).get("passed") is not True:
                     continue
                 chart = proof["chart"]
@@ -509,11 +518,18 @@ def apply_requested_native_quality(quality: dict, payload: dict, svg: str, conte
                                    declared_chart_only: bool = False, paint_deferred: bool = False) -> None:
     requirements = requested_native_data(content, revision)
     declared_charts = []
+    from services.generation_core.drivers.svg.native_declarations import PAYLOAD_KEY, bound_declarations
+    from services.generation_core.drivers.svg.server_chart import trusted_server_chart_ids
+    record, _ = bound_declarations(payload, svg)
+    # Trusted server charts are accepted by construction: no drawing or paint proof,
+    # and a source literal is matched against the declaration itself.
+    trusted = trusted_server_chart_ids(record, svg)
+    proof_payload = payload if not trusted else {**payload, PAYLOAD_KEY: {
+        **record, "objects": [item for item in record.get("objects") or []
+                              if not (isinstance(item, dict) and item.get("id") in trusted)]}}
     if revision == REQUIREMENTS_VERSION_V5:
-        from services.generation_core.drivers.svg.native_declarations import bound_declarations
-        record, _ = bound_declarations(payload, svg)
         declared_charts = [item for item in [*(record or {}).get("objects", []), *(record or {}).get("dropped", [])]
-                           if isinstance(item, dict) and item.get("kind") == "chart"]
+                           if isinstance(item, dict) and item.get("kind") == "chart" and item.get("id") not in trusted]
         if declared_charts and not requirements:
             requirements = {"version": revision, "tables": [], "charts": []}
     if not requirements:
@@ -529,7 +545,7 @@ def apply_requested_native_quality(quality: dict, payload: dict, svg: str, conte
         from services.generation_core.drivers.svg.native_chart_evidence import (
             chart_drawing_evidence, chart_projection_diagnostics, chart_value_differences,
         )
-        evidence = chart_drawing_evidence(payload, svg, revision=revision,
+        evidence = chart_drawing_evidence(proof_payload, svg, revision=revision,
             **({"measurement": quality, "render_capture": render_capture, "post_render": post_render,
                 **({"paint_deferred": True} if paint_deferred else {})}
                if revision == REQUIREMENTS_VERSION_V5 else {}))
@@ -631,7 +647,8 @@ def apply_requested_native_quality(quality: dict, payload: dict, svg: str, conte
             failures.append({"kind": "native_requested_chart_unsupported", **expected})
             continue
         match = next((entry for entry in remaining if entry["kind"] == "chart"
-                      and (v5_proven(evidence.get(entry["id"]), expected) if revision == REQUIREMENTS_VERSION_V5
+                      and (v5_proven(evidence.get(entry["id"]), expected)
+                           if revision == REQUIREMENTS_VERSION_V5 and entry["id"] not in trusted
                            else _chart_matches(entry["payload"], expected))), None)
         if match is None:
             # A native annotation is optional only after the bound declaration
