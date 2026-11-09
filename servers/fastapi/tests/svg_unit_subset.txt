@@ -247,6 +247,7 @@ tests/unit/test_env_settings_authored_vnext.py
 tests/unit/test_export_canvas_sizes.py
 tests/unit/test_export_cookie_header.py
 tests/unit/test_generate_authored_style_samples.py
+tests/unit/test_generation_core_admission_strategy.py
 tests/unit/test_generation_core_asset_offer.py
 tests/unit/test_header_contract_canvas.py
 tests/unit/test_icon_concepts.py

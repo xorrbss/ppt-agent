@@ -7,7 +7,10 @@ render, and export execution remains owned by the workspace worker boundary.
 from __future__ import annotations
 
 from services.source_images.budget import source_image_admission_budget
-from services.generation_core.admission.strategy import resolve_generation_strategy
+from services.generation_core.admission.strategy import (
+    removed_generation_strategy_code,
+    resolve_generation_strategy,
+)
 
 from services.public_generation_route import (
     effective_generation_engine as _effective_generation_engine,
@@ -311,13 +314,21 @@ async def _resolve_generation_route_receipt(
     slide_count: int,
     resolver: GenerationRouteResolver | None,
 ) -> GenerationRouteReceiptV1:
+    removed_strategy = removed_generation_strategy_code(request)
+    if removed_strategy is not None:
+        # Authored generation (and its deck-ir engine) was removed on
+        # 2026-11-09; no public request may select it.
+        raise _public_error(422, removed_strategy)
     if resolve_generation_strategy(request) == "svg":
+        from fastapi import HTTPException
         from services.svg_generation_admission import require_svg_creation_admission
 
-        # A no-op unless ``strategy`` was explicit -- an omitted strategy that
-        # resolved to svg here already passed the same admission check inside
-        # the resolver itself (silent authored fallback otherwise).
-        require_svg_creation_admission(request)
+        # Explicit svg and omitted strategy alike: a request svg admission
+        # rejects is a 422 with the violation's own code, never a fallback.
+        try:
+            require_svg_creation_admission(request)
+        except HTTPException as error:
+            raise _public_error(error.status_code, str(error.detail)) from error
         payload = {
             "schemaVersion": "generation-route-receipt/v1",
             "requestedMode": request.generation_mode,
@@ -763,6 +774,11 @@ class SqlPublicV2Orchestrator:
                     actor=actor,
                     request_hash=request_hash,
                 )
+            removed_strategy = removed_generation_strategy_code(request)
+            if removed_strategy is not None:
+                # Authored generation was removed on 2026-11-09: refuse it
+                # before any reference, source or admission work.
+                raise _public_error(422, removed_strategy)
 
             reference_ids: list[uuid.UUID] = []
             for value in request.reference_snapshot_ids:
@@ -824,10 +840,13 @@ class SqlPublicV2Orchestrator:
             )
             if resolve_generation_strategy(internal_request) == "svg":
                 from services.svg_generation_admission import pin_fresh_common_header_mode, require_svg_creation_admission
+                from fastapi import HTTPException
                 try:
                     pin_fresh_common_header_mode(internal_request)
                     require_svg_creation_admission(internal_request)
                     seal_new_external_header_title_plan(internal_request)
+                except HTTPException as error:
+                    raise _public_error(error.status_code, str(error.detail)) from error
                 except ValueError as error:
                     raise _public_error(422, str(error)) from error
             if svg_authoring_profile is not None or svg_stage_plan is not None:

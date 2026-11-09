@@ -204,12 +204,12 @@ class PresentationGenerationRequestV2(PublicWireModel):
 
     @model_validator(mode="after")
     def reject_retired_deck_ir_engine_selection(self) -> "PresentationGenerationRequestV2":
-        # "deck-ir" is retired as an explicit client choice on the public wire
-        # contract. The server's internal auto-routing to that engine
-        # (services.public_generation_route.effective_generation_engine) is a
-        # separate, server-owned decision that never reads this field back.
+        # "deck-ir" ran authored generation, removed on 2026-11-09. The literal
+        # stays in the field type so the wire shape is unchanged, but asking
+        # for it fails with the same code as an explicit authored strategy
+        # (which admission rejects: services.public_v2_orchestrator).
         if self.generation_engine == "deck-ir":
-            raise ValueError("generation_engine_deck_ir_retired")
+            raise ValueError("authored_strategy_removed")
         return self
 
     @model_validator(mode="after")

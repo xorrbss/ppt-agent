@@ -1,4 +1,11 @@
-"""API admission coverage for the private exact-reconstruction rollout."""
+"""API admission for authored requests after the authored-generation removal.
+
+Exact-reconstruction presets used to be admitted (or refused with a stable
+4xx) on the authored path. Authored generation was removed on 2026-11-09, so
+every entry point now refuses an authored request with
+``authored_strategy_removed`` before any style, preset or durable work, and a
+job staged with authored before the removal fails the same way in the worker.
+"""
 
 import asyncio
 from types import SimpleNamespace
@@ -14,15 +21,22 @@ from models.generate_presentation_request import GeneratePresentationRequest
 from utils.authored_styles import AuthoredExactReconstructionUnavailableError
 
 
-def _authored_request(*, style: str = "private-exact") -> GeneratePresentationRequest:
+def _authored_request(*, style: str = "private-exact", template: str = "authored") -> GeneratePresentationRequest:
     return GeneratePresentationRequest(
         content="Generate an authored deck",
-        # An omitted strategy resolves to svg (CLAUDE.md, "Two generation
-        # pipelines"); exact-preset admission is an authored-path concern.
         strategy="authored",
-        template="authored",
+        template=template,
         authored_style=style,
     )
+
+
+def _refuse_style_resolution(monkeypatch):
+    """Fail the test if anything resolves the authored style (exact preset)."""
+
+    def resolve(_style_id):
+        raise AssertionError("authored style resolution must not run for a removed strategy")
+
+    monkeypatch.setattr(generation_pipeline, "resolve_authored_style", resolve)
 
 
 class _RecordingSession:
@@ -45,84 +59,69 @@ class _RecordingBackgroundTasks:
         self.calls.append((args, kwargs))
 
 
+def _assert_removed(error: HTTPException) -> None:
+    assert error.status_code == 422
+    assert error.detail == "authored_strategy_removed"
+
+
 @pytest.mark.parametrize(
-    ("reason", "status", "detail"),
+    "request_factory",
     [
-        ("Exact reconstruction style 'private-exact' is disabled or not allow-listed", 403, "authored_exact_reconstruction_unavailable"),
-        ("Exact reconstruction style 'private-exact' failed preset validation", 422, "authored_exact_reconstruction_invalid"),
+        lambda: _authored_request(),
+        lambda: _authored_request(style="typo-or-legacy-style"),
+        lambda: _authored_request(style="default", template="adaptive"),
     ],
 )
-def test_exact_admission_returns_stable_non_private_4xx(monkeypatch, reason, status, detail):
-    monkeypatch.setattr(
-        generation_pipeline,
-        "resolve_authored_style",
-        lambda _style_id: (_ for _ in ()).throw(
-            AuthoredExactReconstructionUnavailableError(reason)
-        ),
-    )
-
+def test_validation_rejects_authored_before_any_style_or_preset_admission(monkeypatch, request_factory):
+    _refuse_style_resolution(monkeypatch)
     with pytest.raises(HTTPException) as exc:
-        asyncio.run(generation_pipeline.check_if_api_request_is_valid(_authored_request(), None))
-
-    assert exc.value.status_code == status
-    assert exc.value.detail == detail
-    assert "private-exact" not in exc.value.detail
-    assert "source" not in exc.value.detail
+        asyncio.run(generation_pipeline.check_if_api_request_is_valid(request_factory(), None))
+    _assert_removed(exc.value)
 
 
-def test_exact_admission_happens_before_async_job_or_background_task(monkeypatch):
-    """An unadmissible bare generate must not mint a deck, job or task.
-
-    The seam this protects used to be the removed ``force_legacy_dispatch``
-    parameter. It is now the ordering inside ``queue_presentation_generation``
-    itself: a request that carries no ``presentation_id`` has no workspace
-    operation to project a rejection onto, so exact-preset admission runs
-    before the workspace bootstrap rather than after it. A request that does
-    carry one keeps the deferred ordering, so its rejection lands on the
-    operation's timeline card.
-    """
-
-    monkeypatch.setattr(
-        generation_pipeline,
-        "resolve_authored_style",
-        lambda _style_id: (_ for _ in ()).throw(
-            AuthoredExactReconstructionUnavailableError(
-                "Exact reconstruction style 'private-exact' is disabled or not allow-listed"
-            )
-        ),
-    )
+def test_async_admission_rejects_authored_before_any_job_or_background_task(monkeypatch):
+    _refuse_style_resolution(monkeypatch)
     session = _RecordingSession()
     tasks = _RecordingBackgroundTasks()
 
     with pytest.raises(HTTPException) as exc:
         asyncio.run(
             generation_pipeline.queue_presentation_generation(
-                # No ``presentation_id``: nothing durable exists for this
-                # request yet, which is exactly the case that must fail first.
                 _authored_request(),
                 tasks,
                 session,
             )
         )
 
-    assert exc.value.status_code == 403
-    assert exc.value.detail == "authored_exact_reconstruction_unavailable"
+    _assert_removed(exc.value)
     assert session.added == []
     assert session.commits == 0
     assert tasks.calls == []
 
 
-def test_sync_endpoint_rejects_exact_before_generation_handler(monkeypatch):
-    monkeypatch.setattr(
-        generation_pipeline,
-        "resolve_authored_style",
-        lambda _style_id: (_ for _ in ()).throw(
-            AuthoredExactReconstructionUnavailableError(
-                "Exact reconstruction style 'private-exact' is disabled or not allow-listed"
+def test_async_route_rejects_explicit_authored_with_the_removal_code(monkeypatch):
+    _refuse_style_resolution(monkeypatch)
+    monkeypatch.setattr(endpoint, "_require_local_legacy_async_generation", lambda *_args: None)
+    session = _RecordingSession()
+    session.get_bind = lambda: None
+    request_http = SimpleNamespace(state=SimpleNamespace(request_id="authored-async"), headers={}, cookies={})
+
+    with pytest.raises(HTTPException) as exc:
+        asyncio.run(
+            endpoint.generate_presentation_async(
+                request_http, _authored_request(), _RecordingBackgroundTasks(),
+                idempotency_key=None, sql_session=session,
             )
-        ),
-    )
+        )
+
+    _assert_removed(exc.value)
+    assert session.added == []
+
+
+def test_sync_endpoint_rejects_authored_before_validation_or_generation(monkeypatch):
+    validate = AsyncMock()
     handler = AsyncMock()
+    monkeypatch.setattr(generation_pipeline, "check_if_api_request_is_valid", validate)
     monkeypatch.setattr(generation_pipeline, "generate_presentation_handler", handler)
     request_http = SimpleNamespace(state=SimpleNamespace(request_id=None), headers={}, cookies={})
 
@@ -133,47 +132,9 @@ def test_sync_endpoint_rejects_exact_before_generation_handler(monkeypatch):
             )
         )
 
-    assert exc.value.status_code == 403
-    assert exc.value.detail == "authored_exact_reconstruction_unavailable"
+    _assert_removed(exc.value)
+    validate.assert_not_awaited()
     handler.assert_not_awaited()
-
-
-def test_unknown_ordinary_authored_style_keeps_default_compatibility(monkeypatch):
-    resolved = []
-
-    def fake_resolve(style_id):
-        resolved.append(style_id)
-        return SimpleNamespace(reference_mode="style_reference")
-
-    monkeypatch.setattr(generation_pipeline, "resolve_authored_style", fake_resolve)
-    request = _authored_request(style="typo-or-legacy-style")
-
-    asyncio.run(generation_pipeline.check_if_api_request_is_valid(request, None))
-
-    assert resolved == ["typo-or-legacy-style"]
-    assert request.template == "authored"
-
-
-def test_style_reference_request_does_not_expose_or_change_reference_contract(monkeypatch):
-    resolved = []
-    monkeypatch.setattr(
-        generation_pipeline,
-        "resolve_authored_style",
-        lambda style_id: resolved.append(style_id)
-        or SimpleNamespace(reference_mode="style_reference"),
-    )
-    request = GeneratePresentationRequest(
-        content="Generate a standard authored deck",
-        strategy="authored",
-        template="adaptive",
-        authored_style="default",
-    )
-
-    asyncio.run(generation_pipeline.check_if_api_request_is_valid(request, None))
-
-    assert request.template == "authored"
-    assert resolved == ["default"]
-    assert "reference_mode" not in request.model_dump(mode="json")
 
 
 class _WorkerSession:
@@ -208,7 +169,7 @@ class _SessionFactory:
         return False
 
 
-def test_worker_revalidation_sets_safe_exact_error_status(monkeypatch):
+def test_worker_fails_a_staged_authored_exact_job_with_the_removal_code(monkeypatch):
     job_id = uuid.uuid4()
     task_id = "exact-task"
     job = SimpleNamespace(
@@ -221,7 +182,8 @@ def test_worker_revalidation_sets_safe_exact_error_status(monkeypatch):
     session = _WorkerSession(job, status)
     monkeypatch.setattr(generation_pipeline, "async_session_maker", lambda: _SessionFactory(session))
     monkeypatch.setattr(generation_pipeline, "claim_generation_job", AsyncMock(return_value=(task_id, "lease")))
-    monkeypatch.setattr(generation_pipeline, "finalize_generation_job", AsyncMock())
+    finalize = AsyncMock()
+    monkeypatch.setattr(generation_pipeline, "finalize_generation_job", finalize)
     monkeypatch.setattr(generation_pipeline, "release_generation_job", AsyncMock())
     monkeypatch.setattr(
         generation_pipeline,
@@ -244,19 +206,23 @@ def test_worker_revalidation_sets_safe_exact_error_status(monkeypatch):
 
     handler.assert_not_awaited()
     assert status.status == "error"
-    assert status.error["status_code"] == 403
-    assert status.error["detail"] == "authored_exact_reconstruction_unavailable"
+    assert status.error["status_code"] == 422
+    assert status.error["code"] == "authored_strategy_removed"
+    assert status.error["detail"] == "authored_strategy_removed"
     assert "private-exact" not in str(status.error)
+    assert finalize.await_args.kwargs == {"succeeded": False}
 
 
-def test_sync_endpoint_refuses_svg_before_validation_or_provider_work(monkeypatch):
-    # The svg driver needs the durable generation job the inline endpoint lacks.
+@pytest.mark.parametrize("strategy", ["svg", None])
+def test_sync_endpoint_refuses_svg_before_validation_or_provider_work(monkeypatch, strategy):
+    # The svg driver needs the durable generation job the inline endpoint
+    # lacks; an omitted strategy is svg too.
     validate = AsyncMock()
     handler = AsyncMock()
     monkeypatch.setattr(generation_pipeline, "check_if_api_request_is_valid", validate)
     monkeypatch.setattr(generation_pipeline, "generate_presentation_handler", handler)
     request_http = SimpleNamespace(state=SimpleNamespace(request_id=None), headers={}, cookies={})
-    request = GeneratePresentationRequest(content="Generate an svg deck", template="authored", strategy="svg")
+    request = GeneratePresentationRequest(content="Generate an svg deck", template="authored", strategy=strategy)
 
     with pytest.raises(HTTPException) as exc:
         asyncio.run(endpoint.generate_presentation_sync(request_http, request, _RecordingSession()))

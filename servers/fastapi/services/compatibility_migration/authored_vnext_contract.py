@@ -174,9 +174,15 @@ def _requested_driver(request: object) -> str:
 
 
 def require_authored_vnext_creation_admission(request: object) -> None:
-    """Reject legacy/template-v2 creation without touching durable state."""
+    """Reject legacy/template-v2 creation without touching durable state.
 
-    if getattr(request, "strategy", None) == "svg":
+    svg is the only generation strategy since authored generation was removed
+    (2026-11-09): an omitted or explicit svg strategy goes through svg
+    admission, and an explicit authored one is rejected there with
+    ``authored_strategy_removed``.
+    """
+
+    if getattr(request, "strategy", None) in (None, "svg", "authored"):
         from services.svg_generation_admission import require_svg_creation_admission
 
         require_svg_creation_admission(request)

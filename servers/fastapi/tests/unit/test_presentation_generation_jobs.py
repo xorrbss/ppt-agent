@@ -542,7 +542,8 @@ def test_restart_reconciliation_recovers_only_abandoned_attempts(
     asyncio.run(scenario())
 
 
-def test_worker_restores_correlation_request_id_from_durable_job():
+def _run_worker_on_payload(request_payload: dict):
+    """Run ``run_generation_job`` on one durable payload with a fake session."""
     from services import presentation_generation_pipeline as endpoint
 
     status = AsyncPresentationGenerationTaskModel(status="running")
@@ -551,10 +552,29 @@ def test_worker_restores_correlation_request_id_from_durable_job():
         presentation_id=uuid.uuid4(),
         request_id="request-from-ingress",
         request_sha256="c" * 64,
-        request_payload={"content": "durable request"},
+        request_payload=request_payload,
         state="running",
     )
     captured_request_ids: list[str | None] = []
+    finalized: list[dict] = []
+
+    class FailureSession:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *_):
+            return None
+
+        async def get(self, model, identifier):
+            return status if model is AsyncPresentationGenerationTaskModel else None
+
+        def add(self, _row):
+            return None
+
+        async def commit(self):
+            return None
+
+    sessions = []
 
     class WorkerSession:
         async def __aenter__(self):
@@ -580,6 +600,14 @@ def test_worker_restores_correlation_request_id_from_durable_job():
         captured_request_ids.append(request._request_id)
         status.status = "completed"
 
+    async def finalize(*_args, **kwargs):
+        finalized.append(kwargs)
+        return True
+
+    def session_maker():
+        sessions.append(None)
+        return WorkerSession() if len(sessions) == 1 else FailureSession()
+
     with (
         patch.object(
             endpoint,
@@ -599,14 +627,41 @@ def test_worker_restores_correlation_request_id_from_durable_job():
         patch.object(
             endpoint,
             "finalize_generation_job",
-            new=AsyncMock(return_value=True),
+            new=finalize,
         ),
         patch.object(
             endpoint,
             "async_session_maker",
-            new=lambda: WorkerSession(),
+            new=session_maker,
         ),
     ):
         asyncio.run(endpoint.run_generation_job(job.id, None))
+    return status, captured_request_ids, finalized
+
+
+def test_worker_restores_correlation_request_id_from_durable_job():
+    _status, captured_request_ids, finalized = _run_worker_on_payload(
+        {"content": "durable request", "strategy": "svg"}
+    )
 
     assert captured_request_ids == ["request-from-ingress"]
+    assert finalized == [{"succeeded": True}]
+
+
+@pytest.mark.parametrize(
+    "request_payload",
+    [
+        {"content": "durable authored request", "strategy": "authored"},
+        # Saved before the strategy resolver existed: omitted meant authored.
+        {"content": "durable pre-resolver request"},
+        {"content": "durable deck-ir request", "strategy": "authored", "generation_engine": "deck-ir"},
+    ],
+)
+def test_worker_fails_a_job_staged_with_authored_without_generating(request_payload):
+    status, captured_request_ids, finalized = _run_worker_on_payload(request_payload)
+
+    assert captured_request_ids == []
+    assert finalized == [{"succeeded": False}]
+    assert status.status == "error"
+    assert status.error["code"] == "authored_strategy_removed"
+    assert status.error["status_code"] == 422

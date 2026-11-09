@@ -5,7 +5,7 @@ from types import SimpleNamespace
 import uuid
 
 import pytest
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from sqlalchemy import event, select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlmodel import SQLModel
@@ -18,7 +18,6 @@ from models.sql.async_presentation_generation_status import (
 )
 from models.sql.presentation import (
     PRESENTATION_LIFECYCLE_PUBLISHED,
-    PRESENTATION_LIFECYCLE_STAGING,
     PresentationModel,
 )
 from models.sql.presentation_generation_job import PresentationGenerationJob
@@ -34,10 +33,10 @@ from models.sql.workspace import (
 )
 from models.workspace import WorkspaceTemplateApplicationRequest
 from api.v1.ppt.endpoints import workspace as workspace_endpoint
-from api.v1.ppt.endpoints.presentation_crud import get_presentation
 from services.workspace_authored_template_confirmation_service import (
     confirm_authored_template_application,
 )
+from services.workspace_error_registry import WorkspaceAPIException
 from services.workspace_service import WorkspaceServiceError
 from services.authored_vnext.generation.effective_style import (
     resolve_authored_composition,
@@ -122,11 +121,14 @@ def _master_contract() -> DeckMasterContract:
     )
 
 
-def test_confirm_is_atomic_idempotent_and_target_owned(tmp_path: Path):
-    asyncio.run(_confirm_is_atomic_idempotent_and_target_owned(tmp_path))
+def test_confirm_refuses_authored_regeneration_without_any_durable_row(tmp_path: Path):
+    asyncio.run(_confirm_refuses_authored_regeneration(tmp_path))
 
 
-async def _confirm_is_atomic_idempotent_and_target_owned(tmp_path: Path):
+async def _confirm_refuses_authored_regeneration(tmp_path: Path):
+    # Applying a template regenerates the deck with the authored strategy,
+    # removed on 2026-11-09: the shared admission refuses it and the whole
+    # target graph is rolled back.
     engine, maker = await _database(tmp_path / "confirm.db")
     try:
         async with maker() as session:
@@ -136,82 +138,41 @@ async def _confirm_is_atomic_idempotent_and_target_owned(tmp_path: Path):
             source_id = source.id
 
         async with maker() as session:
-            first = await confirm_authored_template_application(
-                session,
-                source_presentation_id=source_id,
-                request=_request(),
-                idempotency_key="confirm-1",
-                generation_request_builder=_builder,
-            )
-        async with maker() as session:
-            replay = await confirm_authored_template_application(
-                session,
-                source_presentation_id=source_id,
-                request=_request(),
-                idempotency_key="confirm-1",
-                generation_request_builder=_builder,
-            )
-
-        assert first.duplicate is False
-        assert replay.duplicate is True
-        assert replay.target_presentation_id == first.target_presentation_id
-        assert replay.operation.id == first.operation.id
-        assert replay.message.id == first.message.id
+            with pytest.raises(HTTPException) as refused:
+                await confirm_authored_template_application(
+                    session,
+                    source_presentation_id=source_id,
+                    request=_request(),
+                    idempotency_key="confirm-1",
+                    generation_request_builder=_builder,
+                )
+        assert (refused.value.status_code, refused.value.detail) == (422, "authored_strategy_removed")
 
         async with maker() as session:
-            presentations = (
-                await session.execute(select(PresentationModel))
-            ).scalars().all()
-            operations = (
-                await session.execute(select(WorkspaceOperation))
-            ).scalars().all()
-            conversations = (
-                await session.execute(select(WorkspaceConversation))
-            ).scalars().all()
-            messages = (
-                await session.execute(select(WorkspaceMessage))
-            ).scalars().all()
-            jobs = (
-                await session.execute(select(PresentationGenerationJob))
-            ).scalars().all()
-            tasks = (
-                await session.execute(select(AsyncPresentationGenerationTaskModel))
-            ).scalars().all()
-
-        assert len(presentations) == 2
-        target = next(item for item in presentations if item.id != source_id)
-        assert target.id == first.target_presentation_id
-        assert target.lifecycle_status == PRESENTATION_LIFECYCLE_STAGING
-        assert target.revision == 0
-        assert len(conversations) == len(messages) == len(operations) == len(jobs) == len(tasks) == 1
-        assert conversations[0].presentation_id == target.id
-        assert messages[0].content == _request().prompt
-        assert operations[0].presentation_id == target.id
-        assert operations[0].kind == "design.apply"
-        assert operations[0].expected_revision == 0
-        assert operations[0].request_payload["source_presentation_id"] == str(source_id)
-        assert operations[0].request_payload["source_revision"] == 7
-        settings = operations[0].request_payload["generation_settings"]
-        assert settings["authored_style"] == "signal"
-        assert settings["authored_style_intent"] == {
-            "intent": "set",
-            "styleId": "signal",
-        }
-        assert settings["master_intent"] == {"intent": "keep", "pin": None}
-        assert settings["resolved_master_pin"] is None
-        assert settings["resolved_composition_pin"] is None
-        assert settings["resolved_style_digest"].startswith("sha256:")
-        assert settings["design_signature"].startswith("sha256:")
-        assert jobs[0].request_payload["_internal_authored_design_replay"] is True
-        assert jobs[0].presentation_id == target.id
-        assert jobs[0].workspace_operation_id == operations[0].id
-        assert jobs[0].request_payload["presentation_id"] == str(target.id)
-
-        async with maker() as session:
-            staging_view = await get_presentation(target.id, session)
-        assert staging_view.id == target.id
+            presentations = (await session.execute(select(PresentationModel))).scalars().all()
+            assert [item.id for item in presentations] == [source_id]
+            for model in (
+                WorkspaceOperation, WorkspaceConversation, WorkspaceMessage,
+                PresentationGenerationJob, AsyncPresentationGenerationTaskModel,
+            ):
+                assert (await session.execute(select(model))).scalars().all() == []
     finally:
         await engine.dispose()
+
+
+def test_confirm_endpoint_refuses_with_the_authored_removal_code(monkeypatch):
+    monkeypatch.setattr(workspace_endpoint, "_require_workspace_writes", lambda *_args: None)
+
+    with pytest.raises(WorkspaceAPIException) as refused:
+        asyncio.run(
+            workspace_endpoint.confirm_presentation_template_application(
+                uuid.uuid4(), _request(), idempotency_key="confirm-1", session=None,
+            )
+        )
+
+    assert refused.value.status_code == 422
+    assert refused.value.code == refused.value.detail == "authored_strategy_removed"
+    assert refused.value.retryable is False
 
 
 def test_confirm_openapi_contract_uses_required_idempotency_header():
@@ -441,7 +402,7 @@ def test_target_id_is_stable_per_idempotency_key_and_never_the_source():
     assert other != first
 
 
-def test_confirm_rejects_stale_source_revision_and_key_conflict(tmp_path: Path):
+def test_confirm_rejects_stale_source_revision(tmp_path: Path):
     asyncio.run(_confirm_rejects_stale_source_revision_and_key_conflict(tmp_path))
 
 
@@ -464,24 +425,5 @@ async def _confirm_rejects_stale_source_revision_and_key_conflict(tmp_path: Path
                     generation_request_builder=_builder,
                 )
         assert stale.value.code == "revision_conflict"
-
-        async with maker() as session:
-            await confirm_authored_template_application(
-                session,
-                source_presentation_id=source_id,
-                request=_request(),
-                idempotency_key="same-key",
-                generation_request_builder=_builder,
-            )
-        async with maker() as session:
-            with pytest.raises(WorkspaceServiceError) as conflict:
-                await confirm_authored_template_application(
-                    session,
-                    source_presentation_id=source_id,
-                    request=_request(style="poster"),
-                    idempotency_key="same-key",
-                    generation_request_builder=_builder,
-                )
-        assert conflict.value.code == "idempotency_key_payload_conflict"
     finally:
         await engine.dispose()

@@ -171,6 +171,11 @@ _GROUPS = (
     (403, False, "This operation does not match the account that started it.", (
         "workspace_operation_principal_conflict",
     )),
+    # Authored generation was removed on 2026-11-09: new requests are refused
+    # at admission and operations staged with it before then fail on dispatch.
+    (422, False, "This generation option is no longer available. Generate the presentation again.", (
+        "authored_strategy_removed",
+    )),
 )
 
 

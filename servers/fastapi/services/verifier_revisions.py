@@ -788,6 +788,12 @@ PARTIAL_RECOVERY_CODE_LEDGER = VerifierRevisionLedger(
         # writing policy protects names the request source joins with a middle dot (강원·제주권).
         # No stored deck carries a v7 marker; stored pages are not re-rendered by this change.
         "0708f189eb82bdb51f8232f6ca2f0607cb8ac97ae9280aee428dfa6671526d09": "svg-partial-recovery-code/1",
+        # 2026-11-09 authored generation removal (P1): the pipeline refuses to dispatch a job
+        # staged with authored (authored_strategy_removed), a workspace retry of one is refused
+        # at admission, and the svg dispatch no longer also requires template == "authored"
+        # (admission already normalizes it). svg admission, rendering and recovery of stored
+        # svg decks are unchanged.
+        "5c43414ccc4a637cc6ceb2dd19d59b93ec1888c1d8779bdc5d0cbaec1292b291": "svg-partial-recovery-code/1",
     }),
 )
 
@@ -958,6 +964,12 @@ PAGE_RENDER_CODE_LEDGER = VerifierRevisionLedger(
         # writing policy protects names the request source joins with a middle dot (강원·제주권).
         # No stored deck carries a v7 marker; stored pages are not re-rendered by this change.
         "285bbc810c4a0237b230bf32760d90ee57e951a6fcf39c429c70d138dcefa9a9": "svg-page-render-code/1",
+        # 2026-11-09 authored generation removal (P1): the pipeline refuses to dispatch a job
+        # staged with authored (authored_strategy_removed), a workspace retry of one is refused
+        # at admission, and the svg dispatch no longer also requires template == "authored"
+        # (admission already normalizes it). svg admission, rendering and recovery of stored
+        # svg decks are unchanged.
+        "3695b66f021c71277e19b9b878b396162d6562f597e60c028ded9f388e86ddb0": "svg-page-render-code/1",
     }),
 )
 

@@ -118,6 +118,7 @@ from services.source_content.pipeline import (
 from services.database import async_session_maker, get_async_session
 from services.documents_loader import DocumentsLoader
 from services.generation_core.admission.strategy import (
+    require_generation_strategy_admission,
     resolve_generation_strategy,
     recorded_generation_strategy,
 )
@@ -492,7 +493,9 @@ async def check_if_api_request_is_valid(
 ) -> Tuple[uuid.UUID,]:
     # Fail before canonicalizing uploads or allocating any durable identity.
     # Existing legacy decks remain readable through the frozen compatibility
-    # runtime; this boundary controls new generation only.
+    # runtime; this boundary controls new generation only. It rejects a new
+    # authored generation with authored_strategy_removed and admits every
+    # other request to svg.
     require_authored_vnext_creation_admission(request)
     presentation_id = uuid.uuid4()
     print(f"Presentation ID: {presentation_id}")
@@ -557,16 +560,10 @@ async def check_if_api_request_is_valid(
 
     if request.strategy not in {None, "authored", "svg"}:
         raise HTTPException(status_code=400, detail="generation_strategy_conflict")
-    if request.generation_engine == "deck-ir":
-        # Retired as an explicit client choice. The server's own internal
-        # auto-routing to that engine (services.public_generation_route.
-        # effective_generation_engine) is unaffected -- it constructs its own
-        # bridge request object outside this admission function.
-        raise HTTPException(status_code=400, detail="generation_engine_deck_ir_retired")
-    if request.strategy == "svg":
-        from services.svg_generation_admission import require_svg_creation_admission
-
-        require_svg_creation_admission(request)
+    # Authored generation (an explicit authored strategy or the deck-ir engine)
+    # was rejected with authored_strategy_removed, and every other request
+    # passed svg admission, at the top of this function
+    # (require_authored_vnext_creation_admission).
     if (
         request.aspect_ratio != "16:9"
         and resolve_generation_strategy(request) != "svg"
@@ -1346,7 +1343,9 @@ async def generate_presentation_handler(
         # HTML per slide instead of filling a React archetype. Self-contained pipeline
         # (author -> render -> optional vision-QA -> image PPTX/PDF -> persist) that
         # bypasses the compose/structure/content/export path. Default path untouched.
-        if request.template == AUTHORED_TEMPLATE:
+        # svg (the only strategy new requests can take) dispatches whatever the
+        # template field says; admission normalizes it to "authored" anyway.
+        if request.template == AUTHORED_TEMPLATE or resolve_generation_strategy(request) == "svg":
             if async_status:
                 async_status.message = "Authoring bespoke slides"
                 async_status.updated_at = datetime.now(timezone.utc)
@@ -1565,6 +1564,9 @@ async def run_generation_job(
                 raise RuntimeError("presentation_generation_job_missing")
             request = _request_from_durable_payload(job.request_payload)
             request._request_id = job.request_id
+            # A job staged with authored before its removal fails here with
+            # authored_strategy_removed instead of starting authored work.
+            require_generation_strategy_admission(request)
             if request.source_mode not in {SOURCE_CONTENT_RESTYLE_MODE, "raster_reconstruction"}:
                 await _admit_generation_references(request, session)
             # Recheck rollout and source validity on the worker too. A private
@@ -2157,6 +2159,9 @@ async def _admit_generation_operation_v2_compatible(
 ) -> uuid.UUID:
     """Bind the browser-compatible request to one complete v2 admission."""
 
+    # A workspace retry of an operation staged with authored before its
+    # removal would start a new authored generation: reject it here.
+    require_generation_strategy_admission(request)
     retry_bounds = None
     partial_manifest = None
     if partial_svg_recovery:

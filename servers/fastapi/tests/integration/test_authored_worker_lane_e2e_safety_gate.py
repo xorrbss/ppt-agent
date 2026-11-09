@@ -69,12 +69,11 @@ import asyncio
 
 import pytest
 
-from models.sql.presentation import PRESENTATION_LIFECYCLE_PUBLISHED
 from services import authored_composition_policy as composition_policy
 from services import authored_terminal_slide_fallback as terminal_mod
-from services.authored_terminal_slide_fallback import MAX_REMAKES_PER_SLIDE
 from utils.authored_dom_quality import DomQualityIssue, DomQualityReport
 from tests.support.authored_worker_lane_harness import (
+    assert_lane_refused,
     StubProvider,
     _default_contract,
     _run_worker_lane,
@@ -146,7 +145,7 @@ def _install_real_safety_gate_for_one_slide(
     )
 
 
-def test_real_safety_gate_defect_reaches_remake_then_flag_through_the_scheduler(
+def test_safety_gate_defect_lane_is_refused_as_authored_strategy_removed(
     tmp_path, monkeypatch
 ):
     monkeypatch.setenv("AUTHORED_PUBLISH_FLAGGED_SLIDES", "true")
@@ -171,47 +170,7 @@ def test_real_safety_gate_defect_reaches_remake_then_flag_through_the_scheduler(
         )
     )
 
-    assert outcome.status["status"] == "completed", outcome.status
-    assert outcome.job.state == "published"
-    assert outcome.presentation is not None
-    assert outcome.presentation.lifecycle_status == PRESENTATION_LIFECYCLE_PUBLISHED
+    # Authored generation was removed on 2026-11-09: this scenario can no
+    # longer start, so the lane now proves the refusal.
+    assert_lane_refused(outcome, provider)
 
-    # Exactly one remake call for the defective slide (the real gate rejects
-    # the remade candidate too, since it carries the same marker): the
-    # first-pass authoring call, plus one remake through
-    # ``resolve_terminal_gate_slides``. Every other slide was authored once,
-    # untouched by the gate or the scheduler.
-    assert MAX_REMAKES_PER_SLIDE == 2  # a budget of 1 would mask this assertion
-    assert provider.calls_by_index == {
-        defective_index: 2,
-        **{index: 1 for index in range(slide_count) if index != defective_index},
-    }
-
-    gate = outcome.presentation.theme["authoredQualityGate"]
-    flagged = gate["flaggedSlides"]
-    assert [entry["index"] for entry in flagged] == [defective_index]
-    assert flagged[0]["reason"].startswith("composition_safety:")
-    assert "overflow" in flagged[0]["reason"]
-    assert flagged[0]["remakeAttempted"] is True
-
-    # Not asserted on ``outcome.receipts``: any deck with a flagged slide
-    # currently fails to persist its attempt-timing receipt at all (a real,
-    # separate defect -- see this module's docstring) rather than losing only
-    # the "flaggedSlides" field, so a receipt-shaped assertion here would be
-    # unable to tell that regression apart from this scenario's own. The
-    # published presentation's own quality-gate record, asserted above, is
-    # the receipt-independent evidence for what this test verifies.
-
-    # Every slide's persisted HTML is still its first-draft content -- the
-    # defective slide's own rejected remake candidate was never admitted, so
-    # the flag on the presentation record is the only trace of the gate
-    # finding anything. Checked by content markers rather than exact string
-    # equality: normal pipeline processing (qid/semantic-role stamping,
-    # attribute-quote normalization) rewrites bytes that were never part of
-    # this scenario's contract.
-    by_index = {slide.index: slide for slide in outcome.slides}
-    assert sorted(by_index) == list(range(slide_count))
-    for index in range(slide_count):
-        html = by_index[index].html_content
-        assert f"Slide {index + 1}</h1>" in html, index
-        assert f"Body of slide {index + 1}</p>" in html, index

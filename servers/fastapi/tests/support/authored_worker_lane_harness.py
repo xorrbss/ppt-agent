@@ -38,18 +38,14 @@ import pytest
 import uvicorn
 from fastapi import FastAPI
 from PIL import Image
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlmodel import SQLModel
 
 from enums.llm_provider import LLMProvider
 from models.authored_header_contract import AuthoredHeaderContract, default_header_contract
-from models.sql.presentation import (
-    PresentationModel,
-)
 from models.sql.presentation_generation_job import PresentationGenerationJob
-from models.sql.public_admission import PublicOperationAdmission, PublicPolicyProfile
-from models.sql.slide import SlideModel
+from models.sql.public_admission import PublicPolicyProfile
 from models.sql.user import User
 from models.sql.workspace import WorkspaceOperation
 from services import authored_batch_policy as batch_policy_mod
@@ -64,9 +60,6 @@ from services import presentation_generation_job_service as jobs
 from services import public_generation_deadline_policy as deadline_policy
 from services import public_operation_admission as admission_mod
 from services import workspace_operation_runner as workspace_runner
-from services.authored_generation_timing_receipt import (
-    load_generation_attempt_timing_receipts,
-)
 from services.authored_provider_rate_profile import (
     TOKEN_PROFILE_NAME,
     resolve_authored_rate_profile,
@@ -638,15 +631,22 @@ def _install_provider(
 
 
 @dataclass
-class LaneOutcome:
-    task_id: str
-    status: dict[str, Any]
-    job: PresentationGenerationJob
-    presentation: PresentationModel | None
-    slides: list[SlideModel]
-    receipts: tuple[Any, ...]
-    operation: WorkspaceOperation | None
-    admission: PublicOperationAdmission | None
+class LaneRefusal:
+    """What the lane observed for an authored submission after the removal."""
+
+    status_code: int
+    body: str
+    job_count: int
+    operation_count: int
+
+
+def assert_lane_refused(outcome: "LaneRefusal", provider: "StubProvider") -> None:
+    """The authored lane submission was refused before any work started."""
+
+    assert outcome.status_code == 422, outcome.body
+    assert "authored_strategy_removed" in outcome.body
+    assert (outcome.job_count, outcome.operation_count) == (0, 0)
+    assert provider.calls == []
 
 
 async def _run_worker_lane(
@@ -658,7 +658,7 @@ async def _run_worker_lane(
     contract: AuthoredHeaderContract,
     terminal_statuses: frozenset[str] = frozenset({"completed", "error"}),
     gate_override: Callable[[pytest.MonkeyPatch], None] | None = None,
-) -> LaneOutcome:
+) -> LaneRefusal:
     from api.v1.ppt.endpoints import presentation_generate as endpoint
     from services import presentation_generation_pipeline as generation_pipeline
 
@@ -817,90 +817,20 @@ async def _run_worker_lane(
                 json=payload,
                 headers={"Idempotency-Key": f"worker-lane-{owner_id.hex}"},
             )
-            # The compatibility route answers 202 with the admitted operation id.
-            assert submitted.status_code in {200, 202}, submitted.text
-            task_id = submitted.json()["id"]
-            assert submitted.json().get("operation_id")
-
-            last_status: dict[str, Any] = {}
-
-            async def terminal_status():
-                try:
-                    response = await client.get(
-                        f"/api/v1/ppt/presentation/status/{task_id}"
-                    )
-                except httpx.TransportError:
-                    return None
-                assert response.status_code == 200, response.text
-                body = response.json()
-                last_status.clear()
-                last_status.update(body)
-                return body if body["status"] in terminal_statuses else None
-
-            try:
-                status = await _wait_until(
-                    terminal_status, deadline_seconds=_STATUS_TIMEOUT_SECONDS
-                )
-            except AssertionError as error:
-                raise AssertionError(
-                    f"worker lane did not settle: last status={last_status!r}; "
-                    f"provider calls={[call.indices for call in provider.calls]!r}"
-                ) from error
-
-        last_job_state: list[str | None] = [None]
-
-        async def job_settled():
-            async with maker() as session:
-                job = await session.scalar(
-                    select(PresentationGenerationJob).where(
-                        PresentationGenerationJob.task_id == task_id
-                    )
-                )
-                last_job_state[0] = job.state if job is not None else None
-                return job if job is not None and job.state in {"published", "failed"} else None
-
-        try:
-            job = await _wait_until(job_settled, deadline_seconds=30)
-        except AssertionError as error:
-            raise AssertionError(
-                f"job did not settle: state={last_job_state[0]!r}; status={status!r}"
-            ) from error
+        # Authored generation was removed on 2026-11-09: the route refuses the
+        # submission before any durable row or provider call exists.
         async with maker() as session:
-            presentation = await session.get(PresentationModel, job.presentation_id)
-            slides = list(
-                (
-                    await session.execute(
-                        select(SlideModel)
-                        .where(SlideModel.presentation == job.presentation_id)
-                        .order_by(SlideModel.index)
-                    )
-                ).scalars()
+            job_count = await session.scalar(
+                select(func.count()).select_from(PresentationGenerationJob)
             )
-            operation = (
-                await session.get(WorkspaceOperation, job.workspace_operation_id)
-                if job.workspace_operation_id is not None
-                else None
+            operation_count = await session.scalar(
+                select(func.count()).select_from(WorkspaceOperation)
             )
-            admission = (
-                await session.scalar(
-                    select(PublicOperationAdmission).where(
-                        PublicOperationAdmission.operation_id == job.workspace_operation_id
-                    )
-                )
-                if job.workspace_operation_id is not None
-                else None
-            )
-        # The handler seals the attempt-timing receipt after the job row has
-        # already reached its terminal state, so give it a moment to land.
-        async def receipts_written():
-            return load_generation_attempt_timing_receipts(job.id) or None
-
-        try:
-            receipts = await _wait_until(receipts_written, deadline_seconds=15)
-        except AssertionError:
-            receipts = ()
-        return LaneOutcome(
-            task_id, status, job, presentation, slides, receipts, operation, admission
+        return LaneRefusal(
+            status_code=submitted.status_code,
+            body=submitted.text,
+            job_count=int(job_count or 0),
+            operation_count=int(operation_count or 0),
         )
     finally:
         await runner.stop()

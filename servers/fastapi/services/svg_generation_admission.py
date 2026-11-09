@@ -67,10 +67,10 @@ def _common_header_preservation_conflict(request: object) -> bool:
 def svg_creation_admission_violation(request: object) -> str | None:
     """First reason ``request`` would fail svg admission, or ``None`` if it passes.
 
-    Field-only checks (no ``strategy`` read): callers decide *when* to ask this
-    -- an explicit ``strategy == "svg"`` request that violates it is a 422; an
-    omitted-strategy request that violates it silently prefers authored
-    instead (``generation_core.admission.resolve_generation_strategy``).
+    Field-only checks (no ``strategy`` read). Since authored generation was
+    removed, every new request that violates it -- explicit svg or omitted
+    strategy -- is a 422 with this code (:func:`require_svg_creation_admission`);
+    nothing falls back to another strategy.
     """
     allowed_source_modes = {None, "source_content_restyle", "raster_reconstruction"}
     blocked = (
@@ -117,14 +117,20 @@ def svg_creation_admission_violation(request: object) -> str | None:
 
 
 def require_svg_creation_admission(request: object) -> None:
+    """Admit a new generation request to svg, the only generation strategy.
+
+    An explicit authored request is rejected with ``authored_strategy_removed``
+    first. Every other request -- explicit svg or omitted strategy alike -- must
+    pass svg admission; a violation is a 422 carrying its own code.
+    """
+    from services.generation_core.admission.strategy import require_generation_strategy_admission
     from services.svg_common_header_design_plan import fresh_header_mode_conflict
-    if (getattr(request, "strategy", None) in (None, "svg")
-            and (_common_header_preservation_conflict(request) or fresh_header_mode_conflict(request))):
+
+    require_generation_strategy_admission(request)
+    if _common_header_preservation_conflict(request) or fresh_header_mode_conflict(request):
         # This is a conflicting user choice, not a reason to silently select
         # another generation strategy through the capability predicate.
         raise HTTPException(status_code=422, detail="svg_common_header_source_preservation_conflict")
-    if getattr(request, "strategy", None) != "svg":
-        return
     violation = svg_creation_admission_violation(request)
     if violation is not None:
         raise HTTPException(status_code=422, detail=violation)
