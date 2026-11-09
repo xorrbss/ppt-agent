@@ -53,6 +53,9 @@ _ALLOWED_HANGUL_MODULES: frozenset[str] = frozenset(
         "services/generation_core/assets/icon_pack/concepts.py",  # Korean particles/suffixes for icon concept matching
         "services/ppt_writing_policy.py",  # Hangul word-boundary regexes and duration unit suffixes
         "services/generation_core/drivers/svg/native_requirements.py",  # Korean unit suffixes in numeric parsing
+        "services/generation_core/drivers/svg/native_chart_evidence.py",  # Korean chart note prefixes (unit, source)
+        "services/generation_core/drivers/svg/server_chart.py",  # Korean unit examples in the server chart author rule
+        "services/generation_core/drivers/svg/server_chart_data_ref.py",  # Korean unit examples in the data reference rule
         "services/generation_core/drivers/svg/timeline_ink_guard.py",  # the day suffix of timeline captions
         "services/source_images/extract_documents.py",  # Korean caption/heading style names in DOCX
         "services/svg_common_header_space_advance.py",  # a Hangul glyph class for space-advance measurement
