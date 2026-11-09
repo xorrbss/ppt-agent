@@ -7,7 +7,6 @@ import { NextIntlClientProvider } from "next-intl";
 import koMessages from "@/i18n/messages/ko.json";
 import { Toaster } from "@/components/ui/sonner";
 import { makeStore } from "@/store/store";
-import { setPptGenUploadState } from "@/store/slices/presentationGenUpload";
 import UploadPage from "./UploadPage";
 import { useSupportingFiles } from "./upload-page/useSupportingFiles";
 
@@ -75,7 +74,7 @@ describe("<UploadPage /> authored-only creation", () => {
       <NextIntlClientProvider locale="ko" messages={koMessages} timeZone="Asia/Seoul">
         <AppRouterContext.Provider value={router as any}>
           <Provider store={makeStore()}>
-            <UploadPage masterFeatureEnabled={false} />
+            <UploadPage />
             <Toaster />
           </Provider>
         </AppRouterContext.Provider>
@@ -101,7 +100,7 @@ describe("<UploadPage /> authored-only creation", () => {
       <NextIntlClientProvider locale="ko" messages={koMessages} timeZone="Asia/Seoul">
         <AppRouterContext.Provider value={router as any}>
           <Provider store={makeStore()}>
-            <UploadPage masterFeatureEnabled />
+            <UploadPage />
             <Toaster />
           </Provider>
         </AppRouterContext.Provider>
@@ -113,7 +112,7 @@ describe("<UploadPage /> authored-only creation", () => {
       fileName: "source.pptx",
       mimeType: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
     });
-    cy.get('[data-testid="generation-strategy-svg"]').should("be.enabled").click();
+    cy.get('[data-testid="generation-strategy-selector"]').should("not.exist");
 
     cy.get('[data-testid="source-content-selection-summary"]')
       .should("contain", "원본 화면을 편집 가능한 텍스트와 표로 A4에 재구성")
@@ -121,40 +120,20 @@ describe("<UploadPage /> authored-only creation", () => {
     cy.get('[data-testid="upload-master-selection"]').should("not.exist");
   });
 
-  it("starts without a company standard and discards a stale browser preference", () => {
-    cy.window().then((browserWindow) => {
-      browserWindow.localStorage.setItem(
-        "presenton:authored-master:last-used-id:v1",
-        "master:sample-data-insight",
-      );
-    });
-
-    // The company-standard master picker is an authored-only feature; svg is
-    // now the landing default, so this test selects authored explicitly to
-    // exercise it.
-    const store = makeStore();
-    store.dispatch(setPptGenUploadState({ generationStrategy: "authored" }));
-
+  it("offers neither a generation-strategy choice nor a company standard", () => {
     mount(
       <NextIntlClientProvider locale="ko" messages={koMessages} timeZone="Asia/Seoul">
         <AppRouterContext.Provider value={router as any}>
-          <Provider store={store}>
-            <UploadPage masterFeatureEnabled />
+          <Provider store={makeStore()}>
+            <UploadPage />
             <Toaster />
           </Provider>
         </AppRouterContext.Provider>
       </NextIntlClientProvider>,
     );
 
-    cy.get('[data-testid="upload-master-selection"]')
-      .should("contain", koMessages.upload.simplify.companyTemplateDescription)
-      .and("not.contain", "데이터 인사이트");
-    cy.window().then((browserWindow) => {
-      expect(
-        browserWindow.localStorage.getItem(
-          "presenton:authored-master:last-used-id:v1",
-        ),
-      ).to.equal(null);
-    });
+    cy.get('[data-testid="generation-strategy-selector"]').should("not.exist");
+    cy.get('[data-testid="upload-master-selection"]').should("not.exist");
+    cy.get('[data-testid="open-master-catalog"]').should("not.exist");
   });
 });

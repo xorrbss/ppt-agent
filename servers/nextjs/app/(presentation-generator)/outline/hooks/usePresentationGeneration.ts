@@ -1,8 +1,7 @@
 import { useSavedSvgTemplate } from "./useSavedSvgTemplate";
 import { AUTH_SESSION_EXPIRED_EVENT } from "../../services/api/api-error-handler";
 import { commonHeaderDesignForConfig, hasCommonHeader } from "@/lib/common-header-design";
-import { isAmbiguousGenerationTransportError, isRetryableGenerationStartError, hasRecoverableChatFirstWorkspace, isCompanyStandardAdmissionError } from "./generationStartErrors";
-import { useTranslations as useA2bTranslations } from "next-intl";
+import { isAmbiguousGenerationTransportError, isRetryableGenerationStartError, hasRecoverableChatFirstWorkspace } from "./generationStartErrors";
 import { useState, useCallback, useEffect, useRef } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { RootState } from "@/store/store";
@@ -28,8 +27,6 @@ import {
   saveDurableGenerationTask,
   updateDurableGenerationTask,
 } from "./durableGenerationTask";
-import { generationMasterPin } from "@/lib/authored-vnext/master/selection-storage";
-import { DEFAULT_AUTHORED_STYLE } from "../../services/api/authored";
 import { SOURCE_CONTENT_POLICY } from "../../services/api/source-content/contract";
 import { documentCanvasForOrientation } from "@/lib/document-canvas";
 
@@ -47,25 +44,14 @@ const AUTHORED_TIMEOUT_MS = 30 * 60 * 1000;
 export const usePresentationGeneration = (
   presentationId: string | null,
   outlines: { content: string }[] | null,
-  onMasterRequired?: () => void,
 ) => {
-  const tA2b = useA2bTranslations("outlineExtras");
   const t = useTranslations("generation");
   const tTemplate = useTranslations("svgTemplatePicker");
   const dispatch = useDispatch();
   const router = useRouter();
   const templateRestoreState = useSavedSvgTemplate(presentationId);
-  const authoredVisionQa = useSelector(
-    (s: RootState) => s.pptGenUpload.authoredVisionQa
-  );
   const authoredStyle = useSelector(
     (s: RootState) => s.pptGenUpload.authoredStyle
-  );
-  const generationStrategy = useSelector(
-    (s: RootState) => s.pptGenUpload.generationStrategy,
-  );
-  const companyStandard = useSelector(
-    (s: RootState) => s.pptGenUpload.companyStandard
   );
   // The deck language chosen in the upload flow; threaded into the authored request
   // so the backend picks language-aware fonts (e.g. Noto Sans KR) instead of falling
@@ -289,13 +275,11 @@ export const usePresentationGeneration = (
       return;
     }
     const base = Math.max(120, slides_markdown.length * 25);
-    const estSeconds = authoredVisionQa
-      ? Math.min(AUTHORED_TIMEOUT_MS / 1000, base * 2)
-      : Math.min(600, base);
+    const estSeconds = Math.min(600, base);
     // "Auto" is a sentinel, not a real language: send null so the backend applies
     // its language-aware fallback instead of authoring with a literal "Auto".
     const reduxAuthoredRequest = {
-      strategy: generationStrategy,
+      strategy: "svg" as const,
       language: isSourceContentGeneration
         ? null
         : language && language !== LanguageType.Auto
@@ -304,23 +288,15 @@ export const usePresentationGeneration = (
       ...(isSourceContentGeneration
         ? { instructions: sourceContentInstructions || null }
         : {}),
-      // The immutable source-content path must never enter vision re-authoring,
-      // including outline reload/resume paths reconstructed from Redux.
-      visionQa: isSourceContentGeneration || generationStrategy === "svg" ? false : authoredVisionQa,
-      ...(generationStrategy === "svg" ? {
-        commonHeaderMode: generationConfig?.commonHeaderMode ?? "uniform",
-        commonHeaderDesign: commonHeaderDesignForConfig(generationConfig ?? {}),
-        commonHeaderCoverException: hasCommonHeader(generationConfig?.commonHeaderMode) && (generationConfig?.commonHeaderCoverException ?? false),
-      } : {}),
-      ...(generationStrategy === "svg" && generationConfig?.svgDesignReferenceSnapshotId ? { svgDesignReferenceSnapshotId: generationConfig.svgDesignReferenceSnapshotId } : {}),
-      ...(generationStrategy === "svg" && generationConfig?.svgTemplatePin ? { svgTemplatePin: generationConfig.svgTemplatePin, svgTemplateMode: generationConfig.svgTemplateMode, svgTemplateFrameMap: generationConfig.svgTemplateFrameMap } : {}),
-      authoredStyle:
-        generationStrategy === "authored" && generationConfig?.pageSize !== "A4" && generationConfig?.aspectRatio === "9:16"
-          ? DEFAULT_AUTHORED_STYLE.id
-          : authoredStyle,
-      ...(isSourceContentGeneration && generationStrategy === "svg" && generationConfig?.pageSize === "A4" && generationConfig.orientation
+      commonHeaderMode: generationConfig?.commonHeaderMode ?? "uniform",
+      commonHeaderDesign: commonHeaderDesignForConfig(generationConfig ?? {}),
+      commonHeaderCoverException: hasCommonHeader(generationConfig?.commonHeaderMode) && (generationConfig?.commonHeaderCoverException ?? false),
+      ...(generationConfig?.svgDesignReferenceSnapshotId ? { svgDesignReferenceSnapshotId: generationConfig.svgDesignReferenceSnapshotId } : {}),
+      ...(generationConfig?.svgTemplatePin ? { svgTemplatePin: generationConfig.svgTemplatePin, svgTemplateMode: generationConfig.svgTemplateMode, svgTemplateFrameMap: generationConfig.svgTemplateFrameMap } : {}),
+      authoredStyle,
+      ...(isSourceContentGeneration && generationConfig?.pageSize === "A4" && generationConfig.orientation
         ? { documentCanvas: documentCanvasForOrientation(generationConfig.orientation) }
-        : (generationStrategy !== "svg" || generationConfig?.sourceCanvas) && sourceContentAdmission?.documentCanvas
+        : generationConfig?.sourceCanvas && sourceContentAdmission?.documentCanvas
           ? { documentCanvas: sourceContentAdmission.documentCanvas }
         : {}),
       ...(generationConfig?.sourceCanvas ? { sourceCanvas: true }
@@ -330,9 +306,6 @@ export const usePresentationGeneration = (
           : { aspectRatio: generationConfig?.aspectRatio ?? "16:9" }),
       ...(generationConfig?.codexGenerationPreset
         ? { codexGenerationPreset: generationConfig.codexGenerationPreset }
-        : {}),
-      ...(companyStandard && !isSourceContentGeneration && generationStrategy === "authored"
-        ? { masterPin: generationMasterPin(companyStandard) }
         : {}),
       ...(sourceContentMode && sourceContentAdmission
         ? {
@@ -348,10 +321,11 @@ export const usePresentationGeneration = (
     }
     // A "starting" record can survive a lost POST response. Reusing it here
     // resubmits with the same idempotency key instead of creating a second job.
-    if (!durableTask || (durableTask.mode !== "authored" && durableTask.mode !== "svg")) {
+    // A stored record from a removed generation strategy is never resumed.
+    if (!durableTask || durableTask.mode !== "svg") {
       durableTask = saveDurableGenerationTask({
         ...createDurableGenerationTask({
-          mode: generationStrategy,
+          mode: "svg",
           sourcePresentationId: presentationId,
           timeoutMs: AUTHORED_TIMEOUT_MS,
           progressDurationSeconds: estSeconds,
@@ -383,7 +357,6 @@ export const usePresentationGeneration = (
           ? { instructions: authoredRequest.instructions ?? null }
           : {}),
         language: authoredRequest.language,
-        vision_qa: authoredRequest.visionQa,
         strategy: authoredRequest.strategy ?? "svg",
         common_header_mode: "commonHeaderMode" in authoredRequest ? authoredRequest.commonHeaderMode : undefined,
         common_header_design: "commonHeaderDesign" in authoredRequest ? authoredRequest.commonHeaderDesign : undefined,
@@ -401,7 +374,6 @@ export const usePresentationGeneration = (
             : authoredRequest.sourceMode === "source_content_restyle" && authoredRequest.strategy === "svg" ? {}
             : { aspect_ratio: "16:9" }),
         codex_generation_preset: authoredRequest.codexGenerationPreset,
-        masterPin: authoredRequest.masterPin,
         sourceMode: authoredRequest.sourceMode,
         rasterApprovalPin: "rasterApprovalPin" in authoredRequest ? authoredRequest.rasterApprovalPin : undefined,
         referenceSnapshotIds: authoredRequest.sourceMode === "raster_reconstruction"
@@ -427,16 +399,6 @@ export const usePresentationGeneration = (
       if (!isActiveRun()) return;
       setLoadingState({ ...DEFAULT_LOADING_STATE, message: error instanceof Error ? error.message : "제작 요청을 접수하지 못했습니다. 다시 확인해 주세요." });
       setStartRecovery(isAmbiguousGenerationTransportError(error) ? "receipt" : isRetryableGenerationStartError(error) ? "retry" : null);
-      if (isCompanyStandardAdmissionError(error)) {
-        clearDurableGenerationTask(durableTask.idempotencyKey);
-        startingDurableTaskRef.current = null;
-        notify.warning(
-          tA2b("pleaseCheckThePptMasterAgain"),
-          tA2b("theMasterChangedOrIsNotPublished")
-        );
-        onMasterRequired?.();
-        return;
-      }
       if (openRecoverableWorkspace(error, durableTask.idempotencyKey)) {
         return;
       }
@@ -451,15 +413,11 @@ export const usePresentationGeneration = (
     templateRestoreState,
     presentationId,
     outlines,
-    authoredVisionQa,
     language,
     generationConfig,
     sourceContentMode,
     sourceContentAdmission,
     authoredStyle,
-    generationStrategy,
-    companyStandard,
-    onMasterRequired,
     openWorkspace,
     openRecoverableWorkspace,
     reportDurableGenerationFailure,

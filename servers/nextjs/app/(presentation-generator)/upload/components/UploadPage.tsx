@@ -9,26 +9,17 @@ import { useTranslations as useA2bTranslations } from "next-intl";
  * useUploadPageState; this component only reorganizes the interaction surface.
  */
 
-import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { LayoutTemplate } from "lucide-react";
+import React, { useCallback, useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
 import { useDispatch, useSelector } from "react-redux";
 
 import Wrapper from "@/components/Wrapper";
 import { Button } from "@/components/ui/button";
-import { useUploadLimits } from "@/lib/use-upload-limits";
 import { cn } from "@/lib/utils";
-import {
-  setPptGenUploadState,
-  setSourceContentMode,
-} from "@/store/slices/presentationGenUpload";
+import { setSourceContentMode } from "@/store/slices/presentationGenUpload";
 import type { RootState } from "@/store/store";
-import { isAuthoredVnextMasterEnabled } from "@/lib/authored-vnext/master/contracts";
-import { AuthoredVnextMasterClient } from "@/lib/authored-vnext/master/client";
-import { clearLastUsedMasterId } from "@/lib/authored-vnext/master/selection-storage";
 
 import TemplateSelection from "../../outline/components/TemplateSelection";
-import MasterCatalogDialog from "../../authored-vnext/master-setup/MasterCatalogDialog";
 import { ConfigurationSelects } from "./ConfigurationSelects";
 import { PromptInput } from "./PromptInput";
 import SupportingDoc from "./SupportingDoc";
@@ -40,29 +31,16 @@ import SourceContentLossDialog from "./upload-page/SourceContentLossDialog";
 import GenerationGuardDialog from "./upload-page/GenerationGuardDialog";
 import RasterSourceReview from "./upload-page/RasterSourceReview";
 import { useUploadPageState } from "./upload-page/useUploadPageState";
-import { useMasterCatalogController } from "./upload-page/useMasterCatalogController";
-import { useSourceSvgCapability } from "./upload-page/useSourceSvgCapability";
 import { useDashboardPromptHandoff } from "./upload-page/useDashboardPromptHandoff";
 import { SourceContentSummaryPanel } from "./upload-page/SourceContentSummaryPanel";
-import { GenerationStrategySelector } from "./upload-page/GenerationStrategySelector";
 import { GenerateActionRow } from "./upload-page/GenerateActionRow";
 import UploadDesignGallery from "./UploadDesignGallery";
 import { GenerationPreparation } from "../../generation-workspace/GenerationPreparation";
 import { PreviousAttemptNotice } from "./upload-page/PreviousAttemptNotice";
 
-const masterClient = new AuthoredVnextMasterClient();
-
-export interface UploadPageProps {
-  /** Component harness seam; production keeps the environment feature gate. */
-  masterFeatureEnabled?: boolean;
-}
-
-const UploadPage = ({
-  masterFeatureEnabled = isAuthoredVnextMasterEnabled(),
-}: UploadPageProps = {}) => {
+const UploadPage = () => {
   const tA2b = useA2bTranslations("uploadExtras");
   const t = useTranslations("upload");
-  const uploadLimits = useUploadLimits();
   const dispatch = useDispatch();
   const selectedThemeId = useSelector(
     (state: RootState) => state.pptGenUpload.selectedTheme
@@ -70,17 +48,10 @@ const UploadPage = ({
   const authoredStyle = useSelector(
     (state: RootState) => state.pptGenUpload.authoredStyle,
   );
-  const companyStandard = useSelector(
-    (state: RootState) => state.pptGenUpload.companyStandard
-  );
   const sourceContentMode = useSelector(
     (state: RootState) => state.pptGenUpload.sourceContentMode,
   );
-  const generationStrategy = useSelector(
-    (state: RootState) => state.pptGenUpload.generationStrategy,
-  );
   const [reviewBeforeGeneration, setReviewBeforeGeneration] = useState(false);
-  const sourceSvgCapability = useSourceSvgCapability(sourceContentMode, authoredStyle);
 
   const {
     files,
@@ -97,39 +68,6 @@ const UploadPage = ({
       dispatch(setSourceContentMode(isSinglePptx));
     },
   });
-  const analysisSourceFile = useMemo(
-    () => files.find((file) => /\.(?:ppt|pptx)$/i.test(file.name)) ?? null,
-    [files],
-  );
-
-  const {
-    masterCatalogOpen,
-    setMasterCatalogOpen,
-    masterCatalogEntryMode,
-    resumeAnalysisId,
-    openMasterCatalog,
-    openAiMasterImport,
-    selectAiMasterSource,
-    rememberAnalysis,
-    applyMaster,
-    clearMaster,
-    masterSelectionEpochRef,
-  } = useMasterCatalogController({
-    dispatch,
-    files,
-    replaceFiles,
-    analysisSourceFile,
-    uploadLimits,
-  });
-
-  useEffect(() => {
-    if (!masterFeatureEnabled) return;
-    // Company-standard selection is document-scoped. A fresh upload must never
-    // inherit browser state created by another user, automation, or document.
-    ++masterSelectionEpochRef.current;
-    dispatch(setPptGenUploadState({ companyStandard: null }));
-    clearLastUsedMasterId();
-  }, [dispatch, masterFeatureEnabled, masterSelectionEpochRef]);
 
   const {
     config,
@@ -147,8 +85,6 @@ const UploadPage = ({
     decomposeAbortControllerRef,
     handleGeneratePresentation,
     handleReviewOutline,
-    isMasterResolving,
-    masterAdmissionError,
     sourceContentSummary,
     sourceContentCanvas,
     isSourceContentAnalyzing,
@@ -172,8 +108,6 @@ const UploadPage = ({
     files,
     filesRef,
     selectedThemeId,
-    masterFeatureEnabled,
-    onMasterRequired: () => openMasterCatalog(),
   });
   useEffect(() => {
     if (!generationAttemptActive && files.length === 0 && sourceContentMode) {
@@ -181,37 +115,19 @@ const UploadPage = ({
     }
   }, [dispatch, files.length, sourceContentMode, generationAttemptActive]);
 
-  // A master is optional.  Only a previously selected master that failed
-  // published-head resolution blocks retrying the authored request.
-  const masterBlocksGeneration = Boolean(masterAdmissionError);
-  const generationBusy = loadingState.isLoading || isMasterResolving;
-
-  const handleReviewThenGenerate = useCallback(() => {
-    if (generationBusy) return;
-    if (masterBlocksGeneration) {
-      openMasterCatalog();
-      return;
-    }
-    void handleReviewOutline();
-  }, [generationBusy, handleReviewOutline, masterBlocksGeneration, openMasterCatalog]);
+  const generationBusy = loadingState.isLoading;
 
   const handlePrimaryGenerate = useCallback(() => {
-    if (reviewBeforeGeneration) {
-      handleReviewThenGenerate();
-      return;
-    }
     if (generationBusy) return;
-    if (masterBlocksGeneration) {
-      openMasterCatalog();
+    if (reviewBeforeGeneration) {
+      void handleReviewOutline();
       return;
     }
     void handleGeneratePresentation();
   }, [
     generationBusy,
     handleGeneratePresentation,
-    handleReviewThenGenerate,
-    masterBlocksGeneration,
-    openMasterCatalog,
+    handleReviewOutline,
     reviewBeforeGeneration,
   ]);
 
@@ -349,25 +265,15 @@ const UploadPage = ({
               ) : null}
             </div>
 
-            <GenerationStrategySelector
-              sourceContentMode={sourceContentMode}
-              generationStrategy={generationStrategy}
-              onChangeStrategy={(strategy) => dispatch(setPptGenUploadState({ generationStrategy: strategy }))}
-              sourceSvgCapability={sourceSvgCapability}
-              pageSize={config.pageSize}
-            />
-
             {sourceContentMode ? (
               <SourceContentSummaryPanel
-                generationStrategy={generationStrategy}
                 authoredStyle={authoredStyle}
-                companyStandard={companyStandard}
                 isSourceContentAnalyzing={isSourceContentAnalyzing}
                 sourceContentSummary={sourceContentSummary}
               />
             ) : null}
 
-            {sourceContentMode && generationStrategy === "svg" && config.pageSize === "A4" && authoredStyle === "screenshot-blue" &&
+            {sourceContentMode && config.pageSize === "A4" && authoredStyle === "screenshot-blue" &&
               <details className="mt-3 rounded-lg border border-slate-200 bg-white p-3 text-sm text-slate-700">
                 <summary className="cursor-pointer font-medium">{tA2b("advancedOptionReviewEveryRegionManually")}</summary>
                 <label className="mt-3 flex items-start gap-2">
@@ -385,8 +291,6 @@ const UploadPage = ({
                     onConfigChange={handleConfigChange}
                     sourceContentMode={sourceContentMode}
                     authoredStyle={authoredStyle}
-                    hasCompanyStandard={Boolean(companyStandard) && !sourceContentMode}
-                    generationStrategy={generationStrategy}
                     sourceDocumentCanvas={sourceContentCanvas}
                   />
                 </>
@@ -395,108 +299,22 @@ const UploadPage = ({
                 reviewBeforeGeneration={reviewBeforeGeneration}
                 onReviewBeforeGenerationChange={setReviewBeforeGeneration}
                 onGenerate={handlePrimaryGenerate}
-                disabled={generationBusy || previousGenerationAttempt.blocked || (generationStrategy === "svg" && Boolean(config.svgTemplatePin) && config.svgTemplateCapabilityState !== "available")}
+                disabled={generationBusy || previousGenerationAttempt.blocked || (Boolean(config.svgTemplatePin) && config.svgTemplateCapabilityState !== "available")}
                 generating={loadingState.isLoading}
               />
             </div>
 
-            {generationStrategy === "svg" ? <SvgTemplatePicker config={config} onConfigChange={handleConfigChange} sourceContentMode={sourceContentMode} hasCompanyMaster={Boolean(companyStandard)} /> : null}
+            <SvgTemplatePicker config={config} onConfigChange={handleConfigChange} sourceContentMode={sourceContentMode} />
 
-            {generationStrategy === "svg" ? <SvgDesignReferenceInput config={config} onConfigChange={handleConfigChange} disabled={Boolean(config.svgTemplatePin || companyStandard)} /> : null}
-
-            {generationStrategy === "authored" && masterAdmissionError ? (
-              <div
-                className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2.5 text-sm text-rose-900"
-                role="alert"
-                data-testid="master-admission-error"
-              >
-                <span>{t("master.unavailable")}</span>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  onClick={openMasterCatalog}
-                  className="shrink-0 border-rose-300 bg-white text-rose-800 hover:bg-rose-100"
-                >
-                  {t("master.choose")}
-                </Button>
-              </div>
-            ) : null}
+            <SvgDesignReferenceInput config={config} onConfigChange={handleConfigChange} disabled={Boolean(config.svgTemplatePin)} />
           </div>
         </section>
 
         <UploadDesignGallery>
-        {masterFeatureEnabled && generationStrategy === "authored" ? (
-          <section
-            className="mx-auto mt-6 max-w-[1080px]"
-            aria-labelledby="upload-master-title"
-            data-testid="upload-master-selection"
-          >
-            <div className="flex flex-col gap-4 rounded-2xl border border-slate-200/80 bg-white px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
-              <div className="flex min-w-0 items-start gap-3">
-                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-violet-50 text-violet-600">
-                  <LayoutTemplate className="h-4 w-4" aria-hidden="true" />
-                </span>
-                <div className="min-w-0">
-                  <h2 id="upload-master-title" className="text-sm font-bold text-[#242629]">
-                    {t("simplify.useCompanyTemplate")}
-                  </h2>
-                  {companyStandard ? (
-                    <p className="mt-1 break-words text-sm text-slate-500" data-testid="company-standard-summary">
-                      {t("master.selected", {
-                        name: companyStandard.name,
-                        version: companyStandard.revision,
-                        layouts: companyStandard.layoutCount,
-                      })}
-                    </p>
-                  ) : (
-                    <p className="mt-1 text-sm text-[#737780]">
-                      {t("simplify.companyTemplateDescription")}
-                    </p>
-                  )}
-                </div>
-              </div>
-              <div className="flex shrink-0 flex-wrap gap-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => { rememberAnalysis(null); openAiMasterImport(); }}
-                  data-testid="ppt-ai-master-create"
-                >
-                  {t("master.aiCreate")}
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={openMasterCatalog}
-                  data-testid="open-master-catalog"
-                >
-                  {companyStandard ? t("master.change") : t("master.choose")}
-                </Button>
-              </div>
-            </div>
-          </section>
-        ) : null}
-
         <section className="mx-auto mt-10 max-w-[1080px]">
           <TemplateSelection />
         </section>
         </UploadDesignGallery>
-        {masterFeatureEnabled && generationStrategy === "authored" ? (
-          <MasterCatalogDialog
-            analysisSourceFile={analysisSourceFile}
-            entryMode={masterCatalogEntryMode}
-            open={masterCatalogOpen}
-            onAnalysisIdChange={rememberAnalysis}
-            onAnalysisSourceFileChange={selectAiMasterSource}
-            onOpenChange={setMasterCatalogOpen}
-            resumeAnalysisId={resumeAnalysisId}
-            selectedMasterId={companyStandard?.masterId}
-            onApply={applyMaster}
-            onClear={clearMaster}
-          />
-        ) : null}
-
         <SourceContentLossDialog
           prompt={sourceContentLossPrompt}
           onDecide={resolveSourceContentLossPrompt}

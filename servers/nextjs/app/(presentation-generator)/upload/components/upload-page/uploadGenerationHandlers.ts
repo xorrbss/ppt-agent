@@ -5,7 +5,7 @@ import type { Dispatch, SetStateAction, MutableRefObject } from "react";
 import type { useRouter } from "next/navigation";
 import type { Dispatch as ReduxDispatch, UnknownAction } from "redux";
 import { clearOutlines, setPresentationId } from "@/store/slices/presentationGeneration";
-import { setPptGenUploadState, type CompanyStandardSelection } from "@/store/slices/presentationGenUpload";
+import { setPptGenUploadState } from "@/store/slices/presentationGenUpload";
 import type { RootState } from "@/store/store";
 import { requestVerbosity } from "../../utils/requestVerbosity";
 import { documentCanvasRequestForConfig, LanguageType, type PresentationConfig } from "../../type";
@@ -28,8 +28,6 @@ interface GenerationHandlersContext {
   pendingPresentationId: string;
   previousPresentationId?: string | null;
   selectedThemeId: string | null;
-  generationStrategy: "authored" | "svg";
-  authoredVisionQa: boolean;
   authoredStyle: string;
   llmConfig: RootState["userConfig"]["llm_config"];
   router: ReturnType<typeof useRouter>;
@@ -49,18 +47,17 @@ const STOCK_IMAGE_PROVIDERS = new Set(["pexels", "pixabay"]);
 // Every asynchronous branch receives the same click-time canvas configuration.
 export function createUploadGenerationHandlers({
   config: initialConfig, sourceContentMode, pendingPresentationId, previousPresentationId, selectedThemeId,
-  generationStrategy, authoredVisionQa, authoredStyle, llmConfig, router,
+  authoredStyle, llmConfig, router,
   dispatch, setLoadingState, setCanCancelDocumentProcessing, decomposeAbortControllerRef,
   setPendingPresentationId, recoverCreateRef, onPresentationCreated, saveAdmission, captureLiveness,
 }: GenerationHandlersContext) {
   const sourceContentCanvasForConfig = (sourceContent: SourceContentAnalysisResponseV1, config: PresentationConfig) =>
-    generationStrategy === "svg" && config.pageSize === "A4" && config.orientation
+    config.pageSize === "A4" && config.orientation
       ? documentCanvasForOrientation(config.orientation)
-      : generationStrategy !== "svg" || config.sourceCanvas ? sourceContent.documentCanvas : undefined;
+      : config.sourceCanvas ? sourceContent.documentCanvas : undefined;
 
-  const stageAutoAuthoredGeneration = (
+  const stageAutoGeneration = (
     presentationId: string,
-    master: CompanyStandardSelection | undefined,
     sourceContent: SourceContentAnalysisResponseV1 | null = null,
     config: PresentationConfig = initialConfig,
   ) => {
@@ -86,32 +83,27 @@ export function createUploadGenerationHandlers({
     const requestedSlides = config.slides ? Number.parseInt(config.slides, 10) : 8;
     const estimatedSlides = Number.isFinite(requestedSlides) ? requestedSlides : 8;
     const baseSeconds = Math.max(120, estimatedSlides * 25);
-    const progressDurationSeconds = authoredVisionQa
-      ? Math.min(30 * 60, baseSeconds * 2)
-      : Math.min(600, baseSeconds);
+    const progressDurationSeconds = Math.min(600, baseSeconds);
     saveDurableGenerationTask({
       ...createDurableGenerationTask({
-        mode: generationStrategy,
+        mode: "svg",
         sourcePresentationId: presentationId,
         timeoutMs: 30 * 60 * 1000,
         progressDurationSeconds,
       }),
       authoredRequest: {
-        strategy: generationStrategy,
-        ...(generationStrategy === "svg" ? {
-          commonHeaderMode: config.commonHeaderMode ?? "uniform",
-          commonHeaderDesign: commonHeaderDesignForConfig(config),
-          commonHeaderCoverException: hasCommonHeader(config.commonHeaderMode) && (config.commonHeaderCoverException ?? false),
-        } : {}),
+        strategy: "svg" as const,
+        commonHeaderMode: config.commonHeaderMode ?? "uniform",
+        commonHeaderDesign: commonHeaderDesignForConfig(config),
+        commonHeaderCoverException: hasCommonHeader(config.commonHeaderMode) && (config.commonHeaderCoverException ?? false),
         language:
           config.language && config.language !== LanguageType.Auto
             ? config.language
             : null,
         ...(sourceContent ? { instructions: sourceContentInstructions || null } : {}),
-        visionQa: sourceContent ? false : authoredVisionQa,
         authoredStyle,
-        ...(generationStrategy === "svg" && config.svgDesignReferenceSnapshotId ? { svgDesignReferenceSnapshotId: config.svgDesignReferenceSnapshotId } : {}),
-      ...(generationStrategy === "svg" && config.svgTemplatePin ? { svgTemplatePin: config.svgTemplatePin, svgTemplateMode: config.svgTemplateMode, svgTemplateFrameMap: config.svgTemplateFrameMap } : {}),
+        ...(config.svgDesignReferenceSnapshotId ? { svgDesignReferenceSnapshotId: config.svgDesignReferenceSnapshotId } : {}),
+      ...(config.svgTemplatePin ? { svgTemplatePin: config.svgTemplatePin, svgTemplateMode: config.svgTemplateMode, svgTemplateFrameMap: config.svgTemplateFrameMap } : {}),
         ...(sourceContentCanvas
           ? { documentCanvas: sourceContentCanvas }
           : {}),
@@ -128,15 +120,6 @@ export function createUploadGenerationHandlers({
               sourceMode: "source_content_restyle" as const,
               sourceContentManifestPin: sourceContent.manifestPin,
               contentPolicy: SOURCE_CONTENT_POLICY,
-            }
-          : {}),
-        ...(master && !sourceContent
-          ? {
-              masterPin: {
-                masterId: master.masterId,
-                revision: master.revision,
-                digest: master.digest,
-              },
             }
           : {}),
       },
@@ -181,7 +164,6 @@ export function createUploadGenerationHandlers({
   const handleDocumentProcessing = async (
     selectedFiles: File[],
     auto: boolean,
-    resolvedMaster: CompanyStandardSelection | undefined,
     admittedSourceContent: SourceContentAdmission | null = null,
     config: PresentationConfig = initialConfig,
   ) => {
@@ -189,14 +171,14 @@ export function createUploadGenerationHandlers({
     if (!isLive()) return;
     setLoadingState({
       isLoading: true,
-      message: sourceContentMode && generationStrategy === "svg"
+      message: sourceContentMode
         ? "원본 분석을 마치고 SVG 배치를 준비하는 중…"
         : "문서를 처리하는 중…",
       showProgress: true,
       duration: 90,
       progress: 0,
       progressLabel: `0/${selectedFiles.length}`,
-      extra_info: sourceContentMode && generationStrategy === "svg"
+      extra_info: sourceContentMode
         ? "원문·표·이미지를 유지하며 SVG 생성과 검사를 진행합니다."
         : selectedFiles.length > 0 ? "용량이 큰 문서는 몇 분 정도 걸릴 수 있습니다." : "",
     });
@@ -304,16 +286,14 @@ export function createUploadGenerationHandlers({
       include_table_of_contents: sourceContentMode ? false : !!config?.includeTableOfContents,
       include_title_slide: sourceContentMode ? false : !!config?.includeTitleSlide,
       web_search: sourceContentMode ? false : !!config?.webSearch,
-      ...(generationStrategy === "svg" ? {
-        common_header_mode: config.commonHeaderMode ?? "uniform",
-        common_header_design: commonHeaderDesignForConfig(config),
-        common_header_cover_exception: hasCommonHeader(config.commonHeaderMode) && (config.commonHeaderCoverException ?? false),
-      } : {}),
-      ...(generationStrategy === "svg" && config.svgDesignReferenceSnapshotId ? { svg_design_reference_snapshot_id: config.svgDesignReferenceSnapshotId } : {}),
-      ...(generationStrategy === "svg" && config.svgTemplatePin ? { svgTemplatePin: config.svgTemplatePin, svgTemplateMode: config.svgTemplateMode, svgTemplateFrameMap: config.svgTemplateFrameMap } : {}),
+      common_header_mode: config.commonHeaderMode ?? "uniform",
+      common_header_design: commonHeaderDesignForConfig(config),
+      common_header_cover_exception: hasCommonHeader(config.commonHeaderMode) && (config.commonHeaderCoverException ?? false),
+      ...(config.svgDesignReferenceSnapshotId ? { svg_design_reference_snapshot_id: config.svgDesignReferenceSnapshotId } : {}),
+      ...(config.svgTemplatePin ? { svgTemplatePin: config.svgTemplatePin, svgTemplateMode: config.svgTemplateMode, svgTemplateFrameMap: config.svgTemplateFrameMap } : {}),
       ...documentCanvasRequestForConfig(config),
       theme: selectedTheme,
-      strategy: generationStrategy,
+      strategy: "svg" as const,
     } satisfies Parameters<typeof PresentationGenerationApi.createPresentation>[0];
 
     const submitPreparedRequest = async () => {
@@ -330,10 +310,9 @@ export function createUploadGenerationHandlers({
     saveAdmission?.(null);
     };
     recoverCreateRef.current = submitPreparedRequest;
-    if (auto) stageAutoAuthoredGeneration(presentationId, resolvedMaster, sourceContentAnalysis, config);
+    if (auto) stageAutoGeneration(presentationId, sourceContentAnalysis, config);
     saveAdmission?.({ presentationId, auto, request: createRequest, config, uploadState: {
-      sourceContentMode, authoredStyle, authoredVisionQa, generationStrategy,
-      companyStandard: resolvedMaster ?? null,
+      sourceContentMode, authoredStyle,
       sourceContentAdmission: sourceContentAnalysis ? {
         manifestPin: sourceContentAnalysis.manifestPin,
         referenceSnapshotId: sourceContentAnalysis.referenceSnapshotBinding.referenceSnapshotId,
@@ -350,7 +329,6 @@ export function createUploadGenerationHandlers({
    */
   const handleDirectPresentationGeneration = async (
     auto: boolean,
-    resolvedMaster: CompanyStandardSelection | undefined,
     config: PresentationConfig = initialConfig,
   ) => {
     const isLive = captureLiveness();
@@ -382,16 +360,14 @@ export function createUploadGenerationHandlers({
       include_table_of_contents: !!config?.includeTableOfContents,
       include_title_slide: !!config?.includeTitleSlide,
       web_search: !!config?.webSearch,
-      ...(generationStrategy === "svg" ? {
-        common_header_mode: config.commonHeaderMode ?? "uniform",
-        common_header_design: commonHeaderDesignForConfig(config),
-        common_header_cover_exception: hasCommonHeader(config.commonHeaderMode) && (config.commonHeaderCoverException ?? false),
-      } : {}),
-      ...(generationStrategy === "svg" && config.svgDesignReferenceSnapshotId ? { svg_design_reference_snapshot_id: config.svgDesignReferenceSnapshotId } : {}),
-      ...(generationStrategy === "svg" && config.svgTemplatePin ? { svgTemplatePin: config.svgTemplatePin, svgTemplateMode: config.svgTemplateMode, svgTemplateFrameMap: config.svgTemplateFrameMap } : {}),
+      common_header_mode: config.commonHeaderMode ?? "uniform",
+      common_header_design: commonHeaderDesignForConfig(config),
+      common_header_cover_exception: hasCommonHeader(config.commonHeaderMode) && (config.commonHeaderCoverException ?? false),
+      ...(config.svgDesignReferenceSnapshotId ? { svg_design_reference_snapshot_id: config.svgDesignReferenceSnapshotId } : {}),
+      ...(config.svgTemplatePin ? { svgTemplatePin: config.svgTemplatePin, svgTemplateMode: config.svgTemplateMode, svgTemplateFrameMap: config.svgTemplateFrameMap } : {}),
       ...documentCanvasRequestForConfig(config),
       theme: selectedTheme,
-      strategy: generationStrategy,
+      strategy: "svg" as const,
     } satisfies Parameters<typeof PresentationGenerationApi.createPresentation>[0];
 
 
@@ -410,10 +386,9 @@ export function createUploadGenerationHandlers({
     saveAdmission?.(null);
     };
     recoverCreateRef.current = submitPreparedRequest;
-    if (auto) stageAutoAuthoredGeneration(presentationId, resolvedMaster, null, config);
+    if (auto) stageAutoGeneration(presentationId, null, config);
     saveAdmission?.({ presentationId, auto, request: createRequest, config, uploadState: {
       sourceContentMode: false, sourceContentAdmission: null, authoredStyle,
-      authoredVisionQa, generationStrategy, companyStandard: resolvedMaster ?? null,
     } });
     await submitPreparedRequest();
   };

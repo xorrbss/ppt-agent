@@ -476,7 +476,7 @@ class AuthoredStylesApi {
         generation_strategy: selection.generationStrategy,
         authored_style: selection.authoredStyle,
         source_content_mode: String(selection.sourceContentMode),
-        has_company_standard: String(selection.hasCompanyStandard),
+        has_company_standard: "false",
       }).toString()}` : "";
       const response = await fetch(
         getApiUrl(`/api/v1/ppt/authored/canvas-capabilities${query}`),

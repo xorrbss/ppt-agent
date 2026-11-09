@@ -23,8 +23,6 @@ export interface SourceContentAdmissionSelection {
   documentCanvas?: DocumentCanvas;
 }
 
-export type PresentationGenerationStrategy = "authored" | "svg";
-
 interface PresentationGenUploadState {
   config: PresentationConfig | null;
   svgTemplateSelectionExplicit: boolean;
@@ -35,15 +33,8 @@ interface PresentationGenUploadState {
   /** Selected theme-preset id (a DEFAULT_THEMES id) applied to the deck after generation; null = none. */
   selectedTheme: string | null;
 
-  /** Authored mode only: opt into the vision-QA self-correction pass (higher quality,
-   * slower — it adds a second authoring round). Off by default for speed. */
-  authoredVisionQa: boolean;
-
-  /** Authored mode only: selected server-authored visual style id. */
+  /** Selected visual style id (the svg generation style). */
   authoredStyle: string;
-
-  /** Rendering source selected for a new document. SVG is the default. */
-  generationStrategy: PresentationGenerationStrategy;
 
   /**
    * Company furniture/brand pin. This is deliberately independent from
@@ -67,9 +58,7 @@ const initialState: PresentationGenUploadState = {
   svgTemplateSelection: null,
   files: [],
   selectedTheme: null, // null = no preset; deck keeps the default (theme picked later in the editor)
-  authoredVisionQa: false,
   authoredStyle: "default",
-  generationStrategy: "svg",
   companyStandard: null,
   sourceContentMode: false,
   sourceContentAdmission: null,
@@ -95,9 +84,7 @@ export const presentationGenUploadSlice = createSlice({
         svgTemplateSelection,
         files,
         selectedTheme,
-        authoredVisionQa,
         authoredStyle,
-        generationStrategy,
         companyStandard,
         sourceContentMode,
         sourceContentAdmission,
@@ -114,9 +101,7 @@ export const presentationGenUploadSlice = createSlice({
       }
       if (files !== undefined) state.files = files;
       if (selectedTheme !== undefined) state.selectedTheme = selectedTheme;
-      if (authoredVisionQa !== undefined) state.authoredVisionQa = authoredVisionQa;
       if (authoredStyle !== undefined) state.authoredStyle = authoredStyle;
-      if (generationStrategy !== undefined) state.generationStrategy = generationStrategy;
       if (companyStandard !== undefined) {
         state.companyStandard = companyStandard;
       }

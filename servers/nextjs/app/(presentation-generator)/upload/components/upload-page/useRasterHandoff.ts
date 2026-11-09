@@ -78,7 +78,6 @@ export const useRasterHandoff = (
           strategy: "svg",
           language: null,
           instructions: recovery.instructions,
-          visionQa: false,
           authoredStyle: recovery.authoredStyle,
           svgDesignReferenceSnapshotId: recovery.svgDesignReferenceSnapshotId,
           commonHeaderMode: recovery.commonHeaderMode ?? "uniform",

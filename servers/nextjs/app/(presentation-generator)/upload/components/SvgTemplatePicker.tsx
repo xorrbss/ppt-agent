@@ -17,9 +17,9 @@ import type { PresentationConfig } from "../type";
 import { templateSourceCanvasSelector } from "../../services/api/svg-template-canvas";
 import { beginEpochRequest } from "../utils/requestEpoch";
 
-export default function SvgTemplatePicker({ config, onConfigChange, sourceContentMode, hasCompanyMaster }: {
+export default function SvgTemplatePicker({ config, onConfigChange, sourceContentMode }: {
   config: PresentationConfig; onConfigChange: (key: keyof PresentationConfig, value: unknown) => void;
-  sourceContentMode: boolean; hasCompanyMaster: boolean;
+  sourceContentMode: boolean;
 }) {
   const dispatch = useDispatch();
   const t = useTranslations("svgTemplatePicker");
@@ -140,7 +140,7 @@ export default function SvgTemplatePicker({ config, onConfigChange, sourceConten
     if (available === null) return;
     SvgTemplatesApi.capability({ templatePin: selection.pin, mode: selection.mode, canvas,
       ...(sourceContentMode ? { sourceMode: "source_content_restyle" } : {}),
-      hasCompanyMaster, hasCommonTitleDesign,
+      hasCommonTitleDesign,
     }).then(result => {
       if (epoch !== capabilityEpoch.current || !live(owner)) return;
       const resolved = available === false ? { ...result, state: "blocked" as const, reasonCode: "svg_template_registration_disabled", nextAction: null } : result;
@@ -153,7 +153,7 @@ export default function SvgTemplatePicker({ config, onConfigChange, sourceConten
     return () => { capabilityEpoch.current += 1; };
   // Configuration updates are passed by the upload form; only capability inputs invalidate a result.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selection, canvasKey, sourceContentMode, hasCompanyMaster, hasCommonTitleDesign, available, refresh]);
+  }, [selection, canvasKey, sourceContentMode, hasCommonTitleDesign, available, refresh]);
 
   useEffect(() => {
     const owner = ownerEpoch.current;

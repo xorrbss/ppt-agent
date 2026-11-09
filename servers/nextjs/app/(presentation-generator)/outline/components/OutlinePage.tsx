@@ -17,12 +17,9 @@ import { useOutlineStreaming } from "../hooks/useOutlineStreaming";
 import { useOutlineManagement } from "../hooks/useOutlineManagement";
 import { usePresentationGeneration } from "../hooks/usePresentationGeneration";
 import {
-  clearDurableGenerationTask,
-  type DurableGenerationTask,
   findDurableGenerationTask,
   findResumableGenerationTask,
 } from "../hooks/durableGenerationTask";
-import MasterSelectionSummary from "./MasterSelectionSummary";
 import ResumeGenerationBanner from "./ResumeGenerationBanner";
 import { existingMasterApplyCas, record } from "./masterApplyCas";
 import MasterDesignerDialog from "../../authored-vnext/master-setup/MasterDesignerDialog";
@@ -61,9 +58,6 @@ const OutlinePage: React.FC<{
   const [masterDesignerOpen, setMasterDesignerOpen] = useState(
     masterEnabled && initialMasterSettingsOpen
   );
-  const [masterDefaultResolved, setMasterDefaultResolved] = useState(
-    !masterEnabled
-  );
   const [autoIntentState, setAutoIntentState] = useState<
     "checking" | "pending" | "none"
   >(auto ? "checking" : "none");
@@ -74,18 +68,10 @@ const OutlinePage: React.FC<{
   const sourceSvgAutoReady = auto && !autoIntentChecking && autoIntentState === "pending" &&
     sourceSvgAutoPresentationId === resolvedPresentationId;
   const masterSelectionEpochRef = useRef(0);
-  const openMasterDesigner = useCallback(() => setMasterDesignerOpen(true), []);
 
   // Custom hooks
   const dispatch = useDispatch();
   const router = useRouter();
-  const handleMasterRequired = useCallback(() => {
-    if (auto && resolvedPresentationId) {
-      router.replace(`/outline?id=${encodeURIComponent(resolvedPresentationId)}`);
-      return;
-    }
-    openMasterDesigner();
-  }, [auto, openMasterDesigner, resolvedPresentationId, router]);
   // Resolve the immutable source intent before opening an outline stream.
   // Source SVG reads its content from the manifest, including after a reload.
   const streamState = useOutlineStreaming(
@@ -97,7 +83,6 @@ const OutlinePage: React.FC<{
     usePresentationGeneration(
       resolvedPresentationId,
       outlines,
-      handleMasterRequired,
     );
 
   useEffect(() => {
@@ -129,74 +114,11 @@ const OutlinePage: React.FC<{
     if (staged?.mode !== "authored") return;
   }, [auto, dispatch, resolvedPresentationId]);
 
-  useEffect(() => {
-    // Upload resolves the current published revision immediately before an
-    // auto-generation click. Preserve only that exact document-scoped pin
-    // through outline streaming; never recover a browser-wide prior choice.
-    if (!masterEnabled || !resolvedPresentationId) {
-      setMasterDefaultResolved(true);
-      return;
-    }
-    const staged = auto
-      ? findDurableGenerationTask(resolvedPresentationId)
-      : null;
-    const stagedPin =
-      staged?.mode === "authored" ? staged.authoredRequest?.masterPin : undefined;
-    if (stagedPin) {
-      if (
-        companyStandard?.masterId === stagedPin.masterId &&
-        companyStandard.revision === stagedPin.revision &&
-        companyStandard.digest === stagedPin.digest
-      ) {
-        setMasterDefaultResolved(true);
-        return;
-      }
-      const epoch = ++masterSelectionEpochRef.current;
-      void masterClient
-        .getRevision(stagedPin.masterId, stagedPin.revision)
-        .then((revision) => {
-          if (masterSelectionEpochRef.current !== epoch) return;
-          if (revision.digest !== stagedPin.digest) {
-            dispatch(setPptGenUploadState({ companyStandard: null }));
-            return;
-          }
-          dispatch(
-            setPptGenUploadState({
-              companyStandard: masterSelectionFromPublished(revision),
-            })
-          );
-        })
-        .catch(() => {
-          if (masterSelectionEpochRef.current === epoch) {
-            dispatch(setPptGenUploadState({ companyStandard: null }));
-          }
-        })
-        .finally(() => {
-          if (masterSelectionEpochRef.current === epoch) {
-            setMasterDefaultResolved(true);
-          }
-        });
-      return;
-    }
-    setMasterDefaultResolved(true);
-  }, [auto, companyStandard, dispatch, masterEnabled, resolvedPresentationId]);
-
   const applyPublishedMaster = useCallback(
     async (published: MasterRevisionEnvelope) => {
       if (!resolvedPresentationId) return;
       const selection = masterSelectionFromPublished(published);
       ++masterSelectionEpochRef.current;
-      const staged = findDurableGenerationTask(resolvedPresentationId);
-      const stagedPin = staged?.authoredRequest?.masterPin;
-      if (
-        staged?.mode === "authored" &&
-        !staged.taskId &&
-        (stagedPin?.masterId !== selection.masterId ||
-          stagedPin?.revision !== selection.revision ||
-          stagedPin?.digest !== selection.digest)
-      ) {
-        clearDurableGenerationTask(staged.idempotencyKey);
-      }
       if (initialMasterSettingsOpen) {
         const current = await DashboardApi.getPresentation(resolvedPresentationId);
         const cas = existingMasterApplyCas(current);
@@ -339,7 +261,6 @@ const OutlinePage: React.FC<{
       if (streamState.isStreaming) return;
       if (!streamState.hasCompleted && autoIntentState !== "pending") return;
       if (!outlines || outlines.length === 0) return;
-      if (masterEnabled && !masterDefaultResolved) return;
     }
     autoSubmittedRef.current = true;
     handleSubmit();
@@ -353,8 +274,6 @@ const OutlinePage: React.FC<{
     streamState.hasCompleted,
     outlines,
     handleSubmit,
-    masterEnabled,
-    masterDefaultResolved,
   ]);
 
   useEffect(() => {
@@ -473,11 +392,6 @@ const OutlinePage: React.FC<{
           suppressed={loadingState.isLoading || preparing}
           onResume={() => void handleSubmit()}
         />
-        {!auto && masterEnabled && !preparing && !startRecovery && <MasterSelectionSummary
-          templateName="AI 저작 스타일"
-          selection={companyStandard}
-          onOpen={openMasterDesigner}
-        />}
         {editingOutline ? <div className="max-h-[48dvh] overflow-y-auto rounded-2xl border border-slate-200">
           <OutlineContent
             outlines={outlines}
