@@ -717,9 +717,15 @@ async def _attempt_render(*, ctx, request, presentation_id, index, content, payl
                         "cache_only_remeasurement", "cached_author_render", "append_only_cache"))
                     and (payload.get("partial_recovery") or {}).get("category") != "known"):
                 before = final
+                # Server-drawn charts draw their declaration: rewriting their text would break
+                # its grounding against the source and its replay (server_chart.py).
+                from services.generation_core.drivers.svg.server_chart import (
+                    server_chart_group_ids, server_chart_policy)
+                chart_groups = server_chart_group_ids(payload, final) if server_chart_policy(ctx.snapshot) else ()
                 final, substitutions = substitute_svg_visible_symbols(
                     final, source_values=source_values, required_text=required_text,
-                    protected_element_ids=(GROUP_ID, "svg-system-template-background", "svg-system-template-foreground"))
+                    protected_element_ids=(GROUP_ID, "svg-system-template-background", "svg-system-template-foreground",
+                                           *chart_groups))
                 if substitutions:
                     # The declarations (bound to ``before``) follow the text edit.
                     from services.generation_core.drivers.svg.native_declarations import follow_visible_text_edits
@@ -998,7 +1004,9 @@ async def _attempt_render(*, ctx, request, presentation_id, index, content, payl
             assess_visible_nodes, svg_text_nodes, svg_writing_repair_witnesses,
         )
 
-        writing = assess_visible_nodes(svg_text_nodes(final), source_values=source_values)
+        from services.generation_core.drivers.svg.server_chart import server_chart_group_ids, server_chart_policy
+        chart_groups = server_chart_group_ids(payload, final) if server_chart_policy(ctx.snapshot) else ()
+        writing = assess_visible_nodes(svg_text_nodes(final, excluded_ids=chart_groups), source_values=source_values)
         substitution = payload["attempts"][-1].get("writing_policy_substitution")
         if substitution:
             writing["local_substitution"] = substitution
@@ -1012,7 +1020,8 @@ async def _attempt_render(*, ctx, request, presentation_id, index, content, payl
             writing_hint = json.dumps({
                 "kind": "writing_policy_visible_symbols",
                 "counts": writing["hard_violation_counts"],
-                "witnesses": svg_writing_repair_witnesses(final, source_values=source_values),
+                "witnesses": svg_writing_repair_witnesses(final, source_values=source_values,
+                                                          excluded_ids=chart_groups),
                 "instruction": "Repair the witnessed unprotected symbols in newly phrased text using commas or words, preserving every term, scope and relation. Preserve protected literals, native cells and labels, official names, quotations, numbers and formulas exactly. Do not change frozen header fields or delete wording. Keep facts and slide layout intact.",
             }, ensure_ascii=False, separators=(",", ":"))
     from services.generation_core.drivers.svg.embed_assets import apply_vector_icon_quality

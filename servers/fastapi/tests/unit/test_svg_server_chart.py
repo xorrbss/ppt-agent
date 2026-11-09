@@ -487,7 +487,7 @@ def test_each_deck_gets_the_rule_of_the_revision_it_was_admitted_with():
     assert server_chart.server_chart_policy({"server_chart_render": V2})
     v3 = server_chart.server_chart_rule({"server_chart_render": server_chart.SERVER_CHART_REVISION_V3})
     assert v3 == rule.replace(V2, server_chart.SERVER_CHART_REVISION_V3)
-    assert server_chart.SERVER_CHART_CURRENT == server_chart.SERVER_CHART_REVISION_V4
+    assert server_chart.SERVER_CHART_CURRENT == server_chart.SERVER_CHART_REVISION_V5
 
 
 #: Published output of revision two for the families it adds (bar and column are
