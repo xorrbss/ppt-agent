@@ -337,11 +337,12 @@ def pin_svg_style(request: object) -> dict:
                 if get_svg_server_charts_env() and frozen[SNAPSHOT_REVISION_KEY] != REQUIREMENTS_VERSION_V5:
                     # V4 decks only: server value labels carry units (만명, 점) that the V5
                     # unit grammar does not read; the combination is not supported yet.
-                    # Bar/column charts drawn by the server from the declaration
-                    # (server_chart.py), pinned like the revision above.
+                    # Charts drawn by the server from the declaration (server_chart.py),
+                    # pinned like the revision above: a deck keeps the renderer revision
+                    # it was admitted with.
                     from services.generation_core.drivers.svg.server_chart import (
-                        SERVER_CHART_REVISION, SNAPSHOT_KEY as SERVER_CHART_KEY)
-                    frozen[SERVER_CHART_KEY] = SERVER_CHART_REVISION
+                        SERVER_CHART_CURRENT, SNAPSHOT_KEY as SERVER_CHART_KEY)
+                    frozen[SERVER_CHART_KEY] = SERVER_CHART_CURRENT
                 from services.generation_core.drivers.svg.icon_flatten import (
                     ASSET_PROJECTION_CURRENT, ASSET_PROJECTION_KEY,
                 )

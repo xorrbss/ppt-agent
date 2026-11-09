@@ -21,13 +21,21 @@ beneath the bars), so the unchanged requirement checks and exporter apply to it.
 
 Revision one draws bar and column charts: clustered (one or more series) and
 stacked or percent-stacked (two or more series), positive values. Value labels
-carry the title's unit. Admission enables it for V4 decks only: the V5 unit
-grammar does not read every unit a label may carry (만명, 점). Any other form leaves the placeholder empty and records why;
-nothing is guessed.
+carry the title's unit. Revision two draws bar and column charts exactly as
+revision one and adds line and area charts (two or more categories, one or more
+series, values zero or above, a zero-based value axis; several lines carry no
+value labels, as the native line contract labels one line only) and pie and
+donut charts (one series, at most eight positive slices, clockwise from twelve
+o'clock; values sit in their slice, or beside the slice name when one does not
+fit). Fresh admissions freeze revision two; decks admitted with revision one
+keep it and its author rule. Admission enables it for V4 decks only: the V5 unit
+grammar does not read every unit a label may carry (만명, 점). Any other form
+leaves the placeholder empty and records why; nothing is guessed.
 """
 from __future__ import annotations
 
 import json
+import math
 import re
 from collections import Counter
 from decimal import Decimal, InvalidOperation
@@ -35,6 +43,7 @@ from statistics import median
 from xml.etree import ElementTree as ET
 
 SERVER_CHART_REVISION = "svg-server-chart/v1"
+SERVER_CHART_REVISION_V2 = "svg-server-chart/v2"
 SNAPSHOT_KEY = "server_chart_render"
 RENDER_ATTRIBUTE = "data-chart-render"
 BOX_ATTRIBUTE = "data-chart-box"
@@ -55,7 +64,8 @@ class ServerChartUnsupported(ValueError):
 
 def server_chart_policy(style_snapshot: dict | None) -> bool:
     """Whether a deck was admitted with server-rendered charts (frozen at admission)."""
-    return isinstance(style_snapshot, dict) and style_snapshot.get(SNAPSHOT_KEY) == SERVER_CHART_REVISION
+    return isinstance(style_snapshot, dict) and style_snapshot.get(SNAPSHOT_KEY) in (
+        SERVER_CHART_REVISION, SERVER_CHART_REVISION_V2)
 
 
 SERVER_CHART_RULE = (
@@ -74,8 +84,27 @@ SERVER_CHART_RULE = (
 )
 
 
+SERVER_CHART_RULE_V2 = (
+    "Bar, column, line, area, pie and donut charts are drawn by the server from your JSON. For such a chart "
+    "write only an empty placeholder <g id=\"native-chart-SLUG\" data-native-chart='JSON' "
+    f"data-chart-render=\"{SERVER_CHART_REVISION_V2}\" data-chart-box=\"X Y WIDTH HEIGHT\"/> with the same JSON "
+    "contract; do not draw its bars, lines, areas, slices, axes, labels, legend or title yourself. The box is "
+    "where the whole chart (its title, legend, category and value labels included) will be drawn: at least "
+    "360x240 px, clear of every other element; put captions, unit notes and callouts outside it. Chart only "
+    "numbers the source states, each with the category it belongs to. Put the unit in the title in "
+    "parentheses, such as \"(억원)\", \"(%)\" or \"(점)\": value labels show it. Bar and column values must be "
+    "positive; use \"grouping\":\"clustered\" (or omit it), or \"stacked\"/\"percentStacked\" with two or more "
+    "series for parts of a whole. Line and area charts show a trend over two or more ordered categories, with "
+    "one or more series of values zero or above. Pie and donut charts show the shares of one whole: exactly "
+    "one series, at most 8 positive slices. Charts with negative values are drawn by you as before. When "
+    "previous_svg shows such a placeholder, keep it as a placeholder.\n"
+)
+_RULES = {SERVER_CHART_REVISION: SERVER_CHART_RULE, SERVER_CHART_REVISION_V2: SERVER_CHART_RULE_V2}
+
+
 def server_chart_rule(style_snapshot: dict | None) -> str:
-    return SERVER_CHART_RULE if server_chart_policy(style_snapshot) else ""
+    """The author rule of the revision the deck was admitted with (``""`` without one)."""
+    return _RULES[style_snapshot[SNAPSHOT_KEY]] if server_chart_policy(style_snapshot) else ""
 
 
 def _text_width(text: str, size: float) -> float:
@@ -250,9 +279,9 @@ def _label_unit(title: str | None, series: list[dict]) -> str:
 class _Layout:
     """Everything a drawing needs except the value label position."""
 
-    def __init__(self, root, node, raw):
+    def __init__(self, root, node, raw, validate=None):
         self.x0, self.y0, self.width, self.height = _box(node)
-        self.chart_type, self.categories, self.series = _validated(raw)
+        self.chart_type, self.categories, self.series = (validate or _validated)(raw)
         self.font, self.ink, self.size = _page_style(root, node)
         self.title_size = self.size + 2
         self.horizontal = self.chart_type == "bar"
@@ -534,8 +563,241 @@ def _normalised(raw: dict, layout: _Layout, show_values: bool, position: str, bo
     return box
 
 
+# --- Revision two: line, area, pie and donut ---------------------------------------------
+#
+# Bar and column charts draw exactly as in revision one (the same code); revision two adds
+# the trend families (line, area) and the part-of-whole families (pie, donut). Revision
+# one stays published unchanged for the decks admitted with it.
+
+_FAMILIES_V2 = _FAMILIES | {"line", "area", "pie", "donut"}
+_TREND = ("line", "area")
+_POLAR = ("pie", "donut")
+#: Distinct slice colours, in slice order; a pie has at most this many slices.
+_SLICE_COLORS = ("#2563EB", "#38BDF8", "#94A3B8", "#1E3A8A", "#64748B", "#0EA5E9", "#CBD5E1", "#0F172A")
+_DONUT_HOLE = 0.58
+_AREA_OPACITY = "0.3"
+_POLAR_LABEL_GAP = 14.0
+
+
+def _validated_v2(raw: dict) -> tuple[str, list[str], list[dict]]:
+    chart_type = raw.get("chartType")
+    if chart_type in _FAMILIES:
+        return _validated(raw)
+    if chart_type not in _FAMILIES_V2:
+        raise ServerChartUnsupported("server_chart_type_unsupported")
+    if raw.get("grouping") not in (None, "clustered"):
+        # Stacks are bar/column only (the native stack contract).
+        raise ServerChartUnsupported("server_chart_grouping_unsupported")
+    categories, series = raw.get("categories"), raw.get("series")
+    if (not isinstance(categories, list) or not categories or not all(isinstance(item, str) and item.strip()
+                                                                       for item in categories)
+            or not isinstance(series, list) or not series):
+        raise ServerChartUnsupported("server_chart_shape_invalid")
+    for item in series:
+        if (not isinstance(item, dict) or not isinstance(item.get("name"), str) or not item["name"].strip()
+                or not isinstance(item.get("values"), list) or len(item["values"]) != len(categories)):
+            raise ServerChartUnsupported("server_chart_shape_invalid")
+    values = [_number(value) for item in series for value in item["values"]]
+    if chart_type in _TREND:
+        if len(categories) < 2:
+            # A trend needs two or more ordered categories to draw a line.
+            raise ServerChartUnsupported("server_chart_trend_needs_categories")
+        if any(value < 0 for value in values):
+            # The drawing's value axis starts at zero.
+            raise ServerChartUnsupported("server_chart_value_negative")
+        if not any(value > 0 for value in values):
+            raise ServerChartUnsupported("server_chart_value_not_positive")
+        return chart_type, categories, series
+    if len(series) != 1:
+        # A pie or donut draws one whole (the native pie contract).
+        raise ServerChartUnsupported("server_chart_polar_needs_one_series")
+    if len(categories) > len(_SLICE_COLORS):
+        raise ServerChartUnsupported("server_chart_too_many_slices")
+    if any(value <= 0 for value in values):
+        # A zero or negative share has no slice.
+        raise ServerChartUnsupported("server_chart_value_not_positive")
+    return chart_type, categories, series
+
+
+def _draw_trend(layout: _Layout, node, show_values: bool) -> bool:
+    """A line or area chart; ``False`` when two value labels of one category collide."""
+    size, font, ink = layout.size, layout.font, layout.ink
+    top = layout.y0
+    if layout.title:
+        _text(node, layout.title, layout.x0, top + layout.title_size, size=layout.title_size, font=font,
+              fill=ink, weight="bold")
+        top += layout.title_size + 14
+    top = _legend(layout, node, top)
+    bottom = layout.y0 + layout.height
+    band = layout.width / len(layout.categories)
+    category_size, lines = _wrap_all(layout.categories, size, band - 8)
+    zero = bottom - (category_size * 1.25 * max(map(len, lines)) + 10)
+    plot_top = top + (size + 12 if show_values else 6)
+    if zero - plot_top < 60:
+        raise ServerChartUnsupported("server_chart_box_too_small")
+    # The axis is drawn before the series that rest on it.
+    _element(node, "line", x1=_fmt(layout.x0), y1=_fmt(zero), x2=_fmt(layout.x0 + layout.width), y2=_fmt(zero),
+             stroke=_AXIS, stroke_width="2")
+    centers = [layout.x0 + band * (index + 0.5) for index in range(len(layout.categories))]
+    for center, wrapped in zip(centers, lines, strict=True):
+        _text(node, wrapped, center, zero + category_size + 6, size=category_size, font=font, fill=ink,
+              anchor="middle")
+    points = [[(center, zero - (zero - plot_top) * float(_number(value)) / layout.high)
+               for center, value in zip(centers, item["values"], strict=True)] for item in layout.series]
+    for s_index, series_points in enumerate(points):
+        color = layout.colors[s_index][0]
+        if layout.chart_type == "area":
+            outline = [*series_points, (centers[-1], zero), (centers[0], zero)]
+            _element(node, "polygon", points=" ".join(f"{_fmt(x)},{_fmt(y)}" for x, y in outline), fill=color,
+                     fill_opacity=_AREA_OPACITY, stroke=color, stroke_width="2", stroke_linejoin="round")
+        else:
+            _element(node, "polyline", points=" ".join(f"{_fmt(x)},{_fmt(y)}" for x, y in series_points),
+                     fill="none", stroke=color, stroke_width="3", stroke_linejoin="round", stroke_linecap="round")
+    if not show_values:
+        return True
+    # Value labels are painted after every series, so no line crosses them.
+    fits = True
+    for c_index, center in enumerate(centers):
+        heights = sorted(series_points[c_index][1] for series_points in points)
+        fits = fits and all(lower - upper >= size + 2 for upper, lower in zip(heights, heights[1:], strict=False))
+        for s_index, series_points in enumerate(points):
+            _text(node, layout.labels[s_index][c_index], center, series_points[c_index][1] - 10, size=size,
+                  font=font, fill=ink, anchor="middle", weight="bold")
+    return fits
+
+
+def _slice_colors(raw: dict, count: int) -> list[str]:
+    declared = raw["series"][0].get("pointColors")
+    if (isinstance(declared, list) and len(declared) == count and len(set(declared)) == count
+            and all(isinstance(color, str) and re.fullmatch(r"#[0-9A-Fa-f]{6}", color) for color in declared)):
+        return list(declared)
+    return list(_SLICE_COLORS[:count])
+
+
+def _draw_polar(layout: _Layout, node, colors: list[str], show_values: bool, inside: bool) -> bool:
+    """A pie or donut, clockwise from twelve o'clock; ``False`` when an inside value label
+    does not fit its slice. Category names (and outside values) sit beyond their slice."""
+    size, font, ink = layout.size, layout.font, layout.ink
+    top = layout.y0
+    if layout.title:
+        _text(node, layout.title, layout.x0, top + layout.title_size, size=layout.title_size, font=font,
+              fill=ink, weight="bold")
+        top += layout.title_size + 14
+    bottom = layout.y0 + layout.height
+    outside = show_values and not inside
+    values = [float(_number(value)) for value in layout.series[0]["values"]]
+    labels = layout.labels[0]
+    line_height = size * 1.25
+    widths = [max(_text_width(category, size), _text_width(label, size) if outside else 0)
+              for category, label in zip(layout.categories, labels, strict=True)]
+    block = line_height * (2 if outside else 1)
+    radius = min(layout.width / 2 - max(widths) - _POLAR_LABEL_GAP - 4,
+                 (bottom - top) / 2 - block - _POLAR_LABEL_GAP)
+    if radius < 60:
+        raise ServerChartUnsupported("server_chart_box_too_small")
+    cx, cy = layout.x0 + layout.width / 2, (top + bottom) / 2
+    hole = _DONUT_HOLE if layout.chart_type == "donut" else 0.0
+    total = sum(values)
+    angle = -math.pi / 2
+    middles = []
+    for value, color in zip(values, colors, strict=True):
+        sweep = 2 * math.pi * value / total
+        steps = max(2, math.ceil(sweep / 0.05))
+        arc = [angle + sweep * step / steps for step in range(steps + 1)]
+        outline = [(cx + radius * math.cos(item), cy + radius * math.sin(item)) for item in arc]
+        outline += ([(cx + radius * hole * math.cos(item), cy + radius * hole * math.sin(item))
+                     for item in reversed(arc)] if hole else [(cx, cy)])
+        _element(node, "polygon", points=" ".join(f"{_fmt(x)},{_fmt(y)}" for x, y in outline), fill=color)
+        middles.append((angle + sweep / 2, sweep))
+        angle += sweep
+    boxes = []
+    for (middle, _sweep), category, label, width in zip(middles, layout.categories, labels, widths, strict=True):
+        cos, sin = math.cos(middle), math.sin(middle)
+        x, y = cx + (radius + _POLAR_LABEL_GAP) * cos, cy + (radius + _POLAR_LABEL_GAP) * sin
+        anchor = "start" if cos > 0.25 else "end" if cos < -0.25 else "middle"
+        center_y = y + sin * block / 2
+        baseline = center_y - block / 2 + size * 0.85
+        left = x if anchor == "start" else x - width if anchor == "end" else x - width / 2
+        boxes.append((left, center_y - block / 2, left + width, center_y + block / 2))
+        _text(node, category, x, baseline, size=size, font=font, fill=ink, anchor=anchor)
+        if outside:
+            _text(node, label, x, baseline + line_height, size=size, font=font, fill=ink, anchor=anchor, weight="bold")
+    for index, first in enumerate(boxes):
+        for second in boxes[index + 1:]:
+            if first[0] < second[2] and second[0] < first[2] and first[1] < second[3] and second[1] < first[3]:
+                # Neighbouring small slices: their names would overprint each other.
+                raise ServerChartUnsupported("server_chart_slice_labels_collide")
+    if not inside or not show_values:
+        return True
+    fits = True
+    reach = radius * ((1 + hole) / 2 if hole else 0.62)
+    for (middle, sweep), label, color in zip(middles, labels, colors, strict=True):
+        chord = 2 * reach * math.sin(min(sweep, math.pi) / 2)
+        ring = radius * (1 - hole) if hole else reach
+        fits = fits and chord >= _text_width(label, size) + 8 and ring >= size + 6
+        _text(node, label, cx + reach * math.cos(middle), cy + reach * math.sin(middle) + size * 0.35, size=size,
+              font=font, fill=_contrast(color), anchor="middle", weight="bold")
+    return fits
+
+
+def _clear(node) -> None:
+    for child in list(node):
+        node.remove(child)
+
+
+def render_server_chart_v2(root: ET.Element, node: ET.Element, raw: dict) -> list[float]:
+    """Revision two: revision one's bar and column charts, plus line, area, pie and donut.
+
+    Same contract as :func:`render_server_chart_v1`.
+    """
+    if raw.get("chartType") in _FAMILIES:
+        return render_server_chart_v1(root, node, raw)
+    _clear(node)
+    layout = _Layout(root, node, raw, validate=_validated_v2)
+    box = [layout.x0, layout.y0, layout.width, layout.height]
+    for key in (RENDER_ATTRIBUTE, BOX_ATTRIBUTE):
+        node.attrib.pop(key, None)
+    labels = raw.get("valueLabels") if isinstance(raw.get("valueLabels"), dict) else {}
+    show_values = labels.get("shown", True) is not False
+    try:
+        if layout.chart_type in _TREND:
+            position = "above"
+            if layout.chart_type == "line" and len(layout.series) > 1:
+                # The native line contract labels the values of a single line only.
+                show_values = False
+            if not _draw_trend(layout, node, show_values) and show_values:
+                # Two series too close at one category: the chart is drawn without value labels.
+                _clear(node)
+                show_values = False
+                _draw_trend(layout, node, show_values)
+            colors = [[layout.colors[index][0]] * len(layout.categories) for index in range(len(layout.series))]
+        else:
+            colors = _slice_colors(raw, len(layout.categories))
+            position = "outsideEnd" if labels.get("position") == "outsideEnd" else "center"
+            if not _draw_polar(layout, node, colors, show_values, position == "center") and show_values:
+                # A slice too small for its value: every value moves beside its name.
+                _clear(node)
+                position = "outsideEnd"
+                _draw_polar(layout, node, colors, show_values, False)
+            colors = [colors]
+    except ServerChartUnsupported:
+        _clear(node)
+        raise
+    raw["valueLabels"] = {"shown": show_values, "position": position if show_values else None}
+    raw["categoryOrder"] = "clockwise" if layout.chart_type in _POLAR else "leftToRight"
+    raw.pop("grouping", None)
+    raw["markers"] = False
+    if layout.title:
+        raw["title"] = layout.title
+    for item, item_colors in zip(layout.series, colors, strict=True):
+        item["pointColors"] = list(item_colors)
+    return box
+
+
 #: Published renderer revisions. A revision's output never changes once published.
-RENDERERS = {SERVER_CHART_REVISION: render_server_chart_v1}
+RENDERERS = {SERVER_CHART_REVISION: render_server_chart_v1, SERVER_CHART_REVISION_V2: render_server_chart_v2}
+#: The revision a fresh admission freezes.
+SERVER_CHART_CURRENT = SERVER_CHART_REVISION_V2
 
 
 def render_server_chart(root: ET.Element, node: ET.Element, raw: dict) -> tuple[str, list[float]]:
@@ -697,7 +959,8 @@ def apply_server_chart_grounding(quality: dict, payload: dict, svg: str, sources
         quality.setdefault("failures", []).extend(failures)
 
 
-__all__ = ["BOX_ATTRIBUTE", "RENDERERS", "RENDER_ATTRIBUTE", "SERVER_CHART_REVISION", "SERVER_CHART_RULE",
-           "SNAPSHOT_KEY", "ServerChartUnsupported", "apply_server_chart_grounding", "placeholder_view",
-           "render_server_chart", "render_server_chart_v1", "server_chart_policy", "server_chart_rule",
+__all__ = ["BOX_ATTRIBUTE", "RENDERERS", "RENDER_ATTRIBUTE", "SERVER_CHART_CURRENT", "SERVER_CHART_REVISION",
+           "SERVER_CHART_REVISION_V2", "SERVER_CHART_RULE", "SERVER_CHART_RULE_V2", "SNAPSHOT_KEY",
+           "ServerChartUnsupported", "apply_server_chart_grounding", "placeholder_view", "render_server_chart",
+           "render_server_chart_v1", "render_server_chart_v2", "server_chart_policy", "server_chart_rule",
            "source_numbers"]
