@@ -141,7 +141,7 @@ const OutlinePage: React.FC<{
       ? findDurableGenerationTask(resolvedPresentationId)
       : null;
     const stagedPin =
-      staged?.mode === "authored" ? staged.authoredRequest?.masterPin : undefined;
+      staged?.mode === "svg" ? staged.authoredRequest?.masterPin : undefined;
     if (stagedPin) {
       if (
         companyStandard?.masterId === stagedPin.masterId &&
@@ -189,7 +189,7 @@ const OutlinePage: React.FC<{
       const staged = findDurableGenerationTask(resolvedPresentationId);
       const stagedPin = staged?.authoredRequest?.masterPin;
       if (
-        staged?.mode === "authored" &&
+        staged?.mode === "svg" &&
         !staged.taskId &&
         (stagedPin?.masterId !== selection.masterId ||
           stagedPin?.revision !== selection.revision ||

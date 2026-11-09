@@ -1,26 +1,43 @@
-"""Resolve the effective generation strategy: svg is the default, authored the fallback.
+"""Resolve the effective generation strategy: svg is the only one admitted.
 
 Every caller in this codebase that needs to know whether a request runs the
 svg or the authored pipeline calls :func:`resolve_generation_strategy` rather
 than reading ``request.strategy`` directly -- the raw field stays ``None``
-when the caller omitted it (that is the wire contract), but "omitted" no
-longer means authored. See ``docs/generation-core-architecture-20260925.md``
-Part A for the design and the exceptions below.
+when the caller omitted it (that is the wire contract), and "omitted" always
+means svg. See ``docs/generation-core-architecture-20260925.md`` Part A for
+the original design and ``docs/authored-removal-design-20261105.md`` (P1) for
+the removal of authored generation.
+
+Authored generation is removed (owner decision 2026-11-09): no request may
+start one. An explicit ``strategy="authored"`` (or the authored-only
+``generation_engine="deck-ir"``) still parses, so the payload shape is
+unchanged and durable authored payloads still restore, but every admission
+entry point rejects it with :data:`AUTHORED_STRATEGY_REMOVED` through
+:func:`require_generation_strategy_admission`, and a durable job staged with
+authored before the removal fails with the same code when it is dispatched.
+The resolver itself still reports an explicit ``"authored"`` verbatim, so
+code that reads existing authored decks keeps working until the authored
+code is deleted.
 """
 from __future__ import annotations
 
 from typing import Literal
 
+from fastapi import HTTPException
+
 GenerationStrategy = Literal["svg", "authored"]
 
-#: Why an *omitted* strategy resolved the way it did. "explicit" covers both
-#: literal choices (the exceptions below never apply to those); any other
-#: value is only possible for authored, and (besides "default", the ordinary
-#: svg pick) explains why svg was skipped without a 422 the caller never
-#: asked to avoid. A value outside this fixed set is one of
+#: Why a request resolved the way it did. "explicit" covers both literal
+#: choices; "default" is the omitted-strategy pick (always svg). Durable
+#: payloads staged before the authored removal may also carry one of
 #: services.svg_generation_admission.svg_creation_admission_violation's own
-#: structural reason codes (e.g. "svg_source_verbatim_required").
+#: structural reason codes (e.g. "svg_source_verbatim_required"), recorded
+#: when an omitted strategy used to fall back to authored silently; such a
+#: job restores as authored and fails on dispatch.
 StrategyReason = Literal["explicit", "default"]
+
+#: Error code for any request that would start a new authored generation.
+AUTHORED_STRATEGY_REMOVED = "authored_strategy_removed"
 
 
 def resolve_generation_strategy_with_reason(
@@ -28,35 +45,17 @@ def resolve_generation_strategy_with_reason(
 ) -> tuple[GenerationStrategy, str]:
     """Resolve ``request`` to ``("svg" | "authored", reason)``.
 
-    An explicit ``strategy`` is always honoured verbatim -- admission for
-    that explicit choice (e.g. :func:`services.svg_generation_admission.require_svg_creation_admission`)
-    still runs downstream and may 422 it. Only the *omitted* case is resolved
-    here, and only for that case do the exceptions below apply:
-
-    1. A source restyle with a page-size/orientation override stays on its
-       existing authored route.
-    2. Any other combination svg admission would reject (checked structurally,
-       not by source_mode alone) falls back to authored silently -- the new
-       default must never turn a previously-valid authored request into a 422.
-       ``reason`` is the violation's own code, so an operator can tell "why
-       not svg" apart from an ordinary explicit authored request.
+    An explicit ``strategy`` is reported verbatim -- admission for that
+    explicit choice still runs downstream and rejects it (authored is
+    removed; svg admission may 422 an svg request). An omitted strategy
+    always resolves to svg: an omitted-strategy request svg admission would
+    reject is a 422 carrying the violation's own code
+    (:func:`services.svg_generation_admission.require_svg_creation_admission`),
+    never a silent switch to another pipeline.
     """
     explicit = getattr(request, "strategy", None)
     if explicit in ("svg", "authored"):
         return explicit, "explicit"
-    # A4 source reflow is opted into with an explicit SVG strategy. Keep
-    # previously omitted-strategy requests on their existing authored route.
-    if (
-        getattr(request, "source_mode", None) == "source_content_restyle"
-        and (getattr(request, "page_size", None) is not None
-             or getattr(request, "orientation", None) is not None)
-    ):
-        return "authored", "svg_source_canvas_override_not_supported"
-    from services.svg_generation_admission import svg_creation_admission_violation
-
-    violation = svg_creation_admission_violation(request)
-    if violation is not None:
-        return "authored", violation
     return "svg", "default"
 
 
@@ -76,10 +75,42 @@ def recorded_generation_strategy(request: object) -> tuple[GenerationStrategy, s
     return strategy, getattr(request, "_generation_strategy_reason", None) or derived_reason
 
 
+def removed_generation_strategy_code(request: object) -> str | None:
+    """The removal code if ``request`` asks for authored generation, else ``None``.
+
+    Covers an explicit ``strategy="authored"`` and the authored-only
+    ``generation_engine="deck-ir"``. Field-only: it never resolves styles or
+    touches durable state, so every entry point can call it first.
+    """
+    if getattr(request, "strategy", None) == "authored":
+        return AUTHORED_STRATEGY_REMOVED
+    if getattr(request, "generation_engine", None) == "deck-ir":
+        return AUTHORED_STRATEGY_REMOVED
+    return None
+
+
+def require_generation_strategy_admission(request: object) -> None:
+    """Reject a request that would start a new authored generation (HTTP 422).
+
+    Also used when a durable job restored from a payload staged before the
+    removal is dispatched: the exception carries the stable ``code`` and is
+    not retryable, so the job's recorded error names the removal.
+    """
+    code = removed_generation_strategy_code(request)
+    if code is not None:
+        error = HTTPException(status_code=422, detail=code)
+        error.code = code
+        error.retryable = False
+        raise error
+
+
 __all__ = [
+    "AUTHORED_STRATEGY_REMOVED",
     "GenerationStrategy",
     "StrategyReason",
+    "recorded_generation_strategy",
+    "removed_generation_strategy_code",
+    "require_generation_strategy_admission",
     "resolve_generation_strategy",
     "resolve_generation_strategy_with_reason",
-    "recorded_generation_strategy",
 ]

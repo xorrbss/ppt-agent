@@ -30,14 +30,12 @@ function GenerationHarness() {
   return <button onClick={() => void handleSubmit()}>Generate</button>;
 }
 
-describe("usePresentationGeneration authored-only generation", () => {
+describe("usePresentationGeneration svg-only generation", () => {
   beforeEach(() => {
     cy.window().then((window) => window.localStorage.clear());
     store.dispatch(
       setPptGenUploadState({
         authoredStyle: "strategic-navy",
-        generationStrategy: "authored",
-        authoredVisionQa: true,
         companyStandard: {
           masterId: "master:company-standard",
           revision: 3,
@@ -52,7 +50,7 @@ describe("usePresentationGeneration authored-only generation", () => {
     );
   });
 
-  it("starts only the authored driver with independent style and company pins", () => {
+  it("starts the svg driver with independent style and company pins", () => {
     cy.stub(router, "replace").as("replace");
     cy.stub(PresentationGenerationApi, "generateAuthoredAsync")
       .resolves({ id: "task-authored", status: "running" } as any)
@@ -74,13 +72,19 @@ describe("usePresentationGeneration authored-only generation", () => {
       Cypress.sinon.match({
         presentation_id: "outline-shell-test",
         authored_style: "strategic-navy",
-        vision_qa: true,
+        strategy: "svg",
         masterPin: {
           masterId: "master:company-standard",
           revision: 3,
           digest: `sha256:${"a".repeat(64)}`,
         },
       }),
+    );
+    cy.get("@generateAuthored").should(
+      "have.been.calledWith",
+      Cypress.sinon.match(
+        (body: Record<string, unknown>) => !("vision_qa" in body),
+      ),
     );
   });
 

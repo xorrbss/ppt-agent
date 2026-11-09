@@ -121,10 +121,9 @@ def test_fresh_v2_request_pins_writing_policy_in_durable_payload() -> None:
     assert GeneratePresentationRequest.model_validate(durable_payload).writing_policy == WRITING_POLICY_ID
 
 
-def test_deterministic_route_rejection_is_422_not_503() -> None:
-    def resolver(**kwargs: object) -> dict[str, object]:
-        return public_generation_route.resolve_authored_generation_route(
-            **{**kwargs, "generation_mode": "registered-template"})
+def test_explicit_authored_strategy_is_rejected_before_any_route_resolution() -> None:
+    def resolver(**_kwargs: object) -> dict[str, object]:
+        raise AssertionError("authored generation must never reach a route resolver")
 
     request = PresentationGenerationRequestV2(
         content="Brand style deck", generationMode="brand-style", strategy="authored",
@@ -136,7 +135,39 @@ def test_deterministic_route_rejection_is_422_not_503() -> None:
             )
         )
     assert excinfo.value.status_code == 422
-    assert excinfo.value.reason_code == "generation_mode_invalid"
+    assert excinfo.value.reason_code == "authored_strategy_removed"
+
+
+def test_omitted_strategy_svg_violation_is_a_422_with_its_own_code() -> None:
+    # This request used to fall back to authored silently (an authored-catalogue
+    # style id is not an svg source template); it is now svg's own 422.
+    request = PresentationGenerationRequestV2(
+        content="Restyle", sourceMode="source_content_restyle", authoredStyle="devax-first-ten",
+        sourceContentManifestPin={"manifestId": "scm_source-deck", "digest": "sha256:" + "b" * 64},
+        contentPolicy={"text": "verbatim"},
+    )
+    with pytest.raises(PublicV2OrchestrationError) as excinfo:
+        asyncio.run(
+            public_v2_orchestrator._resolve_generation_route_receipt(
+                request, slide_count=10, resolver=None,
+            )
+        )
+    assert excinfo.value.status_code == 422
+    assert excinfo.value.reason_code == "svg_source_template_unavailable"
+
+
+def test_omitted_strategy_routes_to_svg_native() -> None:
+    request = PresentationGenerationRequestV2(content="Deck", generationMode="free-design")
+    receipt = asyncio.run(
+        public_v2_orchestrator._resolve_generation_route_receipt(request, slide_count=10, resolver=None)
+    )
+    assert receipt.selected_route == "svg-native"
+    assert public_generation_route.effective_generation_engine(request) == "authored"
+
+
+def test_explicit_deck_ir_engine_is_rejected_with_the_removal_code() -> None:
+    with pytest.raises(ValidationError, match="authored_strategy_removed"):
+        PresentationGenerationRequestV2(content="Deck", generationEngine="deck-ir")
 
 
 def test_registered_template_requests_are_rejected_after_the_design_pack_removal() -> None:
@@ -147,25 +178,6 @@ def test_registered_template_requests_are_rejected_after_the_design_pack_removal
     with pytest.raises(ValidationError):
         PresentationGenerationRequestV2(content="Deck", designPackPin={
             "designPackId": "baseline-pack", "version": 1, "digest": "sha256:" + "a" * 64})
-
-
-def test_generic_resolver_failure_is_still_503() -> None:
-    def resolver(**kwargs: object) -> dict[str, object]:
-        raise RuntimeError("boom")
-
-    request = PresentationGenerationRequestV2(
-        content="Brand style deck",
-        generationMode="brand-style",
-        strategy="authored",
-    )
-    with pytest.raises(PublicV2OrchestrationError) as excinfo:
-        asyncio.run(
-            public_v2_orchestrator._resolve_generation_route_receipt(
-                request, slide_count=10, resolver=resolver,
-            )
-        )
-    assert excinfo.value.status_code == 503
-    assert excinfo.value.reason_code == "generation_route_resolver_unavailable"
 
 
 def test_generation_route_error_types_resolves_the_installed_exception() -> None:

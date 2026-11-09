@@ -6,7 +6,6 @@ the response models. Pipeline names are re-exported for callers and tests
 that address them through the endpoint module.
 """
 
-import traceback
 from typing import Optional
 
 from fastapi import (
@@ -67,35 +66,23 @@ async def generate_presentation_sync(
     request: GeneratePresentationRequest,
     sql_session: AsyncSession = Depends(get_async_session),
 ):
-    # The synchronous endpoint runs the whole generation inline, so it has no
-    # durable operation, lease, revision fence, or timeline card. Preserve it
-    # only for the explicit local SQLite compatibility workflow. Cluster/public
-    # runtimes receive a deprecation error before validation, provider calls,
-    # rendering, or export can execute on the HTTP request lifetime.
+    # The synchronous endpoint would run the whole generation inline, so it has
+    # no durable operation, lease, revision fence, or timeline card. Cluster/
+    # public runtimes receive a deprecation error before anything else; the
+    # local SQLite runtime gets the strategy errors below. No request
+    # generates here any more.
     _require_local_sync_generation(sql_engine.url)
     request._request_id = getattr(request_http.state, "request_id", None)
-    # The svg driver (the default strategy) needs a durable generation job for
-    # its checkpoints, quality recovery and header design; this inline route
-    # has none, so it used to fail with a 500 after spending the brief and
-    # outline calls. Refuse it up front and name the route that works.
-    from services.generation_core.admission.strategy import resolve_generation_strategy
+    # Authored generation, the only strategy this inline route could run, was
+    # removed on 2026-11-09: an explicit authored request is refused with
+    # authored_strategy_removed. Every other request is svg, whose driver needs
+    # a durable generation job for its checkpoints, quality recovery and header
+    # design; this inline route has none, so refuse it up front and name the
+    # route that works.
+    from services.generation_core.admission.strategy import require_generation_strategy_admission
 
-    if resolve_generation_strategy(request) == "svg":
-        raise HTTPException(status_code=422, detail="svg_generation_requires_async_route")
-    try:
-        (presentation_id,) = await generation_pipeline.check_if_api_request_is_valid(request, sql_session)
-        return await generation_pipeline.generate_presentation_handler(
-            request,
-            presentation_id,
-            None,
-            export_cookie_header=build_export_cookie_header(request_http),
-            sql_session=sql_session,
-        )
-    except HTTPException:
-        raise
-    except Exception:
-        traceback.print_exc()
-        raise HTTPException(status_code=500, detail="Presentation generation failed")
+    require_generation_strategy_admission(request)
+    raise HTTPException(status_code=422, detail="svg_generation_requires_async_route")
 
 
 @PRESENTATION_GENERATE_ROUTER.post(

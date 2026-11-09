@@ -1655,6 +1655,12 @@
       "status_code": 403,
       "safe_message": "This operation does not match the account that started it.",
       "retryable": false
+    },
+    {
+      "code": "authored_strategy_removed",
+      "status_code": 422,
+      "safe_message": "This generation option is no longer available. Generate the presentation again.",
+      "retryable": false
     }
   ],
   "privacy": {

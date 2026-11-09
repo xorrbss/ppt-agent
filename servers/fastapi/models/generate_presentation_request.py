@@ -316,10 +316,10 @@ class GeneratePresentationRequest(BaseModel):
     strategy: Optional[Literal["authored", "svg"]] = Field(
         default=None,
         description=(
-            "Explicit generation strategy. Omit to use the server default (svg), "
-            "except for combinations svg admission does not support, which stay "
-            "on authored -- see "
-            "services.generation_core.admission.resolve_generation_strategy."
+            "Generation strategy. Omit it or pass svg, the only strategy: a "
+            "request svg admission does not support is a 422 with its own code. "
+            "authored was removed and is rejected with authored_strategy_removed "
+            "-- see services.generation_core.admission.strategy."
         ),
     )
     # None is the historical request contract. Fresh SVG admission pins an

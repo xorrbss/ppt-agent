@@ -22,7 +22,7 @@ export interface DocumentCanvasCapabilities {
 }
 
 export interface DocumentCanvasSelection {
-  generationStrategy: "authored" | "svg";
+  generationStrategy: "svg";
   authoredStyle: string;
   sourceContentMode: boolean;
   hasCompanyStandard: boolean;

@@ -127,7 +127,6 @@ describe("Upload PPT AI master flow", () => {
     store.dispatch(setPptGenUploadState({
       selectedTheme: null,
       authoredStyle: "default",
-      generationStrategy: "authored",
       companyStandard: null,
     }));
     cy.intercept("GET", "**/api/v1/ppt/structured-templates*", {

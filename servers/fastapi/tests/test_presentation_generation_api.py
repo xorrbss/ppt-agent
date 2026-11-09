@@ -10,7 +10,7 @@ from pydantic import ValidationError
 from api.v1.ppt.endpoints.presentation_generate import generate_presentation_sync
 from constants.presentation import MAX_NUMBER_OF_SLIDES
 from models.generate_presentation_request import GeneratePresentationRequest
-from models.presentation_and_path import PresentationPathAndEditPath
+from services.presentation_generation_pipeline import check_if_api_request_is_valid
 
 
 def _fake_request() -> types.SimpleNamespace:
@@ -60,61 +60,35 @@ class TestPresentationGenerationAPI:
         mock_validate.assert_not_awaited()
         mock_handler.assert_not_awaited()
 
-    def test_generate_presentation_export_as_pdf(self):
+    @pytest.mark.parametrize("export_as", ["pdf", "pptx"])
+    def test_sync_route_refuses_authored_with_the_removal_code(self, export_as):
         request = GeneratePresentationRequest(
             content="Create a presentation about artificial intelligence and machine learning",
             n_slides=5,
             language="English",
-            export_as="pdf",
+            export_as=export_as,
             template="korean-biz",
             strategy="authored",
         )
-        response_payload = PresentationPathAndEditPath(
-            presentation_id=uuid.uuid4(),
-            path="/tmp/exports/test.pdf",
-            edit_path="/presentation?id=test",
-        )
 
         with patch(
+            "services.presentation_generation_pipeline.check_if_api_request_is_valid",
+            new=AsyncMock(),
+        ) as mock_validate, patch(
             "services.presentation_generation_pipeline.generate_presentation_handler",
-            new=AsyncMock(return_value=response_payload),
+            new=AsyncMock(),
         ) as mock_handler:
-            response = asyncio.run(
-                generate_presentation_sync(
-                    _fake_request(), request, sql_session=FakeAsyncSession()
+            with pytest.raises(HTTPException) as caught:
+                asyncio.run(
+                    generate_presentation_sync(
+                        _fake_request(), request, sql_session=FakeAsyncSession()
+                    )
                 )
-            )
 
-        assert response == response_payload
-        mock_handler.assert_awaited_once()
-
-    def test_generate_presentation_export_as_pptx(self):
-        request = GeneratePresentationRequest(
-            content="Create a presentation about artificial intelligence and machine learning",
-            n_slides=5,
-            language="English",
-            export_as="pptx",
-            template="korean-biz",
-            strategy="authored",
-        )
-        response_payload = PresentationPathAndEditPath(
-            presentation_id=uuid.uuid4(),
-            path="/tmp/exports/test.pptx",
-            edit_path="/presentation?id=test",
-        )
-
-        with patch(
-            "services.presentation_generation_pipeline.generate_presentation_handler",
-            new=AsyncMock(return_value=response_payload),
-        ) as mock_handler:
-            response = asyncio.run(
-                generate_presentation_sync(
-                    _fake_request(), request, sql_session=FakeAsyncSession()
-                )
-            )
-
-        assert response == response_payload
-        mock_handler.assert_awaited_once()
+        assert caught.value.status_code == 422
+        assert caught.value.detail == "authored_strategy_removed"
+        mock_validate.assert_not_awaited()
+        mock_handler.assert_not_awaited()
 
     def test_generate_presentation_with_no_content(self):
         with pytest.raises(ValidationError):
@@ -127,6 +101,8 @@ class TestPresentationGenerationAPI:
                 }
             )
 
+    # Slide-count admission is shared by every generation entry point
+    # (check_if_api_request_is_valid); the sync route no longer reaches it.
     def test_generate_presentation_with_n_slides_less_than_one(self):
         request = GeneratePresentationRequest(
             content="Create a presentation about artificial intelligence and machine learning",
@@ -134,15 +110,10 @@ class TestPresentationGenerationAPI:
             language="English",
             export_as="pdf",
             template="korean-biz",
-            strategy="authored",
         )
 
         with pytest.raises(HTTPException) as exc:
-            asyncio.run(
-                generate_presentation_sync(
-                    _fake_request(), request, sql_session=FakeAsyncSession()
-                )
-            )
+            asyncio.run(check_if_api_request_is_valid(request, FakeAsyncSession()))
 
         assert exc.value.status_code == 400
         assert exc.value.detail == "Number of slides must be greater than 0"
@@ -154,25 +125,11 @@ class TestPresentationGenerationAPI:
             language="English",
             export_as="pptx",
             template="korean-biz",
-            strategy="authored",
-        )
-        response_payload = PresentationPathAndEditPath(
-            presentation_id=uuid.uuid4(),
-            path="/tmp/exports/maximum.pptx",
-            edit_path="/presentation?id=maximum",
         )
 
-        with patch(
-            "services.presentation_generation_pipeline.generate_presentation_handler",
-            new=AsyncMock(return_value=response_payload),
-        ):
-            response = asyncio.run(
-                generate_presentation_sync(
-                    _fake_request(), request, sql_session=FakeAsyncSession()
-                )
-            )
+        (presentation_id,) = asyncio.run(check_if_api_request_is_valid(request, FakeAsyncSession()))
 
-        assert response == response_payload
+        assert isinstance(presentation_id, uuid.UUID)
 
     def test_generate_presentation_rejects_slide_count_above_maximum(self):
         request = GeneratePresentationRequest(
@@ -181,15 +138,10 @@ class TestPresentationGenerationAPI:
             language="English",
             export_as="pptx",
             template="korean-biz",
-            strategy="authored",
         )
 
         with pytest.raises(HTTPException) as exc:
-            asyncio.run(
-                generate_presentation_sync(
-                    _fake_request(), request, sql_session=FakeAsyncSession()
-                )
-            )
+            asyncio.run(check_if_api_request_is_valid(request, FakeAsyncSession()))
 
         assert exc.value.status_code == 400
         assert (

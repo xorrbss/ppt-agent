@@ -7,11 +7,8 @@ from __future__ import annotations
 
 import asyncio
 
-from models.sql.presentation import (
-    PRESENTATION_LIFECYCLE_PUBLISHED,
-    PRESENTATION_LIFECYCLE_STAGING,
-)
 from tests.support.authored_worker_lane_harness import (
+    assert_lane_refused,
     _FORBIDDEN_DECLARATION,
     PolicyClock,
     StubProvider,
@@ -24,7 +21,7 @@ from tests.support.authored_worker_lane_harness import (
 # --- 3: terminal fallback at the author stage --------------------------------------
 
 
-def test_persistent_renderer_policy_violation_fails_the_deck_when_flag_publishing_is_off(
+def test_renderer_policy_violation_lane_is_refused_as_authored_strategy_removed(
     tmp_path, monkeypatch
 ):
     monkeypatch.setenv("AUTHORED_PUBLISH_FLAGGED_SLIDES", "false")
@@ -50,24 +47,12 @@ def test_persistent_renderer_policy_violation_fails_the_deck_when_flag_publishin
         )
     )
 
-    assert outcome.status["status"] == "error", outcome.status
-    failure = outcome.status["failure"]
-    assert failure["code"] == "authored_slide_author_failed"
-    assert failure["stage"] == "author"
-    assert failure["slide_number"] == terminal_index + 1
-    # The per-slide call budget (initial + one recovery) was spent on that
-    # slide only; every other slide was authored once and admitted.
-    assert provider.calls_by_index[terminal_index] == 2
-    assert all(
-        count == 1 for index, count in provider.calls_by_index.items() if index != terminal_index
-    )
-    assert outcome.presentation is not None
-    assert outcome.presentation.lifecycle_status == PRESENTATION_LIFECYCLE_STAGING
-    assert outcome.slides == []
-    assert not list((tmp_path / "app-data" / "exports").glob("*.pptx"))
+    # Authored generation was removed on 2026-11-09: this scenario can no
+    # longer start, so the lane now proves the refusal.
+    assert_lane_refused(outcome, provider)
 
 
-def test_persistent_author_failure_publishes_a_flagged_placeholder_when_enabled(
+def test_flagged_placeholder_lane_is_refused_as_authored_strategy_removed(
     tmp_path, monkeypatch
 ):
     monkeypatch.setenv("AUTHORED_PUBLISH_FLAGGED_SLIDES", "true")
@@ -94,27 +79,7 @@ def test_persistent_author_failure_publishes_a_flagged_placeholder_when_enabled(
         )
     )
 
-    assert outcome.status["status"] == "completed", outcome.status
-    assert outcome.job.state == "published"
-    assert outcome.presentation.lifecycle_status == PRESENTATION_LIFECYCLE_PUBLISHED
-    gate = outcome.presentation.theme["authoredQualityGate"]
-    flagged = gate["flaggedSlides"]
-    assert [entry["index"] for entry in flagged] == [terminal_index]
-    assert flagged[0]["reason"] == "author:attempts_exhausted"
-    assert flagged[0]["remakeAttempted"] is True
-    receipt = outcome.receipts[-1].to_dict()
-    assert [entry["index"] for entry in receipt["flaggedSlides"]] == [terminal_index]
-    # Two ordinary calls plus the one simplified rescue call, on that slide only.
-    assert provider.calls_by_index[terminal_index] == 3
-    assert all(
-        count == 1 for index, count in provider.calls_by_index.items() if index != terminal_index
-    )
-    by_index = {slide.index: slide for slide in outcome.slides}
-    assert sorted(by_index) == list(range(slide_count))
-    assert by_index[terminal_index].html_content != terminal_html
-    assert f"Slide {terminal_index + 1}" in by_index[terminal_index].html_content
-    for index in range(slide_count):
-        if index != terminal_index:
-            assert 'data-header-part="body"' in by_index[index].html_content
-
+    # Authored generation was removed on 2026-11-09: this scenario can no
+    # longer start, so the lane now proves the refusal.
+    assert_lane_refused(outcome, provider)
 

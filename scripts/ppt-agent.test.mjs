@@ -14,7 +14,6 @@ const PRESENTATION_ID = "11111111-1111-4111-8111-111111111111";
 const OPERATION_ID = "44444444-4444-4444-8444-444444444444";
 const ARTIFACT_ID = "66666666-6666-4666-8666-666666666666";
 const TASK_ID = "77777777-7777-4777-8777-777777777777";
-const SYNC_URL = "/api/v1/ppt/presentation/generate";
 const ASYNC_URL = "/api/v1/ppt/presentation/generate/async";
 
 function runCli(args) {
@@ -45,7 +44,7 @@ function generateResponse(overrides = {}) {
 /**
  * The svg strategy (the server default) needs a durable job, so the CLI admits
  * it through the async endpoint and polls status. Keys are matched by prefix,
- * so the async route must be listed before any bare SYNC_URL handler.
+ * so the async route must be listed before any bare generate-path handler.
  */
 function asyncGeneration(response = generateResponse()) {
   return {
@@ -133,8 +132,7 @@ test("forwards --style to the local generation API", async (t) => {
   t.after(() => mock.server.close());
 
   const result = await runCli([
-    "--content", "authored deck",
-    "--mode", "authored",
+    "--content", "svg deck",
     "--style", "strategic-navy",
     "--base", mock.base,
   ]);
@@ -146,7 +144,7 @@ test("forwards --style to the local generation API", async (t) => {
     method: "POST",
     url: ASYNC_URL,
     body: {
-      content: "authored deck",
+      content: "svg deck",
       n_slides: 8,
       language: "Korean (한국어)",
       template: "authored",
@@ -182,36 +180,62 @@ test("--common-header forwards the svg header mode", async (t) => {
   assert.equal(mock.requests[0].body.common_header_mode, "free");
 });
 
-test("--common-header rejects an unknown value and authored strategy", async () => {
-  let result = await runCli(["--content", "x", "--common-header", "fixed"]);
+test("--common-header rejects an unknown value", async () => {
+  const result = await runCli(["--content", "x", "--common-header", "fixed"]);
   assert.equal(result.code, 1);
   assert.match(result.stderr, /--common-header must be one of uniform, free/);
-  result = await runCli(["--content", "x", "--common-header", "free", "--strategy", "authored"]);
-  assert.equal(result.code, 1);
-  assert.match(result.stderr, /--common-header applies only to the svg strategy/);
 });
 
-test("--strategy authored sends an explicit strategy override", async (t) => {
-  const mock = await startMockServer({
-    "/api/v1/ppt/presentation/generate": (res) => json(res, generateResponse()),
-  });
+test("--strategy svg is accepted and sent with the async request", async (t) => {
+  const mock = await startMockServer(asyncGeneration());
   t.after(() => mock.server.close());
 
-  const result = await runCli([
-    "--content", "authored deck",
-    "--strategy", "authored",
-    "--base", mock.base,
-  ]);
+  const result = await runCli(["--content", "svg deck", "--strategy", "svg", "--base", mock.base]);
 
   assert.equal(result.code, 0, result.stderr);
-  assert.equal(mock.requests[0].url, SYNC_URL);
-  assert.equal(mock.requests[0].body.strategy, "authored");
+  assert.equal(mock.requests[0].url, ASYNC_URL);
+  assert.equal(mock.requests[0].body.strategy, "svg");
 });
 
-test("--strategy rejects an unknown value", async (t) => {
+test("--strategy authored is rejected with a removal message and no request", async (t) => {
+  const mock = await startMockServer(asyncGeneration());
+  t.after(() => mock.server.close());
+
+  const result = await runCli(["--content", "x", "--strategy", "authored", "--base", mock.base]);
+
+  assert.equal(result.code, 1);
+  assert.match(result.stderr, /--strategy authored was removed \(2026-11-09\)/);
+  assert.equal(mock.requests.length, 0);
+});
+
+test("--strategy rejects an unknown value", async () => {
   const result = await runCli(["--content", "x", "--strategy", "deck-ir"]);
   assert.equal(result.code, 1);
-  assert.match(result.stderr, /--strategy must be one of svg, authored/);
+  assert.match(result.stderr, /--strategy must be one of svg \(got "deck-ir"\)/);
+});
+
+test("--async is a no-op: the async route is used with or without it", async (t) => {
+  const mock = await startMockServer(asyncGeneration());
+  t.after(() => mock.server.close());
+
+  const result = await runCli(["--content", "svg deck", "--async", "--base", mock.base]);
+
+  assert.equal(result.code, 0, result.stderr);
+  assert.equal(mock.requests[0].url, ASYNC_URL);
+});
+
+test("removed --mode and --vision-qa flags fail loudly without a request", async (t) => {
+  const mock = await startMockServer(asyncGeneration());
+  t.after(() => mock.server.close());
+
+  let result = await runCli(["--content", "x", "--mode", "authored", "--base", mock.base]);
+  assert.equal(result.code, 1);
+  assert.match(result.stderr, /--mode was removed with the authored strategy/);
+
+  result = await runCli(["--content", "x", "--vision-qa", "--base", mock.base]);
+  assert.equal(result.code, 1);
+  assert.match(result.stderr, /--vision-qa was removed/);
+  assert.equal(mock.requests.length, 0);
 });
 
 test("--out follows the chained export operation to its artifact", async (t) => {
@@ -312,10 +336,12 @@ test("rejects a missing --style value before making a request", async () => {
   assert.match(result.stderr, /--style requires a style preset id/);
 });
 
-test("documents authored style usage in --help", async () => {
+test("--help documents svg as the only strategy and omits removed authored options", async () => {
   const result = await runCli(["--help"]);
 
   assert.equal(result.code, 0, result.stderr);
-  assert.match(result.stdout, /--mode authored/);
+  assert.match(result.stdout, /svg is the only generation strategy/);
   assert.match(result.stdout, /--style <id>/);
+  assert.match(result.stdout, /--strategy svg/);
+  assert.doesNotMatch(result.stdout, /--mode|--vision-qa|--strategy <svg\|authored>/);
 });

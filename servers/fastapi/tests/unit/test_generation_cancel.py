@@ -50,7 +50,7 @@ async def _seed_job(maker, *, owner=OWNER_A, job_state="queued", task_status="pe
         presentation_id=uuid.uuid4(),
         request_id="cancel-request-id",
         request_sha256="a" * 64,
-        request_payload={"content": "durable"},
+        request_payload={"content": "durable", "strategy": "svg"},
         state=job_state,
     )
     async with maker() as session:

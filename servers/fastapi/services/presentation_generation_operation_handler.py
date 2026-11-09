@@ -225,6 +225,14 @@ class PresentationGenerationOperationHandler:
                 context.claim.fencing_token,
             )
             request = _request_from_durable_payload(job.request_payload)
+            from services.generation_core.admission.strategy import removed_generation_strategy_code
+
+            removed_strategy = removed_generation_strategy_code(request)
+            if removed_strategy is not None:
+                # Authored generation (including the deck-ir engine) was
+                # removed on 2026-11-09. An operation staged with it before
+                # then fails instead of starting authored work.
+                raise NonRetryableWorkspaceOperationError(removed_strategy)
             if getattr(request, "source_mode", None) == "raster_reconstruction":
                 from services.svg_generation_assets import publication_context
 

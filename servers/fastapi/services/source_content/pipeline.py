@@ -160,7 +160,12 @@ async def admit_source_content_request(
             tenant_id=tenant_id,
         )
         return None
-    svg_source = getattr(request, "strategy", None) == "svg"
+    from services.generation_core.admission.strategy import resolve_generation_strategy
+
+    # An omitted strategy is svg too; an explicit authored restyle (the removed
+    # reflow route) is refused at admission before it gets here, and only
+    # internal callers of the frozen authored code still pass one.
+    svg_source = resolve_generation_strategy(request) == "svg"
     if svg_source:
         from services.svg_generation_admission import require_svg_creation_admission
 

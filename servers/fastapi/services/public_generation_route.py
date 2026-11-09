@@ -68,17 +68,12 @@ def resolve_authored_generation_route(
 def effective_generation_engine(
     request: PresentationGenerationRequestV2,
 ) -> str:
-    # The strategy resolver decides svg-vs-authored first (svg is the
-    # default). Only when it resolves to authored does the pre-svg-default
-    # engine table apply -- an omitted strategy no longer falls through to
-    # the deck-ir auto-route just because generationMode was also set.
-    if resolve_generation_strategy(request) == "svg":
-        return "authored"
-    if request.source_mode == "source_content_restyle":
-        return "authored"
-    if "generation_mode" in request.model_fields_set:
-        return "deck-ir"
-    return request.generation_engine or "authored"
+    # "authored" is the engine literal every admitted request carries (svg
+    # included); the receipt keeps it so sealed receipts still validate. The
+    # deck-ir engine ran authored generation, removed on 2026-11-09, so no
+    # request is routed to it any more: an explicit authored or deck-ir request
+    # is rejected with authored_strategy_removed before routing.
+    return "authored"
 
 
 def pin_source_restyle_authoring(

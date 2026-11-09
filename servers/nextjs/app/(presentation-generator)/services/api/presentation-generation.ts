@@ -404,7 +404,7 @@ export class PresentationGenerationApi {
     orientation?: "landscape" | "portrait";
     theme?: PresentationThemePayload | null;
     /** Server persists this before the async generation job is admitted. */
-    strategy?: "authored" | "svg";
+    strategy?: "svg";
   }) {
     try {
       const response = await fetch(
@@ -755,8 +755,7 @@ export class PresentationGenerationApi {
       presentation_id: string;
       content: string;
       slides_markdown?: string[];
-      vision_qa?: boolean;
-      strategy?: "authored" | "svg";
+      strategy?: "svg";
       common_header_design?: import("@/lib/common-header-design").CommonHeaderDesign;
     common_header_mode?: import("@/lib/common-header-design").CommonHeaderMode;
       common_header_cover_exception?: boolean;
@@ -785,7 +784,6 @@ export class PresentationGenerationApi {
       idempotency_key?: string;
     },
   ): Promise<StartGenerationResponse> {
-    // An omitted strategy now means svg (the current default), not authored.
     const resolvedStrategy = body.strategy ?? "svg";
     try {
       const response = await fetch(
@@ -813,11 +811,6 @@ export class PresentationGenerationApi {
             export_as: "pptx",
             // Export refuses a "development" receipt in every format.
             qualityProfile: "release",
-            // Optional self-correction pass (render + vision-critique + re-author flagged).
-            // OFF by default — it adds a second authoring round (~doubles time); the
-            // design-system hardening already prevents most overflow/overlap. Opt in for
-            // a max-quality, slower pass.
-            vision_qa: resolvedStrategy === "svg" ? false : (body.vision_qa ?? false),
             ...(body.svgTemplatePin ? {} : { authored_style: body.authored_style ?? "default" }),
             ...(body.svg_design_reference_snapshot_id ? { svg_design_reference_snapshot_id: body.svg_design_reference_snapshot_id } : {}),
             ...(body.svgTemplatePin ? { svgTemplatePin: body.svgTemplatePin, svgTemplateMode: body.svgTemplateMode, svgTemplateFrameMap: body.svgTemplateFrameMap } : {}),

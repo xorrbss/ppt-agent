@@ -53,7 +53,6 @@ from services.authored_presentation_service import AUTHORED_TEMPLATE  # noqa: E4
 from services.compatibility_migration.authored_vnext_contract import require_authored_vnext_creation_admission  # noqa: E402,E501
 from services.public_generation_route import effective_generation_engine as _effective_generation_engine  # noqa: E402
 from services.public_v2_orchestrator import _actor_context, _public_error, _resolve_generation_route_receipt  # noqa: E402
-from services.svg_generation_admission import require_svg_creation_admission  # noqa: E402
 
 FIXTURE_PATH = FASTAPI_ROOT / "tests" / "fixtures" / "canvas_admission_baseline.json"
 SCHEMA_VERSION = "canvas-admission-baseline/v1"
@@ -167,10 +166,6 @@ def run_sync(request: Any) -> None:
     require_authored_vnext_creation_admission(request)
     if request.strategy not in {None, "authored", "svg"}:
         raise HTTPException(status_code=400, detail="generation_strategy_conflict")
-    if request.generation_engine == "deck-ir":
-        raise HTTPException(status_code=400, detail="generation_engine_deck_ir_retired")
-    if request.strategy == "svg":
-        require_svg_creation_admission(request)
     if request.aspect_ratio != "16:9" and str(request.template or "").strip().lower() != AUTHORED_TEMPLATE:
         raise HTTPException(status_code=422, detail="authored_portrait_combination_not_supported")
     request.template = AUTHORED_TEMPLATE

@@ -41,9 +41,6 @@ from models.workspace import (
     WorkspaceTemplateApplicationResponse,
     WorkspaceTimelineResponse,
 )
-from services.workspace_authored_template_confirmation_service import (
-    confirm_authored_template_application,
-)
 from services.workspace_api_contract import (
     project_workspace_event_page,
     project_workspace_timeline,
@@ -82,7 +79,6 @@ from services.workspace_service import (
     workspace_events,
     workspace_timeline,
 )
-from services.workspace_operation_runner import wake_workspace_operation_runner
 
 # Poll interval and heartbeat cadence (in poll ticks) of the workspace event stream.
 _EVENT_STREAM_POLL_INTERVAL_SECONDS = 1
@@ -575,48 +571,17 @@ async def confirm_presentation_template_application(
     ),
     session: AsyncSession = Depends(get_async_session),
 ) -> WorkspaceTemplateApplicationResponse:
-    """Confirm one target-owned authored design application."""
+    """Confirm one target-owned authored design application.
+
+    Applying a template regenerates the deck with the authored strategy,
+    removed on 2026-11-09: every confirmation is refused with
+    ``authored_strategy_removed`` before any lock, snapshot or durable row.
+    """
+
+    from services.generation_core.admission.strategy import AUTHORED_STRATEGY_REMOVED
 
     _require_workspace_writes(source_presentation_id)
-    target_presentation_id = _template_application_target_id(
-        source_presentation_id=source_presentation_id,
-        idempotency_key=idempotency_key,
-    )
-    try:
-        confirmed = await confirm_authored_template_application(
-            session,
-            source_presentation_id=source_presentation_id,
-            request=request,
-            idempotency_key=idempotency_key,
-            target_presentation_id=target_presentation_id,
-        )
-        _record_operation_admission(
-            confirmed.operation.kind,
-            duplicate=confirmed.duplicate,
-        )
-        timeline = await workspace_timeline(
-            session,
-            presentation_id=confirmed.target_presentation_id,
-        )
-    except WorkspaceServiceError as error:
-        _raise_service_error(error)
-    wake_workspace_operation_runner()
-    projected_timeline = project_workspace_timeline(
-        timeline,
-        presentation_id=confirmed.target_presentation_id,
-    )
-    return WorkspaceTemplateApplicationResponse(
-        source_presentation_id=confirmed.source_presentation_id,
-        source_revision=confirmed.source_revision,
-        target_presentation_id=confirmed.target_presentation_id,
-        conversation_id=confirmed.conversation.id,
-        first_user_message_id=confirmed.message.id,
-        operation_id=confirmed.operation.id,
-        status=confirmed.operation.state,
-        operation_state=confirmed.operation.state,
-        duplicate=confirmed.duplicate,
-        timeline=projected_timeline,
-    )
+    raise WorkspaceAPIException(AUTHORED_STRATEGY_REMOVED, status_code=422, retryable=False)
 
 
 @WORKSPACE_ROUTER.post("/bootstrap", response_model=WorkspaceBootstrapResponse)
