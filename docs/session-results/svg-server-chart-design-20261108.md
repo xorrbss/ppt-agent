@@ -466,3 +466,28 @@ keep their place; the slice names drawn beside them become a legend.
 
 - The remaining flagged pages (3 in V4, 2 in V5) are published, not fallbacks. They carry `writing_policy_visible_symbols` in body prose, as in the author-drawn arms.
 - Spend for the re-measurement: $8.0.
+
+## Revision six: drawing inside a side margin, and the confirmation measurement (2026-11-09)
+
+**Third cause.** The confirmation run with v5 (business review and consumer survey, 3 decks per arm) still showed `svg_common_header_body_intrusion`: 12 first attempts in V4 and 9 in V5. Recomposing the failing pages showed the elements were right-aligned value-axis tick labels ("100%", "15%"):
+- The v4 planner places them by an estimated width.
+- "%" is wider than the estimate: "100%" measures 2.44 em in Noto Sans KR against an estimate of 2.20 em.
+- So a label crossed the box's left edge when the box sat on the body edge.
+
+**Fix.** `svg-server-chart/v6` (now admitted):
+- Draws v5 inside an 8 px margin on each side of the declared box.
+- The native style spec and the anchor follow the drawing box.
+- A test checks every drawn text at real Noto Sans KR advance widths. The measured declaration crosses the box edge under v4/v5 and not under v6.
+
+**Measurement** (same two prompts, 3 decks per arm):
+
+| | V4 with v5 | V4 with v6 | V5 with v5 | V5 with v6 |
+|---|---|---|---|---|
+| Native charts in the PPTX | 19 | 22 | 22 | 22 |
+| Fallback pages (of 42) | 5 | **0** | 2 | 2 |
+| Header intrusion (first attempts) | 12 | 2 | 9 | 0 |
+| Cost per deck (median) | $1.4 | $1.6 | $1.5 | $1.3 |
+
+- The two remaining V5 fallbacks fail on `required_text_missing` in body prose, not on a chart.
+- `server_chart_occluded` appeared on 2 first attempts in V4. It was published once, as a flagged page, not as a fallback.
+- Spend: $16.7 for v5 and $17.6 for v6.
