@@ -186,18 +186,20 @@ def _trusted_v4_chart_object(declaration: dict, offset: tuple) -> tuple[dict, di
     The payload is the declaration's (as for every trusted chart) with each series in the colour
     the drawing gave it; ``appearance["serverChartStyle"]`` is ``server_chart_v4_native``'s spec.
     """
-    from services.generation_core.drivers.svg.server_chart import ServerChartUnsupported, _replay_style
+    from services.generation_core.drivers.svg.server_chart import ServerChartUnsupported, _replay_style, drawing_box
     from services.generation_core.drivers.svg.server_chart_v4_native import native_style
 
     if len(offset) != 2:
         # A scaled parent would scale the drawing but not the spec's pixel sizes.
         raise NativeRejection("native_group_transform_unsupported")
     anchor, payload, appearance = _trusted_chart_object(declaration)
+    box = drawing_box(declaration)
+    anchor = {"x": box[0], "y": box[1], "width": box[2], "height": box[3]}
     style = _replay_style(declaration)
     if appearance is None or style is None:
         raise NativeRejection("native_chart_server_style_unavailable")
     try:
-        colors, spec = native_style(json.loads(json.dumps(declaration["raw"])), style, declaration["box"])
+        colors, spec = native_style(json.loads(json.dumps(declaration["raw"])), style, box)
     except (ServerChartUnsupported, TypeError, ValueError, KeyError, IndexError, ArithmeticError) as error:
         raise NativeRejection("native_chart_server_style_unavailable") from error
     if payload["chartType"] not in ("pie", "donut"):
