@@ -68,7 +68,7 @@ def test_revision_five_is_trusted_passes_the_checks_and_exports_like_four(name, 
 
 
 def test_revision_five_is_current_and_has_its_own_rule():
-    assert server_chart.SERVER_CHART_CURRENT == R5 and R5 in server_chart.TRUSTED_RENDERERS
+    assert R5 in server_chart.TRUSTED_RENDERERS
     rule = server_chart.server_chart_rule({"server_chart_render": R5})
     assert rule == server_chart.SERVER_CHART_RULE_V4.replace(f'"{R4}"', f'"{R5}"')
 

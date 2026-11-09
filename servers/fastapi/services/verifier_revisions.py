@@ -514,6 +514,11 @@ WHOLE_PAGE_VERIFIER_LEDGER = VerifierRevisionLedger(
         # server-drawn chart group. No stored deck carries a v5 marker, and decks without server
         # charts are unchanged.
         "20bcd816ff90afcd48d073345f1273e67aa5741981b9f2b65b0f5cfa3189bfda": "svg-whole-page-verifier/1",
+        # 2026-11-09: server chart prototype only (SVG_SERVER_CHARTS decks): renderer revision
+        # svg-server-chart/v6 (v5 drawn inside an 8 px side margin, so a right-aligned tick label
+        # wider than its estimate stays in the box) becomes the admitted revision. No stored deck
+        # carries a v6 marker; every other page is unchanged.
+        "3ff42a892823f3ff6c0d89e1ad55d5cffd6438e903adfa9a73ad4fe63893337d": "svg-whole-page-verifier/1",
     }),
 )
 
@@ -763,6 +768,11 @@ PARTIAL_RECOVERY_CODE_LEDGER = VerifierRevisionLedger(
         # server-drawn chart group. No stored deck carries a v5 marker, and decks without server
         # charts are unchanged.
         "1d06de03416b2293801a8ffb6870ea6307c804b8605f2b8bc019cece4dbb8b8d": "svg-partial-recovery-code/1",
+        # 2026-11-09: server chart prototype only (SVG_SERVER_CHARTS decks): renderer revision
+        # svg-server-chart/v6 (v5 drawn inside an 8 px side margin, so a right-aligned tick label
+        # wider than its estimate stays in the box) becomes the admitted revision. No stored deck
+        # carries a v6 marker; every other page is unchanged.
+        "dc02a8aa9d8f5cdcf2ed94966afcf44bce83f5631ed7d1652e83c63b2bc166cf": "svg-partial-recovery-code/1",
     }),
 )
 
@@ -923,6 +933,11 @@ PAGE_RENDER_CODE_LEDGER = VerifierRevisionLedger(
         # server-drawn chart group. No stored deck carries a v5 marker, and decks without server
         # charts are unchanged.
         "89a46d6aa7f94ba999c9124f5c0a12c129856a94e3ff1a13ef6b7a858b6f2242": "svg-page-render-code/1",
+        # 2026-11-09: server chart prototype only (SVG_SERVER_CHARTS decks): renderer revision
+        # svg-server-chart/v6 (v5 drawn inside an 8 px side margin, so a right-aligned tick label
+        # wider than its estimate stays in the box) becomes the admitted revision. No stored deck
+        # carries a v6 marker; every other page is unchanged.
+        "b73ba23cf70af94be426684f977a5b7b1fb4bec8d731b7ab14b3b4e69172200a": "svg-page-render-code/1",
     }),
 )
 
