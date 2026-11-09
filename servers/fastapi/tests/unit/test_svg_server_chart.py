@@ -196,10 +196,14 @@ def test_the_author_rule_is_sent_only_to_decks_admitted_with_server_charts():
     assert f'data-chart-render=\"{server_chart.SERVER_CHART_REVISION}\"' in rule
 
 
-@pytest.mark.parametrize("value,expected", [("on", True), ("1", True), ("", False), ("off", False)])
-def test_server_charts_setting_is_default_off(monkeypatch, value, expected):
+@pytest.mark.parametrize("value,expected", [
+    ("on", True), ("1", True), ("", True), (None, True), ("off", False), ("0", False), ("bogus", False)])
+def test_server_charts_setting_is_default_on(monkeypatch, value, expected):
     from utils.get_env_concurrency import get_svg_server_charts_env
-    monkeypatch.setenv("SVG_SERVER_CHARTS", value)
+    if value is None:
+        monkeypatch.delenv("SVG_SERVER_CHARTS", raising=False)
+    else:
+        monkeypatch.setenv("SVG_SERVER_CHARTS", value)
     assert get_svg_server_charts_env() is expected
 
 

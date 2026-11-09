@@ -102,7 +102,7 @@ INTERNAL_ENV_NAMES: MappingProxyType[str, str] = MappingProxyType(
         "SVG_TEMPLATE_STEP_PICTURES": "Model-drawn step pictures (vector spots) for template-redesign decks while SVG_ILLUSTRATION_MODE is off: on/off.",
         "SVG_TEMPLATE_PICTURES": "Vector pictures for fresh template-redesign decks, policy frozen at admission: on/off (default off).",
         "SVG_NATIVE_CHART_INTEGRITY_V5": "Chart-integrity policy for fresh SVG admission, selected revision pinned once: on/off (default off).",
-        "SVG_SERVER_CHARTS": "Server-drawn native charts for fresh SVG admissions, renderer revision frozen at admission: on/off (default off).",
+        "SVG_SERVER_CHARTS": "Server-drawn native charts for fresh SVG admissions, renderer revision frozen at admission: on/off (default on).",
         "SVG_TEMPLATE_CONTENT_SIZING": "Content-sized template bodies, guidance frozen at fresh admission: on/off (default off).",
         "SVG_TEMPLATE_BODY_RENDERS": "Masked template body page renders, made at registration and sent to authors only when on (frozen at admission): on/off.",
         "SVG_TEMPLATE_BODY_RENDER_EXCLUDED_PAGES": "Measurement only: 1-based template slide numbers registration renders no body page for (e.g. 9,66).",

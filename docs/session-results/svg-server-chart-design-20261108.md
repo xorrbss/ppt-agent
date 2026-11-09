@@ -491,3 +491,18 @@ keep their place; the slice names drawn beside them become a legend.
 - The two remaining V5 fallbacks fail on `required_text_missing` in body prose, not on a chart.
 - `server_chart_occluded` appeared on 2 first attempts in V4. It was published once, as a flagged page, not as a fallback.
 - Spend: $16.7 for v5 and $17.6 for v6.
+
+## Default on (2026-11-09)
+
+The owner turned `SVG_SERVER_CHARTS` on by default for fresh SVG admissions
+(V4 and V5), on the measurements above, before the two remaining checks:
+
+- Nobody has yet opened an exported deck in PowerPoint to check the native
+  chart style (gridlines, palette, label positions) and editing.
+- Every run used the three prepared prompts; real user documents, and charts by
+  reference to `chart:` literals, are unmeasured.
+
+Setting the knob to `off` (or any value other than `on`, `true`, `1`) returns
+fresh decks to author-drawn charts. Admission freezes the choice, so either
+change leaves existing decks as they are: decks admitted while it was on keep
+replaying their renderer revision.
