@@ -22,6 +22,7 @@ shape (``native_object_*`` from ``NativeObject.build``).
 """
 from __future__ import annotations
 
+import json
 import re
 import math
 from xml.etree import ElementTree as ET
@@ -116,16 +117,22 @@ def _entry(root: ET.Element, declaration: dict, *, width: float, height: float,
             if not native_group_ids_complete:
                 raise NativeRejection("native_chart_sibling_ownership_unproven")
             canvas_texts = _sibling_canvas_texts(root, native_group_ids)
-        try:
-            anchor, payload, appearance = chart_object(
-                raw, prims, canvas_texts=canvas_texts, revision=revision,
-            )
-        except NativeRejection:
-            if not trusted:
-                raise
-            # A trusted server chart is accepted by construction: its payload comes from
-            # the declaration its drawing was replayed from, not from a drawing proof.
-            anchor, payload, appearance = _trusted_chart_object(declaration)
+        from services.generation_core.drivers.svg.server_chart import SERVER_CHART_REVISION_V4
+        if trusted and declaration.get("render") == SERVER_CHART_REVISION_V4:
+            # Revision four: one spec, two outputs. The native chart follows the renderer's own
+            # decisions (a replay of the stored declaration), not what a proof infers back.
+            anchor, payload, appearance = _trusted_v4_chart_object(declaration, offset)
+        else:
+            try:
+                anchor, payload, appearance = chart_object(
+                    raw, prims, canvas_texts=canvas_texts, revision=revision,
+                )
+            except NativeRejection:
+                if not trusted:
+                    raise
+                # A trusted server chart is accepted by construction: its payload comes from
+                # the declaration its drawing was replayed from, not from a drawing proof.
+                anchor, payload, appearance = _trusted_chart_object(declaration)
         from services.generation_core.drivers.svg.native_requirements import REQUIREMENTS_VERSION_V5
         if revision == REQUIREMENTS_VERSION_V5 and payload["chartType"] == "donut":
             from services.generation_core.drivers.svg.native_chart import _model_chart
@@ -171,6 +178,33 @@ def _trusted_chart_object(declaration: dict) -> tuple[dict, dict, dict | None]:
                   if {"categoryOrder", "valueLabels", "markers"} <= set(raw) else None)
     x, y, width, height = (float(value) for value in declaration["box"])
     return {"x": x, "y": y, "width": width, "height": height}, payload, appearance
+
+
+def _trusted_v4_chart_object(declaration: dict, offset: tuple) -> tuple[dict, dict, dict]:
+    """``(anchor, payload, appearance)`` of a trusted v4 server chart, styled by its renderer.
+
+    The payload is the declaration's (as for every trusted chart) with each series in the colour
+    the drawing gave it; ``appearance["serverChartStyle"]`` is ``server_chart_v4_native``'s spec.
+    """
+    from services.generation_core.drivers.svg.server_chart import ServerChartUnsupported, _replay_style
+    from services.generation_core.drivers.svg.server_chart_v4_native import native_style
+
+    if len(offset) != 2:
+        # A scaled parent would scale the drawing but not the spec's pixel sizes.
+        raise NativeRejection("native_group_transform_unsupported")
+    anchor, payload, appearance = _trusted_chart_object(declaration)
+    style = _replay_style(declaration)
+    if appearance is None or style is None:
+        raise NativeRejection("native_chart_server_style_unavailable")
+    try:
+        colors, spec = native_style(json.loads(json.dumps(declaration["raw"])), style, declaration["box"])
+    except (ServerChartUnsupported, TypeError, ValueError, KeyError, IndexError, ArithmeticError) as error:
+        raise NativeRejection("native_chart_server_style_unavailable") from error
+    if payload["chartType"] not in ("pie", "donut"):
+        for index, item in enumerate(payload["series"]):
+            item["color"] = colors[index]
+    anchor = {**anchor, "x": anchor["x"] + offset[0], "y": anchor["y"] + offset[1]}
+    return anchor, payload, {**appearance, "serverChartStyle": spec}
 
 
 def _canvas_size(root: ET.Element) -> tuple[float, float]:

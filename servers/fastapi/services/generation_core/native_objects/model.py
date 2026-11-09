@@ -105,7 +105,8 @@ class NativeObject:
             if set(svgAppearance) != {"holeRatio"} and (
                     not {"categoryOrder", "valueLabels", "markers"} <= set(svgAppearance)
                     or set(svgAppearance) - {"categoryOrder", "valueLabels", "markers",
-                                             "lineWidthPx", "markerDiameterPx", "holeRatio"}
+                                             "lineWidthPx", "markerDiameterPx", "holeRatio",
+                                             "serverChartStyle"}
                     or svgAppearance["categoryOrder"] not in ("topToBottom", "leftToRight", "clockwise")
                     or svgAppearance["categoryOrder"] != {
                         "bar": "topToBottom", "column": "leftToRight", "line": "leftToRight",
@@ -121,6 +122,13 @@ class NativeObject:
                            not math.isfinite(svgAppearance[key]) or svgAppearance[key] <= 0
                            for key in ("lineWidthPx", "markerDiameterPx") if key in svgAppearance)):
                 raise NativeObjectsError("native_chart_appearance_invalid")
+            if "serverChartStyle" in svgAppearance:
+                # The native style of a trusted v4 server chart (absent from every other sidecar).
+                try:
+                    validate_server_chart_style(svgAppearance["serverChartStyle"], canonical["chartType"],
+                                                len(canonical["categories"]), canonical.get("grouping"))
+                except ServerChartStyleError as error:
+                    raise NativeObjectsError("native_chart_appearance_invalid") from error
         return cls(id=id, kind=kind, anchor=anchor, payload=canonical, svg_appearance=svgAppearance)
 
     def to_wire(self) -> dict:
@@ -167,6 +175,115 @@ class NativeObjects:
 
     def by_id(self) -> dict[str, NativeObject]:
         return {item.id: item for item in self.objects}
+
+
+# --- svgAppearance["serverChartStyle"]: the native style of a trusted v4 server chart ---------
+#
+# Produced by ``drivers/svg/server_chart_v4_native.native_style`` from a replay of the chart's
+# drawing and consumed by ``drivers/svg/export_projection``. Optional: every sidecar written
+# before it (and every chart that is not a trusted v4 server chart) has no such key and keeps
+# its exact projection. Lengths are canvas px; layouts are fractions of the anchor.
+
+NATIVE_STYLE_VERSION = "svg-server-chart-native-style/v1"
+_STYLE_HEX = re.compile(r"^#[0-9A-F]{6}$")
+_LABEL_POSITIONS = {
+    "bar": ("outsideEnd", "insideEnd", "insideBase", "center"),
+    "column": ("outsideEnd", "insideEnd", "insideBase", "center"),
+    "line": ("above",), "area": (None,), "pie": ("outsideEnd", "center"), "donut": ("center",),
+}
+_FORMAT = re.compile(r'^(?:#,##0(?:\.0{1,12})?|General|0(?:\.0{1,12})?%)(?:"(?:%|[A-Za-z가-힣]{1,4})")?$')
+
+
+class ServerChartStyleError(ValueError):
+    """A spec outside the v1 shape."""
+
+
+def _style_check(condition: bool) -> None:
+    if not condition:
+        raise ServerChartStyleError("native_chart_server_style_invalid")
+
+
+def _style_number(value: Any, *, positive: bool = False) -> bool:
+    return (type(value) in (int, float) and math.isfinite(value)
+            and (value > 0 if positive else value >= 0))
+
+
+def _style_px(value: Any) -> bool:
+    return _style_number(value, positive=True) and value <= 400
+
+
+def _style_color(value: Any) -> bool:
+    return isinstance(value, str) and bool(_STYLE_HEX.match(value))
+
+
+def _style_layout(value: Any) -> bool:
+    return (isinstance(value, dict) and set(value) == {"x", "y", "w", "h"}
+            and all(_style_number(value[key]) and value[key] <= 1 for key in value)
+            and value["w"] > 0 and value["h"] > 0
+            and value["x"] + value["w"] <= 1 + 1e-6 and value["y"] + value["h"] <= 1 + 1e-6)
+
+
+def validate_server_chart_style(spec: Any, chart_type: str, point_count: int, grouping: str | None) -> None:
+    """Raise :class:`ServerChartStyleError` unless ``spec`` is a v1 native style for this chart."""
+    polar, trend = chart_type in ("pie", "donut"), chart_type in ("line", "area")
+    bars = not polar and not trend
+    required = {"version", "fontFamily", "textColor", "axisColor", "gridColor", "textPx", "dataLabels", "legend"}
+    optional = {"title", "plotLayout"} | (
+        {"holeRatio"} if chart_type == "donut" else set() if polar
+        else {"valueAxis", "line", "fillOpacity"} if trend else {"valueAxis", "bars"})
+    _style_check(isinstance(spec, dict) and required <= set(spec) <= required | optional)
+    _style_check(spec["version"] == NATIVE_STYLE_VERSION)
+    _style_check(isinstance(spec["fontFamily"], str) and 0 < len(spec["fontFamily"].strip()) <= 200)
+    _style_check(all(_style_color(spec[key]) for key in ("textColor", "axisColor", "gridColor")) and _style_px(spec["textPx"]))
+    if "title" in spec:
+        title = spec["title"]
+        _style_check(isinstance(title, dict) and "px" in title and set(title) <= {"px", "layout"} and _style_px(title["px"])
+                     and ("layout" not in title or _style_layout(title["layout"])))
+    _style_check("plotLayout" not in spec or _style_layout(spec["plotLayout"]))
+    if chart_type == "donut":
+        _style_check("holeRatio" in spec and _style_number(spec["holeRatio"], positive=True) and spec["holeRatio"] < 1)
+    if not polar:
+        axis = spec.get("valueAxis")
+        _style_check(isinstance(axis, dict)
+                     and {"visible", "gridlines", "minimum", "maximum", "numberFormat"} <= set(axis)
+                     <= {"visible", "gridlines", "minimum", "maximum", "majorUnit", "numberFormat"}
+                     and type(axis["visible"]) is bool and type(axis["gridlines"]) is bool
+                     and axis["minimum"] == 0 and _style_number(axis["maximum"], positive=True)
+                     and ("majorUnit" not in axis or (_style_number(axis["majorUnit"], positive=True)
+                                                      and 1 <= axis["maximum"] / axis["majorUnit"] <= 32))
+                     and isinstance(axis["numberFormat"], str) and bool(_FORMAT.match(axis["numberFormat"])))
+    if bars:
+        gaps = spec.get("bars")
+        _style_check(isinstance(gaps, dict) and set(gaps) == {"gapWidth", "overlap"}
+                     and type(gaps["gapWidth"]) is int and 0 <= gaps["gapWidth"] <= 500
+                     and gaps["overlap"] == (100 if grouping in ("stacked", "percentStacked") else 0))
+    if trend:
+        line = spec.get("line")
+        _style_check(isinstance(line, dict) and set(line) == {"widthPx", "markerPx"} and _style_px(line["widthPx"])
+                     and (line["markerPx"] is None if chart_type == "area" else _style_px(line["markerPx"])))
+        _style_check(("fillOpacity" in spec) is (chart_type == "area")
+                     and ("fillOpacity" not in spec or (_style_number(spec["fillOpacity"]) and spec["fillOpacity"] <= 1)))
+    labels = spec["dataLabels"]
+    _style_check(isinstance(labels, dict) and type(labels.get("shown")) is bool)
+    if labels["shown"]:
+        keys = {"shown", "position", "px", "bold", "showCategory", "numberFormat"}
+        _style_check(keys <= set(labels) <= keys | {"color", "pointColors"}
+                     and labels["position"] in _LABEL_POSITIONS[chart_type]
+                     and not (grouping in ("stacked", "percentStacked") and labels["position"] == "outsideEnd")
+                     and _style_px(labels["px"]) and type(labels["bold"]) is bool and type(labels["showCategory"]) is bool
+                     and (not labels["showCategory"] or chart_type == "pie")
+                     and isinstance(labels["numberFormat"], str) and bool(_FORMAT.match(labels["numberFormat"]))
+                     and ("color" not in labels or _style_color(labels["color"]))
+                     and ("pointColors" not in labels or (
+                         isinstance(labels["pointColors"], list) and len(labels["pointColors"]) == point_count
+                         and all(_style_color(item) for item in labels["pointColors"]))))
+    else:
+        _style_check(set(labels) == {"shown"})
+    legend = spec["legend"]
+    _style_check(isinstance(legend, dict) and type(legend.get("visible")) is bool
+                 and set(legend) <= {"visible", "position", "layout"}
+                 and legend.get("position", "top" if not polar else "right") == ("right" if polar else "top")
+                 and ("layout" not in legend or _style_layout(legend["layout"])))
 
 
 def slide_native_objects(content: Any) -> NativeObjects | None:

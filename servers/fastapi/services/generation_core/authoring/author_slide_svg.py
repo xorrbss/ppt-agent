@@ -719,7 +719,8 @@ def svg_author_rules(style_snapshot: dict, body_floor: float, *, new_copy: bool 
         requirements_revision=requirements_revision(style_snapshot),
     )
     from services.generation_core.drivers.svg.server_chart import server_chart_rule
-    native_rules += server_chart_rule(style_snapshot)
+    from services.generation_core.drivers.svg.server_chart_data_ref import data_ref_rule
+    native_rules += server_chart_rule(style_snapshot) + data_ref_rule(style_snapshot)
     author_rules = SVG_NEW_COPY_AUTHOR_RULES if new_copy else SVG_AUTHOR_RULES
     if (source_preserved
             and style_snapshot.get("source_authoring_contract") == {"version": "svg-source-whole-page/v1"}):
@@ -1114,6 +1115,9 @@ async def author_slide_svg(content: str, style_snapshot: dict, role: str, index:
     requested_data = format_requested_native_data(content, requirements_revision(style_snapshot))
     if requested_data:
         prompt += "\n\n" + requested_data
+        # Charts the server may draw by reference: ids of the literals shown above.
+        from services.generation_core.drivers.svg.server_chart_data_ref import data_ref_prompt
+        prompt += data_ref_prompt(style_snapshot, content)
     # Revision nine shares revision eight's rules; only its request layout differs.
     cacheable_layout = uses_cacheable_author_layout(read_authoring_profile(style_snapshot))
     profile = behaviour_profile(read_authoring_profile(style_snapshot))
@@ -1430,7 +1434,8 @@ async def author_slide_svg(content: str, style_snapshot: dict, role: str, index:
                 output_view_inbound = apply_plan(root, view_plan)
             # Declaration attributes are outside the SVG contract: strip them
             # before anything validates or stores the tree.
-            declarations = extract_native_declarations(root)
+            from services.generation_core.drivers.svg.server_chart_data_ref import chart_literals
+            declarations = extract_native_declarations(root, chart_literals=chart_literals(style_snapshot, content))
             vectors = {k: v["vector"] for k, v in manifest.items() if v.get("vector") is not None}
             used = set()
             if vectors:

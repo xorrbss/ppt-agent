@@ -198,6 +198,13 @@ CONVERTER_LEDGER = VerifierRevisionLedger(
         # Chart-proof Chrome launches add frame-pacing flags; the default argv is unchanged.
         # V4, earlier revisions and non-SVG paths are unchanged; no stored V5 proofs exist.
         "611d90f3c7fa580ea98fc1df2ad62ca21eb074ae3fab74f1b2aab973fdbe959c": "svg-pptx-converter/1",
+        # 2026-11-09: server chart prototype only (SVG_SERVER_CHARTS decks): the native chart of a
+        # trusted svg-server-chart/v4 chart is projected from svgAppearance["serverChartStyle"]
+        # (the renderer's own decisions, replayed from the stored declaration) and skips the
+        # drawn-style inference. Sidecars without that key -- every author-drawn chart, every
+        # v1/v2/v3 server chart and every stored deck -- project byte-identically (pinned by
+        # tests/unit/test_svg_server_chart_native_style.py). No stored deck carries a v4 chart.
+        "42f4194893fe360b9271a2838da8ae799f4f6965ed83ab0b0fd3ae8d79e7325c": "svg-pptx-converter/1",
     }),
 )
 
@@ -484,6 +491,17 @@ WHOLE_PAGE_VERIFIER_LEDGER = VerifierRevisionLedger(
         # deck checks occlusion and the admitted revision instead. No stored deck carries a
         # v3 marker, so every stored page keeps its interpretation.
         "08ddd5e164a7c475be445d340336056a143eee47522fa5d244a7061c7423ba55": "svg-whole-page-verifier/1",
+        # 2026-11-09: server chart prototype only (SVG_SERVER_CHARTS decks): charts by reference
+        # (server_chart_data_ref, a new policy frozen at admission as server_chart_data_ref, so
+        # no stored deck resolves references), and grounding accepts a category whose leading
+        # words the source elides ("2026년 1분기 1,120, 2분기 1,190"). Other decks unchanged.
+        "89dee0a42f77ae1a6c4d69a3261f86aa79539a4854b600b35a16b123d2beab23": "svg-whole-page-verifier/1",
+        # 2026-11-09: server chart prototype only (SVG_SERVER_CHARTS decks): a trusted
+        # svg-server-chart/v4 chart publishes the renderer's native style spec
+        # (svgAppearance["serverChartStyle"], validated in native_objects/model.py) and exports
+        # from it. Every other chart and every stored deck keeps its exact sidecar and converter
+        # input (pinned by tests/unit/test_svg_server_chart_native_style.py).
+        "593e10e616bd5677d4f056136f2027666b6eb83ea78dfd047858afac51559af1": "svg-whole-page-verifier/1",
     }),
 )
 
@@ -716,6 +734,17 @@ PARTIAL_RECOVERY_CODE_LEDGER = VerifierRevisionLedger(
         # deck checks occlusion and the admitted revision instead. No stored deck carries a
         # v3 marker, so every stored page keeps its interpretation.
         "f2afbfaf458c700fa4705da0b472c2aa7ce20fd6b647cfa0bbfba6eb7b1edcfa": "svg-partial-recovery-code/1",
+        # 2026-11-09: server chart prototype only (SVG_SERVER_CHARTS decks): charts by reference
+        # (server_chart_data_ref, a new policy frozen at admission as server_chart_data_ref, so
+        # no stored deck resolves references), and grounding accepts a category whose leading
+        # words the source elides ("2026년 1분기 1,120, 2분기 1,190"). Other decks unchanged.
+        "1161fb4e381321b44530be8978692017f685452ab5b53e9b7ab90c98c69d0613": "svg-partial-recovery-code/1",
+        # 2026-11-09: server chart prototype only (SVG_SERVER_CHARTS decks): a trusted
+        # svg-server-chart/v4 chart publishes the renderer's native style spec
+        # (svgAppearance["serverChartStyle"]) and exports from it. Every other chart and every
+        # stored deck keeps its exact sidecar and converter input (pinned by
+        # tests/unit/test_svg_server_chart_native_style.py).
+        "3480c4c1d005f3a5c29ab260ad312d26464f9d7f7dc672109cd530225166a4c9": "svg-partial-recovery-code/1",
     }),
 )
 
@@ -859,6 +888,17 @@ PAGE_RENDER_CODE_LEDGER = VerifierRevisionLedger(
         # deck checks occlusion and the admitted revision instead. No stored deck carries a
         # v3 marker, so every stored page keeps its interpretation.
         "2b2e046a00cec4549e24a18b280c042a06bca81f78698e26de773be6d34aed75": "svg-page-render-code/1",
+        # 2026-11-09: server chart prototype only (SVG_SERVER_CHARTS decks): charts by reference
+        # (server_chart_data_ref, a new policy frozen at admission as server_chart_data_ref, so
+        # no stored deck resolves references), and grounding accepts a category whose leading
+        # words the source elides ("2026년 1분기 1,120, 2분기 1,190"). Other decks unchanged.
+        "6a316caad10721eb69abd2c2349f65e8b56140c9a7055292fac7da30c1db7f8d": "svg-page-render-code/1",
+        # 2026-11-09: server chart prototype only (SVG_SERVER_CHARTS decks): a trusted
+        # svg-server-chart/v4 chart publishes the renderer's native style spec
+        # (svgAppearance["serverChartStyle"]) and exports from it. Every other chart and every
+        # stored deck keeps its exact sidecar and converter input (pinned by
+        # tests/unit/test_svg_server_chart_native_style.py).
+        "fdd0671c024284f56a2231616723c3aca1cd9345962606bed2c981fe8840702f": "svg-page-render-code/1",
     }),
 )
 

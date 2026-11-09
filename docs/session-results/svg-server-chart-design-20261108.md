@@ -313,3 +313,134 @@ decks out.
 - Occlusion box estimates for text are approximate.
 - A later revision can now draw axis ticks, gridlines and labels on several
   lines, but none does yet.
+
+## Renderer revision four: a designed trusted drawing (2026-11-09)
+
+`svg-server-chart/v4` (`server_chart_v4.py`) is trusted like v3 (`TRUSTED_RENDERERS`)
+and is what fresh admissions freeze (`SERVER_CHART_CURRENT`). v1, v2 and v3 draw
+byte-for-byte what they drew (digest tests unchanged); decks admitted with them keep
+their revision, rule and proofs. Being trusted, v4 is not bound by what the native
+drawing verifier can read, so it draws what v3 could not.
+
+**What v4 draws (decision rules):**
+- **Value axis.** Zero-based, 1-2-5 "nice" ticks (at most six intervals, fewer when the
+  plot is short or the tick labels are wide), light gridlines (horizontal for column,
+  line, area; vertical for bar), tick labels without a unit (only `%` for a `(%)` unit or
+  a percent-stacked chart). Drawn for line and area charts, for two or more series, for
+  seven or more categories, and whenever value labels are hidden or cannot be placed.
+  A single series of at most six categories keeps clean bars with value labels.
+- **Value labels never overprint.** Each label is checked against the bars, points,
+  line segments and labels already drawn. Bars: outside the bar end, else all labels
+  dropped and the axis forced. Stacks: inside the segment, else dropped and the axis forced.
+  One line or area: above its point, else below, else beside it. Several lines: every
+  point labelled (above, below or beside, whichever is free) up to 12 points, else the
+  last point of each line at the right with labels pushed apart, else none.
+- **Palette from the deck.** Saturated, mid-light fills and strokes outside the chart,
+  weighted by painted area (full-canvas backgrounds ignored, near duplicates merged, at
+  most three) lead the series and slice colours, followed by a neutral and shades and
+  tints of the lead accent; eight distinct colours. Declared `pointColors` still win.
+  The palette is recorded in the replay style; the first drawing's colours also land in
+  the declaration's `pointColors`, which is what the replay draws from.
+- **Fallbacks.** The whole chart shrinks from the page body size to the 14 px floor before
+  it is refused. Category names wrap to three lines (at spaces, or between Korean/Chinese
+  characters) and are never rotated, abbreviated or changed. A pie or donut keeps names
+  beside its slices up to six slices; more slices, or names that would collide or not fit,
+  get a legend (swatch, name, value, names wrapped to two lines). Titles wrap to two lines.
+  Zero values draw in clustered bar and column charts (an empty bar with its label).
+- **Replay.** The one layout decision the normalised declaration cannot express (line
+  labels at their ends record `valueLabels.shown` false, like no labels) is recorded in
+  the replay style (`trendLabels`) and forced on replay.
+
+**Refusals that remain:** negative values (the source grounding reads unsigned numbers),
+zero or negative stacked segments and pie slices, a pie with more than one series or
+eight slices, a trend with one category, shape-invalid JSON or non-finite numbers, a box
+below 160x120 px or too small even at 14 px, category names that cannot wrap into three
+lines at the floor (a Latin word wider than its column), and a legend entry wider than
+the box.
+
+**Finding on the way (affects v2 and v3, not changed):** the native converter rejects a
+data-label position on an area chart (`Native PPTX area data labels do not support label
+position`), so a v2/v3 area chart with value labels (recorded position `above`) falls back
+to drawn shapes in the PPTX. v4 records no position for areas. Nothing in the unit tests
+of v2/v3 converts to PPTX; `test_svg_server_chart_v4.py` converts every v4 case.
+
+**Not done yet:** no real-deck measurement; the PNG checks used a serif fallback font
+(widths are the estimator's).
+
+### Native export style of revision four: one spec, two outputs (2026-11-09)
+
+The PPTX native chart of a trusted v4 chart used to be rebuilt from the JSON plus what
+`chart_object` and `apply_drawn_chart_style` could infer back from the drawing, so area
+colours, axis bounds, ticks, label formats, legend and palette fell back to converter
+defaults or guesses. `server_chart_v4_native.native_style` now replays the stored
+declaration and replay style through the same renderer (`server_chart_v4._render`, whose
+drawing is unchanged and still digest-pinned) and returns its decisions as a spec:
+font family, text colour, chart text size, title size and position, plot area, value axis
+(visible, gridlines, 0..max, major unit, tick number format; a percent stack runs 0..1 with
+`0%`), bar gap and overlap, line width and marker size, area opacity, data labels (shown,
+position, size, weight, colour or per-point contrast colours, number format with the unit),
+legend (shown, position, layout) and the donut hole. Publication stores it as
+`svgAppearance["serverChartStyle"]` (validated in `native_objects/model.py`); no declaration
+state is added. `export_projection._server_chart` writes it field by field in the vendored
+converter vocabulary, and the export scene skips the drawn-style inference for such charts.
+The vendored converter is not patched: every field already existed there.
+
+Charts without the key (author-drawn, v1/v2/v3 server charts, a v4 chart whose trust was
+lost, every stored deck) keep their exact sidecar and converter input:
+`tests/unit/test_svg_server_chart_native_style.py` pins 54 such cases with digests computed
+before the change. Every v4 case exports one native chart whose XML carries the spec.
+
+**What the native chart cannot express without a converter patch:** per-point label
+placement (line labels moved above or below a point, end labels of several lines), the area
+plot between category centres (no `crossBetween` for non-date area charts, so LibreOffice
+draws the area edge to edge), a value axis without its axis line (one axis colour for both
+axes), translucent gridlines (blended to an opaque colour), the separator between a slice
+name and its value, per-series label colours in a stack, and a data-label position on a
+doughnut (the converter always writes one). Pie and donut values drawn inside their slices
+keep their place; the slice names drawn beside them become a legend.
+
+## Measurement of revision four, data references and native style (2026-11-09)
+
+**Setup** (`servers/fastapi/scripts/server_chart_eval/`, real `claude-sonnet-5-5`):
+- Three 7-slide chart-heavy Korean prompts (`prompts.json`): business review, consumer survey, library statistics.
+- 3 decks per prompt and arm, each deck on a fresh backend and database, with the chained PPTX export.
+- Prices: $3/$15 per million tokens, assumed, so costs are comparable within this table only.
+- Arms:
+  - author-drawn charts (`SVG_SERVER_CHARTS=off`), V4 and V5;
+  - server charts with the final code (renderer v4 trusted, data references, native style), V4 and V5.
+
+| | Author V4 | Author V5 | Server V4 | Server V5 |
+|---|---|---|---|---|
+| Decks | 9 | 9 | 9 | 9 |
+| Native charts in the PPTX | **1** (0.1/deck) | **0** | **26** (2.9/deck) | **29** (3.2/deck) |
+| Fallback pages (of 63) | 5 (8%) | 30 (48%) | 14 (22%) | 9 (14%) |
+| V5 charts gated on paint evidence | - | 3 (0 proven) | - | 0 (trusted) |
+| Cost per deck (median) | $1.6 | $1.7 | $1.4 | $1.5 |
+| Generation time per deck (median) | 167 s | 167 s | 153 s | 154 s |
+
+**What it shows:**
+- With author-drawn charts, almost no chart becomes native. The prompts state their numbers in prose, without a `chart:` literal, so V4 asks for no declaration. The author draws bars, lines and donuts as plain shapes, which export as pictures.
+- V5 turns those same pages into fallbacks: `drawing_content_unproven`, 34 first-attempt failures.
+- Server charts make nearly every chart native in both revisions, and cost and take a little less.
+- Server V5 needs no paint proof, so its charts export natively at once.
+
+**Why server pages still fell back** (14 in V4, 9 in V5, concentrated in the library prompt):
+1. **Header-band intrusion** (`svg_common_header_body_intrusion`): 7 of the 14 V4 fallbacks have only this failure.
+   - The body box starts at x=64, and authors place the chart box at x=64.
+   - Every axis and gridline the renderer draws from the box edge has a 1-2 px stroke, and half of it falls outside the body box.
+   - The intrusion check exempts centred strokes of rect/circle/ellipse only, not lines.
+   - Fix: a renderer revision that insets stroked lines by half their stroke width inside the box. Not yet published, because a published revision never changes its output.
+2. **Visible-symbol rewriting** (`writing_policy_visible_symbols`), 3 pages per arm, the same page every run.
+   - The source category "강원·제주권" reached the declaration as "강원, 제주권", so grounding failed (`server_chart_value_ungrounded`).
+   - In V5, the rewritten chart text no longer replays from the declaration, so trust was lost and the ordinary proof failed (`drawing_content_unproven`).
+   - Fix: grounding should compare category names with separators normalised, and the writing policy should not rewrite text inside a server chart group (or the replay should apply the same rewrite).
+3. A few `required_text_missing` pages, as in the author arms.
+
+**Spend:**
+- Author arms $31.1, server arms $26.9, and the harness pilot $3.5: about $61.5 in all.
+- Raw results: `/var/tmp/server-chart-eval/{main,server}/` on the measuring VM. These are not preserved in the repository.
+
+**Caveats:**
+- Three prompts, 3 decks per cell.
+- Arms ran at the same time on two backends.
+- Visual quality was checked on rendered samples only, not by the judge.

@@ -151,6 +151,8 @@ def _donut_hole_percent(hole_ratio: float) -> int:
 
 def _chart(chart: dict, appearance: dict | None = None, *, pt_per_px: float = _PT_PER_PX) -> dict:
     """Small, separate chart projection (category charts only; V1 has no other)."""
+    if appearance is not None and "serverChartStyle" in appearance:
+        return _server_chart(chart, appearance["serverChartStyle"])
     if chart.get("retainedAxisTitle") and chart.get("valueAxis", {}).get("title"):
         raise ValueError("chart_retained_axis_title_conflict")
     chart_type = _CHART_TYPES[chart["chartType"]]
@@ -220,6 +222,91 @@ def _chart(chart: dict, appearance: dict | None = None, *, pt_per_px: float = _P
             "major_unit": value_axis["majorUnit"],
             "number_format": "General",
         }
+    return projected
+
+
+# --- Trusted v4 server charts ---------------------------------------------------------------
+#
+# ``svgAppearance["serverChartStyle"]`` (``server_chart_v4_native.native_style``) records what
+# revision four decided when it drew the chart; ``_server_chart`` writes those decisions in the
+# converter's native-chart vocabulary (``chart_data`` / ``chart_xml`` / ``chart_style``) field
+# by field, so no converter default and no drawing inference leaks in. The export scene skips
+# ``apply_drawn_chart_style`` for such charts. Lengths are canvas px, as the converter takes them.
+
+def _server_chart(chart: dict, spec: dict) -> dict:
+    """The converter payload (without bounds) of a chart whose appearance carries ``spec``."""
+    chart_type = _CHART_TYPES[chart["chartType"]]
+    polar = chart_type in {"pie", "doughnut"}
+    line = spec.get("line")
+    series: list[dict[str, Any]] = []
+    for item in chart["series"]:
+        entry: dict[str, Any] = {"name": item["name"], "values": list(item["values"])}
+        points = item.get("pointColors")
+        if points and (polar or (chart_type in {"bar", "column"} and len(set(points)) > 1)):
+            entry["point_colors"] = list(points)
+        if line is not None:
+            entry["line_width"] = line["widthPx"]
+            if line["markerPx"] is not None:
+                entry["marker_size"] = max(2, min(72, round(line["markerPx"] * _PT_PER_PX)))
+        if "fillOpacity" in spec:
+            entry["fill_opacity"] = spec["fillOpacity"]
+        series.append(entry)
+    colors = [item.get("color") or (item.get("pointColors") or ["#2563EB"])[0] for item in chart["series"]]
+    style: dict[str, Any] = {
+        "colors": colors, "font_family": spec["fontFamily"], "text_color": spec["textColor"],
+        "axis_color": spec["axisColor"], "grid_color": spec["gridColor"],
+        "font_size": spec["textPx"], "axis_font_size": spec["textPx"], "legend_font_size": spec["textPx"],
+        "show_legend": spec["legend"]["visible"],
+    }
+    if spec["legend"]["visible"]:
+        style["legend_position"] = spec["legend"]["position"]
+        if "layout" in spec["legend"]:
+            style["legend_layout"] = dict(spec["legend"]["layout"])
+            style["legend_overlay"] = True
+    projected: dict[str, Any] = {"type": chart_type, "categories": list(chart["categories"]),
+                                 "series": series, "style": style}
+    if chart.get("title"):
+        title = spec.get("title", {})
+        projected["title"] = {"text": chart["title"], "font_size": title.get("px", spec["textPx"] + 2),
+                              "bold": True, "color": spec["textColor"], "font_family": spec["fontFamily"],
+                              "align": "l", **({"layout": dict(title["layout"])} if "layout" in title else {})}
+        projected["title_reserve_space"] = False
+    if "plotLayout" in spec:
+        projected["plot_layout"] = dict(spec["plotLayout"])
+    if chart.get("grouping") is not None:
+        projected["grouping"] = chart["grouping"]
+    if "bars" in spec:
+        projected["gap_width"] = spec["bars"]["gapWidth"]
+        if chart.get("grouping") == "clustered":
+            projected["overlap"] = spec["bars"]["overlap"]
+    if "valueAxis" in spec:
+        axis = spec["valueAxis"]
+        value = {"visible": axis["visible"], "major_gridlines": axis["gridlines"],
+                 "label_position": "next_to" if axis["visible"] else "none",
+                 "minimum": axis["minimum"], "maximum": axis["maximum"], "number_format": axis["numberFormat"]}
+        if "majorUnit" in axis:
+            value["major_unit"] = axis["majorUnit"]
+        category = {"visible": True, "major_gridlines": False}
+        if chart_type == "bar":
+            # Revision four lists bar categories top to bottom, ticks below the plot.
+            category.update(position="left", reverse=True)
+        projected["axes"] = {"category": category, "value": value}
+    labels = spec["dataLabels"]
+    if labels["shown"]:
+        data_labels: dict[str, Any] = {"font_size": labels["px"], "bold": labels["bold"],
+                                       "number_format": labels["numberFormat"], "show_value": True,
+                                       "show_category": labels["showCategory"], "show_leader_lines": False}
+        if labels["position"] is not None:
+            data_labels["position"] = labels["position"]
+        if "color" in labels:
+            data_labels["color"] = labels["color"]
+        if "pointColors" in labels:
+            data_labels["colors"] = list(labels["pointColors"])
+        projected["data_labels"] = data_labels
+    if chart_type == "line":
+        projected["line_style"] = "lineMarker" if line is not None and line["markerPx"] is not None else "line"
+    if "holeRatio" in spec:
+        projected["hole_size"] = _donut_hole_percent(spec["holeRatio"])
     return projected
 
 

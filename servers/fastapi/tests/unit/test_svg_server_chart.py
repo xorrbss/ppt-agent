@@ -152,6 +152,38 @@ def test_a_value_written_before_its_category_counts():
     assert _grounding(SALES, [stated])["failures"] == []
 
 
+QUARTERS = {"chartType": "line", "categories": ["2025년 4분기", "2026년 1분기", "2026년 2분기", "2026년 3분기"],
+            "series": [{"name": "전사 매출", "values": [1050, 1120, 1190, 1220]}], "title": "전사 매출 (억원)"}
+QUARTERS_SOURCE = ("전사 매출은 2025년 4분기 1,050억원에서 2026년 1분기 1,120억원, 2분기 1,190억원, "
+                   "3분기 1,220억원으로 증가했다.")
+
+
+def _line_grounding(raw, sources):
+    page, _ = _extract(_raw_svg(raw, render=server_chart.SERVER_CHART_REVISION_V3))
+    quality = {"passed": True, "failures": []}
+    server_chart.apply_server_chart_grounding(quality, page, page["svg_content"], sources)
+    return quality
+
+
+def test_a_category_whose_leading_words_the_source_elides_is_grounded_by_its_tail():
+    assert _line_grounding(QUARTERS, [QUARTERS_SOURCE]) == {"passed": True, "failures": []}
+
+
+@pytest.mark.parametrize("source,missing", [
+    # A wrong value after the tail still fails.
+    (QUARTERS_SOURCE.replace("1,190억원", "1,290억원"), ["2026년 2분기=1,190"]),
+    # The tail follows a different prefix: "2분기" belongs to 2025년 here.
+    ("2025년 4분기 1,050억원, 2026년 1분기 1,120억원이었다; 2025년에는 2분기 1,190억원, 3분기 1,220억원이었다.",
+     ["2026년 2분기=1,190", "2026년 3분기=1,220"]),
+    # The prefix sits in an earlier sentence.
+    ("2025년 4분기 1,050억원에서 2026년 1분기 1,120억원이었다. 2분기 1,190억원, 3분기 1,220억원이었다.",
+     ["2026년 2분기=1,190", "2026년 3분기=1,220"]),
+])
+def test_an_elided_category_stays_strict(source, missing):
+    quality = _line_grounding(QUARTERS, [source])
+    assert quality["passed"] is False and quality["failures"][0]["values"] == missing
+
+
 def test_source_numbers_read_thousands_separators_and_decimals():
     assert server_chart.source_numbers("총 1,145억원, 87.4점, 2026년") == {
         server_chart.Decimal("1145"), server_chart.Decimal("87.4"), server_chart.Decimal("2026")}
@@ -455,7 +487,7 @@ def test_each_deck_gets_the_rule_of_the_revision_it_was_admitted_with():
     assert server_chart.server_chart_policy({"server_chart_render": V2})
     v3 = server_chart.server_chart_rule({"server_chart_render": server_chart.SERVER_CHART_REVISION_V3})
     assert v3 == rule.replace(V2, server_chart.SERVER_CHART_REVISION_V3)
-    assert server_chart.SERVER_CHART_CURRENT == server_chart.SERVER_CHART_REVISION_V3
+    assert server_chart.SERVER_CHART_CURRENT == server_chart.SERVER_CHART_REVISION_V4
 
 
 #: Published output of revision two for the families it adds (bar and column are

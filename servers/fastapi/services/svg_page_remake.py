@@ -301,8 +301,10 @@ async def preview_svg(presentation, slides, index, request, task, session):
     elif local_edit:
         try:
             from services.generation_core.drivers.svg.native_declarations import extract_native_declarations
+            from services.generation_core.drivers.svg.server_chart_data_ref import chart_literals
             root = _local_svg_content(request.svg_content, target.svg_content)
-            declarations = extract_native_declarations(root)
+            # References resolve from the content a remake author is given (``source``).
+            declarations = extract_native_declarations(root, chart_literals=chart_literals(snapshot, source))
             clean = ET.tostring(root, encoding="unicode")
             if template_page is not None:
                 from services.svg_templates.generation import compose_template_page

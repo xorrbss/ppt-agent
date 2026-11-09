@@ -152,12 +152,18 @@ def _drop(dropped: list, node, kind: str, reason: str) -> None:
     dropped.append({"id": node.get("id") or "", "kind": kind, "reason": reason})
 
 
-def extract_native_declarations(root: ET.Element) -> dict | None:
+def extract_native_declarations(root: ET.Element, *, chart_literals: dict | None = None) -> dict | None:
     """Strip declaration attributes from ``root`` in place and return them.
 
     Returns ``None`` when the tree declares nothing, else
     ``{"objects": [{"id", "kind", "raw"}], "dropped": [{"id", "kind", "reason"}]}``.
     A malformed declaration is dropped with a reason; it never fails the page.
+
+    ``chart_literals`` (``server_chart_data_ref.chart_literals``) is given only for a
+    deck admitted with server charts by reference: a server placeholder's
+    ``data-chart-ref`` then takes its data from the named literal. Every replay of
+    a raw response passes the literals of the same pinned content. ``None`` never
+    reads the attribute (decks admitted without the policy).
     """
     parents = {child: parent for parent in root.iter() for child in parent}
     declared: list[tuple[ET.Element, list[str]]] = []
@@ -218,7 +224,13 @@ def extract_native_declarations(root: ET.Element) -> dict | None:
             from services.generation_core.drivers.svg.server_chart import (
                 BOX_ATTRIBUTE, RENDER_ATTRIBUTE, ServerChartUnsupported, render_server_chart,
             )
+            from services.generation_core.drivers.svg.server_chart_data_ref import (
+                RECORD_KEY, REF_ATTRIBUTE, resolve_reference,
+            )
+            data_ref = None
             try:
+                if chart_literals is not None and REF_ATTRIBUTE in node.attrib:
+                    raw, data_ref = resolve_reference(node, raw, chart_literals)
                 revision, box, extras = render_server_chart(root, node, raw)
             except ServerChartUnsupported as error:
                 node.attrib.pop(RENDER_ATTRIBUTE, None)
@@ -226,7 +238,12 @@ def extract_native_declarations(root: ET.Element) -> dict | None:
                 _drop(dropped, node, kind, str(error))
                 continue
             objects.append({"id": node.get("id"), "kind": kind, "raw": raw, "render": revision, "box": box,
-                            **extras})
+                            **extras, **({RECORD_KEY: data_ref} if data_ref is not None else {})})
+            continue
+        if kind == "chart" and chart_literals is not None and "data-chart-ref" in node.attrib:
+            # A reference names data for the server to draw; an author-drawn chart has none.
+            node.attrib.pop("data-chart-ref")
+            _drop(dropped, node, kind, "server_chart_data_ref_not_server_chart")
             continue
         objects.append({"id": node.get("id"), "kind": kind, "raw": raw})
     return {"objects": objects, "dropped": dropped}

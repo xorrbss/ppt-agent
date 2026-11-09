@@ -1,0 +1,18 @@
+{
+  "server": {
+    "description": "server-rendered charts (V4 integrity rules, server chart renderer v3)",
+    "env": {"SVG_SERVER_CHARTS": "on", "SVG_NATIVE_CHART_INTEGRITY_V5": "off"}
+  },
+  "author": {
+    "description": "author-drawn charts, V4 integrity rules (current default)",
+    "env": {"SVG_SERVER_CHARTS": "off", "SVG_NATIVE_CHART_INTEGRITY_V5": "off"}
+  },
+  "author-v5": {
+    "description": "author-drawn charts, V5 paint-gated native charts",
+    "env": {"SVG_SERVER_CHARTS": "off", "SVG_NATIVE_CHART_INTEGRITY_V5": "on"}
+  },
+  "server-v5": {
+    "description": "server charts with V5 rules",
+    "env": {"SVG_SERVER_CHARTS": "on", "SVG_NATIVE_CHART_INTEGRITY_V5": "on"}
+  }
+}

@@ -35,9 +35,15 @@ and style (:func:`trusted_server_chart_ids`), the chart skips the drawing proof
 matched against the declaration, the values are grounded as before, and the
 deck instead checks that nothing is painted over the chart and that every
 server chart names the deck's frozen revision (:func:`apply_server_chart_admission`).
-Fresh admissions, V4 and V5, freeze revision three; decks admitted with revision
-one or two keep it, its author rule and its proofs. Any form a revision cannot
-draw leaves the placeholder empty and records why; nothing is guessed.
+Fresh admissions, V4 and V5, freeze the current revision (``SERVER_CHART_CURRENT``);
+decks admitted with an earlier revision keep it, its author rule and its proofs. Any
+form a revision cannot draw leaves the placeholder empty and records why; nothing is
+guessed.
+
+Revision four (``server_chart_v4.py``) is trusted like revision three and draws a
+designed chart: a nice-tick value axis with gridlines where it helps, labels that never
+collide, the page's accent colours, and fallbacks (shrinking to the 14 px floor, three-line
+category names, a legend for crowded pies) in place of refusals.
 """
 from __future__ import annotations
 
@@ -52,6 +58,7 @@ from xml.etree import ElementTree as ET
 SERVER_CHART_REVISION = "svg-server-chart/v1"
 SERVER_CHART_REVISION_V2 = "svg-server-chart/v2"
 SERVER_CHART_REVISION_V3 = "svg-server-chart/v3"
+SERVER_CHART_REVISION_V4 = "svg-server-chart/v4"
 SNAPSHOT_KEY = "server_chart_render"
 RENDER_ATTRIBUTE = "data-chart-render"
 BOX_ATTRIBUTE = "data-chart-box"
@@ -73,7 +80,7 @@ class ServerChartUnsupported(ValueError):
 def server_chart_policy(style_snapshot: dict | None) -> bool:
     """Whether a deck was admitted with server-rendered charts (frozen at admission)."""
     return isinstance(style_snapshot, dict) and style_snapshot.get(SNAPSHOT_KEY) in (
-        SERVER_CHART_REVISION, SERVER_CHART_REVISION_V2, SERVER_CHART_REVISION_V3)
+        SERVER_CHART_REVISION, SERVER_CHART_REVISION_V2, SERVER_CHART_REVISION_V3, SERVER_CHART_REVISION_V4)
 
 
 SERVER_CHART_RULE = (
@@ -109,8 +116,19 @@ SERVER_CHART_RULE_V2 = (
 )
 #: Revision three draws what revision two draws; only the marker the author writes differs.
 SERVER_CHART_RULE_V3 = SERVER_CHART_RULE_V2.replace(f'"{SERVER_CHART_REVISION_V2}"', f'"{SERVER_CHART_REVISION_V3}"')
+#: Revision four draws a value axis, collision-free labels, the deck's colours and a legend for
+#: crowded pies, so the author is told what it may declare and that the drawing needs no help.
+SERVER_CHART_RULE_V4 = SERVER_CHART_RULE_V2.replace(
+    f'"{SERVER_CHART_REVISION_V2}"', f'"{SERVER_CHART_REVISION_V4}"').replace(
+    "Bar and column values must be positive;",
+    "Values must be zero or above (a bar or column chart draws a zero value; stacked segments and pie "
+    "slices must be positive);").replace(
+    "Charts with negative values are drawn by you as before.",
+    "The server chooses the value axis, gridlines, colours (from the page's accent colours) and the "
+    "label layout, and gives a pie with many or crowded slices a legend: do not write any of them. Charts "
+    "with negative values are drawn by you as before.")
 _RULES = {SERVER_CHART_REVISION: SERVER_CHART_RULE, SERVER_CHART_REVISION_V2: SERVER_CHART_RULE_V2,
-          SERVER_CHART_REVISION_V3: SERVER_CHART_RULE_V3}
+          SERVER_CHART_REVISION_V3: SERVER_CHART_RULE_V3, SERVER_CHART_REVISION_V4: SERVER_CHART_RULE_V4}
 
 
 def server_chart_rule(style_snapshot: dict | None) -> str:
@@ -814,16 +832,23 @@ def render_server_chart_v3(root: ET.Element | None, node: ET.Element, raw: dict,
     return render_server_chart_v2(root, node, raw, style=style)
 
 
+def render_server_chart_v4(root: ET.Element | None, node: ET.Element, raw: dict, *, style=None) -> list[float]:
+    """Revision four (``server_chart_v4.py``): a trusted, designed drawing; same contract as the others."""
+    from services.generation_core.drivers.svg.server_chart_v4 import render_server_chart_v4 as render
+
+    return render(root, node, raw, style=style)
+
+
 #: Published renderer revisions. A revision's output never changes once published.
 RENDERERS = {SERVER_CHART_REVISION: render_server_chart_v1, SERVER_CHART_REVISION_V2: render_server_chart_v2,
-             SERVER_CHART_REVISION_V3: render_server_chart_v3}
+             SERVER_CHART_REVISION_V3: render_server_chart_v3, SERVER_CHART_REVISION_V4: render_server_chart_v4}
 #: Revisions whose charts are accepted by construction instead of by a drawing proof
 #: (owner decision 2026-11-09): a chart is trusted only while its drawing in the page
 #: is exactly what its renderer draws from its stored declaration (see
 #: :func:`trusted_server_chart_ids`); otherwise it takes the ordinary proof.
-TRUSTED_RENDERERS = frozenset({SERVER_CHART_REVISION_V3})
+TRUSTED_RENDERERS = frozenset({SERVER_CHART_REVISION_V3, SERVER_CHART_REVISION_V4})
 #: The revision a fresh admission freezes.
-SERVER_CHART_CURRENT = SERVER_CHART_REVISION_V3
+SERVER_CHART_CURRENT = SERVER_CHART_REVISION_V4
 
 
 def render_server_chart(root: ET.Element, node: ET.Element, raw: dict) -> tuple[str, list[float], dict]:
@@ -841,13 +866,23 @@ def render_server_chart(root: ET.Element, node: ET.Element, raw: dict) -> tuple[
         raise ServerChartUnsupported("server_chart_render_invalid")
     if revision not in TRUSTED_RENDERERS:
         return revision, renderer(root, node, raw), {}
+    if revision == SERVER_CHART_REVISION_V4:
+        # Revision four also records the palette it derived from the page.
+        from services.generation_core.drivers.svg.server_chart_v4 import page_style, style_record
+
+        styled = page_style(root, node)
+        return revision, renderer(root, node, raw, style=styled), {"style": style_record(styled)}
     font, ink, size = _page_style(root, node)
     box = renderer(root, node, raw, style=(font, ink, size))
     return revision, box, {"style": {"font": font, "ink": ink, "size": size}}
 
 
-def _replay_style(item: dict) -> tuple[str, str, float] | None:
+def _replay_style(item: dict) -> tuple | None:
     style = item.get("style")
+    if item.get("render") == SERVER_CHART_REVISION_V4:
+        from services.generation_core.drivers.svg.server_chart_v4 import replay_style
+
+        return replay_style(style)
     if (not isinstance(style, dict) or set(style) != {"font", "ink", "size"}
             or not isinstance(style["font"], str) or not isinstance(style["ink"], str)
             or isinstance(style["size"], bool) or not isinstance(style["size"], (int, float))
@@ -945,7 +980,14 @@ def placeholder_view(svg: str, declarations: dict | None) -> str:
             continue
         for child in list(node):
             node.remove(child)
-        node.set("data-native-chart", json.dumps(item["raw"], ensure_ascii=False, separators=(",", ":")))
+        shown = item["raw"]
+        if item.get("dataRef") is not None:
+            # A chart drawn by reference is shown as its reference (server_chart_data_ref).
+            from services.generation_core.drivers.svg.server_chart_data_ref import REF_ATTRIBUTE, reference_view
+
+            shown = reference_view(item["raw"])
+            node.set(REF_ATTRIBUTE, item["dataRef"])
+        node.set("data-native-chart", json.dumps(shown, ensure_ascii=False, separators=(",", ":")))
         node.set(RENDER_ATTRIBUTE, item["render"])
         node.set(BOX_ATTRIBUTE, " ".join(_fmt(value) for value in item["box"]))
         changed = True
@@ -1208,13 +1250,53 @@ def _associated(text: str, category: str, series: str | None, value: Decimal, ot
     return False
 
 
+_SENTENCE_END = re.compile(r"[.!?。](?!\d)|\n|;")
+_WORD_CHAR = re.compile(r"\w")
+
+
+def _elided_associated(text: str, category: str, value: Decimal, categories: list[str], numbers) -> bool:
+    """Whether ``text`` states ``value`` for ``category`` with its leading words elided.
+
+    A source lists ``2026년 1분기 1,120억원, 2분기 1,190억원``: the second category
+    ``2026년 2분기`` is written as its tail ``2분기``. The tail counts only when the
+    nearest earlier leading part of any category with the same number of words is
+    exactly the elided prefix (``2026년``, not ``2025년``), in the same sentence, and
+    ``value`` is the first number right after the tail.
+    """
+    words = category.split()
+    for cut in range(1, len(words)):
+        prefix, tail = " ".join(words[:cut]), " ".join(words[cut:])
+        siblings = {" ".join(other.split()[:cut]) for other in categories if len(other.split()) > cut}
+        tails = {" ".join(other.split()[cut:]) for other in categories if other != category}
+        for match in re.finditer(re.escape(tail), text):
+            start, end = match.start(), match.end()
+            if start and _WORD_CHAR.match(text[start - 1]):
+                continue
+            leading = [(found.start(), found.end(), sibling) for sibling in siblings
+                       for found in re.finditer(re.escape(sibling), text[:start])]
+            if not leading:
+                continue
+            _begin, finish, nearest = max(leading, key=lambda item: (item[1], item[1] - item[0]))
+            if nearest != prefix or _SENTENCE_END.search(text, finish, start):
+                continue
+            stops = [text.find(other, end) for other in (*categories, *tails) if other != category
+                     and other not in tail]
+            stops += [text.find(mark, end) for mark in ("\n", ";")]
+            stop = min([position for position in stops if position >= 0] or [len(text)])
+            if _near_after(numbers, end, stop) == value:
+                return True
+    return False
+
+
 def apply_server_chart_grounding(quality: dict, payload: dict, svg: str, sources: list[str] | str) -> None:
     """Fail a server-rendered chart whose values the source does not state for their category.
 
     The drawing is derived from the declaration, so the declaration's data is
     the only thing left to check: each value must be stated next to its
     category (and its series, with several series) in one of ``sources``.
-    Derived numbers (shares, totals) are not charted by this revision.
+    Derived numbers (shares, totals) are not charted by this revision. A chart
+    drawn by reference (``"dataRef"``, server_chart_data_ref) took its values from
+    the slide's literal and is not checked again.
     """
     from services.generation_core.drivers.svg.native_declarations import bound_declarations
 
@@ -1224,7 +1306,7 @@ def apply_server_chart_grounding(quality: dict, payload: dict, svg: str, sources
     texts = [sources] if isinstance(sources, str) else [text for text in sources if isinstance(text, str)]
     failures = []
     for item in record.get("objects") or []:
-        if not isinstance(item, dict) or item.get("render") not in RENDERERS:
+        if not isinstance(item, dict) or item.get("render") not in RENDERERS or item.get("dataRef") is not None:
             continue
         categories = item["raw"].get("categories", [])
         series = item["raw"].get("series", [])
@@ -1241,6 +1323,7 @@ def apply_server_chart_grounding(quality: dict, payload: dict, svg: str, sources
                 if not any(_associated(text, category, name, number, categories, numbers, first)
                            or (name is not None
                                and _associated(text, name, category, number, names, numbers, False))
+                           or (name is None and _elided_associated(text, category, number, categories, numbers))
                            for text, numbers, first in views):
                     missing.append(f"{category}={_label(value)}" if name is None else f"{name}/{category}={_label(value)}")
         if missing:
@@ -1252,8 +1335,8 @@ def apply_server_chart_grounding(quality: dict, payload: dict, svg: str, sources
 
 
 __all__ = ["BOX_ATTRIBUTE", "RENDERERS", "RENDER_ATTRIBUTE", "SERVER_CHART_CURRENT", "SERVER_CHART_REVISION",
-           "SERVER_CHART_REVISION_V2", "SERVER_CHART_REVISION_V3", "SERVER_CHART_RULE", "SERVER_CHART_RULE_V2",
-           "SERVER_CHART_RULE_V3", "SNAPSHOT_KEY", "TRUSTED_RENDERERS", "trusted_server_chart_ids",
+           "SERVER_CHART_REVISION_V2", "SERVER_CHART_REVISION_V3", "SERVER_CHART_REVISION_V4", "SERVER_CHART_RULE",
+           "SERVER_CHART_RULE_V2", "SERVER_CHART_RULE_V3", "SERVER_CHART_RULE_V4", "render_server_chart_v4", "SNAPSHOT_KEY", "TRUSTED_RENDERERS", "trusted_server_chart_ids",
            "OCCLUDED_KIND", "apply_server_chart_admission", "server_chart_occlusions",
            "render_server_chart_v3",
            "ServerChartUnsupported", "apply_server_chart_grounding", "placeholder_view", "render_server_chart",
