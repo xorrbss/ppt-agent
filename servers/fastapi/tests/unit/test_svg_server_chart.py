@@ -709,3 +709,14 @@ def test_a_server_chart_must_name_the_revision_its_deck_was_admitted_with():
     assert _admission(v3_page, {"server_chart_render": V2})["failures"][0]["reason"] == (
         "server_chart_revision_not_admitted")
     assert _admission(v2_page, {"server_chart_render": V2})["failures"] == []
+
+
+def test_a_year_is_grounded_with_or_without_its_suffix():
+    margin = {"chartType": "column", "categories": ["2025년 4분기", "2026년 1분기", "2분기", "3분기"],
+              "series": [{"name": "영업이익률 (%)", "values": [8.1, 9.0, 9.8, 10.4]}]}
+    prompt = "- 분기별 영업이익률(%): 2025 4분기 8.1, 2026 1분기 9.0, 2026 2분기 9.8, 2026 3분기 10.4"
+    assert _grounding(margin, [prompt])["failures"] == []
+    wrong = prompt.replace("2026 1분기 9.0", "2026 1분기 9.4")
+    assert _grounding(margin, [wrong])["failures"][0]["values"] == ["2026년 1분기=9"]
+    years = {"chartType": "column", "categories": ["2022", "2023"], "series": [{"name": "이용자", "values": [5820, 6340]}]}
+    assert _grounding(years, ["2022년 5,820, 2023년 6,340"])["failures"] == []

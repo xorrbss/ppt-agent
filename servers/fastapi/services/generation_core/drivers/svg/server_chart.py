@@ -1414,6 +1414,14 @@ def _elided_associated(text: str, category: str, value: Decimal, categories: lis
     return False
 
 
+_YEAR_SUFFIX = re.compile(r"(?<!\d)(\d{4})\s*년")
+
+
+def _year_plain(text: str) -> str:
+    """``text`` with every four-digit year written without its ``년`` suffix."""
+    return _YEAR_SUFFIX.sub(r"\1", text)
+
+
 def apply_server_chart_grounding(quality: dict, payload: dict, svg: str, sources: list[str] | str) -> None:
     """Fail a server-rendered chart whose values the source does not state for their category.
 
@@ -1430,12 +1438,21 @@ def apply_server_chart_grounding(quality: dict, payload: dict, svg: str, sources
     if record is None or not current:
         return
     texts = [sources] if isinstance(sources, str) else [text for text in sources if isinstance(text, str)]
+    # A year is the same with or without its suffix: a source's "2025 4분기 8.1" states the
+    # category "2025년 4분기" (measured 2026-11-09: a correct chart became a fallback page).
+    texts = [_year_plain(text) for text in texts]
     failures = []
     for item in record.get("objects") or []:
         if not isinstance(item, dict) or item.get("render") not in RENDERERS or item.get("dataRef") is not None:
             continue
-        categories = item["raw"].get("categories", [])
-        series = item["raw"].get("series", [])
+        labels = item["raw"].get("categories", [])
+        categories = [_year_plain(category) if isinstance(category, str) else category for category in labels]
+        series = [{**entry, "name": _year_plain(entry["name"])} if isinstance(entry, dict) and isinstance(entry.get("name"), str)
+                  else entry for entry in item["raw"].get("series", [])]
+        shown = dict(zip(categories, labels, strict=False))
+        shown_names = {entry.get("name"): original.get("name") for entry, original
+                       in zip(series, item["raw"].get("series", []), strict=False)
+                       if isinstance(entry, dict) and isinstance(original, dict)}
         missing = []
         views = [(text, _numbers_with_positions(text)) for text in texts]
         views = [(text, numbers, _value_first(text, categories, numbers)) for text, numbers in views]
@@ -1451,7 +1468,9 @@ def apply_server_chart_grounding(quality: dict, payload: dict, svg: str, sources
                                and _associated(text, name, category, number, names, numbers, False))
                            or (name is None and _elided_associated(text, category, number, categories, numbers))
                            for text, numbers, first in views):
-                    missing.append(f"{category}={_label(value)}" if name is None else f"{name}/{category}={_label(value)}")
+                    label = shown.get(category, category)
+                    missing.append(f"{label}={_label(value)}" if name is None
+                                   else f"{shown_names.get(name, name)}/{label}={_label(value)}")
         if missing:
             failures.append({"kind": "native_requested_chart_missing", "declarationId": item.get("id"),
                              "reason": "server_chart_value_ungrounded", "values": missing})
