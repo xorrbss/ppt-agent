@@ -444,3 +444,25 @@ keep their place; the slice names drawn beside them become a legend.
 - Three prompts, 3 decks per cell.
 - Arms ran at the same time on two backends.
 - Visual quality was checked on rendered samples only, not by the judge.
+
+## Both fallback causes fixed: revision five and protected chart text (2026-11-09)
+
+**Header-band intrusion, confirmed.** The failing page was recomposed with its common header (`finalize_svg`). The failing element `svg-5` was the server chart's baseline (`x1=64`, stroke width 2): v4 draws a single-series column's baseline from the box's left edge.
+
+**Fixes:**
+- **Renderer `svg-server-chart/v5`** (admitted from now on):
+  - Draws v4 and moves every line endpoint on or past a box edge in by half its stroke width.
+  - Everything else, including the native style and the export, is identical to v4.
+  - v4 stays published unchanged.
+- **Writing policy.** The visible-symbol substitution, the policy scan and its repair witnesses now skip server-drawn chart groups (`server_chart_group_ids`). Their text is the declaration and must keep matching its source and its replay.
+
+**Re-measurement**, library prompt only, 3 decks per arm, same harness:
+
+| | Server V4 before | Server V4 after | Server V5 before | Server V5 after |
+|---|---|---|---|---|
+| Native charts in the PPTX | 5 | **14** | 7 | **15** |
+| Fallback pages (of 21) | 10 | **0** | 7 | **0** |
+| Cost per deck (median) | $1.6 | $1.4 | $1.4 | $1.3 |
+
+- The remaining flagged pages (3 in V4, 2 in V5) are published, not fallbacks. They carry `writing_policy_visible_symbols` in body prose, as in the author-drawn arms.
+- Spend for the re-measurement: $8.0.
