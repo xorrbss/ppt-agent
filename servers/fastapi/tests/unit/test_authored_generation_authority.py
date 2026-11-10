@@ -16,13 +16,7 @@ from services.authored_provider_attempt_ledger import (
     reserve_provider_overload_retry,
     take_provider_attempt_reservations,
 )
-from services.generation_core.authoring.author_deck import author_correction_from_stored_failure
 from services.authored_checkpoint_errors import AuthoredStageError
-from services.authored_composition_policy import (
-    CompositionProfile,
-    build_authored_capacity_plan,
-)
-from services.authored_generation_planner import plan_authored_text
 from services.authored_generation_timing_receipt import (
     GENERATION_TIMING_STAGES,
     GenerationTimingRecorder,
@@ -31,79 +25,8 @@ from services.authored_generation_timing_receipt import (
 from tests.support.authored_generation_attempt_timing_v1 import (
     create_generation_attempt_timing_receipt,
 )
-from services.authored_presentation_pipeline import _author_stage_failure
 from services.provider_usage_instrumentation import ProviderUsageScope
-from services.generation_core.authoring import author_deck as author_deck_module
-from services.generation_core.authoring.author_slide import Brand, authored_provider_semantic_slot
-
-
-def test_pre_author_planner_freezes_known_closing_text_and_call_budget(monkeypatch) -> None:
-    monkeypatch.setenv("AUTHORED_COMPOSITION_ENVELOPE_ENABLED", "true")
-    # Commit c7b6383c1 ("author ordinary decks by free composition again")
-    # raised the envelope's visible-text target from 350 to 460 chars but did
-    # not raise this fixture's repeat count to match, so the content stopped
-    # exceeding the (correctly updated) target it exists to overflow. 24
-    # repeats clears the new 460-char target with headroom.
-    content = "최종 실행 원칙\n" + ("검증 가능한 운영 근거를 유지합니다. " * 24)
-    profile = CompositionProfile("ordinary", "authored", True, True, 1)
-    capacity_plan = build_authored_capacity_plan((content,), ("CLOSING",), profile)
-
-    planned = plan_authored_text((content,), capacity_plan).at(0)
-
-    assert planned.input_title_chars == len("최종 실행 원칙")
-    assert planned.input_body_chars > planned.body_target_chars == 380
-    assert planned.input_visible_chars > planned.visible_target_chars == 460
-    # The same commit raised CLOSING's qid ceiling 20 -> 36
-    # (_ROLE_BUDGETS["CLOSING"] in services/authored_composition_policy.py)
-    # without updating this assertion to match.
-    assert planned.semantic_target_limit == 36
-    assert planned.condensation_required is True
-    assert planned.condensation_allowed is True
-    assert planned.provider_initial_call_limit == 1
-    assert planned.provider_recovery_call_limit == 1
-    assert "one initial call plus at most one" in planned.prompt_brief()
-
-
-def test_recovered_slide_uses_only_remaining_provider_attempt(monkeypatch) -> None:
-    calls: list[int] = []
-
-    async def fail_author(*_args, **kwargs):
-        calls.append(int(kwargs["receipt_attempt_ordinal"]))
-        raise RuntimeError("transient author failure")
-
-    monkeypatch.setattr(author_deck_module, "author_slide_html", fail_author)
-
-    with pytest.raises(RuntimeError, match="transient author failure"):
-        asyncio.run(
-            author_deck_module._author_one_resilient(
-                "content",
-                "design",
-                Brand(topic="test"),
-                "CLOSING",
-                0,
-                1,
-                raise_on_failure=True,
-                provider_attempt_offset=1,
-            )
-        )
-
-    assert calls == [2]
-
-
-def test_terminal_provider_cause_and_attempt_count_survive_safe_checkpoint() -> None:
-    terminal = RuntimeError("public provider retry limit")
-    terminal.code = "public_provider_retry_limit_exceeded"
-    terminal.retryable = False
-    wrapped = RuntimeError("wrapped provider failure")
-    wrapped.__cause__ = terminal
-
-    error = _author_stage_failure(2, wrapped, provider_attempt_count=2)
-    safe = error.as_safe_dict(attempt_number=3)
-
-    assert error.code == "public_provider_retry_limit_exceeded"
-    assert error.retryable is False
-    assert safe["provider_attempt_count"] == 2
-    assert safe["attempt_number"] == 3
+from services.generation_core.authoring.author_slide import authored_provider_semantic_slot
 
 
 def test_attempt_receipt_keeps_non_null_stages_and_operational_causes(
@@ -161,95 +84,6 @@ def test_provider_attempt_count_rejects_unbounded_checkpoint_value() -> None:
         provider_attempt_count=99,
     )
     assert "provider_attempt_count" not in error.as_safe_dict()
-
-
-def test_a_retry_carries_the_reason_the_slide_was_rejected() -> None:
-    """The next attempt must know what to fix, or it repeats the mistake.
-
-    The durable checkpoint already records why a slide was rejected. Operation
-    ce48036c failed both of slide 35's calls on the same header contract
-    violation, so an attempt that re-sends the identical prompt reproduces it.
-    """
-
-    stored = {
-        "code": "authored_provider_attempt_budget_exhausted",
-        "cause": "Authored slide author failed",
-        "prior_failure": {
-            "code": "authored_slide_author_failed",
-            "exception_type": "ValueError",
-            "cause": (
-                "header contract violated: header_band_missing, "
-                "header_title_missing, header_eyebrow_missing"
-            ),
-        },
-    }
-    hint = author_correction_from_stored_failure(stored)
-    assert hint is not None
-    assert "header_band_missing" in hint
-    assert "header_title_missing" in hint
-    # The generic wrapper message says nothing actionable and is dropped.
-    assert "Authored slide author failed" not in hint
-    assert len(hint) <= 460
-
-    # A bare code is still better than nothing; an empty record stays silent.
-    assert "public_provider_retry_limit_exceeded" in (
-        author_correction_from_stored_failure(
-            {"code": "public_provider_retry_limit_exceeded"}
-        )
-        or ""
-    )
-    assert author_correction_from_stored_failure(None) is None
-    assert author_correction_from_stored_failure({}) is None
-
-
-def test_stored_source_rejection_prefers_actionable_detail_and_exact_block() -> None:
-    expected = "‘영상’이 아니라 ‘콘텐츠 운영’을 판다"
-    hint = author_correction_from_stored_failure({
-        "code": "authored_provider_attempt_budget_exhausted",
-        "cause": "Authored slide author failed",
-        "prior_failure": {
-            "code": "authored_slide_author_failed",
-            "cause": "source_content_browser_readback_failed",
-            "detail": f"source block text has no unique DOM element (run 0: expected {expected!r})",
-            "message": "Authored slide author failed",
-            "block_ids": ["source-slide:7:text:10"],
-        },
-    })
-    assert hint is not None
-    assert expected in hint
-    assert "source-slide:7:text:10" in hint
-    assert "authored_provider_attempt_budget_exhausted" not in hint
-    assert "source_content_browser_readback_failed" not in hint
-    assert len(hint) <= 460
-
-
-def test_prior_source_rejection_preserves_sanitized_message_across_attempts() -> None:
-    expected = "‘영상’이 아니라 ‘콘텐츠 운영’을 판다"
-    message = f"source-slide:7:text:10: expected {expected!r}; Bearer sensitivecredential"
-    stage_error = AuthoredStageError(
-        slide_index=6,
-        stage="author",
-        code="authored_provider_attempt_budget_exhausted",
-        prior_failure={
-            "code": "source_content_browser_readback_failed",
-            "cause": "source_content_browser_readback_failed",
-            "message": message,
-            "detail": "Authored slide author failed",
-            "block_ids": ["source-slide:7:text:10"],
-            "untrusted_payload": "must not survive",
-        },
-    )
-    stored = stage_error.as_safe_dict()
-    prior = stored["prior_failure"]
-    assert expected in prior["message"]
-    assert "sensitivecredential" not in prior["message"]
-    assert "[redacted]" in prior["message"]
-    assert prior["block_ids"] == ["source-slide:7:text:10"]
-    assert "untrusted_payload" not in prior
-    hint = author_correction_from_stored_failure(stored)
-    assert expected in hint
-    assert "source-slide:7:text:10" in hint
-    assert "sensitivecredential" not in hint
 
 
 def test_a_later_operation_attempt_gives_a_failed_slide_its_calls_back(

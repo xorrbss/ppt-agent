@@ -2,7 +2,7 @@
 
 import pytest
 
-from services.authored_flag_classification import (
+from services.generation_core.quality.flag_classification import (
     CLASSIFICATION_KEY,
     REPAIR_NOT_ADMITTED,
     REVIEW_REQUIRED,

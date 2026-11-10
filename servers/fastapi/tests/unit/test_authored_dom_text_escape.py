@@ -36,16 +36,10 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from types import SimpleNamespace
 
 import pytest
 
 from services.authored_composition_policy import blocking_safety_issues
-from services.authored_repair_round_order import (
-    TEXT_SCALE_MAX_FACTOR,
-    TEXT_SCALE_MIN_FACTOR,
-    text_scale_factor,
-)
 from utils.authored_dom_quality import (
     EXACT_RECONSTRUCTION,
     inspect_authored_dom,
@@ -198,27 +192,6 @@ def test_run29_slide05_container_clip_is_not_a_text_escape():
 # ---------------------------------------------------------------------------
 
 
-def test_escape_feeds_fit_summary_and_bounds_the_text_scale_rung():
-    report = inspect_authored_dom("<div></div>", _metrics("run29_slide17_text_escape"))
-
-    assert report.fit_summary["worst_overflow_ratio"] > 1.0
-    assert report.fit_summary["overflow_kinds"] == {"text": 2}
-
-    factor = text_scale_factor(
-        [issue.to_dict() for issue in blocking_safety_issues(report)]
-    )
-    assert factor is not None
-    assert TEXT_SCALE_MIN_FACTOR <= factor <= TEXT_SCALE_MAX_FACTOR
-    assert factor == pytest.approx(1.0 / report.fit_summary["worst_overflow_ratio"])
-
-
-def test_clean_slide_leaves_the_rung_alone():
-    report = inspect_authored_dom("<div></div>", _metrics("run29_slide05_container_clip"))
-
-    assert report.fit_summary["worst_overflow_ratio"] == 1.0
-    assert text_scale_factor([issue.to_dict() for issue in report.issues]) is None
-
-
 def test_new_category_is_a_blocking_safety_category():
     assert TEXT_ESCAPE_CATEGORY in BLOCKING_SAFETY_CATEGORIES
     assert {"overflow", "clipping", "off_canvas", "overlap"} <= BLOCKING_SAFETY_CATEGORIES
@@ -355,45 +328,6 @@ def test_exact_reconstruction_reports_only_marked_defects():
 # ---------------------------------------------------------------------------
 
 
-def test_remake_brief_carries_the_measured_defects(monkeypatch):
-    import asyncio
-
-    from services import authored_terminal_slide_fallback as terminal_mod
-
-    captured: dict[str, object] = {}
-
-    async def fake_revise(*args, **kwargs):
-        captured["critiques"] = kwargs.get("initial_critiques")
-        return [["<html>remade</html>"], [b"png"], [0], [{"path": "full_reauthor"}]]
-
-    monkeypatch.setattr(terminal_mod, "revise_authored_deck", fake_revise)
-    defects = [
-        SimpleNamespace(
-            category=TEXT_ESCAPE_CATEGORY,
-            detail=(
-                "text of s18-accept-evidence prints 25px below the bottom of its "
-                "card s18-accept-card, over s18-stable-card"
-            ),
-        )
-    ]
-
-    asyncio.run(
-        terminal_mod._remake_candidate(
-            index=0, html="<html></html>", png=b"png", content="topic", role="body",
-            brand=None, design_system="", style=None, total_slides=1,
-            defects=defects, reference_kwargs={},
-        )
-    )
-
-    details = [issue.detail for issue in captured["critiques"][0].issues]
-    # The hint alone is longer than one issue's 200-character budget, which is
-    # why the measurement has to travel as its own issue rather than appended.
-    assert len(terminal_mod.LOWER_DENSITY_HINT) > 200
-    assert "s18-accept-evidence" in details[0]
-    assert "s18-accept-card" in details[0]
-    assert details[1].startswith("Rebuild this slide")
-
-
 # ---------------------------------------------------------------------------
 # The footer safe zone: run 33's published callout under the page number
 # ---------------------------------------------------------------------------
@@ -447,36 +381,6 @@ def test_run33_slide03_is_not_a_footer_zone_intrusion():
         )
         == ()
     )
-
-
-def test_footer_zone_intrusion_feeds_fit_summary_and_keeps_its_rung_wiring():
-    """The magnitude and the text-scale wiring survive the demotion intact.
-
-    The rung reads the gate failures, and those carry only
-    ``blocking_safety_issues``, so an advisory category cannot reach it today.
-    The wiring is asserted here against the issues directly, so re-promoting
-    the category stays the one-line deletion from ``ADVISORY_ONLY_CATEGORIES``.
-    """
-
-    report = inspect_authored_dom("<div></div>", _metrics("run33_slide02_footer_zone"))
-
-    assert report.fit_summary["worst_overflow_ratio"] > 1.0
-    assert report.fit_summary["overflow_kinds"] == {"text": 2}
-
-    # What the rung would be handed if the category were promoted again.
-    footer_issues = [
-        issue.to_dict()
-        for issue in report.issues
-        if issue.category == FOOTER_ZONE_CATEGORY
-    ]
-    factor = text_scale_factor(footer_issues)
-    assert factor is not None
-    assert TEXT_SCALE_MIN_FACTOR <= factor <= TEXT_SCALE_MAX_FACTOR
-    assert factor == pytest.approx(1.0 / report.fit_summary["worst_overflow_ratio"])
-
-    assert text_scale_factor(
-        [issue.to_dict() for issue in blocking_safety_issues(report)]
-    ) is None
 
 
 def test_footer_zone_category_is_advisory_not_blocking():

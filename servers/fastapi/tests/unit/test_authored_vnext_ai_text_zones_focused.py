@@ -15,7 +15,6 @@ from services.authored_vnext.generation.ai_text_zones import (
     materialize_ai_text_zone_contract,
 )
 from tests.support.authored_vnext_master_fixture import master_contract_payload
-from services.generation_core.authoring.author_deck import _constrain_structured_zone_html
 
 
 MASTER_DIGEST = "sha256:" + ("a" * 64)
@@ -160,69 +159,3 @@ def test_materialized_contract_applies_resolved_empty_rules_without_moving_geome
     tampered = empty.model_copy(update={"deck_id": "deck:other"})
     with pytest.raises(ValueError, match="digest mismatch"):
         materialize_ai_text_zone_contract(contract, tampered)
-
-
-def test_structured_zone_html_is_token_fenced_and_pinned_to_bounds() -> None:
-    colors = {
-        "background": "#F7F9FC",
-        "surface": "#FFFFFF",
-        "textPrimary": "#0B1830",
-        "textSecondary": "#486078",
-        "accent": "#1463FF",
-        "divider": "#C9D5E6",
-        "warning": "#E85D75",
-    }
-    context = {
-        "schemaVersion": "authored-vnext-ai-edit-zone-context/v1",
-        "zones": [
-            {
-                "zoneId": "ai-zone:requirements",
-                "bounds": {"x": 96.0, "y": 168.0, "width": 1088.0, "height": 432.0},
-                "generationState": "generate",
-                "blocks": [{"blockId": "ai-zone:requirements:block:1"}],
-                "maxChars": 240,
-                "maxItems": 3,
-                "textAlign": "right",
-            }
-        ],
-        "templateDesignContext": {
-            "tokens": {"colors": colors},
-            "allowedFonts": ["Malgun Gothic", "Noto Sans KR", "Arial", "sans-serif"],
-        },
-    }
-    font = context["templateDesignContext"]["allowedFonts"][0]
-    block_id = context["zones"][0]["blocks"][0]["blockId"]
-    html = (
-        "<!doctype html><html><head><style>"
-        f"body{{background:{colors['background']};font-family:'{font}'}}"
-        f".card{{background:{colors['surface']};color:{colors['textPrimary']}}}"
-        "</style></head><body>"
-        '<section data-ai-zone-id="ai-zone:requirements">'
-        f'<div data-ai-block-id="{block_id}">'
-        '<article class="card" data-ai-item>요구사항 1</article>'
-        '<article class="card" data-ai-item>요구사항 2</article>'
-        '<article class="card" data-ai-item>요구사항 3</article>'
-        "</div></section></body></html>"
-    )
-
-    constrained = _constrain_structured_zone_html(html, context)
-
-    assert 'data-ai-zone-constraints="v1"' in constrained
-    assert "left:96px!important" in constrained
-    assert "width:1088px!important" in constrained
-    assert "overflow:hidden!important" in constrained
-    assert "text-align:right!important" in constrained
-
-    with pytest.raises(ValueError, match="invented colors"):
-        _constrain_structured_zone_html(
-            html.replace(colors["surface"], "#010203"),
-            context,
-        )
-    with pytest.raises(ValueError, match="exceeds maxItems"):
-        _constrain_structured_zone_html(
-            html.replace(
-                "</div></section>",
-                '<article class="card" data-ai-item>요구사항 4</article></div></section>',
-            ),
-            context,
-        )

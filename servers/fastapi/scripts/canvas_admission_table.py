@@ -49,7 +49,7 @@ from models.public_v2_contracts import PresentationGenerationRequestV2  # noqa: 
 from services.public_v2_orchestration_types import PublicRequestActor, PublicV2OrchestrationError  # noqa: E402
 from models.generate_presentation_request import GeneratePresentationRequest  # noqa: E402
 from services.authored_canvas import validate_authored_canvas_admission  # noqa: E402
-from services.authored_presentation_service import AUTHORED_TEMPLATE  # noqa: E402
+from services.generation_core.admission.strategy import AUTHORED_TEMPLATE  # noqa: E402
 from services.compatibility_migration.authored_vnext_contract import require_authored_vnext_creation_admission  # noqa: E402,E501
 from services.public_generation_route import effective_generation_engine as _effective_generation_engine  # noqa: E402
 from services.public_v2_orchestrator import _actor_context, _public_error, _resolve_generation_route_receipt  # noqa: E402

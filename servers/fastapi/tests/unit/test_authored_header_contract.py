@@ -26,7 +26,6 @@ from models.presentation_outline_model import (
 )
 from utils.authored_header_prompt import render_header_contract
 from utils.authored_header_style_map import structural_changes
-from services.generation_core.authoring.author_deck import prepare_authored_deck
 from utils.llm_calls.author_header_contract import (
     build_header_contract_messages,
     coerce_header_contract,
@@ -336,19 +335,6 @@ def test_a_deliberately_pinned_band_keeps_both_of_its_bounds():
 # --- deck plan wiring ---------------------------------------------------------
 
 
-def test_plan_freezes_one_contract_for_every_slide():
-    plan = prepare_authored_deck(
-        _outline("표지", "POR-005 접수 채널", "번호 없는 슬라이드"),
-        _brand(),
-        header_contract=_numbered_contract(),
-    )
-    assert "SLIDE HEADER SYSTEM" in plan.design_system
-    assert plan.header_contract is not None
-    # Identifiers are never pre-extracted here: each slide's own text travels to
-    # the authoring model in plan.contents, which is where they are read.
-    assert "POR-005" in plan.contents[1]
-
-
 def test_the_contract_forbids_badges_and_lookalike_headers_on_excluded_roles():
     text = render_header_contract(_numbered_contract())
     assert "NO requirement identifier, badge, chip, or code anywhere" in text
@@ -528,34 +514,6 @@ def test_the_pinned_body_form_names_the_full_canvas_width():
 
     assert "position:absolute;left:0;right:0;top:(N +" in text
     assert "has no horizontal extent and collapses to zero width" in text
-
-
-def test_a_structured_deck_takes_its_geometry_from_the_template():
-    """Template zone bounds and a per-slide derived band cannot both be authoritative.
-
-    The application pins every zone container at the template's own top, so a
-    zone at y=140 under a 180px band renders inside the header — and a body
-    wrapper pinned below the band becomes the containing block those zone
-    offsets then resolve against. For these decks the template decides.
-    """
-    plan = prepare_authored_deck(
-        _outline("표지", "POR-005 접수 채널"),
-        _brand(),
-        structured_slide_contexts=[
-            None,
-            {"zones": [{"zoneId": "ai-zone:body"}]},
-        ],
-        header_contract=_numbered_contract(),
-    )
-
-    assert plan.header_contract is None
-    assert "SLIDE HEADER SYSTEM" not in plan.design_system
-
-
-def test_plan_without_a_contract_carries_no_header_system():
-    plan = prepare_authored_deck(_outline("POR-005 접수 채널"), _brand())
-    assert plan.header_contract is None
-    assert "SLIDE HEADER SYSTEM" not in plan.design_system
 
 
 def test_the_contract_call_reads_the_deck_material_to_judge_the_slot():

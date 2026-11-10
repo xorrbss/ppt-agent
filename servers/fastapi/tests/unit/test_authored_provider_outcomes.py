@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import asyncio
 from datetime import timedelta
-from pathlib import Path
 from types import SimpleNamespace
 import uuid
 
@@ -21,10 +20,8 @@ from models.sql.workspace import (
     WorkspaceOperationEvent,
     WorkspaceOutbox,
 )
-from services.generation_core.authoring import author_deck as author_deck_mod
 from services.generation_core.authoring import author_slide as author_slide_mod
 from services.generation_core.authoring.author_slide import Brand
-from services.authored_author_stage_deferral import author_stage_failure
 from services.authored_batch_policy import is_authored_provider_overload
 from services.authored_provider_attempt_ledger import (
     ProviderAttemptReservation,
@@ -33,7 +30,6 @@ from services.authored_provider_attempt_ledger import (
 )
 from services.workspace_operation_handler_registry import (
     WorkspaceOperationClaim,
-    WorkspaceOperationDeferred,
 )
 from services.workspace_operation_runner import (
     defer_workspace_operation_claim,
@@ -956,30 +952,6 @@ def test_a_non_overload_status_with_an_unrelated_number_stays_non_overload():
     assert is_provider_overload(InvalidRequest("max_output_tokens must be <= 500")) is False
 
 
-def test_run22_usage_limit_shape_is_a_durable_deck_pause(monkeypatch):
-    monkeypatch.setattr("utils.provider_overload.time.time", lambda: 1789437216)
-    fixture_path = Path(__file__).parents[1] / "fixtures" / "authored_provider_usage_limit_run22.txt"
-    fixture = fixture_path.read_text(encoding="utf-8")
-
-    class UsageLimit(RuntimeError):
-        status_code = 429
-
-    client = _ChatGPTClient([], error=UsageLimit(fixture))
-    call = _call(client)
-    with pytest.raises(ProviderQuotaPause) as raised:
-        call()
-
-    pause = raised.value
-    assert isinstance(pause, WorkspaceOperationDeferred)
-    assert pause.reset_at == 1789437217
-    assert pause.detail == {
-        "provider_quota_reset_at": 1789437217,
-        "provider_quota_resume_semantics": "coordinator_requeues_after_reset",
-    }
-    assert call.receipt["quotaPauseResetAt"] == 1789437217
-    assert author_stage_failure(21, pause, provider_attempt_count=3) is pause
-
-
 def test_quota_pause_reset_is_persisted_on_the_operation(tmp_path):
     async def scenario() -> dict[str, object]:
         engine = create_async_engine(f"sqlite+aiosqlite:///{tmp_path / 'pause.db'}")
@@ -1108,55 +1080,6 @@ def test_unenforceable_timeout_is_reported_rather_than_assumed(caplog):
 
     assert "provider_call_timeout_not_enforced" in caplog.text
     assert "uncloneable-provider" in caplog.text
-
-
-def test_provider_outcome_gets_only_the_explicit_single_recovery(monkeypatch):
-    brand = Brand(
-        topic="주제",
-        language="Korean",
-        primary="#2563EB",
-        fonts="Noto Sans KR",
-    )
-    calls = []
-
-    async def succeeds_after_empty(*_args, **kwargs):
-        calls.append(kwargs)
-        if len(calls) == 1:
-            raise ProviderOutcomeError(
-                "public_provider_empty_output", recovery_allowed=True
-            )
-        return _VALID_HTML
-
-    monkeypatch.setattr(author_deck_mod, "author_slide_html", succeeds_after_empty)
-    result = asyncio.run(
-        author_deck_mod._author_one_resilient(
-            "slide", "design", brand, "COVER", 0, 1, raise_on_failure=True
-        )
-    )
-
-    assert result == _VALID_HTML
-    assert [call["receipt_attempt_ordinal"] for call in calls] == [1, 2]
-    assert all(call["allow_provider_fallback"] is False for call in calls)
-
-    calls.clear()
-
-    async def always_failed(*_args, **kwargs):
-        calls.append(kwargs)
-        raise ProviderOutcomeError(
-            "public_provider_response_failed", recovery_allowed=True
-        )
-
-    monkeypatch.setattr(author_deck_mod, "author_slide_html", always_failed)
-    with pytest.raises(ProviderOutcomeError) as terminal:
-        asyncio.run(
-            author_deck_mod._author_one_resilient(
-                "slide", "design", brand, "COVER", 0, 1,
-                raise_on_failure=True,
-            )
-        )
-    assert terminal.value.code == "public_provider_response_failed"
-    assert terminal.value.retryable is False
-    assert [call["receipt_attempt_ordinal"] for call in calls] == [1, 2]
 
 
 @pytest.mark.parametrize("field", ["exceptionType", "errorCode", "requestId", "terminalEvent", "failureKind", "statusOrigin", "incompleteReason", "providerErrorType", "rejectedParameter", "requestRejectionReason", "unrecognizedErrorCode", "unrecognizedParameter"])

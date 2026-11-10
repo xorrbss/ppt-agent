@@ -1,19 +1,20 @@
-"""Format-neutral one-page remake: deck load, digests, task writes, dispatch.
+"""One-page remake: deck load, digests, task writes, dispatch to svg.
 
-Split out of ``authored_page_remake_service`` so an svg page remake runs
-without importing the authored HTML pipeline. Preview and publication load
-the deck here, send svg pages to ``services.svg_page_remake`` and authored HTML
-pages back to ``authored_page_remake_service`` (imported where it is needed).
-The names, error codes and task payloads are unchanged; the authored service
-re-exports every one of them.
+Split out of ``authored_page_remake_service``, which was deleted with the
+authored generation pipeline. Preview and publication load the deck here and
+send the page to ``services.svg_page_remake``; a page or deck that is not svg
+(an authored HTML deck) is refused with
+``authored_page_remake_unsupported_presentation``. The names, error codes and
+task payloads are unchanged.
 """
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
-import time
 import uuid
+import weakref
 from typing import Any
 
 from fastapi import BackgroundTasks, HTTPException
@@ -41,6 +42,14 @@ from utils.hashing import sha256_prefixed
 LOGGER = logging.getLogger(__name__)
 
 PREVIEW_KIND = "authored_page_remake_preview"
+
+#: One mutex per deck. Page-remake publication and batch publication rewrite
+#: the same slides, so they take turns. Preview generation deliberately does
+#: NOT take it -- see the note there. Moved unchanged from the deleted
+#: ``authored_quality_review_service``.
+_ANALYZE_AND_FIX_LOCKS: weakref.WeakValueDictionary[uuid.UUID, asyncio.Lock] = (
+    weakref.WeakValueDictionary()
+)
 
 
 class AuthoredPageRemakeError(RuntimeError):
@@ -104,14 +113,12 @@ async def _load_deck(
     presentation_id: uuid.UUID,
     slide_index: int | None = None,
 ) -> tuple[PresentationModel, list[SlideModel]]:
-    """Load the deck and refuse a target this service cannot re-author.
+    """Load the deck and refuse a target this service cannot remake.
 
-    The requirement is on the page being remade, not on its neighbours.  A deck
-    that carries one blank placeholder is still a deck of authored pages, and
-    demanding that every slide be authored let a single blank disable remake for
-    every other page.  Everything downstream is index-addressed - the plan role,
-    the outline alignment, the per-slide reference images - so a non-authored
-    sibling does not affect the candidate for ``slide_index``.
+    Only svg decks and svg pages are remade (authored HTML remake was removed
+    with the authored pipeline). The requirement is on the page being remade,
+    not on its neighbours: everything downstream is index-addressed, so a
+    non-svg sibling does not affect the candidate for ``slide_index``.
 
     ``slide_index`` is validated only when it is in range; callers keep raising
     their own out-of-range errors so the reported codes stay unchanged.
@@ -131,9 +138,9 @@ async def _load_deck(
     unsupported_target = (
         slide_index is not None
         and 0 <= slide_index < len(slides)
-        and not (slides[slide_index].is_authored() or slides[slide_index].is_svg())
+        and not slides[slide_index].is_svg()
     )
-    if not slides or not (presentation.is_authored() or presentation.is_svg()) or unsupported_target:
+    if not slides or not presentation.is_svg() or unsupported_target:
         raise AuthoredPageRemakeError(
             "authored_page_remake_unsupported_presentation",
             stage="source_validation",
@@ -150,7 +157,6 @@ async def run_authored_page_remake_preview(
 ) -> None:
     """Generate and validate one detached candidate; never mutate a live slide."""
 
-    started = time.perf_counter()
     # Deliberately unlocked, so a batch can preview four pages at once. A
     # process-local lock could not exclude publication anyway — the workspace
     # worker has its own OS process — so a deck that moves underneath is caught
@@ -160,21 +166,7 @@ async def run_authored_page_remake_preview(
         raise AuthoredPageRemakeError(
             "authored_page_remake_slide_out_of_range", stage="source_validation"
         )
-    target = slides[slide_index]
-    if target.is_svg():
-        return await preview_svg(presentation, slides, slide_index, request, task, session)
-    from services.authored_page_remake_service import _preview_authored_html
-
-    return await _preview_authored_html(
-        presentation_id,
-        slide_index,
-        request,
-        task,
-        session,
-        presentation=presentation,
-        slides=slides,
-        started=started,
-    )
+    return await preview_svg(presentation, slides, slide_index, request, task, session)
 
 
 def _failed_preview_breadcrumb(
@@ -301,28 +293,38 @@ async def publish_authored_page_remake(
         raise AuthoredPageRemakeError(
             "authored_page_remake_slide_out_of_range", stage="publish_validation"
         )
-    slide = slides[slide_index]
     task = await session.get(AsyncPresentationGenerationTaskModel, preview_task_id)
     if task is None:
         raise AuthoredPageRemakeError(
             "authored_page_remake_preview_not_found", stage="publish_validation"
         )
-    if slide.is_svg():
-        return await publish_svg_candidate(session, presentation, slides, slide_index, task, snapshot=snapshot,
-            operation_id=operation_id, attempt_token=attempt_token, expected_revision=expected_revision)
-    from services.authored_page_remake_service import _publish_authored_html
+    return await publish_svg_candidate(session, presentation, slides, slide_index, task, snapshot=snapshot,
+        operation_id=operation_id, attempt_token=attempt_token, expected_revision=expected_revision)
 
-    return await _publish_authored_html(
-        session=session,
-        presentation_id=presentation_id,
-        slide_index=slide_index,
-        preview_task_id=preview_task_id,
-        snapshot=snapshot,
-        presentation=presentation,
-        slides=slides,
-        slide=slide,
-        task=task,
-    )
+
+async def publish_authored_page_remake_legacy(
+    *,
+    session: AsyncSession,
+    presentation_id: uuid.UUID,
+    slide_index: int,
+    preview_task_id: str,
+) -> dict[str, Any]:
+    """Publish one preview through the HTTP route and commit it under the deck lock."""
+
+    lock = _ANALYZE_AND_FIX_LOCKS.setdefault(presentation_id, asyncio.Lock())
+    async with lock:
+        try:
+            result = await publish_authored_page_remake(
+                session=session,
+                presentation_id=presentation_id,
+                slide_index=slide_index,
+                preview_task_id=preview_task_id,
+            )
+            await session.commit()
+            return result
+        except Exception:
+            await session.rollback()
+            raise
 
 
 def remake_http_error(error: AuthoredPageRemakeError) -> HTTPException:
@@ -349,6 +351,7 @@ __all__ = [
     "AuthoredPageRemakeError",
     "authored_page_source_digest",
     "publish_authored_page_remake",
+    "publish_authored_page_remake_legacy",
     "queue_authored_page_remake_preview",
     "remake_http_error",
     "run_authored_page_remake_preview",

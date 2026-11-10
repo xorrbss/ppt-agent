@@ -17,7 +17,7 @@ from models.presentation_outline_model import (
 from models.sql.presentation import PresentationModel
 from models.sql.slide import SlideModel
 from services import workspace_batch_remake_operation_handler as handler_module
-from services.authored_page_remake_service import AuthoredPageRemakeError
+from services.page_remake_core import AuthoredPageRemakeError
 from services.workspace_batch_remake_operation_handler import (
     WorkspaceBatchRemakeOperationHandler,
 )

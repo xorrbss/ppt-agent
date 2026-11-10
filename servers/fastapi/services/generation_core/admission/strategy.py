@@ -39,6 +39,11 @@ StrategyReason = Literal["explicit", "default"]
 #: Error code for any request that would start a new authored generation.
 AUTHORED_STRATEGY_REMOVED = "authored_strategy_removed"
 
+#: The request ``template`` value generation admission normalizes svg requests
+#: to (kept for wire compatibility; it no longer selects a pipeline). Moved
+#: here unchanged from ``services.authored_presentation_contracts``.
+AUTHORED_TEMPLATE = "authored"
+
 
 def resolve_generation_strategy_with_reason(
     request: object,
@@ -106,6 +111,7 @@ def require_generation_strategy_admission(request: object) -> None:
 
 __all__ = [
     "AUTHORED_STRATEGY_REMOVED",
+    "AUTHORED_TEMPLATE",
     "GenerationStrategy",
     "StrategyReason",
     "recorded_generation_strategy",

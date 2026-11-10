@@ -9,7 +9,6 @@ from types import SimpleNamespace
 import pytest
 
 from models.authored_header_contract import default_header_contract
-from models.presentation_outline_model import PresentationOutlineModel, SlideOutlineModel
 from models.authored_vnext.capability_registry import prompt_capability_clause
 from services.document_canvas_generation import generation_font_floor
 from services.generation_core.drivers.svg.canvas_brief import reference_caveat
@@ -22,7 +21,6 @@ from utils.llm_calls.author_canvas_shape import (
     classify_canvas_shape,
     composition_clause,
 )
-from services.generation_core.authoring.author_deck import prepare_authored_deck
 from utils.llm_calls.author_deck_tokens import deck_tokens_block
 from utils.llm_calls.author_prompt_profile import (
     AUGUST,
@@ -253,11 +251,3 @@ def test_svg_rules_carry_no_clause_for_the_baseline():
 def _canvas(w, h):
     return SimpleNamespace(width_px=w, height_px=h,
                            safe_area=SimpleNamespace(x=64, y=64, width=w - 128, height=h - 128))
-
-
-@pytest.mark.parametrize(("size", "expected"),
-                         [((720, 1280), True), ((720, 1040), True), ((1188, 840), True), ((1280, 720), False)])
-def test_document_canvas_clause_reaches_every_non_baseline_deck(size, expected):
-    outline = PresentationOutlineModel(slides=[SlideOutlineModel(content="개발방법론")])
-    plan = prepare_authored_deck(outline, _brand(), canvas=_canvas(*size))
-    assert ("DOCUMENT CANVAS" in plan.design_system) is expected

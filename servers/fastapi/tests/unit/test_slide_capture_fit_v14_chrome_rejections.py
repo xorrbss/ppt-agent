@@ -12,8 +12,6 @@ from pathlib import Path
 
 import pytest
 
-from services.authored_local_fit_evidence import validate_changed_capture
-from services.authored_local_fit_policy import font_size_allowed, minimum_allowed_pt
 from utils.slide_capture import find_chrome
 
 _SUPPORT = Path(__file__).resolve().parents[1] / "fixtures" / "local_fit_v14" / "support.py"
@@ -134,38 +132,6 @@ def test_displacing_a_protected_sibling_rejects_scope_exceeded() -> None:
 # --- font floor and shrink cap --------------------------------------------
 
 
-@pytest.mark.xfail(strict=True, reason=_FROZEN_REASON)
-def test_text_shrink_stays_within_the_ten_percent_cap_and_nine_point_floor() -> None:
-    html, policy, capture = support.fit("text_scaled_floor", V14)
-    report = support.report_of(capture)
-
-    assert report["unresolved_reasons"] == []
-    assert report["status"] == "text_scaled"
-    assert [operation["kind"] for operation in report["operations"]] == ["text_scaled"]
-    assert report["operations"][0]["font_factor"] == 0.95
-    assert report["edits"] == [{"qid": "card-text", "declarations": "font-size:15.2px;line-height:20.9px"}]
-    for run in report["runs"]:
-        assert run["original_pt"] == pytest.approx(12)
-        assert run["final_pt"] == pytest.approx(11.4)
-        assert run["minimum_allowed_pt"] == pytest.approx(10.8)
-        assert run["final_pt"] >= 9.0
-        assert run["final_pt"] >= run["original_pt"] * 0.9
-        assert run["minimum_allowed_pt"] == pytest.approx(minimum_allowed_pt(run["original_pt"], policy_revision=V14))
-        assert font_size_allowed(run["original_pt"], run["final_pt"], policy_revision=V14)
-    # Under v1.4 the extended ladder is policy-removed before it is ever measured.
-    extended = [candidate for candidate in report["candidates"] if candidate["font_factor"] < 0.9]
-    assert extended
-    assert all(candidate["outcome"] == "removed:relative_shrink_limit" for candidate in extended)
-    assert all(candidate["rejection"]["code"] == "reject.relative_shrink_limit" for candidate in extended)
-    assert all(
-        min(candidate.get("actual_font_factors") or [1]) >= 0.9 - 1e-9
-        for candidate in report["candidates"]
-        if candidate["outcome"] in {"passed", "committed"}
-    )
-    support.assert_byte_preserving(html, capture.fitted_html, report["edits"])
-    validate_changed_capture(capture, original_html=html, policy=policy)
-
-
 @pytest.mark.parametrize("revision", [V14, support.V15])
 @pytest.mark.xfail(strict=True, reason=_FROZEN_REASON)
 def test_nine_point_text_is_never_shrunk_below_the_floor(revision: str) -> None:
@@ -191,57 +157,6 @@ def test_nine_point_text_is_never_shrunk_below_the_floor(revision: str) -> None:
 
 
 # --- morph ---------------------------------------------------------------
-
-
-def test_uniform_label_row_morphs_to_donate_space_to_the_colliding_bars() -> None:
-    html, policy, capture = support.fit("morph_ok")
-    report = support.report_of(capture)
-
-    assert report["unresolved_reasons"] == []
-    assert report["status"] == "spacing_adjusted"
-    assert report["geometry_seeds"] == [{
-        "qid": "bar-a", "other_qid": "bar-b", "kind": "absolute_rows",
-        "measurement": "painted_sibling_intersection", "intersection_px": 26, "intentional_overlap": False,
-    }]
-    [operation] = report["operations"]
-    assert operation["kind"] == "parent_reflow" and operation["qid"] == "root"
-    morph = operation["morph"]
-    assert morph["outcome"] == "passed"
-    assert morph["semantic_guard"]["passed"] is True
-    assert morph["semantic_guard"]["reason"] == "uniform_label_decoration_only"
-    assert morph["semantic_guard"]["minimum_contrast"] >= 4.5
-    assert morph["donor_qid"] == "donor" and morph["receiver_qid"] == "receiver"
-    assert morph["morph_nodes"] == ["tag-1", "tag-2", "tag-3", "tag-4", "tag-5"]
-    assert morph["needed_px"] == pytest.approx(28)
-    assert morph["reclaimed_px"] == pytest.approx(morph["needed_px"])
-    assert morph["current_available_px"] == pytest.approx(2)
-    assert morph["row_before_height_px"] == pytest.approx(120)
-    assert morph["row_after_height_px"] == pytest.approx(92)
-    assert morph["receiver_growth_px"] == pytest.approx(24)
-    assert morph["boundary"]["final_visual_bottom_px"] <= morph["boundary"]["allowed_bottom_px"]
-
-    edits = {edit["qid"]: edit["declarations"] for edit in report["edits"]}
-    assert edits["bar-b"] == "top:32px;bottom:auto"
-    assert edits["receiver"] == "height:114px"
-    assert edits["lanes"] == "height:106px;flex-shrink:0"
-    assert edits["lane"] == "height:58px;flex-shrink:0"
-    assert edits["tags"].startswith("display:flex;flex-wrap:nowrap;column-gap:2px;row-gap:0;align-items:baseline")
-    for index in range(1, 6):
-        assert "background-color:transparent" in edits[f"tag-{index}"]
-        assert "white-space:nowrap" in edits[f"tag-{index}"]
-    assert all("font-size" not in declarations for declarations in edits.values())
-    for run in report["runs"]:
-        assert run["final_pt"] == pytest.approx(run["original_pt"])
-    support.assert_byte_preserving(html, capture.fitted_html, report["edits"])
-    validate_changed_capture(capture, original_html=html, policy=policy)
-
-    verified = support.render(capture.fitted_html, {**policy, "baseline": report["baseline"]}, fit=False)
-    boxes = support.bboxes(verified)
-    assert boxes["bar-b"]["y"] >= support.bottom(boxes["bar-a"]) + 2 - 0.5
-    tops = {round(boxes[f"tag-{index}"]["y"], 1) for index in range(1, 6)}
-    assert len(tops) == 1, "the label row must collapse onto one line"
-    assert boxes["donor"]["height"] == pytest.approx(92, abs=0.5)
-    assert support.bottom(boxes["donor"]) <= support.bottom(boxes["root"]) - 1 + 0.5
 
 
 def test_a_label_with_explicit_semantics_blocks_the_morph() -> None:

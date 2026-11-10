@@ -59,30 +59,3 @@ def test_the_knob_is_registered() -> None:
     assert entry["default"] is False
     assert entry["secret"] is False
     assert "fastapi.runtime" in entry["targets"]
-
-
-def test_both_generation_gates_read_the_same_predicate() -> None:
-    """The pipeline fits and generation demands receipts; they cannot disagree.
-
-    A pipeline that fits while generation exempts the deck publishes without
-    evidence; the reverse fails the deck with
-    ``authored_local_fit_evidence_incomplete``. Both call sites must therefore
-    route through ``local_fit_applies`` and nothing else.
-    """
-
-    from pathlib import Path
-
-    import services.authored_presentation_generation as generation
-    import services.authored_presentation_pipeline as pipeline
-
-    retired = (
-        "plan_reference_mode != EXACT_RECONSTRUCTION and not source_reflow",
-        "reference_mode != EXACT_RECONSTRUCTION\n        and not source_reflow",
-    )
-    for module in (pipeline, generation):
-        source = Path(module.__file__).read_text(encoding="utf-8")
-        assert "local_fit_applies(" in source, f"{module.__name__} bypasses the predicate"
-        for expression in retired:
-            assert expression not in source, (
-                f"{module.__name__} still decides the fit itself: {expression!r}"
-            )

@@ -10,20 +10,15 @@ import pytest
 
 from services.authored_generation_timing_receipt import (
     GENERATION_ATTEMPT_TIMING_STAGES,
-    GENERATION_OBSERVABILITY_METRICS,
     GenerationTimingRecorder,
     _attempt_receipt_v2_from_dict,
     create_generation_attempt_timing_receipt_v2,
-    create_generation_timing_receipt,
     generation_attempt_timing_receipt_path,
-    generation_timing_receipt_path,
     load_generation_attempt_timing_receipts,
-    load_generation_timing_receipt,
 )
 from tests.support.authored_generation_attempt_timing_v1 import (
     create_generation_attempt_timing_receipt,
 )
-from services.authored_presentation_generation import _PERFORMANCE_STAGE_NAMES
 from services.public_v2_orchestrator import (
     SqlPublicV2Orchestrator,
     _public_generation_timing,
@@ -80,193 +75,6 @@ def _quality_receipt(job_id: uuid.UUID):
         requested_release_profile="release",
         pre_export_evaluation_profile="default",
     )
-
-
-def test_generation_timing_receipt_is_durable_bounded_and_runner_projected(
-    tmp_path, monkeypatch
-) -> None:
-    monkeypatch.setenv("AUTHORED_QUALITY_RECEIPT_DIRECTORY", str(tmp_path))
-    job_id = uuid.uuid4()
-    quality_receipt = _quality_receipt(job_id)
-    stages = {
-        "outline": 11,
-        "author": 22,
-        "illustration": 23,
-        "render": 24,
-        "quality": 25,
-        "repair": 33,
-        "checkpoint": 44,
-        "export": 55,
-        "publication": 66,
-    }
-    observability = {
-        name: (
-            {"state": "observed", "value": "publish_committed"}
-            if name == "fencingOutcome"
-            else {"state": "observed", "value": "succeeded"}
-            if name == "finalOutcome"
-            else {"state": "observed", "value": {"author": 1}}
-            if name
-            in {"stageRetryCalls", "stageEstimatedCost", "stageActualCost"}
-            else {"state": "unavailable", "reason": "counter_not_implemented"}
-            if name in {"blockedRequest", "timeout", "crash"}
-            else {"state": "observed", "value": 1}
-        )
-        for name in GENERATION_OBSERVABILITY_METRICS
-        if not name.endswith("Duration")
-    }
-    observability.update(
-        {
-            f"{stage}Duration": {"state": "observed", "value": stages[stage]}
-            for stage in _PERFORMANCE_STAGE_NAMES
-        }
-    )
-    assert set(observability) == set(GENERATION_OBSERVABILITY_METRICS)
-
-    first = create_generation_timing_receipt(
-        job_id=job_id,
-        quality_receipt=quality_receipt,
-        attempt_number=2,
-        stage_timings_ms=stages,
-        total_ms=250,
-        observability_metrics=observability,
-    )
-    second = create_generation_timing_receipt(
-        job_id=job_id,
-        quality_receipt=quality_receipt,
-        attempt_number=2,
-        stage_timings_ms=stages,
-        total_ms=250,
-        observability_metrics=observability,
-    )
-
-    assert second == first
-    assert load_generation_timing_receipt(job_id) == first
-    assert "private-attempt-token" not in generation_timing_receipt_path(job_id).read_text(
-        encoding="utf-8"
-    )
-
-    claim = SimpleNamespace(
-        kind="presentation.generate",
-        operation_id=uuid.uuid4(),
-        request_payload={"job_id": str(job_id)},
-    )
-    attached = asyncio.run(
-        _attach_durable_generation_timing(
-            claim,
-            {"status": "completed", "job_id": str(job_id)},
-        )
-    )
-    safe = sanitize_workspace_event_payload(
-        attached,
-        operation_kind="presentation.generate",
-    )
-    assert safe["stage_timings_ms"] == stages
-    assert safe["total_ms"] == 250
-    assert safe["generation_timing_receipt"]["qualityReceiptDigest"] == (
-        quality_receipt.receipt_digest
-    )
-    assert safe["generation_timing_receipt"]["requestedReleasePolicyDigest"] == (
-        quality_receipt.requested_release_policy_digest
-    )
-    assert safe["generation_timing_receipt"]["observability"] == {
-        "schemaVersion": "generation-observability/v1",
-        "metrics": observability,
-    }
-    assert safe["generation_timing_receipt"]["observability"]["metrics"][
-        "repairDuration"
-    ] == {"state": "observed", "value": stages["repair"]}
-
-    now = datetime.now(UTC)
-    public_status = SqlPublicV2Orchestrator._status(
-        SimpleNamespace(
-            id=uuid.uuid4(),
-            presentation_id=uuid.uuid4(),
-            kind="presentation.generate",
-            # The status projection reads the admission payload for the
-            # route receipt; this attempt carries none.
-            request_payload=None,
-            state="succeeded",
-            error_code=None,
-            error_detail=None,
-            result={
-                "generation_timing_receipt": first.to_dict(),
-            },
-            result_revision=3,
-            progress={"percent": 100},
-            attempt_number=2,
-            retry_count=1,
-            max_attempts=3,
-            started_at=now + timedelta(milliseconds=5),
-            completed_at=now + timedelta(milliseconds=255),
-            created_at=now,
-            updated_at=now + timedelta(milliseconds=255),
-        ),
-        SimpleNamespace(deadline_at=now + timedelta(minutes=5)),
-        [],
-    )
-    timing = public_status.generation_timing
-    assert timing is not None
-    assert timing.outcome == "succeeded"
-    assert timing.queue_wait_millis == 5
-    assert timing.wall_millis == 250
-    assert timing.logical_calls == 2
-    assert timing.retry_reason == "retry_reason_unavailable"
-    assert timing.stages.outline.duration_millis == 11
-    assert timing.stages.provider == "not_started"
-    assert timing.stages.authoring.duration_millis == 22
-    assert timing.stages.repair.duration_millis == 33
-    assert timing.stages.chromium_review.duration_millis == 49
-    assert timing.stages.publication.duration_millis == 66
-    assert timing.usage_availability.tokens == "available"
-    assert timing.usage_availability.cost == "available"
-    assert timing.worker.status == "observed"
-    assert timing.terminal_error is None
-
-    for excluded_names in (
-        {"repairDuration"},
-        {"repairDuration", "stageRetryCalls", "stageEstimatedCost", "stageActualCost"},
-    ):
-        legacy_job_id = uuid.uuid4()
-        legacy_metrics = {
-            name: metric
-            for name, metric in observability.items()
-            if name not in excluded_names
-        }
-        legacy = create_generation_timing_receipt(
-            job_id=legacy_job_id,
-            quality_receipt=_quality_receipt(legacy_job_id),
-            attempt_number=2,
-            stage_timings_ms=stages,
-            total_ms=250,
-            observability_metrics=legacy_metrics,
-        )
-        assert load_generation_timing_receipt(legacy_job_id) == legacy
-        assert dict(legacy.observability_metrics) == legacy_metrics
-
-    for invalid_metrics in (
-        {**observability, "unknownMetric": {"state": "observed", "value": 1}},
-        {name: metric for name, metric in observability.items() if name != "authorDuration"},
-    ):
-        with pytest.raises(ValueError, match="^generation_observability_metrics_invalid$"):
-            create_generation_timing_receipt(
-                job_id=job_id,
-                quality_receipt=quality_receipt,
-                attempt_number=2,
-                stage_timings_ms=stages,
-                total_ms=250,
-                observability_metrics=invalid_metrics,
-            )
-
-    with pytest.raises(ValueError, match="binding_changed"):
-        create_generation_timing_receipt(
-            job_id=job_id,
-            quality_receipt=quality_receipt,
-            attempt_number=2,
-            stage_timings_ms={**stages, "author": 23},
-            total_ms=250,
-            observability_metrics=observability,
-        )
 
 
 def test_generation_timing_projection_drops_invalid_or_incomplete_values() -> None:

@@ -20,7 +20,7 @@ from models.authored_vnext.deck import (
     RegenerationResult,
 )
 from models.authored_vnext.master.operations import LegacyMasterApplyPin
-from services.authored_presentation_artifacts import _save_slide_pngs
+from services.slide_image_sets import _save_slide_pngs
 from services.authored_vnext.generation.core_bridge import (
     CoreBridgeCheckpoint,
     DurableExportPlanBridge,

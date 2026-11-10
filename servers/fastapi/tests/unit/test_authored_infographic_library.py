@@ -9,7 +9,6 @@ import pytest
 
 from models.authored_infographic_plan import ARCHETYPES, coerce_infographic_plan
 from utils.authored_infographic import (
-    InfographicContractError,
     check_infographic_contract,
     finalize_infographic_slide_html,
     has_library,
@@ -23,7 +22,6 @@ from utils.authored_infographic import (
 from utils.authored_dom_quality import ensure_authored_qids
 from utils.authored_infographic.library import LIBRARY_TEMPLATE
 from utils.authored_infographic.skeleton import density_class, node_count, split_figure
-from services.generation_core.authoring import author_deck as author_deck_mod
 from utils.llm_calls.author_infographic_marker import infographic_marker
 from services.generation_core.authoring.author_slide import Brand, validate_authored_slide_html
 from services.generation_core.authoring.author_slide_prompt import author_prompt
@@ -341,17 +339,6 @@ def test_injection_is_idempotent_and_lands_after_the_models_styles():
     assert inject_library_css(once, css) == once
 
 
-def test_finalize_rejects_a_broken_figure_with_a_hint_and_the_rejected_html():
-    slide = _slide("process", 3)
-    broken = _doc(render_skeleton(slide).replace(">감지<", ">감지하기<", 1))
-    with pytest.raises(InfographicContractError) as raised:
-        finalize_infographic_slide_html(broken, brand=_brand(), slide=slide)
-    assert raised.value.rejected_html == broken
-    correction = author_deck_mod._classify_author_validation_error(raised.value)
-    assert correction is not None and correction.category == "infographic_contract"
-    assert "감지" in correction.hint and "FIGURE MARKUP" in correction.hint
-
-
 def test_the_prompt_carries_the_contract_and_the_skeleton():
     slide = _slide("cycle", 4)
     marker = infographic_marker(slide)
@@ -361,24 +348,3 @@ def test_the_prompt_carries_the_contract_and_the_skeleton():
         _CONTENT, "DESIGN", _brand(), "CONTENT", 2, 10, infographic=slide
     )
     assert slot_contract(slide) in prompt
-
-
-def test_the_batch_egress_checks_and_injects_like_the_single_path():
-    """The batch path post-processes through the same contract and injection."""
-    from services.generation_core.authoring import author_batch as batch_mod
-
-    slide = _slide("process", 3)
-    request = batch_mod.AuthoredBatchSlideRequest(
-        index=2, content=_CONTENT, role="CONTENT", infographic=slide
-    )
-    prepared = batch_mod._prepare_slide(
-        request, design_system="DESIGN", brand=_brand(), slide_count=10
-    )
-    assert "FIGURE CONTRACT" in prepared.prompt
-    good = _doc(render_skeleton(slide))
-    finished = batch_mod._postprocess_slide(prepared, good, brand=_brand())
-    assert has_library(finished) and "#1E5EFF" in finished
-    with pytest.raises(InfographicContractError):
-        batch_mod._postprocess_slide(
-            prepared, good.replace(">감지<", ">감지하기<", 1), brand=_brand()
-        )

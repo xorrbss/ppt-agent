@@ -7,14 +7,10 @@ from types import SimpleNamespace
 
 import pytest
 
-from services.authored_composition_policy import blocking_safety_issues
-from services.authored_terminal_slide_flag_only import verbatim_flagged_slides
 from services.source_content import pipeline
 from services.source_content.contracts import SourceContentManifestPin
 from services.source_content.outline import SourceDocumentOutlineBuilder
-from utils.authored_dom_quality import inspect_authored_dom
-from utils.authored_empty_media import EMPTY_MEDIA_CATEGORY, find_empty_media_panels
-from services.generation_core.authoring.author_vision_qa import deterministic_dom_critique
+from utils.authored_empty_media import find_empty_media_panels
 
 FIXTURES = Path(__file__).parent / "fixtures" / "empty_media_run6"
 
@@ -23,23 +19,6 @@ def _fixture(page):
     html = (FIXTURES / f"slide-{page}-baseline.html").read_text(encoding="utf-8")
     metrics = json.loads((FIXTURES / f"slide-{page}-baseline-metrics.json").read_text(encoding="utf-8"))
     return html, metrics
-
-
-@pytest.mark.parametrize("page,qid", [(19, "q-image-panel-18"), (31, "q-image-card-30")])
-def test_run6_panels_reach_composition_gate_and_verbatim_flag_reason(page, qid):
-    html, metrics = _fixture(page)
-    before = copy.deepcopy(metrics)
-    report = inspect_authored_dom(html, metrics, strict_structural_off_canvas=True)
-    issues = tuple(issue for issue in blocking_safety_issues(report) if issue.category == EMPTY_MEDIA_CATEGORY)
-    assert len(issues) == 1 and issues[0].qids == (qid,)
-    flags = verbatim_flagged_slides([(page - 1, issues, {})])
-    assert flags[0]["reason"] == "composition_safety:empty_media_panel"
-    assert flags[0]["remakeOutcome"] == "verbatim_flag_only"
-    assert flags[0]["remakeAttempted"] is False
-    critique = deterministic_dom_critique(report)
-    assert critique.needs_fix
-    assert any("empty_media_panel" in issue.detail for issue in critique.issues)
-    assert metrics == before
 
 
 def _panel():

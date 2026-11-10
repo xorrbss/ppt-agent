@@ -29,7 +29,6 @@ from models.authored_header_contract import (
 )
 from models.authored_header_row_fit import fit_requirement_row
 from models.presentation_outline_model import PresentationOutlineModel
-from services.authored_author_stage_placeholder import author_placeholder_html
 from services.authored_header_contract_service import load_header_contract
 from utils.authored_header_prompt import render_header_contract
 from utils.llm_calls.author_header_contract import (
@@ -74,51 +73,6 @@ def _slotted_contract(**canvas: int) -> AuthoredHeaderContract:
             enabled=True, label="요구사항", overflow="plusN"
         ),
     )
-
-
-def _placeholder(contract: AuthoredHeaderContract | None, **canvas: int) -> str:
-    return author_placeholder_html(
-        content=_PLACEHOLDER_CONTENT,
-        brand=SimpleNamespace(primary="#1D4ED8"),
-        role="problem",
-        contract=contract,
-        font_stack=_FONT_STACK,
-        **canvas,
-    )
-
-
-def baseline_cases() -> dict[str, str]:
-    """Every 16:9 output frozen before the contract carried its canvas."""
-    default = default_header_contract()
-    slotted = _slotted_contract()
-    return {
-        "contract_messages_user.txt": build_header_contract_messages(
-            **_MESSAGE_ARGS
-        )[1].content,
-        "revision_messages_user.txt": build_header_revision_messages(
-            slotted, "제목을 더 크게"
-        )[1].content,
-        "clause_default.txt": render_header_contract(default, language="Korean"),
-        "clause_slotted.txt": render_header_contract(slotted, language="Korean"),
-        "placeholder_default.html": _placeholder(default),
-        "placeholder_slotted.html": _placeholder(slotted),
-        "placeholder_uncontracted.html": _placeholder(None),
-        "contract_default.json": json.dumps(
-            default.model_dump(mode="json"), ensure_ascii=False, indent=2
-        ),
-        "contract_slotted.json": json.dumps(
-            slotted.model_dump(mode="json"), ensure_ascii=False, indent=2
-        ),
-        "contract_schema.json": json.dumps(
-            AuthoredHeaderContract.model_json_schema(), ensure_ascii=False, indent=2
-        ),
-    }
-
-
-@pytest.mark.parametrize("name", sorted(baseline_cases()))
-def test_16x9_output_is_byte_identical_to_the_frozen_baseline(name: str) -> None:
-    expected = (FIXTURE_DIR / name).read_text(encoding="utf-8")
-    assert baseline_cases()[name] == expected
 
 
 def test_a_stored_payload_without_canvas_loads_as_1280x720() -> None:
@@ -267,23 +221,6 @@ def test_prompts_state_the_contract_canvas() -> None:
     assert "The canvas is exactly 1188x840px." in user
     assert "title.max_width_px <= 1188 - 2 x margin_x_px" in user
     assert "1280" not in user
-
-
-def test_the_placeholder_page_takes_the_contract_canvas() -> None:
-    contract = default_header_contract(**A4)
-    page = _placeholder(contract)
-    band = max(contract.band_min_px, min(contract.band_max_px, contract.minimum_band_px))
-
-    assert "width:1188px;height:840px;" in page
-    assert f"height:{840 - band - contract.content_gap_px - 48}px;" in page
-    assert "1280" not in page
-
-
-def test_an_uncontracted_placeholder_takes_the_canvas_it_is_given() -> None:
-    page = _placeholder(None, **A4)
-
-    assert "width:1188px;height:840px;" in page
-    assert "padding:64px;height:840px;" in page
 
 
 def _fake_llm(monkeypatch: pytest.MonkeyPatch, answer: object) -> None:

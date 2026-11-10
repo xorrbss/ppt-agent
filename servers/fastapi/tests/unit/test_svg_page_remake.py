@@ -10,7 +10,7 @@ from sqlalchemy.dialects import sqlite
 
 from models.sql.slide import SlideModel
 from services import svg_page_remake as remake
-from services.authored_page_remake_service import (
+from services.page_remake_core import (
     AuthoredPageRemakeError, PREVIEW_KIND, _canonical_digest, authored_page_source_digest,
 )
 from services.svg_contract import source_digest
@@ -335,7 +335,6 @@ def test_digest_mismatch_never_reaches_cas(monkeypatch):
     with pytest.raises(ValueError, match='svg_common_header_digest_mismatch'):
         asyncio.run(remake.preview_svg(presentation, [target], 0, SimpleNamespace(instruction=None), task, session))
     author.assert_not_awaited()
-
 
 
 @pytest.mark.parametrize("stale_binding", [False, True])

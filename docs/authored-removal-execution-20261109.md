@@ -418,6 +418,45 @@ The full pytest suite and `npm run test:next-ci` run before each PR merges.
   structural layering passes (26 entries, none removed); no svg file changed,
   so no reviewed keys; the svg subset list lost the 4 deleted tests (502
   files). Checks: `ruff`, `import server`, targeted pytest 269 passed.
+  **B4b done 2026-11-10.** Deleted the authored generation branch and 189
+  source files: the authored presentation service and everything only it
+  reached (`authored_presentation_*`, the admission capture/legacy/publication
+  stages, the terminal-slide fallback, repair loops, local-fit evidence and
+  export, illustrations, author batch/deck/patch/vision QA, structural repair),
+  the authored quality review service and its telemetry, the HTML halves of
+  `authored_page_remake_service`, every `slidespec_*` service, `utils/slidespec_*`,
+  `models/slidespec_v1.py`, the SlideSpec `llm_calls`, five pure facades
+  (`authored_flag_classification`, `authored_terminal_slide_flag_only`,
+  `authored_vision_advisory`, `authored_infographic_assets`,
+  `authored_deck_infographic_plan`; their tests now import the
+  `generation_core` modules they aliased) and the authored-only scripts.
+  Moved unchanged: `_json_cas_predicate` to `services/json_cas_predicate.py`
+  (the only piece `svg_page_remake` used from `slidespec_artifact_store`; one
+  clean split), the release-review comparison tokens to
+  `services/release_review_policy_metadata.py` (the checker policy digest is
+  byte-identical), `AUTHORED_TEMPLATE` to the strategy module. svg page remake
+  now lives in `services/page_remake_core.py` (svg-only; an HTML or
+  master-pinned deck is refused with
+  `authored_page_remake_unsupported_presentation`). Tests: 87 test files
+  deleted, 80 edited by dropping only the tests that reach a deleted module,
+  and the four orphaned `tests/fixtures/slidespec_*` fixtures.
+  Kept for B4c because `deck_ir.product_adapter` and other B4c importers still
+  reach them: `author_slide*`, `authored_admission` and its checkpoint chain,
+  `authored_quality_receipt_v2`, `authored_composition_policy`, the export
+  handler's authored branch, the orchestrator's release review,
+  `legacy_bridge`, and the semantic republish code of the page and batch
+  remake handlers. Closure top 393/46 (unchanged), all 1,024/217 (from
+  1,171/338); structural layering passes (26 entries); svg reviewed keys added
+  for the page-render and partial-recovery code (the pipeline lost its authored
+  branch only); the svg subset list is 448 files. Checks: `ruff`, `import
+  server`, targeted pytest 1,633 passed, 2 failures that also fail on
+  `origin/main` (`test_hangul_allow_list_only_shrinks` on
+  `constants/presentation.py`, and a header-context budget test that only
+  runs when the private `delivery-backups` artifact is present); the fake-LLM
+  harness generated a 5-page svg deck with its PPTX export, and a page remake
+  (`remeasure_source`) previewed and published (revision 1 to 2), identical to
+  `origin/main` (an `author` remake fails `svg_contract_canvas_mismatch` on
+  both, a fake-LLM limitation).
 - **B5 contracts, scripts, tests, env.** `contracts/authored_vnext` except master
   parts; delete authored-only tests and edit svg tests; remove `SLIDESPEC_*` and
   authored-only `AUTHORED_*` knobs (settings registry included, never §4.3

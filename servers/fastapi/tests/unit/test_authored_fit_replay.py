@@ -11,16 +11,10 @@ test replaces the render-and-gate call with a stub.
 
 from __future__ import annotations
 
-import asyncio
-import json
-import uuid
 
 import pytest
 
-from scripts import authored_fit_replay as cli
 from scripts import authored_fit_replay_buckets as buckets
-from scripts import authored_fit_replay_gate as gate_lib
-from scripts import authored_fit_replay_inputs as inputs_lib
 
 
 def outcome(scale: float, passed: bool, scaled: int = 10, floored: int = 0):
@@ -129,21 +123,6 @@ def test_worst_kind_falls_back_to_off_canvas_then_clipping():
 # --------------------------------------------------------------------------
 
 
-def test_a_job_is_current_code_when_any_slide_carries_the_library_marker():
-    from utils.authored_infographic.library import LIBRARY_MARKER
-
-    quiet = "<html><body><h1>quiet page</h1></body></html>"
-    figure = f"<html><head><style>{LIBRARY_MARKER}</style></head></html>"
-    assert inputs_lib.is_current_code([quiet, figure]) is True
-    assert inputs_lib.is_current_code([quiet, quiet]) is False
-    assert inputs_lib.is_current_code([]) is False
-
-
-def test_archetype_comes_from_the_library_root_class():
-    assert inputs_lib.archetype_of('<div class="ig ig-roadmap n4">') == "roadmap"
-    assert inputs_lib.archetype_of('<div class="ig-label">') is None
-
-
 # --------------------------------------------------------------------------
 # 5.3 summary arithmetic and the section 7 decision inputs
 # --------------------------------------------------------------------------
@@ -228,18 +207,6 @@ def test_under_fill_histogram_bins_are_a_tenth_wide():
 # --------------------------------------------------------------------------
 
 
-def test_external_image_references_are_detected_and_data_uris_are_not():
-    html = (
-        '<img src="/app_data/images/a.png">'
-        '<img src="https://example.com/b.png">'
-        '<img src="data:image/png;base64,AAAA">'
-        '<link href="https://fonts.example/x.css" rel="stylesheet">'
-    )
-    refs = inputs_lib.external_image_refs(html)
-    assert refs == ("/app_data/images/a.png", "https://example.com/b.png")
-    assert inputs_lib.external_image_refs("<img src='data:image/png;base64,A'>") == ()
-
-
 class _FakeCapacity:
     role = "PILLARS"
     title_max_chars = 58
@@ -261,177 +228,9 @@ class _FakeProfile:
     profile_id = "ordinary"
 
 
-def _context():
-    return inputs_lib.JobContext(
-        job_id=uuid.UUID("8a138084-abae-4ee2-ab3c-73686a8f2313"),
-        presentation_id=uuid.UUID("513d0056-ae08-4b1b-abbb-822060381ebe"),
-        state="failed",
-        created_at=None,
-        profile=_FakeProfile(),
-        capacity_plan=_FakePlan(),
-        reference_mode="style_reference",
-        roles=("COVER", "PILLARS"),
-        strict_structural_off_canvas=False,
-        code_version="current",
-    )
-
-
-def test_collect_slides_skips_a_slide_with_an_external_image_reference(monkeypatch, tmp_path):
-    context = _context()
-    clean = inputs_lib.SlideInput(
-        job=context,
-        slide_index=0,
-        role="COVER",
-        source=inputs_lib.CHECKPOINT_AUTHOR,
-        html="<html><img src='data:image/png;base64,A'></html>",
-        archetype=None,
-    )
-    dirty = inputs_lib.SlideInput(
-        job=context,
-        slide_index=1,
-        role="PILLARS",
-        source=inputs_lib.CHECKPOINT_AUTHOR,
-        html='<html><img src="/app_data/images/x.png"></html>',
-        archetype=None,
-    )
-
-    async def fake_select_jobs(_session, **_kwargs):
-        return [object()]
-
-    async def fake_build_context(_session, _job):
-        return context
-
-    async def fake_checkpoint_slides(_session, _context):
-        return [clean, dirty]
-
-    monkeypatch.setattr(inputs_lib, "select_jobs", fake_select_jobs)
-    monkeypatch.setattr(inputs_lib, "build_job_context", fake_build_context)
-    monkeypatch.setattr(inputs_lib, "load_checkpoint_slides", fake_checkpoint_slides)
-    monkeypatch.setattr(inputs_lib, "is_current_code", lambda _htmls: True)
-
-    state = gate_lib.ReplayState(
-        out_dir=tmp_path, png_dir=tmp_path / "png", scales=(0.95,)
-    )
-    state.png_dir.mkdir(parents=True, exist_ok=True)
-    args = cli.parse_args(
-        [
-            "--database-url", "sqlite+aiosqlite:///x.db",
-            "--app-data", str(tmp_path),
-            "--job-id", "8a138084-abae-4ee2-ab3c-73686a8f2313",
-            "--out", str(tmp_path),
-        ]
-    )
-    slides = asyncio.run(cli.collect_slides(object(), args, state))
-
-    assert [item.slide_index for item in slides] == [0]
-    assert len(state.skipped) == 1
-    assert state.skipped[0]["reason"] == "external_image_reference"
-    assert state.skipped[0]["detail"] == "/app_data/images/x.png"
-
-
 # --------------------------------------------------------------------------
 # orchestration with the render-and-gate call stubbed out
 # --------------------------------------------------------------------------
-
-
-def _gate_result(*, issues, violations=(), blocking=0):
-    return gate_lib.GateResult(
-        violations=tuple(violations),
-        issues=list(issues),
-        fit_summary={"content_bbox_fill": 0.6, "worst_overflow_ratio": 1.2},
-        telemetry_status="available",
-        blocking_issue_count=blocking,
-        render_millis=1,
-        png=b"png-bytes",
-    )
-
-
-def test_replay_slide_stops_at_the_first_passing_scale(monkeypatch, tmp_path):
-    context = _context()
-    slide = inputs_lib.SlideInput(
-        job=context,
-        slide_index=1,
-        role="PILLARS",
-        source=inputs_lib.CHECKPOINT_AUTHOR,
-        html="<html><body><p style='font-size:20px'>x</p></body></html>",
-        archetype=None,
-    )
-    overflow = {
-        "category": "overflow",
-        "magnitude": {"ratio_x": 1.0, "ratio_y": 1.3, "element_kind": "text"},
-    }
-    calls: list[float] = []
-
-    async def fake_evaluate(html, _context, _index):
-        # The 1.0 render misses; the first ladder rung already fits.
-        if not calls:
-            calls.append(1.0)
-            return _gate_result(issues=[overflow], blocking=1)
-        calls.append(len(calls))
-        return _gate_result(issues=[])
-
-    monkeypatch.setattr(gate_lib, "evaluate", fake_evaluate)
-    monkeypatch.setattr(
-        inputs_lib, "prepare_for_render", lambda html, **_kwargs: html
-    )
-
-    state = gate_lib.ReplayState(
-        out_dir=tmp_path, png_dir=tmp_path / "png", scales=(0.95, 0.90)
-    )
-    state.png_dir.mkdir(parents=True, exist_ok=True)
-    row_out = asyncio.run(gate_lib.replay_slide(state, slide))
-
-    assert row_out["bucket"] == "fits_at_0.95"
-    assert row_out["first_passing_scale"] == 0.95
-    assert len(row_out["scale_candidates"]) == 1
-    assert row_out["worst_overflow_kind"] == "text"
-    assert row_out["geometry_blocked"] is True
-    assert sorted(path.name for path in (tmp_path / "png").iterdir()) == [
-        "8a138084-01-0.95.png",
-        "8a138084-01-1.00.png",
-    ]
-    # The row must be JSON-serialisable: it becomes one line of slides.jsonl.
-    assert json.loads(json.dumps(row_out))["slide_index"] == 1
-
-
-def test_replay_slide_leaves_a_non_geometry_flag_out_of_the_ladder(monkeypatch, tmp_path):
-    context = _context()
-    slide = inputs_lib.SlideInput(
-        job=context,
-        slide_index=0,
-        role="COVER",
-        source=inputs_lib.CHECKPOINT_AUTHOR,
-        html="<html></html>",
-        archetype=None,
-    )
-    renders: list[str] = []
-
-    async def fake_evaluate(html, _context, _index):
-        renders.append(html)
-        return _gate_result(issues=[{"category": "contrast"}], blocking=0)
-
-    monkeypatch.setattr(gate_lib, "evaluate", fake_evaluate)
-    monkeypatch.setattr(
-        inputs_lib, "prepare_for_render", lambda html, **_kwargs: html
-    )
-    state = gate_lib.ReplayState(
-        out_dir=tmp_path, png_dir=tmp_path / "png", scales=(0.95, 0.90)
-    )
-    state.png_dir.mkdir(parents=True, exist_ok=True)
-    row_out = asyncio.run(gate_lib.replay_slide(state, slide))
-
-    assert row_out["flagged"] is True
-    assert row_out["bucket"] == "non_geometry_flagged"
-    assert row_out["scale_candidates"] == []
-    assert len(renders) == 1
-
-
-def test_parse_scales_rejects_a_value_outside_the_unit_interval():
-    assert cli.parse_scales("0.95,0.90") == (0.95, 0.90)
-    with pytest.raises(inputs_lib.ReplayInputError):
-        cli.parse_scales("1.5")
-    with pytest.raises(inputs_lib.ReplayInputError):
-        cli.parse_scales("")
 
 
 def test_kind_label_names_the_category_when_no_magnitude_exists():
@@ -452,28 +251,3 @@ def test_blocking_categories_keeps_only_publication_blockers():
         {"category": "font"},
     ]
     assert buckets.blocking_categories(issues) == ["off_canvas", "overlap"]
-
-
-@pytest.mark.parametrize(
-    "error_code, blocked, expected",
-    [
-        ("authored_composition_safety_gate_failed", [15], "consistent"),
-        ("authored_composition_safety_gate_failed", [], "inconsistent"),
-        ("http_error_500", [], "consistent"),
-        ("public_deadline_exceeded", [7], "not comparable (deck failed before a gate verdict)"),
-    ],
-)
-def test_circumstantial_parity_labels_a_deck_level_cross_check(error_code, blocked, expected):
-    from scripts.authored_fit_replay_parity import _circumstantial_row
-
-    context = _context()
-    context.last_error_code = error_code
-    rows = [
-        {
-            "job_id": str(context.job_id),
-            "slide_index": index,
-            "geometry_blocked": True,
-        }
-        for index in blocked
-    ]
-    assert _circumstantial_row(context, rows)["agreement"] == expected

@@ -8,17 +8,12 @@ at 18px.  Both carry the same amount of text; only the shape differs.
 
 from __future__ import annotations
 
-from types import SimpleNamespace
 
-from services import authored_presentation_pipeline as pipeline
 from services.authored_composition_policy import (
     CompositionProfile,
     capacity_repair_instructions,
 )
-from services.authored_presentation_generation import _capacity_gate_initial_critiques
-from utils.authored_deck_instruments import _fit_aggregates
 from utils.authored_fragmentation_gate import (
-    FRAGMENTATION_CATEGORY,
     fit_floor_unfixable_cards,
     fit_font_floor_px,
     fragmentation_repair_instruction,
@@ -176,18 +171,6 @@ def test_unfixable_floor_cards_become_the_fit_floor_violation():
     assert report.violations == ("fit_floor:2>0",)
 
 
-def test_deck_instruments_still_count_floor_unfixable_cards():
-    aggregates = _fit_aggregates(
-        [
-            {"cards": [{"outcome": "unfixable:floor"}, {"outcome": "shrunk", "factor": 0.8}]},
-            None,
-            {"cards": [{"outcome": "unfixable:floor"}]},
-        ]
-    )
-    assert aggregates["fit_cards_unfixable"] == 2
-    assert aggregates["fit_cards_shrunk"] == 1
-
-
 # --- knobs ---------------------------------------------------------------------
 
 
@@ -266,27 +249,6 @@ def test_capacity_repair_instructions_route_the_gate_and_keep_the_envelope_text(
     )
 
 
-def test_fragmentation_failures_start_the_same_bounded_repair_round():
-    critiques = _capacity_gate_initial_critiques(
-        [
-            {
-                "slide_index": 0,
-                "issues": [
-                    {"category": FRAGMENTATION_CATEGORY, "message": "text_owners:90>50"},
-                    {"category": "capacity", "message": "qids:45>40"},
-                ],
-            }
-        ],
-        [0],
-        ["body"],
-    )
-    assert len(critiques) == 1 and critiques[0] is not None
-    details = [issue.detail for issue in critiques[0].issues]
-    assert any("Merge labels, kickers and small boxes" in detail for detail in details)
-    assert any("excess content target" in detail for detail in details)
-    assert all(issue.type == "overflow" and issue.severity == "high" for issue in critiques[0].issues)
-
-
 def _strict_profile() -> CompositionProfile:
     return CompositionProfile(
         profile_id="ordinary",
@@ -295,39 +257,6 @@ def _strict_profile() -> CompositionProfile:
         strict_dom_gate=True,
         max_repair_cycles=1,
     )
-
-
-def test_post_render_gate_reports_fragmentation_next_to_the_envelope(monkeypatch):
-    """``_evaluate_slide_quality`` carries the gate's issues with no envelope
-    at all (``capacity_plan=None``), and nothing while the knob is off."""
-
-    monkeypatch.setattr(
-        pipeline, "inspect_authored_dom",
-        lambda *args, **kwargs: SimpleNamespace(telemetry_status="available"),
-    )
-    monkeypatch.setattr(pipeline, "blocking_safety_issues", lambda report: [])
-    fit_report = {"cards": [{"qid": "c1", "outcome": "unfixable:floor"}]}
-    kwargs = dict(
-        index=0, html="<html><body></body></html>", browser_metrics=_sol_like(),
-        capacity_plan=None, composition_profile=_strict_profile(),
-        reference_mode="style-reference", fit_report=fit_report,
-    )
-
-    _gate_off(monkeypatch)
-    _report, failure = pipeline._evaluate_slide_quality(**kwargs)
-    assert failure is None
-
-    _gate_on(monkeypatch)
-    _report, failure = pipeline._evaluate_slide_quality(**kwargs)
-    assert failure is not None
-    assert failure["slide_index"] == 0
-    assert [(issue["category"], issue["severity"], issue["message"]) for issue in failure["issues"]] == [
-        ("fragmentation", "error", "text_owners:90>50"),
-        ("fragmentation", "error", "type_floor:89<15"),
-        ("fragmentation", "error", "fit_floor:1>0"),
-    ]
-    # The repair instruction rides along as ``detail`` so the remake brief quotes it.
-    assert failure["issues"][0]["detail"].startswith("SLIDE has 90 text-owning elements (limit 50). Merge")
 
 
 # --- the fitter's floor ----------------------------------------------------------

@@ -1,16 +1,11 @@
 import asyncio
 from contextlib import asynccontextmanager
 from types import SimpleNamespace
-import uuid
 
 import pytest
 
-from models.authored_illustration_plan import AuthoredIllustrationPlan
-from models.presentation_outline_model import PresentationOutlineModel, SlideOutlineModel
-from services import authored_deck_plans
 from services.authored_generation_performance import authored_provider_concurrency
 from services.public_operation_admission import PublicAdmissionRejected
-from services import slidespec_authored_executor as executor
 from services.generation_core.authoring.author_slide import (
     AUTHOR_MAX_TOKENS,
     Brand,
@@ -233,89 +228,3 @@ def test_author_slide_preserves_nonretryable_public_provider_budget_limit(monkey
 
     assert raised.value.code == "public_provider_retry_limit_exceeded"
     assert raised.value.retryable is False
-
-
-def test_final_outline_infographic_resolver_is_separate_from_outline_expansion(
-    monkeypatch,
-) -> None:
-    monkeypatch.setenv("AUTHORED_INFOGRAPHIC_PLAN_ENABLED", "true")
-    outline = PresentationOutlineModel(slides=[SlideOutlineModel(content="one")])
-    request = SimpleNamespace(slides_markdown="fixed", instructions="keep it")
-    style = SimpleNamespace(reference_mode="style_reference", illustration_prompt="art")
-    sentinel = object()
-
-    async def fake_infographic(received_outline, received_brand, received_style, **kwargs):
-        assert received_outline is outline
-        assert received_brand is sentinel
-        assert received_style is style
-        assert kwargs["instructions"] == "keep it"
-        assert kwargs["roles"] == ["CONTENT"]
-        return "infographic-plan"
-
-    monkeypatch.setattr(
-        authored_deck_plans, "resolve_infographic_plan", fake_infographic
-    )
-    plans = asyncio.run(
-        authored_deck_plans.resolve_deck_plans(
-            request, outline, sentinel, style, ["CONTENT"], resolve_infographic=False
-        )
-    )
-    assert plans.outline is outline
-    assert plans.infographic_plan is None
-    # A deck with no figure plan no longer means "no picture decision at all"
-    # (2026-09-05, design section G4): free composition takes a deterministic
-    # per-deck share budget instead. This deck's only content slide is its
-    # style anchor, which is deliberately never illustrated, so the budget is
-    # an EMPTY plan — a decision, not the absent plan it used to be.
-    assert plans.illustration_plan == AuthoredIllustrationPlan(slide_indices=())
-    assert asyncio.run(
-        authored_deck_plans.resolve_final_outline_infographic_plan(
-            request, plans.outline, sentinel, style, ["CONTENT"]
-        )
-    ) == "infographic-plan"
-
-
-def test_baseline_cache_key_includes_renderer_full_identity(monkeypatch) -> None:
-    request = SimpleNamespace(
-        source=None,
-        spec=SimpleNamespace(
-            specRevision=1,
-            digests=SimpleNamespace(spec="spec", content="content"),
-        ),
-        fonts=SimpleNamespace(model_dump=lambda **_kwargs: {"font": "A"}),
-        renderer=SimpleNamespace(model_dump=lambda **_kwargs: {"renderer": "A"}),
-    )
-    identity = SimpleNamespace(digest="render-identity-a")
-    monkeypatch.setattr(executor, "_render_cache_identity", lambda _html: identity)
-    first = executor._baseline_inspection_cache_key(
-        slide_id=uuid.uuid4(), request=request, html="<main />", adjacent_digest="adj"
-    )
-    identity.digest = "render-identity-b"
-    second = executor._baseline_inspection_cache_key(
-        slide_id=uuid.uuid4(), request=request, html="<main />", adjacent_digest="adj"
-    )
-    assert first != second
-
-
-def test_publication_reuse_fingerprint_is_attempt_scoped_and_manifest_bound() -> None:
-    artifact = SimpleNamespace(
-        render_input_hash="input-a",
-        html_hash="html-a",
-        render_hash="render-a",
-        image_hash="image-a",
-        manifest={"assets": "a", "renderer": "r"},
-    )
-    first_attempt = uuid.uuid4()
-    first = executor._attempt_immutable_artifact_fingerprint(
-        attempt_id=first_attempt, artifact=artifact
-    )
-    assert first == executor._attempt_immutable_artifact_fingerprint(
-        attempt_id=first_attempt, artifact=artifact
-    )
-    assert first != executor._attempt_immutable_artifact_fingerprint(
-        attempt_id=uuid.uuid4(), artifact=artifact
-    )
-    artifact.manifest = {"assets": "changed", "renderer": "r"}
-    assert first != executor._attempt_immutable_artifact_fingerprint(
-        attempt_id=first_attempt, artifact=artifact
-    )

@@ -29,9 +29,9 @@ from models.presentation_outline_model import (
     PresentationOutlineModel,
     SlideOutlineModel,
 )
-from services import authored_deck_infographic_plan as plan_service
-from services import authored_infographic_assets as assets_mod
-from services.authored_deck_infographic_plan import (
+from services.generation_core.assets import infographic_plan as plan_service
+from services.generation_core.assets import infographic_assets as assets_mod
+from services.generation_core.assets.infographic_plan import (
     derive_illustration_plan,
     load_infographic_plan,
     resolve_infographic_plan,

@@ -7,7 +7,6 @@ giving every slide of the deck a byte-identical prefix.
 
 import pytest
 
-from services.generation_core.authoring import author_batch as batch_mod
 from utils.llm_calls.author_prompt_cache_key import (
     apply_prompt_cache_key,
     current_prompt_cache_key,
@@ -93,21 +92,6 @@ def test_single_path_prompt_splits_and_rejoins_exactly():
     assert head == _DESIGN
     assert head + "\n\n" + rest == prompt
     assert rest.startswith("Author slide 3 of 10.")
-
-
-def test_batch_path_prompt_splits_and_rejoins_exactly():
-    request = batch_mod.AuthoredBatchSlideRequest(
-        index=1, content="슬라이드 본문", role="CONTENT"
-    )
-    prepared = batch_mod._prepare_slide(
-        request, design_system=_DESIGN, brand=_brand(), slide_count=6
-    )
-    head, rest = split_deck_invariant(prepared.prompt, _DESIGN)
-
-    assert head == _DESIGN
-    assert head + "\n\n" + rest == prepared.prompt
-    # The full user-side text stays on the prepared slide for its own readers.
-    assert prepared.prompt.startswith(_DESIGN)
 
 
 def test_a_prompt_that_does_not_open_with_the_block_is_left_alone():

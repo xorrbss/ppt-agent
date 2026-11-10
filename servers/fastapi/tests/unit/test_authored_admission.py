@@ -13,7 +13,6 @@ from unittest.mock import AsyncMock
 import pytest
 
 from services import authored_admission as gate
-from services.authored_admission_capture import capture_once
 from services.authored_admission_context import context_from_source, digest_html
 from services.authored_admission_policy import (
     CONSUMED_GLOBAL_ATTRIBUTES,
@@ -30,7 +29,6 @@ from services.authored_admission_shadow import AdmissionShadow
 from services.authored_rollout_profile import RolloutProfile, current_rollout_profile, rollout_profile_scope
 from services.source_content.browser_readback import BrowserSourceReadbackResult, deterministic_source_qid
 from utils.renderer_markup_policy import GLOBAL_ATTRIBUTES, SERVER_STAMPED_ATTRIBUTES
-from utils.slide_capture_result import RenderCapture
 
 
 def sync_async(function):
@@ -389,43 +387,6 @@ def test_same_profile_capture_reuse_is_attempt_bound():
     assert store.reuse(ctx, html + " ") is None
 
 
-@sync_async
-async def test_capture_once_coalesces_identical_concurrent_calls():
-    html = gate.admit_slide_html(context(), HTML).html
-    sample = metrics(html)
-    capture = AsyncMock(
-        return_value=RenderCapture.from_payload(
-            html_digest=digest_html(html),
-            png=b"png",
-            browser_metrics=sample,
-            runtime_counters={},
-        )
-    )
-    session = AdmissionSession(mode="enforce", contexts=(context(),))
-    token = _SESSION.set(session)
-    try:
-        await asyncio.gather(*(capture_once(html, index=0, capture=capture) for _ in range(2)))
-        assert capture.await_count == 1
-        assert session.capture_reuses == 1
-        from services.authored_admission_checkpoint import prepare_checkpoint_write
-
-        prepared = prepare_checkpoint_write(
-            dict(
-                html=html,
-                stage="render",
-                slide_index=0,
-                browser_metrics=sample,
-                png=b"png",
-            )
-        )
-        assert prepared["admission_receipt"].capture_reused
-        assert prepared["admission_receipt"].as_dict()["metricsStorage"] == "checkpoint_bundle"
-        await capture_once(html, index=0, capture=capture, fit=False)
-        assert capture.await_count == 2
-    finally:
-        _SESSION.reset(token)
-
-
 @pytest.mark.parametrize("mode", ["shadow", "enforce"])
 def test_shadow_keeps_legacy_verdict_and_enforce_uses_gate_only(mode):
     session = AdmissionSession(mode=mode, contexts=(context(),))
@@ -446,96 +407,6 @@ def test_shadow_keeps_legacy_verdict_and_enforce_uses_gate_only(mode):
                 check_producer(HTML + "\x00", index=0, producer="author", legacy=legacy)
             assert not calls
     finally:
-        _SESSION.reset(token)
-
-
-def test_fit_edit_requires_canonical_recapture_and_missing_metrics_still_reject(caplog):
-    from services.authored_admission_capture import canonical_capture_html
-    from utils.authored_fit_edits import apply_fit_edits
-
-    with rollout_profile_scope(RolloutProfile(gate_mode="enforce", html_normalization="tree")):
-        original = gate.admit_slide_html(context(), HTML.replace("<h1>", '<h1 title="heading">')).html
-        fitted = apply_fit_edits(original, [{
-            "qid": deterministic_source_qid("b1"), "declarations": "font-size:20px",
-        }])
-        canonical = canonical_capture_html(fitted)
-        assert fitted != canonical
-        assert canonical_capture_html(canonical) == canonical
-        with caplog.at_level("INFO", logger=gate.__name__):
-            rejected = gate.admit_slide_html(context(html_repr="captured"), fitted, metrics=metrics(fitted))
-            missing = gate.admit_slide_html(context(html_repr="captured"), canonical)
-        assert rejected.predicate == missing.predicate == "capture_binding"
-        assert rejected.verdict == missing.verdict == "rejected"
-        assert not rejected.retryable and missing.retryable
-        assert rejected.html == fitted
-        assert '"reason":"html_changed"' in caplog.text
-        assert '"reason":"metrics_missing"' in caplog.text
-        admitted = gate.admit_slide_html(
-            context(html_repr="captured"), canonical, metrics=metrics(canonical), png=b"fresh",
-        )
-        assert admitted.verdict == "admitted"
-        assert admitted.receipt.html_digest == digest_html(canonical)
-
-
-@sync_async
-async def test_capture_last_waiter_drains_cleanup_even_after_second_cancel():
-    from services.authored_admission_capture import capture_ledger
-
-    started, cleaning, finish = asyncio.Event(), asyncio.Event(), asyncio.Event()
-    cleaned = []
-
-    async def capture(_html):
-        started.set()
-        try:
-            await asyncio.Future()
-        finally:
-            cleaning.set()
-            await finish.wait()
-            cleaned.append(True)
-
-    session = AdmissionSession(mode="shadow")
-    token = _SESSION.set(session)
-    try:
-        waiter = asyncio.create_task(capture_once(HTML, capture=capture))
-        await started.wait()
-        waiter.cancel()
-        await cleaning.wait()
-        assert not waiter.done()
-        ledger = capture_ledger(session)
-        assert len(ledger.draining) == 1 and not session.captures
-        waiter.cancel()
-        await asyncio.gather(waiter, return_exceptions=True)
-        assert len(ledger.draining) == 1
-        finish.set()
-        await asyncio.gather(*ledger.draining, return_exceptions=True)
-        assert cleaned == [True] and not ledger.draining
-    finally:
-        finish.set()
-        _SESSION.reset(token)
-
-
-@sync_async
-async def test_capture_cancelled_waiter_preserves_other_consumer():
-    started, finish = asyncio.Event(), asyncio.Event()
-
-    async def capture(_html):
-        started.set()
-        await finish.wait()
-        return b"png"
-
-    session = AdmissionSession(mode="shadow")
-    token = _SESSION.set(session)
-    try:
-        first = asyncio.create_task(capture_once(HTML, capture=capture))
-        second = asyncio.create_task(capture_once(HTML, capture=capture))
-        await started.wait()
-        first.cancel()
-        await asyncio.gather(first, return_exceptions=True)
-        assert not next(iter(session.captures.values())).cancelled()
-        finish.set()
-        assert await second == b"png"
-    finally:
-        finish.set()
         _SESSION.reset(token)
 
 
@@ -653,7 +524,7 @@ def test_consumer_attribute_vocabulary_is_in_renderer_policy():
         *root.glob("utils/slide_capture_fit*.py"),
         root / "services/source_content/browser_readback.py",
         root / "services/authored_terminal_slide_policy.py",
-        root / "services/authored_flag_classification.py",
+        root / "services/generation_core/quality/flag_classification.py",
     ]
     assert CONSUMED_GLOBAL_ATTRIBUTES <= GLOBAL_ATTRIBUTES
     for path in consumers:
@@ -936,53 +807,6 @@ def test_verbatim_html_is_never_admitted_without_a_session(monkeypatch):
 
 
 # --- R7/B4: one frozen rollout profile per attempt -------------------------
-
-
-def test_the_five_switches_are_read_once_and_frozen(monkeypatch):
-    """Every consumer reads the attempt's profile, not the live accessors."""
-
-    from services import authored_repair_loop as loop
-    from services.source_content.placeholder import prompt, text_step
-    from services import authored_rollout_profile as rollout
-    from utils import get_env_programme
-
-    reads: list[str] = []
-    for name in (
-        "get_authored_admission_gate_mode",
-        "get_authored_html_normalization",
-        "is_authored_verbatim_placeholder_authoring_enabled",
-        "is_authored_verbatim_single_repair_loop_enabled",
-        "get_authored_verbatim_repair_loop_model_calls",
-    ):
-        original = getattr(get_env_programme, name)
-        monkeypatch.setattr(
-            rollout, name, lambda *a, _n=name, _f=original, **k: reads.append(_n) or _f(*a, **k)
-        )
-
-    profile = RolloutProfile(
-        gate_mode="enforce",
-        html_normalization="tree",
-        placeholder_authoring=True,
-        single_repair_loop=True,
-        repair_loop_model_calls=2,
-    )
-    with rollout_profile_scope(profile):
-        assert gate.placeholder_authoring_enabled() is True
-        assert loop.single_repair_loop_enabled(source_reflow=True) is True
-        assert loop.repair_loop_model_calls() == 2
-        assert prompt.current_rollout_profile() is profile
-        assert text_step.current_rollout_profile() is profile
-    assert reads == []
-    assert rollout.resolve_rollout_profile() == RolloutProfile()
-    assert sorted(set(reads)) == sorted(
-        {
-            "get_authored_admission_gate_mode",
-            "get_authored_html_normalization",
-            "is_authored_verbatim_placeholder_authoring_enabled",
-            "is_authored_verbatim_single_repair_loop_enabled",
-            "get_authored_verbatim_repair_loop_model_calls",
-        }
-    )
 
 
 @sync_async

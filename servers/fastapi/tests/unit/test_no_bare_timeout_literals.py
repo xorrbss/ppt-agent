@@ -36,9 +36,6 @@ FROZEN_PREFIXES = (
     "utils/llm_calls/",
     "services/generation_core/authoring/",
     "services/source_content/raster_",
-    "services/slidespec_repair_",
-    "services/slidespec_dom_evidence",
-    "services/slidespec_pipeline_performance",
 )
 
 # "relative/path.py:line-independent call text" -> reason. Sites deliberately left
@@ -55,7 +52,6 @@ def _is_duration(node: ast.AST) -> bool:
         and not isinstance(node.value, bool)
         and node.value != 0
     )
-
 
 
 def _call_name(func: ast.AST) -> str:
