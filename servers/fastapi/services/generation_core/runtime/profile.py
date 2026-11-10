@@ -140,7 +140,7 @@ def resolve_svg_runtime_profile_with_provenance(
 
 def _author_executor_capacity() -> int:
     """Return the authored slide executor's actual capacity for SVG admission."""
-    from services.generation_core.authoring.author_slide import _AUTHOR_EXECUTOR
+    from services.generation_core.authoring.author_call_runtime import _AUTHOR_EXECUTOR
 
     return _AUTHOR_EXECUTOR._max_workers
 

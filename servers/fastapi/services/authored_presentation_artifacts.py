@@ -1,12 +1,9 @@
 from __future__ import annotations
 
 import asyncio
-import hashlib
 import io
 import logging
 import os
-from pathlib import Path
-import shutil
 import uuid
 from typing import List, Mapping, Sequence
 
@@ -15,104 +12,28 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from models.generate_presentation_request import GeneratePresentationRequest
 from services.authored_checkpoint_service import (
-    atomic_write,
     clear_checkpoint_html,
     complete_stage,
 )
 from services.authored_admission_checkpoint import prepare_checkpoint_write
 from services.generation_core.style.build import authored_title, resolve_brand
 from utils.asset_directory_utils import (
-    filesystem_image_path_to_app_data_reference,
     get_exports_directory,
-    get_images_directory,
 )
 from utils.filename_utils import safe_export_basename
 from utils.get_env import is_authored_retain_checkpoint_html_enabled
 from services.generation_core.authoring.author_deck import build_image_pptx
 from services.authored_canvas import DEFAULT_CANVAS_HEIGHT_PX, DEFAULT_CANVAS_WIDTH_PX, canvas_or_default
-from utils.hashing import sha256_hex
+from services.slide_image_sets import (  # noqa: F401 - historical import surface for authored callers
+    _authored_image_set_digest,
+    _authored_image_set_relative_directory,
+    _remove_partial_slide_pngs,
+    _save_slide_pngs,
+)
 
 __all__ = ["authored_title", "resolve_brand"]
 
 LOGGER = logging.getLogger(__name__)
-
-
-def _authored_image_set_digest(
-    pngs: List[bytes],
-    publication_token: str | None = None,
-) -> str:
-    digest = hashlib.sha256()
-    if publication_token:
-        digest.update(publication_token.encode("utf-8"))
-        digest.update(b"\0")
-    for png in pngs:
-        digest.update(len(png).to_bytes(8, "big"))
-        digest.update(png)
-    return digest.hexdigest()
-
-
-def _authored_image_set_relative_directory(
-    presentation_id: uuid.UUID,
-    pngs: List[bytes],
-    publication_token: str | None = None,
-) -> str:
-    image_set = _authored_image_set_digest(pngs, publication_token)
-    return os.path.join("authored", str(presentation_id), "sets", image_set)
-
-
-def _save_slide_pngs(
-    presentation_id: uuid.UUID,
-    pngs: List[bytes],
-    publication_token: str | None = None,
-) -> List[str]:
-    """Persist immutable, content-addressed slide images for one publication.
-
-    The publication token isolates concurrent/retried operation attempts.  A
-    failed attempt can therefore remove only its own image set and can never
-    overwrite bytes referenced by an already-published revision.
-    """
-
-    rel_dir = _authored_image_set_relative_directory(
-        presentation_id,
-        pngs,
-        publication_token,
-    )
-    abs_dir = os.path.join(get_images_directory(), rel_dir)
-    os.makedirs(abs_dir, exist_ok=True)
-    refs: List[str] = []
-    for i, png in enumerate(pngs):
-        content_hash = sha256_hex(png)
-        fname = f"slide_{i}-{content_hash}.png"
-        absolute_path = os.path.join(abs_dir, fname)
-        atomic_write(Path(absolute_path), png)
-        refs.append(filesystem_image_path_to_app_data_reference(absolute_path))
-    return refs
-
-
-def _remove_partial_slide_pngs(
-    presentation_id: uuid.UUID,
-    pngs: List[bytes],
-    publication_token: str | None = None,
-) -> None:
-    """Remove only one unpublished, immutable image set."""
-
-    images_root = Path(get_images_directory()).resolve()
-    authored_root = (images_root / "authored").resolve()
-    presentation_root = (authored_root / str(presentation_id)).resolve()
-    sets_root = (presentation_root / "sets").resolve()
-    target = (
-        images_root
-        / _authored_image_set_relative_directory(
-            presentation_id,
-
-            pngs,
-            publication_token,
-        )
-    ).resolve()
-    if target.parent != sets_root or sets_root.parent != presentation_root:
-        raise ValueError("invalid authored slide image cleanup target")
-    if target.is_dir():
-        shutil.rmtree(target)
 
 
 def _build_image_pdf(

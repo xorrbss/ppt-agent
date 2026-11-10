@@ -5,7 +5,7 @@ from sqlalchemy import select
 from models.sql.slide import SlideModel
 from services.svg_templates.selection_material import template_package
 from services.authored_canvas import presentation_canvas_contract
-from services.authored_presentation_artifacts import _save_slide_pngs
+from services.slide_image_sets import _save_slide_pngs
 from services.svg_contract import finalize_svg
 from services.svg_page_publication import classify_svg_page_quality, reposition_flags, set_svg_page
 from services.svg_renderer import render_svg_with_metrics

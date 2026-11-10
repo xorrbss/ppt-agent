@@ -322,7 +322,7 @@ async def _stream_events(
     ordered after it.
     """
 
-    from services.generation_core.authoring.author_slide import _AUTHOR_EXECUTOR
+    from services.generation_core.authoring.author_call_runtime import _AUTHOR_EXECUTOR
 
     # No ``outcome_scope``: the authored outcome guard inspects the returned
     # object's text, and a stream returns an iterator, not a document. The

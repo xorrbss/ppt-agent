@@ -308,7 +308,8 @@ async def build_asset_offer(*, outline, brand, style, roles: Sequence[str], inst
         DEFAULT_PACK_KEY, build_infographic_asset_context,
     )
     from services.generation_core.assets.infographic_plan import resolve_infographic_plan
-    from services.generation_core.authoring.author_slide import EXACT_RECONSTRUCTION, normalize_reference_mode
+    from utils.llm_calls.author_slide_effort import EXACT_RECONSTRUCTION
+    from utils.llm_calls.author_slide_options import normalize_reference_mode
     from services.image_generation_service import image_request_scope, observe_image_provider_calls
 
     policy_kwargs = {}

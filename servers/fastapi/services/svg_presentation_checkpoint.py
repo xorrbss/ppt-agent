@@ -19,7 +19,7 @@ from sqlalchemy import func, select, update
 from models.sql.authored_slide_checkpoint import AuthoredSlideCheckpoint
 from services.authored_checkpoint_artifacts import atomic_write, checkpoint_root
 from services.authored_checkpoint_fence import owned_job
-from services.authored_presentation_artifacts import _save_slide_pngs
+from services.slide_image_sets import _save_slide_pngs
 from services.database import async_session_maker
 from services.workspace_public_generation_lifecycle import (
     monotonic_svg_job_stage as _monotonic_authored_job_stage,

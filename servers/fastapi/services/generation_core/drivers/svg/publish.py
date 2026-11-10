@@ -21,7 +21,8 @@ from models.sql.presentation import PresentationModel, PRESENTATION_LIFECYCLE_PU
 from models.sql.slide import SlideModel
 from services.authored_canvas import merge_presentation_canvas, request_canvas_metadata
 from services.authored_checkpoint_service import begin_publish, complete_publish
-from services.authored_presentation_artifacts import _save_slide_pngs, authored_title
+from services.generation_core.style.build import authored_title
+from services.slide_image_sets import _save_slide_pngs
 from services.generation_core.drivers.svg.native_declarations import PAYLOAD_KEY as NATIVE_DECLARATIONS_KEY
 from services.generation_core.drivers.svg.native_publish import canvas_point_per_px, page_native_objects
 from services.generation_core.native_objects import SLIDE_CONTENT_KEY as NATIVE_OBJECTS_KEY

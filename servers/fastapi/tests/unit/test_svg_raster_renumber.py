@@ -66,7 +66,7 @@ def test_reorder_of_oversized_redesign_page_renumbers_and_still_exports(monkeypa
                         lambda *a, **k: load(PlacementManifest, *a, **k))
     monkeypatch.setattr(svg_raster_renumber, "_fenced_operation",
                         AsyncMock(return_value=(assets_test.OWNER, assets_test.TENANT)))
-    monkeypatch.setattr("services.authored_presentation_artifacts._save_slide_pngs",
+    monkeypatch.setattr("services.slide_image_sets._save_slide_pngs",
                         lambda *_args: [str(tmp_path / "numbered.png")])
 
     changed = asyncio.run(svg_raster_renumber.renumber_redesign_page(

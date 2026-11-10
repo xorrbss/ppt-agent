@@ -196,10 +196,10 @@ def test_strict_flag_makes_no_difference_to_the_native_request():
 
 
 def test_authoring_effort_in_extra_body_is_merged_with_the_format(monkeypatch):
-    from services.generation_core.authoring import author_slide
+    from services.generation_core.authoring import author_call_runtime
 
-    monkeypatch.setattr(author_slide, "get_llm_provider", lambda *a, **k: LLMProvider.ANTHROPIC)
-    kwargs = author_slide._apply_anthropic_authoring_reasoning(
+    monkeypatch.setattr(author_call_runtime, "get_llm_provider", lambda *a, **k: LLMProvider.ANTHROPIC)
+    kwargs = author_call_runtime._apply_anthropic_authoring_reasoning(
         {"model": "claude-sonnet-5-5", "messages": _messages(), "response_format": _structured()},
         "medium",
         model="claude-sonnet-5-5",
@@ -606,10 +606,10 @@ def test_explicit_budgets_and_known_models_are_left_to_llmai():
 
 
 def _none_effort_kwargs(monkeypatch, model: str, **extra) -> dict:
-    from services.generation_core.authoring import author_slide
+    from services.generation_core.authoring import author_call_runtime
 
-    monkeypatch.setattr(author_slide, "get_llm_provider", lambda *a, **k: LLMProvider.ANTHROPIC)
-    kwargs = author_slide._apply_anthropic_authoring_reasoning(
+    monkeypatch.setattr(author_call_runtime, "get_llm_provider", lambda *a, **k: LLMProvider.ANTHROPIC)
+    kwargs = author_call_runtime._apply_anthropic_authoring_reasoning(
         {"model": model, "messages": _messages(), "max_tokens": 1024, **extra}, "none", model=model
     )
     assert kwargs["extra_body"] == {"thinking": {"type": "disabled"}}

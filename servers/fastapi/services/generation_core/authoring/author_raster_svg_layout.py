@@ -11,7 +11,7 @@ from services.generation_core.authoring.author_slide_svg import (
     SvgAuthorResult, free_composition_canvas_clause, svg_prompt_design, svg_reference_samples, svg_author_semantic_slot,
 )
 from services.generation_core.drivers.svg.visual_intent import VISUAL_INTENT_RULES, visual_intent_receipt
-from services.generation_core.authoring.author_slide import (
+from services.generation_core.authoring.author_call_runtime import (
     _AUTHOR_EXECUTOR, _apply_anthropic_authoring_reasoning, _authoring_extra_body,
     _authoring_output_profile, _wait_for_author_rate_slot,
 )

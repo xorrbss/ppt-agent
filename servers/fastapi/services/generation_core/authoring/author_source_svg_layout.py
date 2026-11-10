@@ -395,7 +395,7 @@ async def author_source_svg_layout(
     )
     from utils.llm_calls.author_prompt_profile import authoring_model
     from utils.llm_calls.author_prompt_split import author_messages
-    from services.generation_core.authoring.author_slide import (
+    from services.generation_core.authoring.author_call_runtime import (
         _AUTHOR_EXECUTOR,
         _apply_anthropic_authoring_reasoning,
         _authoring_extra_body,
