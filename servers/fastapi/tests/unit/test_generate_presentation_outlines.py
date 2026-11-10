@@ -298,3 +298,42 @@ def test_svg_author_rules_forbid_invented_presenter_details():
     flat = " ".join(SVG_AUTHOR_RULES.split())
     assert "only when the slide content states it" in flat
     assert "bracketed placeholder such as [Presenter Name]" in flat
+
+
+def _open_objects(node, path="$"):
+    """Yield every object schema a strict structured-output provider rejects."""
+    if isinstance(node, dict):
+        if node.get("type") == "object" and node.get("additionalProperties") is not False:
+            yield path
+        for key, value in node.items():
+            yield from _open_objects(value, f"{path}.{key}")
+    elif isinstance(node, list):
+        for index, value in enumerate(node):
+            yield from _open_objects(value, f"{path}[{index}]")
+
+
+@pytest.mark.parametrize("n_slides", [5, None])
+def test_outline_response_schema_omits_server_chapter_and_stays_strict(n_slides):
+    # 2026-11-11: the server-filled `chapter` (dict | None) leaked into the
+    # response schema as an open object and Codex rejected every outline call
+    # with invalid_json_schema.
+    captured_kwargs = {}
+
+    async def fake_stream_generate_events(_client, **kwargs):
+        captured_kwargs.update(kwargs)
+        yield content_event('{"title": "Deck", "slides": [{"content": "## Intro"}]}')
+
+    with patch.object(outline_module, "get_model", return_value="fake-model"), patch.object(
+        outline_module, "get_client", return_value=object()
+    ), patch.object(outline_module, "get_llm_config", return_value={}), patch.object(
+        outline_module, "get_generate_kwargs", side_effect=lambda **kwargs: kwargs
+    ), patch.object(
+        outline_module, "stream_generate_events", side_effect=fake_stream_generate_events
+    ):
+        _collect_async_chunks(
+            outline_module.generate_ppt_outline(content="topic", n_slides=n_slides, language="English")
+        )
+
+    schema = captured_kwargs["response_format"].json_schema
+    assert "chapter" not in json.dumps(schema)
+    assert list(_open_objects(schema)) == []

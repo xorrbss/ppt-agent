@@ -403,6 +403,8 @@ async def generate_ppt_outline(
             if "content" not in properties:
                 continue
             properties.pop("common_header", None)
+            # Filled by the server after the outline (svg_templates/chapters.py).
+            properties.pop("chapter", None)
             properties.pop("title", None)
             if common_header_mode == "uniform":
                 properties["title"] = {"type": "string", "minLength": 1,
