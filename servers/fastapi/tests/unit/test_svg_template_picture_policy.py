@@ -107,7 +107,7 @@ def test_enabled_route_never_reads_live_image_settings(monkeypatch):
 
 def test_enabled_driver_passes_frozen_style_and_policy_into_the_real_offer(monkeypatch):
     from services.generation_core.assets import infographic_plan
-    from services.generation_core.authoring.author_slide import Brand
+    from services.generation_core.style.brand import Brand
 
     seen = {}
 

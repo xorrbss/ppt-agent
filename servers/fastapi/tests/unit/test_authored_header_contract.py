@@ -24,18 +24,11 @@ from models.presentation_outline_model import (
     PresentationOutlineModel,
     SlideOutlineModel,
 )
-from utils.authored_header_prompt import render_header_contract
 from utils.authored_header_style_map import structural_changes
 from utils.llm_calls.author_header_contract import (
     build_header_contract_messages,
     coerce_header_contract,
 )
-from services.generation_core.authoring.author_slide import Brand, build_design_system
-from services.generation_core.authoring.author_slide_prompt import author_prompt, requirement_marker
-
-
-def _brand() -> Brand:
-    return Brand(topic="차세대 VOC 통합", language="Korean", primary="#0B4EA2")
 
 
 def _outline(*contents: str) -> PresentationOutlineModel:
@@ -49,27 +42,6 @@ def _numbered_contract() -> AuthoredHeaderContract:
     return AuthoredHeaderContract(
         requirements=HeaderRequirementSpec(enabled=True),
         right_slot=HeaderRightSlotSpec(mode="requirements"),
-    )
-
-
-def test_the_accent_tick_is_off_unless_the_request_asked_for_one():
-    """The rule renders as a coloured bar readers take for a dash in the text.
-
-    It is opt-in for the same reason page numbering is: unasked-for chrome is
-    charged to every slide of the deck.
-    """
-    assert default_header_contract().eyebrow.tick.enabled is False
-    brief = render_header_contract(default_header_contract())
-    assert "this deck has none" in brief
-    assert "Never draw a rule, bar, or dot" in brief
-
-    # A model that turns it on anyway is overruled when nothing could have asked.
-    payload = {"eyebrow": {"tick": {"enabled": True}}}
-    assert coerce_header_contract(payload).eyebrow.tick.enabled is False
-    # With a request present the model's judgement stands.
-    assert (
-        coerce_header_contract(payload, allow_tick=True).eyebrow.tick.enabled
-        is True
     )
 
 
@@ -194,75 +166,8 @@ def test_contract_messages_quote_user_instructions_as_data():
 # --- frozen prompt text -------------------------------------------------------
 
 
-def test_render_is_deterministic_for_one_contract():
-    contract = _numbered_contract()
-    assert render_header_contract(contract) == render_header_contract(contract)
-
-
-def test_render_forbids_requirements_when_the_deck_has_none():
-    text = render_header_contract(default_header_contract())
-    assert "Requirement identifiers: this deck has none" in text
-    assert "data-requirement-ids" not in text
-
-
-def test_render_states_the_requirement_group_when_the_deck_has_some():
-    text = render_header_contract(_numbered_contract())
-    assert 'data-header-part="requirements"' in text
-    assert "never invent, renumber, reformat, or drop one" in text
-
-
-def test_design_system_is_unchanged_without_a_contract():
-    brand = _brand()
-    assert build_design_system(brand) == build_design_system(
-        brand, header_contract=None
-    )
-
-
-def test_design_system_carries_the_contract_when_supplied():
-    system = build_design_system(
-        _brand(), header_contract=_numbered_contract()
-    )
-    assert "SLIDE HEADER SYSTEM" in system
-    assert "PAGE-NUMBER SYSTEM" in system
-
-
 # --- per-slide requirement marker --------------------------------------------
 
-
-def test_marker_is_absent_when_the_deck_has_no_requirement_slot():
-    assert requirement_marker(requirements_enabled=False) == ""
-
-
-def test_marker_points_the_model_at_the_slide_text_not_a_supplied_list():
-    marker = requirement_marker(requirements_enabled=True)
-    assert "slide's CONTENT states identifiers" in marker
-    assert 'data-requirement-ids="ID1,ID2"' in marker
-
-
-def test_marker_names_the_lookalikes_that_must_not_become_badges():
-    # A regex over shape alone promoted SHA-256 to a requirement badge on a deck
-    # whose source document had no identifiers at all.
-    marker = requirement_marker(requirements_enabled=True)
-    assert "SHA-256" in marker
-    assert "Never invent" in marker
-
-
-def test_author_prompt_includes_the_marker_only_when_enabled():
-    kwargs = dict(role="PILLARS", index=1, n=3)
-    with_marker = author_prompt(
-        "content",
-        "DESIGN",
-        _brand(),
-        kwargs["role"],
-        kwargs["index"],
-        kwargs["n"],
-        requirements_enabled=True,
-    )
-    without = author_prompt(
-        "content", "DESIGN", _brand(), kwargs["role"], kwargs["index"], kwargs["n"]
-    )
-    assert "REQUIREMENT IDENTIFIERS" in with_marker
-    assert "REQUIREMENT IDENTIFIERS" not in without
 
 # --- decks published before the band was derived ------------------------------
 
@@ -335,30 +240,7 @@ def test_a_deliberately_pinned_band_keeps_both_of_its_bounds():
 # --- deck plan wiring ---------------------------------------------------------
 
 
-def test_the_contract_forbids_badges_and_lookalike_headers_on_excluded_roles():
-    text = render_header_contract(_numbered_contract())
-    assert "NO requirement identifier, badge, chip, or code anywhere" in text
-    assert "must not imitate this header" in text
-
-
 # --- eyebrow wording is fixed for the whole deck ------------------------------
-
-
-def test_the_eyebrow_is_pinned_to_the_deck_language():
-    text = render_header_contract(default_header_contract(), language="Korean")
-    assert "Write it in Korean on EVERY slide" in text
-    assert "never in English or any other language" in text
-
-
-def test_a_latin_uppercase_eyebrow_is_pinned_the_other_way():
-    contract = default_header_contract().model_copy(
-        update={
-            "eyebrow": HeaderEyebrowSpec(text_style="latinUpper"),
-        }
-    )
-    text = render_header_contract(contract, language="Korean")
-    assert "UPPERCASE Latin letters on EVERY slide" in text
-    assert "never in Korean" in text
 
 
 def test_changing_the_eyebrow_wording_needs_reauthoring():
@@ -367,11 +249,6 @@ def test_changing_the_eyebrow_wording_needs_reauthoring():
         update={"eyebrow": HeaderEyebrowSpec(text_style="latinUpper")}
     )
     assert "eyebrow.textStyle" in structural_changes(old, new)
-
-
-def test_the_design_system_pins_the_eyebrow_to_the_brand_language():
-    system = build_design_system(_brand(), header_contract=default_header_contract())
-    assert "Write it in Korean on EVERY slide" in system
 
 
 # --- the requirement group stays on one row -----------------------------------
@@ -445,75 +322,6 @@ def test_coercion_fits_the_row_before_returning_a_model_contract():
         },
     )
     assert requirement_row_width_px(contract) <= contract.right_slot.width_px
-
-
-def test_the_contract_forbids_wrapping_the_overflow_chip():
-    contract = _numbered_contract()
-    plus_n = contract.model_copy(
-        update={
-            "requirements": contract.requirements.model_copy(
-                update={"overflow": "plusN"}
-            )
-        }
-    )
-    text = render_header_contract(plus_n)
-    assert "must sit on ONE" in text
-    assert "never let it wrap" in text
-
-
-def test_the_brief_caps_the_chip_rows_the_bands_ceiling_can_hold():
-    """The right block is the one column "shorten the title" cannot reach.
-
-    A slide whose own text states twenty identifiers derives its band from the
-    chips, and the brief forbids dropping any of them — so without a stated row
-    budget that slide is out of bounds on every retry with no legal authoring
-    left. 280 - 32 - 28 holds eight 22px rows with their 6px gaps.
-    """
-    text = render_header_contract(_numbered_contract())
-
-    assert "may fill at most 8 row(s)" in text
-    assert "show the first 48" in text
-
-
-def test_the_brief_lets_a_slide_leave_the_right_slot_empty():
-    contract = _numbered_contract().model_copy(
-        update={"right_slot": HeaderRightSlotSpec(mode="requirements")}
-    )
-    text = render_header_contract(contract)
-
-    assert "either as an empty marked container or with no container at all" in text
-    assert "Never fill it to have it filled." in text
-
-
-def test_the_attribute_ban_reaches_only_the_headers_own_parts():
-    """The same prompt also carries contracts that require their own attributes.
-
-    Structured authoring asks for data-ai-zone-id on the slide's content
-    containers, and a slide that obeyed a slide-wide ban failed that contract
-    before the header was ever checked — a rule with no counterpart in the
-    validator that could only cost slides.
-    """
-    text = render_header_contract(_numbered_contract())
-
-    assert "On the band's own parts use no data attribute other than" in text
-    assert (
-        "attributes the slide is asked for elsewhere in this prompt are "
-        "unaffected by this rule" in text
-    )
-
-
-def test_the_brief_pins_the_band_box_and_the_bodys_frame_of_reference():
-    text = render_header_contract(_numbered_contract())
-
-    assert "put no padding or border on that element" in text
-    assert "its body must be pinned too" in text
-
-
-def test_the_pinned_body_form_names_the_full_canvas_width():
-    text = render_header_contract(_numbered_contract())
-
-    assert "position:absolute;left:0;right:0;top:(N +" in text
-    assert "has no horizontal extent and collapses to zero width" in text
 
 
 def test_the_contract_call_reads_the_deck_material_to_judge_the_slot():

@@ -30,9 +30,7 @@ from models.authored_header_contract import (
 from models.authored_header_row_fit import fit_requirement_row
 from models.presentation_outline_model import PresentationOutlineModel
 from services.authored_header_contract_service import load_header_contract
-from utils.authored_header_prompt import render_header_contract
 from utils.llm_calls.author_header_contract import (
-    build_header_contract_messages,
     build_header_revision_messages,
     coerce_header_contract,
 )
@@ -208,19 +206,6 @@ def test_the_schema_offers_the_model_no_canvas_field() -> None:
 
     assert "canvas_width_px" not in properties
     assert "canvas_height_px" not in properties
-
-
-def test_prompts_state_the_contract_canvas() -> None:
-    contract = default_header_contract(**A4)
-    clause = render_header_contract(contract, language="Korean")
-    user = build_header_contract_messages(**_MESSAGE_ARGS, **A4)[1].content
-
-    assert "the top of the 1188x840 canvas" in clause
-    assert f"x={1188 - 64}px" in clause
-    assert "1280" not in clause
-    assert "The canvas is exactly 1188x840px." in user
-    assert "title.max_width_px <= 1188 - 2 x margin_x_px" in user
-    assert "1280" not in user
 
 
 def _fake_llm(monkeypatch: pytest.MonkeyPatch, answer: object) -> None:

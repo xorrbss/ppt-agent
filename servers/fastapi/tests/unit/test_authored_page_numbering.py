@@ -1,32 +1,16 @@
 """Page numbering is opt-in: a deck is unnumbered unless its request asked."""
 
-import pytest
 
 from models.authored_header_contract import (
     AuthoredHeaderContract,
     DeckPageNumberSpec,
     default_header_contract,
 )
-from services.authored_header_contract_service import page_number_mode_for
 from utils.authored_header_style_map import structural_changes
 from utils.llm_calls.author_header_contract import (
     build_header_contract_messages,
     coerce_header_contract,
 )
-from services.generation_core.authoring.author_slide import (
-    COMPANY_STANDARD_PAGE_NUMBER_MODE,
-    NO_PAGE_NUMBER_MODE,
-    TEMPLATE_PAGE_NUMBER_MODE,
-    Brand,
-    build_design_system,
-    fallback_slide_html,
-    validate_page_number_mode,
-)
-from services.generation_core.authoring.author_slide_prompt import author_prompt
-
-
-def _brand() -> Brand:
-    return Brand(topic="차세대 VOC 통합", language="Korean", primary="#0B4EA2")
 
 
 # --- the contract default ----------------------------------------------------
@@ -35,16 +19,6 @@ def _brand() -> Brand:
 def test_a_deck_is_unnumbered_by_default():
     assert default_header_contract().page_number.enabled is False
     assert AuthoredHeaderContract().page_number.enabled is False
-
-
-def test_mode_follows_the_contract():
-    numbered = AuthoredHeaderContract(page_number=DeckPageNumberSpec(enabled=True))
-
-    assert page_number_mode_for(numbered) == TEMPLATE_PAGE_NUMBER_MODE
-    assert page_number_mode_for(AuthoredHeaderContract()) == NO_PAGE_NUMBER_MODE
-    # A deck with no contract at all predates numbering being a decision, and is
-    # treated as unnumbered rather than inheriting the old always-on default.
-    assert page_number_mode_for(None) == NO_PAGE_NUMBER_MODE
 
 
 # --- the hard floor over the model -------------------------------------------
@@ -93,68 +67,6 @@ def test_the_model_is_not_offered_numbering_without_a_request():
 # --- what the slide prompt says ----------------------------------------------
 
 
-def test_the_unnumbered_design_system_forbids_footer_copy_and_targets_32px():
-    design_system = build_design_system(
-        _brand(), page_number_mode=NO_PAGE_NUMBER_MODE
-    )
-
-    assert "NO PAGE NUMBER" in design_system
-    assert "y=688px" in design_system
-    # The boundary is stated as a hard limit. Told to reserve "at least" 72px the
-    # model padded to a 92px median band; told to fill down to the line it clipped
-    # panels on 3 of 8 slides. Overflow has to read as the worse failure.
-    assert "NOTHING may cross that line" in design_system
-    assert "bottom:14px" not in design_system
-    assert "bottom 72px" not in design_system
-    assert "#A7ACB3" not in design_system
-
-
-def test_the_unnumbered_slide_prompt_omits_the_marker():
-    prompt = author_prompt(
-        "content",
-        "DESIGN",
-        _brand(),
-        "PROBLEM",
-        1,
-        4,
-        page_number_mode=NO_PAGE_NUMBER_MODE,
-    )
-
-    assert "PAGE MARKER FOR THIS SLIDE: OMIT IT" in prompt
-    assert "This deck is not numbered" in prompt
-    assert "render exactly" not in prompt
-
-
-def test_the_unnumbered_fallback_slide_has_no_footer():
-    html = fallback_slide_html(
-        "content", _brand(), "PROBLEM", 1, 4, page_number_mode=NO_PAGE_NUMBER_MODE
-    )
-
-    assert 'class="foot"' not in html
-    assert "padding:64px 64px 32px" in html
-
-
-def test_the_numbered_fallback_slide_keeps_its_72px_footer_zone():
-    html = fallback_slide_html(
-        "content", _brand(), "PROBLEM", 1, 4, page_number_mode=TEMPLATE_PAGE_NUMBER_MODE
-    )
-
-    # index 1 is the deck's second slide, so its page number is 02.
-    assert '<div class="foot">02</div>' in html
-    assert "padding:64px 64px 72px" in html
-
-
-def test_the_mode_vocabulary_stays_closed():
-    for mode in (
-        TEMPLATE_PAGE_NUMBER_MODE,
-        COMPANY_STANDARD_PAGE_NUMBER_MODE,
-        NO_PAGE_NUMBER_MODE,
-    ):
-        assert validate_page_number_mode(mode) == mode
-    with pytest.raises(ValueError, match="unsupported page number mode"):
-        validate_page_number_mode("footer")
-
-
 # --- changing it after the fact ----------------------------------------------
 
 
@@ -169,27 +81,3 @@ def test_toggling_numbering_is_reported_as_a_structural_change():
     assert structural_changes(off, off) == ()
 
 
-def test_the_page_number_is_the_slide_s_own_position():
-    """The marker is one-based, like the "Author slide N of M" line beside it.
-
-    Numbering it from the zero-based index put every page number one behind the
-    slide carrying it, and, when restyling a source deck, guaranteed the source
-    slide's own page number could never match the one the template rendered.
-    """
-    second = author_prompt(
-        "content", "DESIGN", _brand(), "PROBLEM", 1, 4,
-        page_number_mode=TEMPLATE_PAGE_NUMBER_MODE,
-    )
-    tenth = author_prompt(
-        "content", "DESIGN", _brand(), "PROBLEM", 9, 12,
-        page_number_mode=TEMPLATE_PAGE_NUMBER_MODE,
-    )
-
-    assert 'render exactly "02" once' in second
-    assert "Author slide 2 of 4" in second
-    assert 'render exactly "10" once' in tenth
-    assert "Author slide 10 of 12" in tenth
-    assert '<div class="foot">10</div>' in fallback_slide_html(
-        "content", _brand(), "PROBLEM", 9, 12,
-        page_number_mode=TEMPLATE_PAGE_NUMBER_MODE,
-    )

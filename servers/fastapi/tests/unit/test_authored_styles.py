@@ -11,7 +11,8 @@ from PIL import Image
 import yaml
 
 from api.v1.ppt.endpoints.authored import AUTHORED_ROUTER
-from services.generation_core.authoring.author_slide import EXACT_RECONSTRUCTION, STYLE_REFERENCE
+from utils.llm_calls.author_slide_effort import EXACT_RECONSTRUCTION
+from utils.llm_calls.author_slide_options import STYLE_REFERENCE
 from utils.authored_styles import (
     AUTHORED_STYLE_CATEGORIES,
     AUTHORED_STYLES_DIRECTORY,

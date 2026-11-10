@@ -2,8 +2,6 @@ from __future__ import annotations
 
 import asyncio
 from datetime import datetime, timedelta, timezone
-from hashlib import sha256
-import json
 from pathlib import Path
 from types import SimpleNamespace
 import uuid
@@ -47,15 +45,9 @@ from services.public_v2_orchestrator import (
     PUBLIC_V2_POSTGRESQL_STRICT_PROFILE,
     SqlPublicV2Orchestrator,
     create_public_v2_orchestrator,
-    require_generation_content_integrity_for_export,
     resolve_public_v2_integration_profile,
 )
 from services.artifact_store import SignedArtifactDownload
-from services.authored_vnext.narrative_ir.content_graph import (
-    seal_content_integrity_receipt,
-)
-from models.authored_vnext.narrative_ir_contracts import model_payload
-from services.authored_vnext.narrative_ir.validation import canonical_digest
 from services.source_content.errors import SourceContentError
 
 
@@ -1111,94 +1103,6 @@ def test_public_export_requires_generation_authority_in_the_actor_tenant(
         await engine.dispose()
 
     asyncio.run(scenario())
-
-
-def test_registered_template_export_requires_passed_content_integrity() -> None:
-    operation_id = uuid.uuid4()
-    digest = "sha256:" + "a" * 64
-    route_unsigned = {
-        "schemaVersion": "generation-route-receipt/v1",
-        "requestedMode": "registered-template",
-        "selectedRoute": "source-native",
-        "designPackPin": {
-            "designPackId": "test-pack",
-            "version": 1,
-            "digest": "sha256:" + "d" * 64,
-        },
-        "narrativeIrDigest": None,
-        "fallbackReason": None,
-        "outputCapability": "fidelity",
-    }
-    route_digest = "sha256:" + sha256(
-        json.dumps(
-            route_unsigned,
-            ensure_ascii=True,
-            sort_keys=True,
-            separators=(",", ":"),
-        ).encode("utf-8")
-    ).hexdigest()
-    receipt = seal_content_integrity_receipt(
-        operation_id=operation_id,
-        attempt_binding_digest=canonical_digest({"operationId": str(operation_id), "jobId": "", "attemptId": "", "fencingToken": None}),
-        source_revision=1,
-        result_revision=2,
-        generation_lane="new-authoring",
-        content_graph_digest=digest,
-        route_strategy_receipt_digest=route_digest,
-        narrative_digest="sha256:" + "b" * 64,
-        preserve_source_input_digest=None,
-        provider_call_budget={"actualLogicalCalls": 0, "actualPhysicalCalls": 0},
-        pages=[
-            {
-                "pageIndex": 0,
-                "expectedContentUnitIds": ["unit-1"],
-                "boundContentUnitIds": ["unit-1"],
-                "renderedContentUnitIds": ["unit-1"],
-                "expectedDigest": digest,
-                "boundDigest": digest,
-                "renderedDigest": digest,
-                "sourceOwnershipDigest": "sha256:" + "c" * 64,
-                "expectedProtectedChromeDigest": digest,
-                "observedProtectedChromeDigest": digest,
-                "browserReadbackDigest": digest,
-            }
-        ],
-    )
-    route_payload = {
-        "generation_route_receipt": {
-            **route_unsigned,
-            "receiptDigest": route_digest,
-        },
-        "narrative_checkpoint": {
-            "operationId": str(operation_id),
-            "narrative": {"contentGraphDigest": digest, "narrativeDigest": "sha256:" + "b" * 64},
-            "providerCallBudget": model_payload(receipt.provider_call_budget),
-        },
-    }
-    missing = SimpleNamespace(
-        id=operation_id,
-        request_payload=route_payload,
-        state="succeeded",
-        expected_revision=1,
-        result_revision=2,
-        result={},
-    )
-    with pytest.raises(PublicV2OrchestrationError) as rejected:
-        require_generation_content_integrity_for_export(
-            missing,
-            source_revision=2,
-        )
-    assert rejected.value.reason_code == "content_integrity_receipt_required"
-
-    passed = SimpleNamespace(
-        id=operation_id,
-        request_payload=route_payload,
-        state="succeeded",
-        expected_revision=1,
-        result_revision=2,
-        result={"contentIntegrityReceipt": model_payload(receipt)},
-    )
-    require_generation_content_integrity_for_export(passed, source_revision=2)
 
 
 _SOURCE_RESTYLE_SUBMISSION = {

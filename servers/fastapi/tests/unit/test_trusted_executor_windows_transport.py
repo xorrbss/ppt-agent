@@ -283,12 +283,10 @@ sys.stdout.write(sys.argv[4])
                 isolation_attestation["controls"]["network-none"]["status"]
                 == "unsupported"
             )
-            from services.public_export_operation import _resource_summary
             from services.trusted_executor.dispatch_evidence import (
-                DISPATCH_EVIDENCE_KEY, PRIVATE_DISPATCH_EVIDENCE_KEY, PRIVATE_DISPATCH_GAPS_KEY,
+                DISPATCH_EVIDENCE_KEY,
                 begin_supervised_invocation, validate_supervised_dispatch_evidence,
             )
-            from services.workspace_operation_runner import sanitize_workspace_event_payload
 
             evidence = decoded.resource_metrics[DISPATCH_EVIDENCE_KEY]
             assert validate_supervised_dispatch_evidence(evidence) == evidence
@@ -314,12 +312,8 @@ sys.stdout.write(sys.argv[4])
                 "PUBLIC_WORKER_CAPABILITY_KEY_FILE", "SYSTEMROOT",
             ):
                 assert forbidden not in serialized
-            summary = _resource_summary([{"role": decoded.role, **decoded.resource_metrics}])
-            assert summary[PRIVATE_DISPATCH_EVIDENCE_KEY] == [evidence]
-            assert summary[PRIVATE_DISPATCH_GAPS_KEY] == []
-            public = sanitize_workspace_event_payload(summary, operation_kind="presentation.export")
-            assert PRIVATE_DISPATCH_EVIDENCE_KEY not in public and PRIVATE_DISPATCH_GAPS_KEY not in public
-            assert evidence["evidenceDigest"] not in json.dumps(public)
+            # The authored export's durable resource projection (_resource_summary)
+            # was removed with authored generation (P3 B4c).
             with pytest.raises(ValueError, match="worker_dispatch_evidence_invalid"):
                 validate_supervised_dispatch_evidence({**evidence, "outputDigest": "0" * 64})
             with pytest.raises(ValueError, match="worker_dispatch_evidence_invalid"):

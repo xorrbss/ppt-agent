@@ -3,24 +3,16 @@ from __future__ import annotations
 import pytest
 
 from models.authored_vnext.capability_registry import (
-    AUTHORED_FONT_FLOOR_PT,
-    AUTHORED_FONT_FLOOR_PX,
     CAPABILITY_REGISTRY_DIGEST,
     EDITABLE_HYBRID_PROFILE_ID,
     HYBRID_NATIVE_CAPABILITY_IDS,
     capability_metadata,
     hybrid_ooxml_capabilities,
     is_hybrid_native_capability,
-    prompt_capability_clause,
     require_capability_metadata,
     scene_capabilities,
 )
 from services.authored_vnext.generation.scene_compiler import default_scene_capabilities
-from utils.authored_font_policy import (
-    MIN_AUTHORED_FONT_SIZE_PT,
-    MIN_AUTHORED_FONT_SIZE_PX,
-)
-from services.generation_core.authoring.author_slide_prompt import build_design_system
 
 
 def test_scene_and_ooxml_use_the_same_capability_registry_binding() -> None:
@@ -41,42 +33,6 @@ def test_scene_and_ooxml_use_the_same_capability_registry_binding() -> None:
     assert capability_metadata(consumer="readback")["registryDigest"] == CAPABILITY_REGISTRY_DIGEST
     assert is_hybrid_native_capability("editable.text.ko-en.v1")
     assert not is_hybrid_native_capability("editable.text.ja-zh.v1")
-
-
-def test_prompt_validator_and_font_adapters_share_registry_policy() -> None:
-    assert MIN_AUTHORED_FONT_SIZE_PX == AUTHORED_FONT_FLOOR_PX
-    assert MIN_AUTHORED_FONT_SIZE_PT == AUTHORED_FONT_FLOOR_PT
-    # The clause no longer carries the registry digest (2026-09-05, design
-    # section G4): a 71-character sha256 the model cannot act on sat in the
-    # prompt's highest-recency slot on every call of every slide. The binding it
-    # existed to prove is still carried — and still checked — by
-    # ``capability_metadata`` on every consumer below.
-    clause = prompt_capability_clause()
-    assert CAPABILITY_REGISTRY_DIGEST not in clause
-    assert "author the visual source only" in clause
-    assert capability_metadata(consumer="chromium")["registryDigest"] == CAPABILITY_REGISTRY_DIGEST
-
-    class Brand:
-        primary = None
-        fonts = None
-        language = None
-
-    prompt = build_design_system(
-        Brand(),
-        None,
-        default_style_brief="{primary} {font_stack}",
-        design_system_rules="{style_brief}",
-        illustration_slot_rules="",
-        normalize_reference_mode=lambda value: value or "style",
-        exact_reconstruction="exact",
-        style_reference="style",
-        page_number_system="",
-        type_scale="",
-    )
-    # The design system still ends with the capability clause; only the digest
-    # inside it is gone.
-    assert CAPABILITY_REGISTRY_DIGEST not in prompt
-    assert clause in prompt
 
 
 def test_registry_metadata_and_validator_feature_drift_fail_closed() -> None:

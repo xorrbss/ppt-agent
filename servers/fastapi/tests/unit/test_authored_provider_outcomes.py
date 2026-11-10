@@ -20,8 +20,6 @@ from models.sql.workspace import (
     WorkspaceOperationEvent,
     WorkspaceOutbox,
 )
-from services.generation_core.authoring import author_slide as author_slide_mod
-from services.generation_core.authoring.author_slide import Brand
 from services.authored_batch_policy import is_authored_provider_overload
 from services.authored_provider_attempt_ledger import (
     ProviderAttemptReservation,
@@ -665,77 +663,6 @@ _AUTHOR_CALL_VALID_HTML = (
 )
 
 
-def _patch_author_call_environment(monkeypatch, *, streaming: bool, client) -> None:
-    """Install a fake provider client and pin the streaming switch for one call."""
-
-    async def no_rate_limit() -> None:
-        return None
-
-    monkeypatch.setattr(author_slide_mod, "get_client", lambda **_kwargs: client)
-    monkeypatch.setattr(author_slide_mod, "get_llm_config", lambda: {})
-    monkeypatch.setattr(author_slide_mod, "get_model", lambda: "fake-model")
-    monkeypatch.setattr(author_slide_mod, "get_generate_kwargs", lambda **kwargs: kwargs)
-    monkeypatch.setattr("services.generation_core.authoring.author_call_runtime.is_codex_selected", lambda: False)
-    monkeypatch.setattr(author_slide_mod, "enforce_llm_egress_policy", lambda: None)
-    monkeypatch.setattr(author_slide_mod, "_wait_for_author_rate_slot", no_rate_limit)
-    monkeypatch.setattr(
-        author_slide_mod, "is_authored_author_streaming_enabled", lambda: streaming
-    )
-
-
-def test_streaming_author_call_leaves_the_reservation_intact(monkeypatch):
-    """R2: building the non-stream wrapper unconditionally spent the reservation
-    on a call ``stream_author_call`` then ran instead. The wrapper must only be
-    built on the path that actually uses it, so a pending reservation survives
-    the streaming call untouched."""
-
-    class _RefusingClient:
-        def generate(self, **_kwargs):
-            raise AssertionError("the non-streaming client must not be called")
-
-    async def fake_stream_author_call(_client, _kwargs, **_extra):
-        return SimpleNamespace(content=_AUTHOR_CALL_VALID_HTML)
-
-    _patch_author_call_environment(monkeypatch, streaming=True, client=_RefusingClient())
-    monkeypatch.setattr(author_slide_mod, "stream_author_call", fake_stream_author_call)
-
-    async def scenario():
-        _seed_reservation()
-        html = await author_slide_mod.author_slide_html(
-            "content", "DESIGN", Brand(topic="주제"), "COVER", 0, 1,
-        )
-        return html, current_provider_attempt_reservations()
-
-    html, remaining = asyncio.run(scenario())
-
-    assert "제목" in html
-    assert len(remaining) == 1
-
-
-def test_non_streaming_author_call_consumes_the_reservation_exactly_once(monkeypatch):
-    calls: list[dict] = []
-
-    class _FakeClient:
-        def generate(self, **kwargs):
-            calls.append(kwargs)
-            return SimpleNamespace(content=_AUTHOR_CALL_VALID_HTML)
-
-    _patch_author_call_environment(monkeypatch, streaming=False, client=_FakeClient())
-
-    async def scenario():
-        _seed_reservation()
-        html = await author_slide_mod.author_slide_html(
-            "content", "DESIGN", Brand(topic="주제"), "COVER", 0, 1,
-        )
-        return html, current_provider_attempt_reservations()
-
-    html, remaining = asyncio.run(scenario())
-
-    assert "제목" in html
-    assert len(calls) == 1
-    assert remaining == ()
-
-
 class _ReservationAccountingCall:
     """A bounded call that records whether the caller ever invoked it.
 
@@ -753,122 +680,6 @@ class _ReservationAccountingCall:
 
     def __getattr__(self, name):
         return getattr(self._call, name)
-
-
-def _record_reservation_accounting(monkeypatch) -> list[dict]:
-    """Record, for every bounded call ``author_slide`` builds, how many
-    reservations its construction spent and how many times it was invoked."""
-
-    records: list[dict] = []
-    real_provider_generate_call = author_slide_mod.provider_generate_call
-
-    def recording(*args, **kwargs):
-        before = len(current_provider_attempt_reservations())
-        call = real_provider_generate_call(*args, **kwargs)
-        record = {
-            "outcome_scope": kwargs.get("outcome_scope"),
-            "consumed": before - len(current_provider_attempt_reservations()),
-            "invoked": 0,
-        }
-        records.append(record)
-        return _ReservationAccountingCall(call, record)
-
-    monkeypatch.setattr(author_slide_mod, "provider_generate_call", recording)
-    return records
-
-
-@pytest.mark.parametrize("streaming", [False, True])
-def test_a_reservation_author_slide_spends_is_spent_by_a_call_that_runs(
-    monkeypatch, streaming
-):
-    """The invariant, stated once for every branch ``author_slide_html`` has.
-
-    A reservation authorizes exactly one physical replay of the call that
-    spends it, so spending one for a wrapper the function then drops is an
-    accounting leak: the ledger believes a replayable physical call was made
-    and nothing can replay it.  Construction therefore spends nothing at all,
-    and the number of reservations gone from the ledger is exactly the number
-    of authored wrappers that were invoked.  This asserts the property rather
-    than the branch -- ``streaming`` is only the control that exercises both
-    legs -- so a future early return between construction and invocation stays
-    harmless even though it is a branch this test does not know about.
-    """
-
-    class _FakeClient:
-        def generate(self, **_kwargs):
-            return SimpleNamespace(content=_AUTHOR_CALL_VALID_HTML)
-
-    async def fake_stream_author_call(_client, _kwargs, **_extra):
-        return SimpleNamespace(content=_AUTHOR_CALL_VALID_HTML)
-
-    _patch_author_call_environment(
-        monkeypatch, streaming=streaming, client=_FakeClient()
-    )
-    monkeypatch.setattr(
-        author_slide_mod, "stream_author_call", fake_stream_author_call
-    )
-    records = _record_reservation_accounting(monkeypatch)
-
-    async def scenario():
-        _seed_reservation()
-        html = await author_slide_mod.author_slide_html(
-            "content", "DESIGN", Brand(topic="주제"), "COVER", 0, 1,
-        )
-        return html, current_provider_attempt_reservations()
-
-    html, remaining = asyncio.run(scenario())
-
-    assert "제목" in html
-    # The invariant: building a wrapper spends nothing at all...
-    assert [record for record in records if record["consumed"]] == []
-    # ...and exactly the wrappers that ran spent the seeded reservation.
-    spent = 1 - len(remaining)
-    invoked = [
-        record
-        for record in records
-        if record["outcome_scope"] == "authored" and record["invoked"]
-    ]
-    assert spent == len(invoked)
-    # Control: the two legs must differ, or the parametrization proves nothing.
-    if streaming:
-        assert spent == 0 and len(remaining) == 1
-    else:
-        assert spent == 1 and remaining == ()
-
-
-def test_a_wrapper_author_slide_builds_and_drops_spends_nothing(monkeypatch):
-    """Sensitivity control for the assertion above: it must not be vacuous.
-
-    Constructing an authored wrapper and never invoking it is exactly the R2
-    defect shape (an authored bounded call built on one branch and discarded on
-    another), and it is what a cancelled executor hand-off leaves behind.
-    Reproduced through the construction seam itself, so the proof needs no edit
-    to the code under test: under the previous construction-time consumption
-    this left the ledger empty.
-    """
-
-    class _UncalledClient:
-        def generate(self, **_kwargs):  # pragma: no cover -- never invoked
-            raise AssertionError("the dropped wrapper must not reach the client")
-
-    records = _record_reservation_accounting(monkeypatch)
-
-    async def scenario():
-        _seed_reservation()
-        author_slide_mod.provider_generate_call(
-            _UncalledClient(),
-            provider_id="openai",
-            kwargs={},
-            idempotency_key=None,
-            outcome_scope="authored",
-        )
-        return current_provider_attempt_reservations()
-
-    remaining = asyncio.run(scenario())
-
-    assert len(remaining) == 1
-    assert [record for record in records if record["invoked"]] == []
-    assert [record for record in records if record["consumed"]] == []
 
 
 def test_codex_transport_records_that_no_replay_was_available():

@@ -180,6 +180,7 @@ _GROUPS = (
     # 2026-11-10) can only be listed and deleted; every other operation on it,
     # including one queued before the removal, is refused with this code.
     (422, False, "This presentation uses a format that is no longer supported. It can only be deleted.", (
+        "authored_page_remake_unsupported_presentation",
         "unsupported_presentation_driver",
     )),
 )

@@ -280,45 +280,6 @@ def test_the_ceiling_on_states_the_per_verbosity_cap_and_the_trade(
     )
 
 
-@pytest.mark.parametrize(
-    ("verbosity", "expected_body_px"),
-    [("concise", 20), ("standard", 18), ("text-heavy", 16), (None, 18)],
-)
-def test_authored_type_scale_follows_deck_verbosity(
-    monkeypatch, verbosity, expected_body_px
-):
-    """A deck that carries less text per slide may set that text larger.
-
-    Verbosity reaches the authoring prompt only through Brand, so a deck that
-    kept the 12px floor spent the room it saved on empty bands instead of type.
-
-    Updated 2026-09-05 (design section G2): each verbosity now states a RAMP
-    rather than one "N px or larger" floor, so the assertion moved from the
-    floor sentence to the ramp's body tier. The ramp is the switchable half of
-    the prompt bundle, so this test states the knob it is measuring.
-    """
-    from services.generation_core.authoring.author_slide import Brand, build_design_system
-
-    monkeypatch.setenv("AUTHORED_PROMPT_BUNDLE_ENABLED", "true")
-    brand = Brand(topic="t", verbosity=verbosity or "standard")
-
-    assert f"body copy and bullets {expected_body_px}px" in build_design_system(brand)
-
-
-def test_concise_type_scale_leaves_the_page_number_specification_alone(monkeypatch):
-    """The page number is furniture, so it keeps its own 12px size."""
-    from services.generation_core.authoring.author_slide import Brand, build_design_system
-
-    monkeypatch.setenv("AUTHORED_PROMPT_BUNDLE_ENABLED", "true")
-    design_system = build_design_system(Brand(topic="t", verbosity="concise"))
-
-    assert "12px type (9pt equivalent)" in design_system
-    # One floor for every verbosity now (was 15/13/12): the ramp, not the
-    # floor, is what makes a concise deck set its text larger.
-    assert "below 12px (9pt equivalent)" in design_system
-    assert "below 15px" not in design_system
-
-
 def test_title_slide_presenter_and_date_only_when_user_provided():
     prompt = outline_module.get_system_prompt(None, True, False)
     assert "only when the user's content, instructions or source documents state it" in prompt

@@ -711,8 +711,6 @@ def test_export_subprocess_limit_kills_descendants_and_reports_recycle(
             )
         )
 
-    from services.public_export_operation import _resource_summary
-
     # The enforcing limit is the Job Object's immutable deadline. The
     # userspace handle/pid sampler that used to raise
     # `public_worker_resource_limit_exceeded` lived in the deleted
@@ -737,18 +735,8 @@ def test_export_subprocess_limit_kills_descendants_and_reports_recycle(
     assert metrics["peakProcessCount"] >= 2
     assert metrics["finalProcessCount"] == 0
     assert metrics["recycledWithinBaseline"] is True
-
-    # The durable projection the workspace runner persists keeps the names the
-    # operation timeline has always carried.
-    summary = _resource_summary([{**metrics, "role": job.role}])
-    assert summary["worker_peak_process_count"] >= 2
-    assert summary["worker_recycle_failure_count"] == 0
-    assert summary["resource_limits_enforced"] is True
-    assert summary["worker_enforcement_layer"] == "windows-job-object"
-    assert summary["worker_resource_samples"][0]["finalProcessCount"] == 0
-    # A Job Object meters processes, memory and CPU, never open handles, so on
-    # this backend the durable handle name exists and can only project zero.
-    assert summary["worker_peak_handle_count"] == 0
+    # The authored export's durable resource projection (_resource_summary)
+    # was removed with authored generation (P3 B4c).
 
 
 def test_artifact_ref_rejects_paths_and_session_fields() -> None:

@@ -46,12 +46,7 @@ def test_utc_aware_is_unchanged() -> None:
         "services.public_operation_deadline_scope",
         "services.workspace_api_contract",
         "services.workspace_service",
-        "services.authored_vnext.semantic.completion_v3",
-        "services.authored_vnext.semantic.readiness",
-        "services.authored_vnext.semantic.release_authority_v3",
-        "services.authored_vnext.semantic.release_evidence_v3",
         # editable_mvp_completion_codec's copy was dead code and is simply gone.
-        "services.authored_vnext.semantic.readiness_v3",
         "services.authored_vnext.generation.sql_repository",
     ],
 )

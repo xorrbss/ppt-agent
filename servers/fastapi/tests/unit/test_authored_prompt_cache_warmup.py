@@ -5,11 +5,6 @@ from dataclasses import dataclass
 
 from services.authored_provider_rate_profile import AuthoredRateProfile
 from utils.get_env_programme import is_authored_prompt_cache_warmup_enabled
-from services.generation_core.authoring.author_slide import Brand
-
-
-def _brand() -> Brand:
-    return Brand(topic="cache warmup", language="Korean", primary="#2563EB", fonts="Inter")
 
 
 _DESIGN = "DECK DESIGN SYSTEM: palette, type scale, spacing."

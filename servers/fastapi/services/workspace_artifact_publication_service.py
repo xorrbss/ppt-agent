@@ -46,9 +46,6 @@ from services.account_deletion_service import (
 from services.presentation_export_attempt_service import (
     terminalize_export_attempt_succeeded,
 )
-from services.presentation_export_direct_attempt_semantic import (
-    bind_completed_semantic_export_attempt,
-)
 from services.workspace_artifact_publication_paths import (
     WorkspaceArtifactPublicationError,
     _SHA256_PATTERN,
@@ -2047,17 +2044,6 @@ async def _terminalize_linked_export_attempt(
                     "workspace_export_semantic_binding_required"
                 )
             await session.refresh(attempt)
-            receipt_payloads = [
-                payload
-                for payload in (
-                    provenance.get("coverage_manifest"),
-                    provenance.get("quality_sidecar"),
-                    provenance.get("powerpoint_qa"),
-                )
-                if isinstance(payload, dict)
-            ]
-            if not receipt_payloads:
-                receipt_payloads = [atomic_binding]
             if capability_evidence.get("execution_profile") == "isolated_hybrid_v1":
                 # The isolated export worker measures persisted slide HTML; it
                 # never consumes an authored-vNext emission graph, and its
@@ -2084,21 +2070,12 @@ async def _terminalize_linked_export_attempt(
                         "workspace_export_semantic_binding_required"
                     )
                 return
-            binding_digest = await bind_completed_semantic_export_attempt(
-                session,
-                attempt=attempt,
-                mode="hybrid",
-                renderer_source_sha256=str(
-                    atomic_binding.get("renderer_source_sha256", "")
-                ),
-                pptx_sha256=str(atomic_binding.get("pptx_sha256", "")),
-                receipt_payloads=receipt_payloads,
-                owner_id=artifact.owner_id,
+            # Any other Hybrid attempt was bound to an authored-vNext emission
+            # graph; that binding went with authored generation (P3 B4c) and
+            # an unbound Hybrid attempt was always refused.
+            raise WorkspaceArtifactPublicationError(
+                "workspace_export_semantic_binding_required"
             )
-            if binding_digest is None:
-                raise WorkspaceArtifactPublicationError(
-                    "workspace_export_semantic_binding_required"
-                )
     except Exception as error:
         if isinstance(error, WorkspaceArtifactPublicationError):
             raise

@@ -21,7 +21,8 @@ from sqlalchemy.ext.asyncio import create_async_engine
 from sqlmodel import SQLModel, select
 from sqlmodel.ext.asyncio.session import AsyncSession
 from utils.authored_styles import AuthoredStyle
-from services.generation_core.authoring.author_slide import EXACT_RECONSTRUCTION, Brand
+from services.generation_core.style.brand import Brand
+from utils.llm_calls.author_slide_effort import EXACT_RECONSTRUCTION
 from utils.llm_calls.critique_slide import _image_mime_type
 
 

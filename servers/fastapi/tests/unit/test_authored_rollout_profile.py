@@ -18,13 +18,6 @@ import os
 from functools import wraps
 from pathlib import Path
 
-from services import authored_admission_session as sessions
-from services.authored_rollout_profile import (
-    RolloutProfile,
-    current_rollout_profile,
-    resolve_rollout_profile,
-)
-from utils.authored_html_normalize import normalize_authored_html
 
 
 def sync_async(function):
@@ -39,44 +32,6 @@ def sync_async(function):
 #: the assertion below reads the mode out of the output instead of trusting a
 #: field.  ``legacy`` returns it unchanged; ``tree`` closes the ``<main>``.
 UNCLOSED = "<main><p>pinned</p>"
-
-
-@sync_async
-async def test_a_knob_flipped_mid_attempt_cannot_re_represent_the_rest_of_the_deck(monkeypatch):
-    """Tree mode rewrites every slide's bytes, so a mid-flight flip is a mix.
-
-    The attempt resolves the switches once, at ``admission_scope``.  Flipping
-    the environment variable after that must not reach the normalizer, which is
-    the one consumer that turns the mode into persisted bytes.
-    """
-
-    monkeypatch.setenv("AUTHORED_HTML_NORMALIZATION", "tree")
-    observed: list[tuple[str, str]] = []
-
-    @sessions.admission_scope
-    async def author_two_slides() -> str:
-        for _ in range(2):
-            observed.append(
-                (
-                    current_rollout_profile().html_normalization,
-                    normalize_authored_html(UNCLOSED, profile="fragment").html,
-                )
-            )
-            # An operator flips the knob while the deck is half authored.
-            monkeypatch.setenv("AUTHORED_HTML_NORMALIZATION", "legacy")
-        return sessions.current_session().profile.policy_revision
-
-    revision = await author_two_slides()
-
-    first, second = observed
-    assert first == second, "the attempt changed representation under its own receipts"
-    assert first[0] == "tree" and first[1] == "<main><p>pinned</p></main>"
-    # The receipts of both slides name the representation that produced them.
-    assert revision == RolloutProfile(html_normalization="tree").policy_revision
-    assert revision != RolloutProfile(html_normalization="legacy").policy_revision
-    # The flip is not swallowed either: it is the *next* attempt's profile.
-    assert resolve_rollout_profile().html_normalization == "legacy"
-    assert normalize_authored_html(UNCLOSED, profile="fragment").html == UNCLOSED
 
 
 #: Pruned rather than filtered: walking a virtualenv on Windows costs more than

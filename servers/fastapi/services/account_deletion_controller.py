@@ -29,9 +29,6 @@ from services.authored_vnext.generation.account_lifecycle import (
     cancel_authored_vnext_generation_operations_for_account,
 )
 from services.authored_vnext.master.assets import quarantine_owner_master_assets
-from services.authored_vnext.ooxml.account_lifecycle import (
-    fence_authored_vnext_ooxml_packages_for_account,
-)
 from services.database import (
     async_session_maker,
     require_public_controller_database_authority,
@@ -80,12 +77,9 @@ async def _apply_external_account_deletion_io(
             owner_id=str(owner_id),
             expected_generation=generation,
         )
-        await asyncio.to_thread(
-            fence_authored_vnext_ooxml_packages_for_account,
-            Path(app_data_directory),
-            owner_id=str(owner_id),
-            expected_generation=generation,
-        )
+        # The OOXML package service, whose queued operations this used to
+        # cancel, was removed with authored generation (P3 B4c); its state
+        # files hold no deck content and nothing reads them any more.
     elif is_authored_vnext_ooxml_storage_required():
         raise RuntimeError("authored_vnext_ooxml_storage_unavailable")
 

@@ -11,12 +11,6 @@ import uuid
 import pytest
 from fastapi import HTTPException
 
-from models.public_v2_contracts import GenerationRouteReceiptV1
-from api.v2.orchestration import PublicV2OrchestrationError
-from services.authored_vnext.narrative_ir.content_graph import (
-    seal_content_integrity_receipt,
-)
-from models.authored_vnext.narrative_ir_contracts import model_payload
 from services.presentation_generation_job_service import (
     WorkspaceLinkedGenerationProjectionPoisoned,
 )
@@ -27,7 +21,6 @@ from services.public_generation_worker_lifecycle import (
     durable_generation_failure,
     require_public_generation_publication,
 )
-from services.public_v2_orchestrator import require_generation_content_integrity_for_export
 from services.public_v2_operation_lifecycle import is_public_operation_authority
 from services.workspace_operation_handler_registry import (
     NonRetryableWorkspaceOperationError,
@@ -303,93 +296,6 @@ def test_isolated_worker_executor_cannot_outlive_sealed_job_deadline():
         assert cancelled.is_set()
 
     asyncio.run(scenario())
-
-
-def test_export_gate_rejects_content_integrity_receipt_from_another_operation():
-    from models.authored_vnext.narrative_ir_contracts import ProviderCallBudgetV1
-    operation_id = uuid.uuid4()
-    route_unsigned = {
-        "schemaVersion": "generation-route-receipt/v1",
-        "requestedMode": "registered-template",
-        "selectedRoute": "source-native",
-        "designPackPin": {
-            "designPackId": "pack-1",
-            "version": 1,
-            "digest": "sha256:" + "1" * 64,
-        },
-        "narrativeIrDigest": None,
-        "fallbackReason": None,
-        "outputCapability": "fidelity",
-    }
-    route = GenerationRouteReceiptV1.model_validate(
-        {**route_unsigned, "receiptDigest": _digest(route_unsigned)}
-    )
-    unit_digest = "sha256:" + "a" * 64
-    budget = model_payload(ProviderCallBudgetV1(actual_logical_calls=0, actual_physical_calls=0))
-    binding_data = {
-        "operationId": str(operation_id),
-        "jobId": "",
-        "attemptId": "",
-        "fencingToken": None,
-    }
-    receipt = seal_content_integrity_receipt(
-        operation_id=operation_id,
-        attempt_binding_digest=_digest(binding_data),
-        preserve_source_input_digest=None,
-        provider_call_budget=budget,
-        source_revision=7,
-        result_revision=8,
-        generation_lane="new-authoring",
-        content_graph_digest="sha256:" + "b" * 64,
-        route_strategy_receipt_digest=route.receipt_digest,
-        narrative_digest="sha256:" + "c" * 64,
-        pages=[
-            {
-                "pageIndex": 0,
-                "expectedContentUnitIds": ["unit-1"],
-                "boundContentUnitIds": ["unit-1"],
-                "renderedContentUnitIds": ["unit-1"],
-                "expectedDigest": unit_digest,
-                "boundDigest": unit_digest,
-                "renderedDigest": unit_digest,
-                "sourceOwnershipDigest": "sha256:" + "d" * 64,
-                "expectedProtectedChromeDigest": "sha256:" + "e" * 64,
-                "observedProtectedChromeDigest": "sha256:" + "e" * 64,
-                "browserReadbackDigest": "sha256:" + "f" * 64,
-            }
-        ],
-    )
-    operation = SimpleNamespace(
-        id=operation_id,
-        request_payload={
-            "generation_route_receipt": route.model_dump(mode="json", by_alias=True),
-            "narrative_checkpoint": {
-                "operationId": str(operation_id),
-                "providerCallBudget": budget,
-                "narrative": {"contentGraphDigest": "sha256:" + "b" * 64, "narrativeDigest": "sha256:" + "c" * 64},
-            },
-        },
-        state="succeeded",
-        expected_revision=7,
-        result_revision=8,
-        result={"contentIntegrityReceipt": model_payload(receipt)},
-    )
-    require_generation_content_integrity_for_export(operation, source_revision=8)
-
-    operation.request_payload["narrative_checkpoint"]["narrative"] = {
-        "contentGraphDigest": "sha256:" + "e" * 64
-    }
-    with pytest.raises(PublicV2OrchestrationError) as graph_replay:
-        require_generation_content_integrity_for_export(operation, source_revision=8)
-    assert graph_replay.value.reason_code == "content_integrity_receipt_required"
-
-    operation.request_payload["narrative_checkpoint"]["narrative"] = {
-        "contentGraphDigest": "sha256:" + "b" * 64
-    }
-    operation.id = uuid.uuid4()
-    with pytest.raises(PublicV2OrchestrationError) as rejected:
-        require_generation_content_integrity_for_export(operation, source_revision=8)
-    assert rejected.value.reason_code == "content_integrity_receipt_required"
 
 
 def test_public_projection_rejects_split_operation_and_admission_states():

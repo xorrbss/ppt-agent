@@ -13,20 +13,8 @@ from __future__ import annotations
 import asyncio
 from types import SimpleNamespace
 
-import pytest
 
 from services.provider_usage_instrumentation import response_usage
-from services.generation_core.authoring.author_slide import Brand
-from services.generation_core.authoring.author_slide_fallback import (
-    reraise_author_call_error,
-    text_only_fallback_applies,
-)
-from services.generation_core.authoring.author_slide_stream import (
-    OUTPUT_TOKEN_LIMIT_REASON,
-    AuthoredStreamAborted,
-    raise_if_output_token_limited,
-    stream_author_call,
-)
 from utils.provider_terminal_outcome import (
     ProviderTerminalOutcome,
     ProviderTerminalUsage,
@@ -120,53 +108,6 @@ class _CodexStreamClient:
 _CodexStreamClient.__module__ = "llmai.chatgpt.client"
 
 
-def _stream(raw_events):
-    return _run(
-        stream_author_call(
-            _CodexStreamClient(raw_events), {"model": "test-model", "max_tokens": 16_000}
-        )
-    )
-
-
-def test_length_without_a_document_end_aborts_as_output_token_limit():
-    with pytest.raises(AuthoredStreamAborted) as raised:
-        _stream([_delta(_TRUNCATED[:30]), _delta(_TRUNCATED[30:]), _incomplete()])
-
-    assert raised.value.reason == OUTPUT_TOKEN_LIMIT_REASON
-    assert raised.value.retryable is True
-    assert raised.value.chars == len(_TRUNCATED)
-
-
-def test_length_with_the_document_end_present_is_kept():
-    response = _stream([_delta(_DOCUMENT), _incomplete()])
-
-    assert response.content == _DOCUMENT
-
-
-def test_stop_with_a_truncated_document_is_returned_unchanged():
-    """A model that stopped on its own mid-document is still admission's case."""
-
-    response = _stream([_delta(_TRUNCATED), _completed()])
-
-    assert response.content == _TRUNCATED
-    assert response.usage is _USAGE
-
-
-def test_usage_is_recovered_from_the_terminal_event_when_the_chunk_lost_it():
-    response = _stream([_delta(_DOCUMENT), _incomplete()])
-
-    assert response.usage is not None
-    assert response.usage.output_tokens == 16_000
-    # The receipt reads the same fields, so the token counts survive.
-    assert response_usage(response) == ("reported", 120, 16_000, None)
-
-
-def test_a_completion_that_keeps_its_own_usage_is_not_overwritten():
-    response = _stream([_delta(_DOCUMENT), _completed()])
-
-    assert response.usage is _USAGE
-
-
 # --- the non-streaming seam ---------------------------------------------------
 
 
@@ -174,28 +115,7 @@ def _outcome(finish_reason, usage=None):
     return ProviderTerminalOutcome(finish_reason, usage=usage)
 
 
-def test_the_non_streaming_check_uses_the_same_rule():
-    with pytest.raises(AuthoredStreamAborted) as raised:
-        raise_if_output_token_limited(_outcome("length"), _TRUNCATED)
-    assert raised.value.reason == OUTPUT_TOKEN_LIMIT_REASON
-
-    raise_if_output_token_limited(_outcome("length"), _DOCUMENT + "\n  ")
-    raise_if_output_token_limited(_outcome("stop"), _TRUNCATED)
-    raise_if_output_token_limited(None, _TRUNCATED)
-
-
 # --- how the abort travels through the attempt loop ---------------------------
-
-
-def test_the_abort_survives_the_author_call_boundary_untouched():
-    abort = AuthoredStreamAborted(OUTPUT_TOKEN_LIMIT_REASON, chars=60_000)
-
-    with pytest.raises(AuthoredStreamAborted) as raised:
-        reraise_author_call_error(abort)
-
-    assert raised.value is abort
-    # Dropping the images does not change the output budget.
-    assert text_only_fallback_applies(abort) is False
 
 
 # --- the batch lane hands it to the rescue ------------------------------------
@@ -216,40 +136,7 @@ def _guard_incomplete_error():
     )
 
 
-def test_the_guard_verdict_becomes_the_ceiling_abort_only_for_a_length_outcome():
-    from services.generation_core.authoring.author_slide_stream import (
-        output_token_limit_from_provider_outcome,
-    )
-
-    aborted = output_token_limit_from_provider_outcome(
-        _guard_incomplete_error(), _outcome("length")
-    )
-    assert isinstance(aborted, AuthoredStreamAborted)
-    assert aborted.reason == OUTPUT_TOKEN_LIMIT_REASON
-
-    # Any other incomplete reason keeps the guard's terminal verdict.
-    assert output_token_limit_from_provider_outcome(
-        _guard_incomplete_error(), _outcome("content_filter")
-    ) is None
-    assert output_token_limit_from_provider_outcome(
-        _guard_incomplete_error(), None
-    ) is None
-    # And an unrelated provider code is never rewritten.
-    assert output_token_limit_from_provider_outcome(
-        RuntimeError("public_provider_response_failed"), _outcome("length")
-    ) is None
-
-
 # --- the author-stage rescue flags it by name ---------------------------------
-
-
-def _plan():
-    return SimpleNamespace(
-        contents=("분기 실적 요약\n매출 120억 원\n영업이익 18억 원",),
-        roles=("CONTENT",),
-        brand=Brand(topic="주제", language="Korean", primary="#2563EB", fonts="Noto Sans KR"),
-        header_contract_at=lambda _index: None,
-    )
 
 
 def test_terminal_usage_stands_in_for_a_missing_usage_everywhere_it_is_read():

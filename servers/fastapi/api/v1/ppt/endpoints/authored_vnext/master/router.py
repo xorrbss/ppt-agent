@@ -29,8 +29,6 @@ from models.authored_vnext.master.ai_import import (
 from models.authored_vnext.master.operations import (
     CreateDeckRequest,
     CreateDraftRequest,
-    ApplyMasterToPresentationRequest,
-    ApplyMasterToPresentationResponse,
     CompanyStandardDefaultResponse,
     LegacyMasterApplyPin,
     MasterCatalogPage,
@@ -76,10 +74,6 @@ from services.authored_vnext.master.ai_import import (
     validate_reapply,
 )
 from services.authored_vnext.master.assets import OwnerMasterAssetStore
-from services.authored_vnext.generation.legacy_bridge import (
-    apply_master_to_legacy_presentation,
-)
-from services.authored_vnext.generation.legacy_pin import resolve_legacy_master_pin
 from services.authored_vnext.integration.sql_repository import (
     AuthoredVNextSqlRepository,
 )
@@ -685,47 +679,6 @@ def get_published_master(
         return service.get_published_revision(master_id)
     except MasterServiceError as error:
         raise _http_error(error) from error
-
-
-@AUTHORED_VNEXT_MASTER_ROUTER.post(
-    "/presentations/{presentation_id}/apply",
-    response_model=ApplyMasterToPresentationResponse,
-)
-async def apply_master_to_presentation(
-    request: ApplyMasterToPresentationRequest,
-    presentation_id: uuid.UUID,
-) -> ApplyMasterToPresentationResponse:
-    owner_id = get_current_owner_id()
-    if owner_id is None:
-        raise HTTPException(status_code=401, detail="authored_vnext_owner_required")
-    try:
-        resolved = await asyncio.to_thread(
-            resolve_legacy_master_pin,
-            owner_id=owner_id,
-            requested=request.master_pin,
-        )
-        applied = await apply_master_to_legacy_presentation(
-            presentation_id=presentation_id,
-            expected_presentation_revision=request.expected_presentation_revision,
-            expected_deck_revision=request.expected_deck_revision,
-            expected_deck_digest=request.expected_deck_digest,
-            requested_pin=request.master_pin,
-            idempotency_key=request.idempotency_key,
-            resolved=resolved,
-        )
-        return ApplyMasterToPresentationResponse(
-            presentation_id=str(presentation_id),
-            presentation_revision=applied.presentation_revision,
-            deck_id=applied.deck.deck_id,
-            deck_revision=applied.deck.revision,
-            deck_digest=applied.deck.digest,
-            master=request.master_pin,
-        )
-    except Exception as error:
-        code = getattr(error, "code", str(error))
-        if not isinstance(code, str) or not code.startswith("authored_vnext_"):
-            code = "authored_vnext_master_apply_conflict"
-        raise HTTPException(status_code=409, detail={"code": code}) from error
 
 
 @AUTHORED_VNEXT_MASTER_ROUTER.post(

@@ -56,15 +56,6 @@ def test_export_service_keeps_its_error_type() -> None:
         export_service._relative_luminance("not-a-colour")
 
 
-def test_native_scene_keeps_its_error_type() -> None:
-    from services.authored_vnext.ooxml import native_scene
-
-    assert native_scene._contrast_ratio("#000000", "#FFFFFF") == pytest.approx(21.0)
-    assert native_scene._relative_luminance("FFFFFF") == pytest.approx(1.0)
-    with pytest.raises(native_scene.NativeSceneError):
-        native_scene._relative_luminance("not-a-colour")
-
-
 def test_retained_reference_keeps_value_error() -> None:
     from services.authored_vnext.generation import retained_reference
 

@@ -272,25 +272,6 @@ def test_a_worker_code_change_yields_a_re_exportable_identity(tmp_path: Path) ->
     assert after.evidence.exporter_digest != before.evidence.exporter_digest
 
 
-@pytest.mark.parametrize("orientation", ["landscape", "portrait"])
-def test_render_and_export_producers_preserve_document_canvas(orientation: str) -> None:
-    import json
-    from services.document_canvas import document_canvas_for_orientation
-    from services.public_export_operation import (
-        build_public_render_bundle, build_validated_checkpoint_export_bundle,
-    )
-
-    canvas = document_canvas_for_orientation(orientation).model_dump(mode="json", by_alias=True)
-    identity = _identity("a" * 64)
-    source = identity.slides[0].artifact.model_copy(update={"kind": "slide-html", "media_type": "text/html"})
-    render = json.loads(build_public_render_bundle([source], canvas=canvas))
-    export = json.loads(build_validated_checkpoint_export_bundle(
-        identity, canvas=canvas, source_slides=[source],
-    ))
-    assert render["canvas"] == export["canvas"] == canvas
-    assert "widthPx" not in render["canvas"]
-
-
 def test_unchanged_worker_code_keeps_the_reusable_identity(tmp_path: Path) -> None:
     _worker_tree(tmp_path)
     first = _identity(

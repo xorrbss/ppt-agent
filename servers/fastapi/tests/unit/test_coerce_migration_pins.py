@@ -13,16 +13,6 @@ import math
 from utils.coerce import as_mapping, finite_float
 
 
-def test_editable_scene_rejects_bool_and_non_finite() -> None:
-    # Old copy returned float(value) unguarded: NaN and True passed through.
-    from services.authored_vnext.semantic import editable_scene as module
-
-    assert module.finite_float is finite_float
-    assert not hasattr(module, "_number")
-    assert finite_float(math.nan, 18) == 18
-    assert finite_float(True, 400) == 400
-
-
 def test_delegating_wrappers_share_the_invariant() -> None:
     from utils import authored_dom_fit_magnitude, authored_dom_footer_zone, authored_dom_text_escape
     from utils import authored_empty_media
@@ -55,7 +45,6 @@ def test_none_default_modules_import_the_helper() -> None:
 def test_raising_wrappers_keep_their_error_types() -> None:
     import pytest
 
-    from services.authored_vnext.ooxml import native_scene
     from services.chat import slide_ui_geometry
 
     with pytest.raises(TypeError):
@@ -63,11 +52,6 @@ def test_raising_wrappers_keep_their_error_types() -> None:
     with pytest.raises(ValueError):
         slide_ui_geometry._number(math.inf, name="x")
     assert slide_ui_geometry._number(3, name="x") == 3.0
-    with pytest.raises(native_scene.NativeSceneError):
-        native_scene._number(True, "code")
-    with pytest.raises(native_scene.NativeSceneError):
-        native_scene._number(math.nan, "code")
-    assert native_scene._number(2, "code") == 2.0
 
 
 def test_plain_mapping_copies_use_as_mapping() -> None:

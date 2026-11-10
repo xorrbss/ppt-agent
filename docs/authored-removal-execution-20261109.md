@@ -457,6 +457,76 @@ The full pytest suite and `npm run test:next-ci` run before each PR merges.
   (`remeasure_source`) previewed and published (revision 1 to 2), identical to
   `origin/main` (an `author` remake fails `svg_contract_canvas_mismatch` on
   both, a fake-LLM limitation).
+  **B4c done 2026-11-11.** Deleted 94 source files: the vNext `ooxml` and
+  `narrative_ir` packages; `deck_ir` except `strategy`, `grammar`,
+  `style_profiles`, `canonical` and `contracts`; `semantic` except
+  `canonical` and `typography`; `authored_vnext/generation` pipeline,
+  `legacy_bridge`, `core_bridge`, montage, scene envelope/checkpoint,
+  mutations, quality wire, gate0e probes, outline and title fit;
+  `authored_admission*` (policy kept), the authored checkpoint service, state
+  and stage batch; `author_slide*` (the svg author, effort, options, rules
+  and reference-image modules stay); `source_content/placeholder`;
+  `authored_canonical`, `authored_semantic_candidate`,
+  `presentation_export_direct_attempt_semantic`; the orphans this left
+  (`models/authored_visual_plan`, `authored_checkpoint_render_artifacts`,
+  `authored_evidence_ledger`, `authored_header_body_extent`,
+  `authored_terminal_slide_policy`, `author_call_spans`,
+  `utils/authored_header_prompt`, `utils/authored_html_normalize`, six
+  author-only `llm_calls`); and `scripts/authored_admission_fixture_replay.py`.
+  `public_export_operation` lost the authored render/export path
+  (`render_and_export_authored_htmls`, the canonical execution, the hybrid
+  semantic helpers, `_resource_summary`), 1,693 to 252 lines. Edited, no svg
+  behaviour change: the svg generation strategy receipt keeps its digests
+  (the kept `deck_ir` modules feed `capability_preflight`) but no engine
+  capability is offered any more, so with the non-default
+  `DECK_IR_GENERATION_ENABLED` on, `availableCapabilities` is now empty; a
+  staged deck-ir operation fails `authored_strategy_removed`; a source-native
+  export without a content-integrity receipt fails
+  `content_integrity_receipt_required` (no producer is left); the page and
+  batch remake handlers no longer republish an authored semantic bundle; the
+  export handler is svg-only (anything else fails
+  `unsupported_presentation_driver`); the non-isolated Hybrid publication
+  branch fails `workspace_export_semantic_binding_required`; the OOXML worker
+  transport refuses scene payloads; the master router lost the authored-only
+  `POST /presentations/{presentation_id}/apply` (`api-wire.json`
+  regenerated). Kept for B5: the vNext export half (`integration` export
+  service, artifact store, payload, admission policy, HTTP worker,
+  `lib/ooxml-vnext`, `/api/internal/ooxml-vnext`) that the unmounted export
+  router still imports; the frontend `masterClient.applyToPresentation` call
+  in `OutlinePage` (reached only for a deck with `theme.authored_vnext` deck
+  CAS, which only authored decks carry and which no longer open) with its
+  endpoint and TS types, and the Python `ApplyMasterToPresentation*` models;
+  `scripts/public-service-crash-recovery.py` (its function-local
+  `authored_checkpoint_service` import now dangles; unusable since P1) and
+  `scripts/authored_admission_shadow_report.py`; the orphan models
+  `models/authored_vnext/semantic/{editable_mvp_completion,lifecycle,native_capabilities,release_evidence_v3,release_profile_v3}`
+  and `utils/env_settings/authored_release`. Kept because svg-reachable code
+  imports them: `authored_admission_policy`, `authored_composition_policy`,
+  `authored_quality_receipt_v2`/`v3_pipeline`, the orchestrator release
+  review and the `authored_vnext/generation` modules that
+  `svg_generation_admission`, the pipeline and account deletion import
+  (`legacy_pin`, `scene_compiler`, `account_lifecycle` and their helpers).
+  Not addressed here (left for B5):
+  `workspace_service._verified_authored_local_fit_checkpoint_recovery` and the
+  trusted wire raster schema.
+  For P4, SQL models without any service: `authored_capability_receipt`,
+  `authored_release_evidence_v3`, `slidespec_publication_attempt`; registered
+  in `database.py`/owner scope only: `authored_editable_hybrid_mvp_completion`,
+  `authored_canonical_revision`; `authored_semantic_bundle` is read only by
+  `authored_vnext/generation/sql_repository` (via `legacy_pin`). Tests: 40
+  test/support files deleted, 73 edited (only the tests reaching deleted code
+  dropped; tests of kept code retargeted to the shared modules, e.g. the
+  checkpoint sweeper, the svg checkpoint progress test and the infographic and
+  style tests; the two trusted-worker tests drop only their
+  `_resource_summary` assertions). Closure top 378/37 (from 393/46), all
+  907/138 (from 1,024/217); structural layering passes (25 entries,
+  `utils/authored_html_normalize.py` dropped); reviewed keys added to the
+  whole-page and partial-recovery ledgers (`vision_advisory` reads the byte
+  caps from `reference_images`, which defined them); the svg subset list is
+  424 files. Checks: `ruff`, `import server`, `check` with no new unresolved
+  names, targeted pytest 1,895 passed, 2 failures that also fail on `origin/main` (`test_hangul_allow_list_only_shrinks`, and `test_every_literal_workspace_error_code_is_registered`, whose unregistered `authored_page_remake_unsupported_presentation` literal came with B4b); the fake-LLM harness generated 5-page svg
+  decks with PPTX and PDF exports and published a `remeasure_source` page
+  remake (revision 1 to 2); master router tests pass.
 - **B5 contracts, scripts, tests, env.** `contracts/authored_vnext` except master
   parts; delete authored-only tests and edit svg tests; remove `SLIDESPEC_*` and
   authored-only `AUTHORED_*` knobs (settings registry included, never §4.3

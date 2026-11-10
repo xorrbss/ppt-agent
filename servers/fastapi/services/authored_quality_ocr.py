@@ -19,7 +19,7 @@ from utils.authored_ocr_quality import (
     expected_text_from_browser_metrics,
     inspect_tesseract,
 )
-from services.generation_core.authoring.author_slide import EXACT_RECONSTRUCTION
+from utils.llm_calls.author_slide_effort import EXACT_RECONSTRUCTION
 from utils.ocr_language import presentation_language_to_ocr_code
 from utils.hashing import sha256_hex
 

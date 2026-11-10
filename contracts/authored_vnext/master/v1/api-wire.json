@@ -154,14 +154,6 @@
     },
     {
       "method": "POST",
-      "operation": "apply_master_to_presentation",
-      "path": "/authored-vnext/master/presentations/{presentation_id}/apply",
-      "requestModel": "ApplyMasterToPresentationRequest",
-      "responseModel": "ApplyMasterToPresentationResponse",
-      "successStatus": 200
-    },
-    {
-      "method": "POST",
       "operation": "preview",
       "path": "/authored-vnext/master/preview",
       "requestModel": "PreviewRequest",

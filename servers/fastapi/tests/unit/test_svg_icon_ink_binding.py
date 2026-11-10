@@ -11,8 +11,8 @@ import pytest
 from services.generation_core.assets import offer as offer_mod
 from services.generation_core.assets.icon_pack import families
 from services.generation_core.assets.vector_offer import deck_palette
-from services.generation_core.authoring.author_slide import Brand
-from services.generation_core.authoring.author_slide_design_system import apply_style_defaults
+from services.generation_core.assets.style_primary import resolve_style_primary
+from services.generation_core.style.brand import Brand
 from services.generation_core.drivers.svg.asset_slots import _ink
 from utils.authored_styles import resolve_authored_style
 
@@ -44,7 +44,9 @@ def test_style_list_is_not_empty():
 def test_icon_ink_is_the_authors_accent(style_id):
     style = resolve_authored_style(style_id)
     brand = _brand()
-    accent = apply_style_defaults(brand, style).primary
+    # The accent the author is told to use (the former HTML author's
+    # apply_style_defaults: the default style keeps the brand's own colour).
+    accent = brand.primary if style.id == "default" else resolve_style_primary(brand, style)
     assert offer_mod.icon_ink(brand, style) == accent
     assert deck_palette(brand, style)[0]["ACCENT"].lower() == accent.lower()
 

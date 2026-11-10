@@ -1080,7 +1080,7 @@ async def _default_pipeline_merges_publication_result(
         )
         from services import presentation_generation_pipeline as endpoint
         from services import presentation_generation_operation_handler as adapter
-        from services.authored_checkpoint_service import AuthoredStageError
+        from services.authored_checkpoint_errors import AuthoredStageError
         from services.authored_generation_timing_receipt import (
             load_generation_attempt_timing_receipts,
         )

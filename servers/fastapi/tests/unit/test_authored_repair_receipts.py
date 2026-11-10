@@ -17,12 +17,10 @@ from types import SimpleNamespace
 
 from services.provider_usage_instrumentation import (
     ProviderUsageScope,
-    active_usage_scope_slide_index,
     provider_call_admission,
     provider_usage_scope,
     record_provider_call,
 )
-from services.generation_core.authoring.author_slide import authored_provider_semantic_slot
 
 _AUTHOR_MODEL = "gpt-5.6-sol"
 
@@ -56,34 +54,6 @@ def _capture_receipts(monkeypatch) -> list:
     monkeypatch.delenv("PROVIDER_INPUT_MICROUNITS_PER_1K", raising=False)
     monkeypatch.delenv("PROVIDER_OUTPUT_MICROUNITS_PER_1K", raising=False)
     return receipts
-
-
-async def _author_boundary(index: int, *, input_tokens: int = 1200, output_tokens: int = 300):
-    """The call boundary ``author_slide_html`` runs for a full re-author.
-
-    Same slot shape and receipt fields as the real function: the slide goes
-    into the slot when the scope names no slide, and the receipt is filed as a
-    recovery call of the author model.
-    """
-
-    slot = authored_provider_semantic_slot(
-        receipt_retry_class="recovery",
-        receipt_attempt_ordinal=2,
-        slide_index=(None if active_usage_scope_slide_index() is not None else index),
-    )
-    async with provider_call_admission(
-        is_retry=True, semantic_slot=slot, provider="codex", model=_AUTHOR_MODEL
-    ):
-        pass
-    await record_provider_call(
-        provider="codex",
-        model=_AUTHOR_MODEL,
-        response=SimpleNamespace(
-            usage=SimpleNamespace(input_tokens=input_tokens, output_tokens=output_tokens)
-        ),
-        latency_ms=1500,
-        retry_class="recovery",
-    )
 
 
 async def _first_pass_call(job, index: int) -> None:

@@ -4,7 +4,8 @@ import pytest
 
 from services.authored_local_fit_policy import local_fit_applies
 from utils.get_env_programme import is_authored_local_fit_source_reflow_enabled
-from services.generation_core.authoring.author_slide import EXACT_RECONSTRUCTION, STYLE_REFERENCE
+from utils.llm_calls.author_slide_effort import EXACT_RECONSTRUCTION
+from utils.llm_calls.author_slide_options import STYLE_REFERENCE
 
 
 def test_a_style_reference_deck_fits() -> None:

@@ -22,13 +22,9 @@ from models.presentation_outline_model import (
 )
 from models.sql.presentation_generation_job import PresentationGenerationJob
 from models.sql.slide import SlideModel
-from services import authored_terminal_slide_policy as policy_mod
 from services.generation_core.quality.flag_classification import (
     REPAIR_NOT_ADMITTED,
     REVIEW_REQUIRED,
-)
-from services.authored_vnext.generation.scene_checkpoint import (
-    SceneRepairBudgetExhausted,
 )
 from services.authored_composition_policy import CompositionProfile
 from services.authored_generation_preflight import over_budget_violations
@@ -159,27 +155,6 @@ def _request():
     )
 
 
-def test_source_reflow_flag_policy_is_separate_strict_and_not_exact(monkeypatch):
-    monkeypatch.setenv("AUTHORED_PUBLISH_FLAGGED_SLIDES_SOURCE_REFLOW", "true")
-    verbatim = SimpleNamespace(strict_dom_gate=True, allow_summarization=False)
-
-    assert policy_mod.terminal_fallback_active(
-        profile=verbatim,
-        reference_mode="style_reference",
-        source_reflow=True,
-    )
-    assert not policy_mod.terminal_fallback_active(
-        profile=SimpleNamespace(strict_dom_gate=False, allow_summarization=False),
-        reference_mode="style_reference",
-        source_reflow=True,
-    )
-    assert not policy_mod.terminal_fallback_active(
-        profile=verbatim,
-        reference_mode="exact_reconstruction",
-        source_reflow=True,
-    )
-
-
 def test_flagged_slide_receipt_entries_are_validated_and_serialized():
     entries = [
         {
@@ -201,23 +176,6 @@ def test_flagged_slide_receipt_entries_are_validated_and_serialized():
     assert fields == {"flaggedSlides": entries}
     with pytest.raises(ValueError):
         flagged_slide_entries([{"index": 0}])
-
-
-def test_partition_residual_failures_keeps_unflagged_slides_blocking():
-    residual = [{"slide_index": 0, "issues": []}, {"slide_index": 2, "issues": []}]
-    flagged = [
-        {
-            "index": 2,
-            "reason": "composition_safety:overlap",
-            "remakeAttempted": True,
-            "remakeOutcome": "remake_gate_failed",
-        }
-    ]
-
-    blocking, accepted = policy_mod.partition_residual_failures(residual, flagged)
-
-    assert blocking == [{"slide_index": 0, "issues": []}]
-    assert accepted == [{"slide_index": 2, "issues": []}]
 
 
 # ---------------------------------------------------------------------------
@@ -310,158 +268,9 @@ def test_readback_failure_summary_splits_and_bounds_identifiers(caplog):
 # ---------------------------------------------------------------------------
 
 
-def _exhausted_claim(*exhausted_indices, repeated=True):
-    """A ``claim_scene_repair`` whose budget is spent for these slides.
-
-    This is the resumed-attempt shape: attempt 1 consumed slide N's single
-    durable repair, attempt 2 reuses every checkpoint and the claim refuses.
-    """
-
-    seen: list[int] = []
-
-    def claim(index):
-        seen.append(index)
-        if index in exhausted_indices:
-            raise SceneRepairBudgetExhausted(repeated=repeated)
-        return SimpleNamespace(slide_index=index)
-
-    return claim, seen
-
-
 _ORDINARY = SimpleNamespace(
     profile_id="ordinary", strict_dom_gate=True, allow_summarization=True
 )
-
-
-def test_exhausted_claim_on_resume_leaves_the_round_and_is_declared_terminal():
-    claim, seen = _exhausted_claim(1, repeated=True)
-
-    outcome = policy_mod.claim_bounded_repairs(
-        [0, 1, 2],
-        claim=claim,
-        budget_exhausted=SceneRepairBudgetExhausted,
-        profile=_ORDINARY,
-        reference_mode="style_reference",
-        source_reflow=False,
-    )
-
-    assert seen == [0, 1, 2]
-    assert outcome.blocked is None
-    # Slide 1 never enters the deterministic/provider round, so nothing may
-    # rewrite it and its original html/png/metrics triple stays untouched.
-    assert outcome.flagged == [0, 2]
-    assert sorted(outcome.claims) == [0, 2]
-    assert outcome.predeclared == [
-        {
-            "index": 1,
-            "reason": policy_mod.REPAIR_BUDGET_EXHAUSTED_REASON,
-            "repeated": True,
-        }
-    ]
-
-
-def test_exhausted_claim_blocks_the_deck_when_it_may_not_publish_flagged(
-    monkeypatch,
-):
-    monkeypatch.setenv("AUTHORED_PUBLISH_FLAGGED_SLIDES", "false")
-    claim, _seen = _exhausted_claim(1, repeated=True)
-
-    outcome = policy_mod.claim_bounded_repairs(
-        [0, 1, 2],
-        claim=claim,
-        budget_exhausted=SceneRepairBudgetExhausted,
-        profile=_ORDINARY,
-        reference_mode="style_reference",
-        source_reflow=False,
-    )
-
-    # The caller raises today's authored_composition_safety_gate_failed on this.
-    assert outcome.blocked is not None
-    blocked_index, blocked_error = outcome.blocked
-    assert blocked_index == 1
-    assert blocked_error.repeated is True
-    assert outcome.predeclared == []
-
-
-def test_a_deck_with_no_exhausted_claim_is_unchanged():
-    claim, seen = _exhausted_claim()
-
-    outcome = policy_mod.claim_bounded_repairs(
-        [3],
-        claim=claim,
-        budget_exhausted=SceneRepairBudgetExhausted,
-        profile=_ORDINARY,
-        reference_mode="style_reference",
-        source_reflow=False,
-    )
-
-    assert seen == [3]
-    assert outcome.flagged == [3]
-    assert outcome.predeclared == []
-    assert outcome.blocked is None
-
-
-def test_declaration_refuses_a_deck_that_may_not_publish_flagged(monkeypatch):
-    error = SimpleNamespace(repeated=True)
-    ordinary = SimpleNamespace(
-        profile_id="ordinary", strict_dom_gate=True, allow_summarization=True
-    )
-    verbatim = SimpleNamespace(
-        profile_id="source-verbatim", strict_dom_gate=True, allow_summarization=False
-    )
-
-    assert policy_mod.declare_exhausted_repair_budget(
-        3, error, profile=ordinary, reference_mode="style_reference", source_reflow=False
-    ) == {
-        "index": 3,
-        "reason": policy_mod.REPAIR_BUDGET_EXHAUSTED_REASON,
-        "repeated": True,
-    }
-    # Source reflow may publish flagged by default; switched off, it may not.
-    assert policy_mod.declare_exhausted_repair_budget(
-        3, error, profile=verbatim, reference_mode="style_reference", source_reflow=True
-    ) is not None
-    monkeypatch.setenv("AUTHORED_PUBLISH_FLAGGED_SLIDES_SOURCE_REFLOW", "false")
-    assert (
-        policy_mod.declare_exhausted_repair_budget(
-            3,
-            error,
-            profile=verbatim,
-            reference_mode="style_reference",
-            source_reflow=True,
-        )
-        is None
-    )
-    assert (
-        policy_mod.declare_exhausted_repair_budget(
-            3,
-            error,
-            profile=ordinary,
-            reference_mode="exact_reconstruction",
-            source_reflow=False,
-        )
-        is None
-    )
-
-
-def test_receipt_accepts_a_flag_with_and_without_the_repeated_bit():
-    with_bit = {
-        "index": 2,
-        "reason": policy_mod.REPAIR_BUDGET_EXHAUSTED_REASON,
-        "remakeAttempted": True,
-        "remakeOutcome": "remake_gate_failed",
-        "repeated": True,
-    }
-    without_bit = {
-        "index": 3,
-        "reason": "composition_safety:overlap",
-        "remakeAttempted": True,
-        "remakeOutcome": "remake_gate_failed",
-    }
-
-    assert flagged_slide_entries([with_bit, without_bit]) == (with_bit, without_bit)
-    with pytest.raises(ValueError):
-        flagged_slide_entries([{**with_bit, "repeated": "yes"}])
 
 
 # ---------------------------------------------------------------------------
@@ -488,37 +297,6 @@ def test_over_budget_violations_separate_a_budget_from_a_layout_defect():
     # An unmeasured slide names no element, so it stays fail-closed.
     assert over_budget_violations(("browser_metrics_unavailable",)) == (
         "browser_metrics_unavailable",
-    )
-
-
-def test_gate_repair_rejection_needs_the_fallback_and_a_layout_defect_only():
-    assert policy_mod.gate_repair_rejection_is_terminal_slide(
-        enabled=True,
-        candidate_violations=_ELEMENT_NAMED_VIOLATIONS,
-        original_violations=_ELEMENT_NAMED_VIOLATIONS,
-    )
-    assert not policy_mod.gate_repair_rejection_is_terminal_slide(
-        enabled=False,
-        candidate_violations=_ELEMENT_NAMED_VIOLATIONS,
-        original_violations=(),
-    )
-    # A measurement on either side of the admission ends the deck.
-    assert not policy_mod.gate_repair_rejection_is_terminal_slide(
-        enabled=True,
-        candidate_violations=_ELEMENT_NAMED_VIOLATIONS,
-        original_violations=_MEASURED_VIOLATION,
-    )
-
-
-def test_only_a_flagged_slide_absorbs_its_element_named_capacity_violations():
-    assert policy_mod.flagged_slide_absorbs_capacity(
-        1, _ELEMENT_NAMED_VIOLATIONS, flagged=[1]
-    )
-    assert not policy_mod.flagged_slide_absorbs_capacity(
-        0, _ELEMENT_NAMED_VIOLATIONS, flagged=[1]
-    )
-    assert not policy_mod.flagged_slide_absorbs_capacity(
-        1, _MEASURED_VIOLATION, flagged=[1]
     )
 
 

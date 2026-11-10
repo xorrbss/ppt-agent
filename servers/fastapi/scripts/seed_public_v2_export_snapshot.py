@@ -23,7 +23,7 @@ from models.sql.presentation import PresentationModel
 from models.sql.slide import SlideModel
 from models.sql.user import User
 from services.database import async_session_maker
-from services.workspace_quality_export_operation_handlers import (
+from services.workspace_export_quality_evidence import (
     _validated_authored_quality_receipt_digest,
 )
 

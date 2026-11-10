@@ -34,7 +34,6 @@ from services.authored_composition_policy import (
     resolve_composition_profile,
 )
 from utils.get_env_programme import get_authored_composition_envelope_profile
-from services.generation_core.authoring.author_slide import STYLE_REFERENCE
 
 _PROFILE_KNOB = "AUTHORED_COMPOSITION_ENVELOPE_PROFILE"
 _KNOBS = (
@@ -54,10 +53,6 @@ _DENSE_HTML = "<section>" + "".join(
 def _clean_knobs(monkeypatch):
     for key in _KNOBS:
         monkeypatch.delenv(key, raising=False)
-
-
-def _style() -> SimpleNamespace:
-    return SimpleNamespace(reference_mode=STYLE_REFERENCE)
 
 
 def _reflow_request() -> SimpleNamespace:

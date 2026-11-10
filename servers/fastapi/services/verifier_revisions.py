@@ -551,6 +551,11 @@ WHOLE_PAGE_VERIFIER_LEDGER = VerifierRevisionLedger(
         # instead of the authored DOM quality, fragmentation gate, image-rule, prompt
         # profile and design-system modules. No behaviour or output changed.
         "6e8c378ac183b5f1c3edca1f4c70ddf6495b29c8ef59bb79ef9e69c6c3e5fbee": "svg-whole-page-verifier/1",
+        # 2026-11-11 B4c: authored removal P3 B4c deleted the authored slide author
+        # modules; the vision advisory reads the reference image byte caps from
+        # generation_core.authoring.reference_images, which defined them all along
+        # (author_slide_images only re-exported them). No behaviour or output changed.
+        "9287348cabaeb53ac4922ed29a4f7c7b8b603ac95c87d73ecfed8a373d637f37": "svg-whole-page-verifier/1",
     }),
 )
 
@@ -850,6 +855,11 @@ PARTIAL_RECOVERY_CODE_LEDGER = VerifierRevisionLedger(
         # from the strategy module. The svg dispatch is unchanged; no behaviour or
         # output changed.
         "03a2a45f842e4a67b85560f4332841f93a29e628856cfc50d5d3ea6daed6e131": "svg-partial-recovery-code/1",
+        # 2026-11-11 B4c: authored removal P3 B4c deleted the authored slide author
+        # modules; the vision advisory reads the reference image byte caps from
+        # generation_core.authoring.reference_images, which defined them all along
+        # (author_slide_images only re-exported them). No behaviour or output changed.
+        "1544ef57806af41b62768145c40e3327a4c03276a5b706590a985632bf88a806": "svg-partial-recovery-code/1",
     }),
 )
 

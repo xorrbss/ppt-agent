@@ -733,20 +733,10 @@ def sanitize_workspace_event_payload(
             and normalized == "contentIntegrityReceipt"
             and isinstance(value, Mapping)
         ):
-            try:
-                from services.authored_vnext.narrative_ir.content_graph import (
-                    validate_content_integrity_receipt,
-                )
-                from models.authored_vnext.narrative_ir_contracts import (
-                    model_payload,
-                )
-
-                safe[normalized] = model_payload(
-                    validate_content_integrity_receipt(value)
-                )
-            except Exception:
-                # An invalid integrity receipt is never durable success state.
-                continue
+            # Only the removed source-native route produced this receipt, and
+            # its validator went with authored generation (P3 B4c); a receipt
+            # that cannot be validated is never durable success state.
+            continue
         elif (
             operation_kind == "presentation.generate"
             and normalized == "generationQualityReceipt"
@@ -2535,146 +2525,13 @@ async def finalize_workspace_operation_success(
             else None
         )
         if selected_route == "source-native":
-            try:
-                from services.authored_vnext.narrative_ir.content_graph import (
-                    validate_content_integrity_receipt_binding,
-                )
-                async with session_factory() as authority_session:
-                    authority_operation = await authority_session.get(
-                        WorkspaceOperation, claim.operation_id
-                    )
-                    if (
-                        authority_operation is None
-                        or authority_operation.state != "running"
-                        or authority_operation.fencing_token != claim.fencing_token
-                        or authority_operation.expected_revision
-                        != claim.expected_revision
-                    ):
-                        raise ValueError("content_integrity_binding_authority_stale")
-                    authority_payload = (
-                        authority_operation.request_payload
-                        if isinstance(authority_operation.request_payload, Mapping)
-                        else {}
-                    )
-                authority_route = authority_payload.get("generation_route_receipt")
-                preserve_checkpoint = authority_payload.get(
-                    "preserve_source_checkpoint"
-                )
-                checkpoint = preserve_checkpoint or authority_payload.get(
-                    "narrative_checkpoint"
-                )
-                narrative = (
-                    checkpoint.get("narrative")
-                    if isinstance(checkpoint, Mapping)
-                    else None
-                )
-                checkpoint_operation_id = (
-                    checkpoint.get("operationId") or checkpoint.get("operation_id")
-                    if isinstance(checkpoint, Mapping)
-                    else None
-                )
-                if isinstance(preserve_checkpoint, Mapping):
-                    preserve_input = preserve_checkpoint.get("preserveSourceInput")
-                    preserve_graph = (
-                        preserve_input.get("contentGraph")
-                        if isinstance(preserve_input, Mapping)
-                        else None
-                    )
-                    content_graph_digest = (
-                        preserve_graph.get("contentGraphDigest")
-                        if isinstance(preserve_graph, Mapping)
-                        else None
-                    )
-                    generation_lane = "preserve-source"
-                    attempt_binding_digest = preserve_checkpoint.get(
-                        "attemptBindingDigest"
-                    )
-                    preserve_source_input_digest = (
-                        preserve_input.get("inputDigest")
-                        if isinstance(preserve_input, Mapping)
-                        else None
-                    )
-                    narrative_digest = None
-                else:
-                    content_graph_digest = (
-                        narrative.get("contentGraphDigest")
-                        or narrative.get("content_graph_digest")
-                        if isinstance(narrative, Mapping)
-                        else None
-                    )
-                    generation_lane = "new-authoring"
-                    from services.authored_vnext.narrative_ir.validation import (
-                        canonical_digest,
-                    )
-
-                    attempt_binding_digest = canonical_digest(
-                        {
-                            "operationId": str(checkpoint_operation_id),
-                            "jobId": str(checkpoint.get("jobId") or ""),
-                            "attemptId": str(checkpoint.get("attemptId") or ""),
-                            "fencingToken": checkpoint.get("fencingToken"),
-                        }
-                    )
-                    narrative_digest = (
-                        narrative.get("narrativeDigest")
-                        if isinstance(narrative, Mapping)
-                        else None
-                    )
-                    preserve_source_input_digest = None
-                provider_call_budget = (
-                    checkpoint.get("providerCallBudget")
-                    if isinstance(checkpoint, Mapping)
-                    else None
-                )
-                if not isinstance(provider_call_budget, Mapping):
-                    raise ValueError("content_integrity_provider_budget_missing")
-                from services.authored_vnext.narrative_ir.validation import (
-                    canonical_digest,
-                )
-
-                provider_call_budget_digest = canonical_digest(
-                    dict(provider_call_budget)
-                )
-                route_receipt_digest = (
-                    authority_route.get("receiptDigest")
-                    or authority_route.get("receipt_digest")
-                    if isinstance(authority_route, Mapping)
-                    else None
-                )
-                authority_selected_route = (
-                    authority_route.get("selectedRoute")
-                    or authority_route.get("selected_route")
-                    if isinstance(authority_route, Mapping)
-                    else None
-                )
-                if (
-                    claim.expected_revision is None
-                    or result.result_revision is None
-                    or authority_selected_route != "source-native"
-                    or str(checkpoint_operation_id) != str(claim.operation_id)
-                    or not isinstance(content_graph_digest, str)
-                    or not content_graph_digest
-                    or not isinstance(route_receipt_digest, str)
-                    or not route_receipt_digest
-                ):
-                    raise ValueError("content_integrity_binding_authority_missing")
-                validate_content_integrity_receipt_binding(
-                    result_payload.get("contentIntegrityReceipt"),
-                    operation_id=claim.operation_id,
-                    source_revision=int(claim.expected_revision),
-                    result_revision=int(result.result_revision),
-                    generation_lane=generation_lane,
-                    content_graph_digest=content_graph_digest,
-                    route_strategy_receipt_digest=route_receipt_digest,
-                    attempt_binding_digest=str(attempt_binding_digest),
-                    narrative_digest=narrative_digest,
-                    preserve_source_input_digest=preserve_source_input_digest,
-                    provider_call_budget_digest=provider_call_budget_digest,
-                )
-            except Exception as error:
-                raise NonRetryableWorkspaceOperationError(
-                    "content_integrity_receipt_invalid"
-                ) from error
+            # The source-native route was removed on 2026-11-03 (its handler
+            # refuses it before any work) and the narrative IR package that
+            # validated its content-integrity seal went with authored
+            # generation (P3 B4c): such a result is never durable success.
+            raise NonRetryableWorkspaceOperationError(
+                "content_integrity_receipt_invalid"
+            )
     safe_result = sanitize_workspace_event_payload(
         result_payload,
         operation_kind=claim.kind,
