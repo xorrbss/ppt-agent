@@ -161,6 +161,7 @@ tests/unit/test_document_canvas.py
 tests/unit/test_document_canvas_contain.py
 tests/unit/test_document_canvas_header_clients.py
 tests/unit/test_document_canvas_svg_export.py
+tests/unit/test_drop_authored_only_tables_migration.py
 tests/unit/test_env_settings_authored_release.py
 tests/unit/test_env_settings_authored_runtime.py
 tests/unit/test_env_settings_authored_vnext.py

@@ -24,12 +24,6 @@ from models.sql.authored_slide_checkpoint import (  # noqa: F401, E402
 from models.sql.authored_slide_editor_event import (  # noqa: F401, E402
     AuthoredSlideEditorEvent,
 )
-from models.sql.authored_exact_provenance import (  # noqa: F401, E402
-    AuthoredExactProvenance,
-)
-from models.sql.authored_canonical_revision import (  # noqa: F401, E402
-    AuthoredCanonicalRevision,
-)
 from models.sql.chat_history_message import ChatHistoryMessageModel  # noqa: F401, E402
 from models.sql.image_asset import ImageAsset  # noqa: F401, E402
 from models.sql.key_value import KeyValueSqlModel  # noqa: F401, E402
@@ -45,12 +39,6 @@ from models.sql.presentation_layout_code import (  # noqa: F401, E402
     PresentationLayoutCodeModel,
 )
 from models.sql.slide import SlideModel  # noqa: F401, E402
-from models.sql.slidespec_artifact_bundle import (  # noqa: F401, E402
-    SlideSpecArtifactBundle,
-)
-from models.sql.slidespec_publication_attempt import (  # noqa: F401, E402
-    SlideSpecPublicationAttempt,
-)
 from models.sql.template import TemplateModel  # noqa: F401, E402
 from models.sql.template_create_info import TemplateCreateInfoModel  # noqa: F401, E402
 from models.sql.webhook_subscription import WebhookSubscription  # noqa: F401, E402
@@ -98,23 +86,6 @@ from models.sql.authored_vnext_generation_operation import (  # noqa: F401, E402
 from models.sql.authored_semantic_bundle import (  # noqa: F401, E402
     AuthoredDeckEmissionActivePointer,
     AuthoredDeckEmissionManifestRecord,
-    AuthoredEmissionBundleRecord,
-    AuthoredSemanticArtifact,
-    AuthoredSemanticExportBinding,
-)
-from models.sql.authored_capability_receipt import (  # noqa: F401, E402
-    AuthoredCapabilityReceiptRecordV2,
-)
-from models.sql.authored_release_evidence_v3 import (  # noqa: F401, E402
-    AuthoredComQualificationJobV3,
-    AuthoredReleaseArtifactV3,
-    AuthoredReleaseNonceV3,
-    AuthoredEvidenceGraphRootV3,
-    AuthoredEvidenceBundleCompletionV3,
-    AuthoredGate0StructuralTraceV3,
-)
-from models.sql.authored_editable_hybrid_mvp_completion import (  # noqa: F401, E402
-    AuthoredEditableHybridMvpCompletion,
 )
 from models.sql.provider_runtime_reservation import (  # noqa: F401, E402
     ProviderRuntimeBudget,

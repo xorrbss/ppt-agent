@@ -16,11 +16,6 @@ from models.sql.async_presentation_generation_status import (
 )
 from models.sql.authored_slide_checkpoint import AuthoredSlideCheckpoint
 from models.sql.authored_slide_editor_event import AuthoredSlideEditorEvent
-from models.sql.authored_exact_provenance import AuthoredExactProvenance
-from models.sql.authored_canonical_revision import AuthoredCanonicalRevision
-from models.sql.authored_editable_hybrid_mvp_completion import (
-    AuthoredEditableHybridMvpCompletion,
-)
 from models.sql.chat_history_message import ChatHistoryMessageModel
 from models.sql.image_asset import ImageAsset
 from models.sql.key_value import KeyValueSqlModel
@@ -32,7 +27,6 @@ from models.sql.presentation_version import PresentationVersionModel
 from models.sql.template import TemplateModel
 from models.sql.template_create_info import TemplateCreateInfoModel
 from models.sql.slide import SlideModel
-from models.sql.slidespec_artifact_bundle import SlideSpecArtifactBundle
 from models.sql.webhook_subscription import WebhookSubscription
 from models.sql.workspace import (
     WorkspaceActionReceipt,
@@ -352,14 +346,11 @@ async def create_db_and_tables():
                         PresentationExportAttempt.__table__,
                         WorkspaceArtifact.__table__,
                         WorkspaceCleanupJournal.__table__,
-                        AuthoredExactProvenance.__table__,
-                        AuthoredCanonicalRevision.__table__,
                         PresentationGenerationJob.__table__,
                         AuthoredSlideCheckpoint.__table__,
                         AuthoredSlideEditorEvent.__table__,
                         PresentationVersionModel.__table__,
                         SlideModel.__table__,
-                        SlideSpecArtifactBundle.__table__,
                         KeyValueSqlModel.__table__,
                         ChatHistoryMessageModel.__table__,
                         ImageAsset.__table__,
@@ -399,10 +390,6 @@ async def create_db_and_tables():
                         PublicArtifactPublication.__table__,
                         PublicSlideCheckpoint.__table__,
                         PublicExportIdentity.__table__,
-                        # The editable-hybrid completion ledger is not part of the
-                        # authored-vnext repository tuple, so it has to be named on
-                        # its own or the probes that read it find no table.
-                        AuthoredEditableHybridMvpCompletion.__table__,
                         *AUTHORED_VNEXT_SQL_TABLES,
                     ],
                 )

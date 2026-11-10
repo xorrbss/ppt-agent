@@ -527,6 +527,46 @@ The full pytest suite and `npm run test:next-ci` run before each PR merges.
   names, targeted pytest 1,895 passed, 2 failures that also fail on `origin/main` (`test_hangul_allow_list_only_shrinks`, and `test_every_literal_workspace_error_code_is_registered`, whose unregistered `authored_page_remake_unsupported_presentation` literal came with B4b); the fake-LLM harness generated 5-page svg
   decks with PPTX and PDF exports and published a `remeasure_source` page
   remake (revision 1 to 2); master router tests pass.
+  **P4 done 2026-11-11.** Alembic revision `d1a5c7e9b3f2` (down revision
+  `c5e8a1d3b7f9`, new `HEAD_REVISION`) drops 19 tables: `authored_canonical_revisions`,
+  `authored_capability_receipts_v2`, `authored_editable_hybrid_mvp_completions_v1`,
+  `authored_exact_provenance`, the ten `authored_*_v3` release/evidence/gate0 tables
+  (`authored_release_artifacts`, `authored_release_nonces`, `authored_ci_evidence_identities`,
+  `authored_com_qualification_jobs`, `authored_evidence_graph_roots`,
+  `authored_evidence_bundle_completions`, `authored_gate0_structural_{traces,subjects,events,completions}`),
+  `authored_semantic_artifacts`, `authored_emission_bundles`,
+  `authored_semantic_export_bindings`, `slidespec_artifact_bundles` and
+  `slidespec_publication_attempts`. Their seven SQL model modules were deleted (and
+  three classes of `authored_semantic_bundle`), with the registrations in `services/database.py`
+  (create_all list), `services/database_owner_scope.py`, `alembic/env.py` and the
+  `AuthoredExactProvenance` delete in `PresentationDeletionService`. `downgrade()` recreates
+  every table from the original shape (column order, defaults, checks, uniques, indexes; on
+  PostgreSQL the controller grants and the owner RLS policy of `b5a0d3e7c9f1`).
+  Kept, because kept code still reads or writes them: `authored_slide_checkpoints`;
+  `authored_slide_editor_events` (the mounted `POST /presentation/{id}/editor-events` endpoint,
+  with its service and weekly-report script, still writes it, and
+  `test_authored_driver_removal` pins its 422 on an unsupported deck: dropping it means
+  removing that endpoint, a separate decision); `authored_deck_emission_manifests` and
+  `authored_deck_emission_active` (read by `authored_vnext/generation/sql_repository`
+  through `legacy_pin`, which svg admission imports; the pointer references the manifests);
+  every `authored_vnext_*` table (master-pin storage; the vNext export half, account deletion's
+  `cancel_authored_vnext_exports_for_account` and the generation-operation fence still use
+  them, so they leave with B5). `slides.html_content` and its check constraints are
+  unchanged. `migrations.py` schema inference (for databases without an Alembic version
+  row) no longer needs `authored_exact_provenance` or the SlideSpec tables to recognize
+  a head schema: the workspace schema and the later markers are the evidence
+  (`_authored_exact_provenance_revision`, `_post_slidespec_schema_revision`). Verification:
+  SQLite, fresh file DB at `c5e8a1d3b7f9` with rows in 12 of the dropped tables plus an
+  authored and an svg presentation: upgrade drops exactly the 19 tables and leaves the other 72
+  tables and the presentations untouched, `PresentationDeletionService.tombstone` deletes both
+  presentations, downgrade restores a snapshot identical to the pre-upgrade `sqlalchemy.inspect`
+  output, a second upgrade matches the first. PostgreSQL 15 (throwaway cluster initdb'ed in the
+  scratch directory on port 21950, removed afterwards; the live stack was not touched): the same
+  cycle with rows in 8 dropped tables, `inspect` snapshots identical, and `pg_class` RLS flags,
+  `pg_policies`, ACLs and grants identical after the downgrade. New test
+  `test_drop_authored_only_tables_migration`; `test_owner_rls_migration` lists
+  `authored_canonical_revisions` as removed after its migration. Closure top 374/33, all 903/134;
+  svg subset 425 files.
 - **B5 contracts, scripts, tests, env.** `contracts/authored_vnext` except master
   parts; delete authored-only tests and edit svg tests; remove `SLIDESPEC_*` and
   authored-only `AUTHORED_*` knobs (settings registry included, never §4.3

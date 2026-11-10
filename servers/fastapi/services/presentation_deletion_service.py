@@ -8,7 +8,6 @@ from sqlalchemy import delete, or_, select
 from sqlalchemy.exc import IntegrityError, OperationalError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from models.sql.authored_exact_provenance import AuthoredExactProvenance
 from models.sql.chat_history_message import ChatHistoryMessageModel
 from models.sql.presentation import PresentationModel
 from models.sql.presentation import PRESENTATION_LIFECYCLE_DELETED
@@ -156,11 +155,6 @@ class PresentationDeletionService:
         await self._sql_session.execute(
             delete(PresentationVersionModel).where(
                 PresentationVersionModel.presentation_id == presentation_id
-            )
-        )
-        await self._sql_session.execute(
-            delete(AuthoredExactProvenance).where(
-                AuthoredExactProvenance.presentation_id == presentation_id
             )
         )
         await self._sql_session.execute(

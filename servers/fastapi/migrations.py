@@ -732,7 +732,17 @@ def _slidespec_schema_revision(
     has_artifacts = artifact_table in tables
     has_publications = publication_table in tables
     if not has_artifacts and not has_publications:
-        return previous_revision
+        # d1a5c7e9b3f2 dropped both tables, so a database built after it never
+        # has them.  Later markers are then the evidence that the SlideSpec
+        # revisions passed; without any, the schema is simply at the fence.
+        later_revision = _post_slidespec_schema_revision(
+            inspector,
+            tables,
+            REVISION_SLIDESPEC_PUBLICATION_ATTEMPTS,
+        )
+        if later_revision == REVISION_SLIDESPEC_PUBLICATION_ATTEMPTS:
+            return previous_revision
+        return later_revision
     if has_publications and not has_artifacts:
         raise RuntimeError("SlideSpec publication attempts exist without artifact bundles")
     if previous_revision != REVISION_ACCOUNT_DELETION_FENCE:
@@ -774,11 +784,25 @@ def _slidespec_schema_revision(
         publication_index.get("column_names") or ()
     ) != ("slide_id", "created_at") or bool(publication_index.get("unique")):
         raise RuntimeError("SlideSpec publication attempt index is incompatible")
-    provider_revision = provider_settings_sync_schema_revision(
+    return _post_slidespec_schema_revision(
         inspector,
         tables,
         REVISION_SLIDESPEC_PUBLICATION_ATTEMPTS,
-        prerequisite_revision=REVISION_SLIDESPEC_PUBLICATION_ATTEMPTS,
+    )
+
+
+def _post_slidespec_schema_revision(
+    inspector,
+    tables: set[str],
+    previous_revision: str,
+) -> str:
+    """Infer the revisions after the SlideSpec persistence ones."""
+
+    provider_revision = provider_settings_sync_schema_revision(
+        inspector,
+        tables,
+        previous_revision,
+        prerequisite_revision=previous_revision,
         applied_revision=REVISION_PROVIDER_SETTINGS_SYNC,
     )
     if provider_revision != REVISION_PROVIDER_SETTINGS_SYNC:
@@ -1262,10 +1286,8 @@ def _durable_generation_and_authored_schema_revision(
             raise RuntimeError("Authored slide checkpoint schema exists without chat-scope prerequisites")
         return REVISION_PRIMARY_ADMIN
     if has_authored_resume_count:
-        authored_revision = (
-            REVISION_AUTHORED_EXACT_PROVENANCE
-            if "authored_exact_provenance" in tables
-            else REVISION_AUTHORED_RESUME_COUNT
+        authored_revision = _authored_exact_provenance_revision(
+            inspector, tables, presentation_columns, job_columns
         )
         if authored_revision == REVISION_AUTHORED_EXACT_PROVENANCE:
             if _workspace_schema_applied(
@@ -1284,6 +1306,26 @@ def _durable_generation_and_authored_schema_revision(
         if has_authored_checkpoints
         else REVISION_CHAT_TEMPLATE_SCOPE_REPAIR
     )
+
+
+def _authored_exact_provenance_revision(
+    inspector,
+    tables: set[str],
+    presentation_columns: set[str],
+    job_columns: set[str],
+) -> str:
+    """Return the authored revision a schema with resume counts has reached.
+
+    ``authored_exact_provenance`` was dropped by d1a5c7e9b3f2, so a schema built
+    after the authored removal never has it.  The workspace schema that the next
+    revision creates is then the evidence that the provenance revision passed.
+    """
+
+    if "authored_exact_provenance" in tables or _workspace_schema_applied(
+        inspector, tables, presentation_columns, job_columns
+    ):
+        return REVISION_AUTHORED_EXACT_PROVENANCE
+    return REVISION_AUTHORED_RESUME_COUNT
 
 
 async def migrate_database_on_startup() -> None:
@@ -1651,10 +1693,8 @@ def _infer_revision_from_schema(
         if _authored_resume_count_applied(
             job_columns, has_authored_checkpoints
         ):
-            authored_revision = (
-                REVISION_AUTHORED_EXACT_PROVENANCE
-                if "authored_exact_provenance" in tables
-                else REVISION_AUTHORED_RESUME_COUNT
+            authored_revision = _authored_exact_provenance_revision(
+                inspector, tables, presentation_columns, job_columns
             )
             if authored_revision == REVISION_AUTHORED_EXACT_PROVENANCE:
                 if _workspace_schema_applied(
