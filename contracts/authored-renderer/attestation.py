@@ -20,21 +20,10 @@ _STATIC_IMAGE_SOURCES = (
     "contracts/authored-renderer/source_manifest.py",
     "contracts/authored-renderer/stage_sources.py",
 )
-_NEXT_RENDERER_SOURCES = (
-    "servers/nextjs/lib/authored-hybrid/browser-source.ts",
-    "servers/nextjs/lib/authored-hybrid/chrome-process.ts",
-    "servers/nextjs/lib/authored-hybrid/chrome-runner.ts",
-    "servers/nextjs/lib/authored-hybrid/chrome-runtime-discovery.ts",
-    "servers/nextjs/lib/authored-hybrid/renderer-isolation.ts",
-    "servers/nextjs/lib/authored-hybrid/security-data.ts",
-    "servers/nextjs/lib/authored-hybrid/security.ts",
-)
-
-
 def image_sources(root: Path = REPOSITORY_ROOT) -> tuple[str, ...]:
     fastapi_root = root / "servers" / "fastapi"
     modules = tuple(f"servers/fastapi/{name}" for name in source_files(fastapi_root))
-    return (*_STATIC_IMAGE_SOURCES, *modules, *_NEXT_RENDERER_SOURCES)
+    return (*_STATIC_IMAGE_SOURCES, *modules)
 
 
 IMAGE_SOURCES = image_sources()

@@ -88,7 +88,6 @@ without a shell:
 ```powershell
 $env:AUTHORED_RENDERER_MODE = "isolated"
 $env:AUTHORED_RENDERER_OS_ISOLATION = "nonroot-readonly-tmpfs-network-none"
-$env:AUTHORED_RENDERER_EXECUTION_BOUNDARY = "external-worker"
 $env:AUTHORED_RENDERER_KILL_SWITCH = "false"
 $env:AUTHORED_RENDERER_LEGACY_ENABLED = "false"
 $env:AUTHORED_RENDERER_WORKER_COMMAND_JSON = ConvertTo-Json -Compress @(

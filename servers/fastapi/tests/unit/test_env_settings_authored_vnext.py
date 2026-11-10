@@ -10,14 +10,8 @@ from utils.env_settings.authored_vnext import (
     get_authored_vnext_ooxml_worker_token,
     get_authored_vnext_ooxml_worker_url,
     get_authored_vnext_repository_mode,
-    is_authored_editable_mvp_kill_switch_active,
-    is_authored_semantic_bundle_writes_enabled,
-    is_authored_semantic_hybrid_kill_switch_active,
     is_authored_vnext_export_enabled,
-    is_authored_vnext_generation_enabled,
-    is_authored_vnext_internal_compatibility_enabled,
     is_authored_vnext_master_enabled,
-    is_authored_vnext_new_generation_enabled,
     is_authored_vnext_ooxml_package_enabled,
     is_deck_ir_dev_fixture_allowed,
     is_deck_ir_generation_enabled,
@@ -26,13 +20,7 @@ from utils.env_settings.authored_vnext import (
 
 OPT_IN_FLAGS = {
     "AUTHORED_VNEXT_EXPORT_ENABLED": is_authored_vnext_export_enabled,
-    "AUTHORED_VNEXT_GENERATION_ENABLED": is_authored_vnext_generation_enabled,
-    "AUTHORED_VNEXT_INTERNAL_COMPATIBILITY_ENABLED": is_authored_vnext_internal_compatibility_enabled,
-    "AUTHORED_VNEXT_NEW_GENERATION_ENABLED": is_authored_vnext_new_generation_enabled,
     "AUTHORED_VNEXT_OOXML_PACKAGE_ENABLED": is_authored_vnext_ooxml_package_enabled,
-    "AUTHORED_SEMANTIC_BUNDLE_WRITES_ENABLED": is_authored_semantic_bundle_writes_enabled,
-    "AUTHORED_SEMANTIC_HYBRID_KILL_SWITCH": is_authored_semantic_hybrid_kill_switch_active,
-    "AUTHORED_EDITABLE_MVP_KILL_SWITCH": is_authored_editable_mvp_kill_switch_active,
     "DECK_IR_ALLOW_DEV_FIXTURE": is_deck_ir_dev_fixture_allowed,
     "DECK_IR_GENERATION_ENABLED": is_deck_ir_generation_enabled,
 }

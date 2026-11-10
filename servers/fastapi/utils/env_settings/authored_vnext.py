@@ -29,16 +29,10 @@ if TYPE_CHECKING:
 
 ENV_NAMES: tuple[str, ...] = (
     "AUTHORED_VNEXT_EXPORT_ENABLED",
-    "AUTHORED_VNEXT_GENERATION_ENABLED",
-    "AUTHORED_VNEXT_INTERNAL_COMPATIBILITY_ENABLED",
-    "AUTHORED_VNEXT_NEW_GENERATION_ENABLED",
     "AUTHORED_VNEXT_OOXML_PACKAGE_ENABLED",
     "AUTHORED_VNEXT_MASTER_ENABLED",
     "AUTHORED_VNEXT_REPOSITORY_MODE",
     "AUTHORED_VNEXT_DEFAULT_COMPANY_STANDARD_ID",
-    "AUTHORED_SEMANTIC_BUNDLE_WRITES_ENABLED",
-    "AUTHORED_SEMANTIC_HYBRID_KILL_SWITCH",
-    "AUTHORED_EDITABLE_MVP_KILL_SWITCH",
     "AUTHORED_VNEXT_OOXML_WORKER_TOKEN",
     "NEXT_INTERNAL_URL",
     "DECK_IR_ALLOW_DEV_FIXTURE",
@@ -64,53 +58,11 @@ def is_authored_vnext_export_enabled(settings: RuntimeSettings | None = None) ->
     return _opt_in_env("AUTHORED_VNEXT_EXPORT_ENABLED", settings)
 
 
-def is_authored_vnext_generation_enabled(
-    settings: RuntimeSettings | None = None,
-) -> bool:
-    """Opt-in: exposes the lease-fenced vNext generation router."""
-    return _opt_in_env("AUTHORED_VNEXT_GENERATION_ENABLED", settings)
-
-
-def is_authored_vnext_internal_compatibility_enabled(
-    settings: RuntimeSettings | None = None,
-) -> bool:
-    """Opt-in: first half of the internal double gate for minting new vNext decks."""
-    return _opt_in_env("AUTHORED_VNEXT_INTERNAL_COMPATIBILITY_ENABLED", settings)
-
-
-def is_authored_vnext_new_generation_enabled(
-    settings: RuntimeSettings | None = None,
-) -> bool:
-    """Opt-in: second half of the internal double gate for minting new vNext decks."""
-    return _opt_in_env("AUTHORED_VNEXT_NEW_GENERATION_ENABLED", settings)
-
-
 def is_authored_vnext_ooxml_package_enabled(
     settings: RuntimeSettings | None = None,
 ) -> bool:
     """Opt-in: exposes the owner-scoped PPTX import/package router (unchanged contract)."""
     return _opt_in_env("AUTHORED_VNEXT_OOXML_PACKAGE_ENABLED", settings)
-
-
-def is_authored_semantic_bundle_writes_enabled(
-    settings: RuntimeSettings | None = None,
-) -> bool:
-    """Opt-in: allows semantic export-binding writes and requires a Hybrid manifest."""
-    return _opt_in_env("AUTHORED_SEMANTIC_BUNDLE_WRITES_ENABLED", settings)
-
-
-def is_authored_semantic_hybrid_kill_switch_active(
-    settings: RuntimeSettings | None = None,
-) -> bool:
-    """Opt-in kill switch: disables semantic Hybrid capability in the Workbench projection."""
-    return _opt_in_env("AUTHORED_SEMANTIC_HYBRID_KILL_SWITCH", settings)
-
-
-def is_authored_editable_mvp_kill_switch_active(
-    settings: RuntimeSettings | None = None,
-) -> bool:
-    """Opt-in kill switch: suppresses editable-Hybrid MVP completion matching."""
-    return _opt_in_env("AUTHORED_EDITABLE_MVP_KILL_SWITCH", settings)
 
 
 def is_deck_ir_dev_fixture_allowed(settings: RuntimeSettings | None = None) -> bool:

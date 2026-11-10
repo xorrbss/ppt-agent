@@ -2,9 +2,7 @@
 
 from __future__ import annotations
 
-import importlib.util
 import json
-from pathlib import Path
 
 import pytest
 from pydantic import ValidationError
@@ -318,16 +316,3 @@ def test_deck_snapshot_rejects_mixed_source_or_master_digests() -> None:
     stale["sourceDigest"] = D2
     with pytest.raises(ValidationError, match="different source digest"):
         DeckGenerationSnapshot.model_validate_json(json.dumps(stale))
-
-
-def test_generated_contracts_are_current_and_compact() -> None:
-    repository_root = Path(__file__).resolve().parents[4]
-    generator_path = repository_root / "contracts/authored_vnext/deck/generate.py"
-    spec = importlib.util.spec_from_file_location("authored_vnext_deck_generate", generator_path)
-    assert spec is not None and spec.loader is not None
-    generator = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(generator)
-    assert generator.generate(check=True, repository_root=repository_root) == 0
-    outputs = generator.render_outputs(repository_root)
-    assert len(outputs) == 13
-    assert all(content.count(b"\n") == 1 for content in outputs.values())

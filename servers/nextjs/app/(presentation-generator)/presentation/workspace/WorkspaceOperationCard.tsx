@@ -319,14 +319,6 @@ export function WorkspaceOperationCard({
           .slice(0, 5)
           .join(" · ")
       : "";
-  // The turn answered but the page is model-authored HTML the chat tools
-  // cannot rebuild, so the reply can only name the remake flow. The backend
-  // names the page too, which turns that description into an offer. Read only
-  // under a known operation schema: an unrecognised envelope's fields are not
-  // ours to interpret, and this one starts a write.
-  const remakeOfferSlideIndex = operationKnown
-    ? numberValue(result.page_remake_slide_index, result.pageRemakeSlideIndex)
-    : undefined;
   const inspectedRevision = numberValue(
     result.inspected_revision,
     result.inspectedRevision,
@@ -779,26 +771,6 @@ export function WorkspaceOperationCard({
               ))}
             </ul>
           )}
-        </section>
-      )}
-      {operation.status === "succeeded" && remakeOfferSlideIndex !== undefined && (
-        <section
-          className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-2 text-xs text-amber-950"
-          aria-label={tOperation("remakeOfferAria")}
-          data-testid="page-remake-offer"
-        >
-          <p>
-            {tOperation("remakeOfferDescription", { page: remakeOfferSlideIndex + 1 })}
-          </p>
-          <button
-            type="button"
-            onClick={() => onRemakePage?.(remakeOfferSlideIndex)}
-            disabled={!onRemakePage || disabled}
-            className="mt-2 rounded-md border border-amber-300 bg-white px-2.5 py-1.5 font-semibold text-amber-900 hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-600 focus-visible:ring-offset-1"
-            data-testid="page-remake-offer-start"
-          >
-            {tOperation("remakePage", { page: remakeOfferSlideIndex + 1 })}
-          </button>
         </section>
       )}
       {operation.status === "succeeded" && isVersionRestore && (

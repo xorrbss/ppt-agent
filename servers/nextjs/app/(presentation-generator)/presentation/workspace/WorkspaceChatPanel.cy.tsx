@@ -2036,8 +2036,8 @@ describe("WorkspaceChatPanel", () => {
     cy.get('[data-testid="quality-review-options"]')
       .should("be.visible")
       .and("contain.text", "검수 범위")
-      .and("contain.text", "자동으로 수정")
-      .and("not.contain.text", "결과만 확인");
+      .and("contain.text", "가독성과 디자인을 검토")
+      .and("not.contain.text", "자동으로 수정");
     cy.get('[data-testid="quality-review-scope-subset"]').click();
     cy.get("#quality-review-page-range").type("8-5");
     cy.get("#quality-review-page-range").should(
@@ -2062,12 +2062,7 @@ describe("WorkspaceChatPanel", () => {
       expect(commandBodies[0].context).to.deep.equal({
         scope: "subset",
         slide_indices: [2, 4, 5, 6, 7, 11],
-        mode: "analyze_and_fix",
-        ...(process.env.NEXT_PUBLIC_SLIDESPEC_REPAIR_CANARY_UI !== "false" &&
-        process.env.NEXT_PUBLIC_SLIDESPEC_REPAIR_ALL_SLIDES !== "false"
-          ? { slidespec_opt_in: true }
-          : {}),
-        current_slide: 2,
+        mode: "analyze_only",
       });
     });
     cy.get('[data-testid="quality-review-options"]').should("not.exist");
@@ -2084,84 +2079,5 @@ describe("WorkspaceChatPanel", () => {
       expect(commandBodies[1].context.scope).to.equal("subset");
       expect(commandBodies[1].context.slide_indices).to.deep.equal([1]);
     });
-  });
-
-  it("offers the remake flow on the page a chat turn was refused", () => {
-    const remade = cy.stub().as("remade");
-    mountWithIntl(
-      <WorkspaceOperationCard
-        operation={{
-          anchorType: "operation",
-          id: "operation-refused",
-          operationId: "operation-refused",
-          position: 1,
-          operationType: "slide.edit",
-          title: "슬라이드 수정",
-          status: "succeeded",
-          result: {
-            summary: "이 페이지는 페이지 다시 만들기로 재생성해 주세요.",
-            page_remake_slide_index: 4,
-          },
-          events: [],
-          allowedActions: [],
-        }}
-        onAction={() => undefined}
-        onRemakePage={remade}
-      />,
-    );
-
-    cy.get('[data-testid="page-remake-offer"]').should("be.visible");
-    // The page is addressed in the user's numbering, not the stored index.
-    cy.get('[data-testid="page-remake-offer-start"]')
-      .should("contain.text", "5페이지 다시 만들기")
-      .click();
-    cy.get("@remade").should("have.been.calledOnceWith", 4);
-  });
-
-  it("offers nothing when the turn edited the page it was asked to", () => {
-    mountWithIntl(
-      <WorkspaceOperationCard
-        operation={{
-          anchorType: "operation",
-          id: "operation-edited",
-          operationId: "operation-edited",
-          position: 1,
-          operationType: "slide.edit",
-          title: "슬라이드 수정",
-          status: "succeeded",
-          result: { summary: "제목을 다듬었습니다." },
-          events: [],
-          allowedActions: [],
-        }}
-        onAction={() => undefined}
-        onRemakePage={() => undefined}
-      />,
-    );
-
-    cy.contains("제목을 다듬었습니다.").should("be.visible");
-    cy.get('[data-testid="page-remake-offer"]').should("not.exist");
-  });
-
-  it("does not offer a remake from an unknown operation schema", () => {
-    mountWithIntl(
-      <WorkspaceOperationCard
-        operation={{
-          anchorType: "operation",
-          id: "operation-unknown",
-          operationId: "operation-unknown",
-          position: 1,
-          operationType: "slide.transmogrify",
-          title: "알 수 없는 작업",
-          status: "succeeded",
-          result: { page_remake_slide_index: 4 },
-          events: [],
-          allowedActions: [],
-        }}
-        onAction={() => undefined}
-        onRemakePage={() => undefined}
-      />,
-    );
-
-    cy.get('[data-testid="page-remake-offer"]').should("not.exist");
   });
 });

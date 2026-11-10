@@ -60,8 +60,13 @@ def _input_bundle_references(job: IsolatedWorkerJob, path: Path) -> tuple[Artifa
         "public-svg-export-bundle/v3",
         "public-svg-export-bundle/v4",
     }
-    expected_kind = "slide-svg" if svg_export else ("slide-html" if job.role == "render" else "slide-png")
-    expected_media_type = "image/svg+xml" if svg_export else ("text/html" if job.role == "render" else "image/png")
+    if job.role == "export" and not svg_export:
+        # The raster PNG and editable-hybrid export bundles left with the
+        # authored strategy; the export worker refuses any other schema with
+        # public_export_bundle_schema_unsupported, so nothing is staged for it.
+        return ()
+    expected_kind = "slide-svg" if svg_export else "slide-html"
+    expected_media_type = "image/svg+xml" if svg_export else "text/html"
     result = _staged_bundle_slides(job, value["slides"], kind=expected_kind, media_type=expected_media_type)
     if not 1 <= len(result) <= 100:
         raise TrustedWorkerWireError("trusted_worker_bundle_slide_count_invalid")
@@ -120,16 +125,6 @@ def _input_bundle_references(job: IsolatedWorkerJob, path: Path) -> tuple[Artifa
         if any(ref.created_by_operation_id != job.operation_id for ref in (*result, *asset_refs)):
             raise TrustedWorkerWireError("trusted_worker_svg_asset_operation_mismatch")
         result = (*result, *asset_refs)
-    # An editable-hybrid export additionally measures the authored HTML inside
-    # the isolated worker, so those sources must be staged with the rasters.
-    sources = value.get("sourceSlides")
-    if job.role == "export" and sources is not None:
-        if not isinstance(sources, list) or len(sources) != len(result):
-            raise TrustedWorkerWireError("trusted_worker_bundle_source_count_invalid")
-        result = (
-            *result,
-            *_staged_bundle_slides(job, sources, kind="slide-html", media_type="text/html"),
-        )
     return tuple(result)
 
 

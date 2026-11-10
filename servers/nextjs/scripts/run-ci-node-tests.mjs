@@ -40,14 +40,6 @@ const included = all.filter((file) => {
   return true;
 });
 
-// Chrome integration tests exercise the opt-in renderer. They must not turn
-// on the product feature for the default-off and fail-closed test group.
-const RENDERER_REQUIRED = /^lib\/authored-hybrid\/(?:security)\.test\.mjs$/;
-const rendererRequired = included.filter((file) => RENDERER_REQUIRED.test(file));
-const defaultOffParallel = included.filter(
-  (file) => !RENDERER_REQUIRED.test(file),
-);
-
 function run(files, extraArgs, env = process.env) {
   if (!files.length) return;
   const result = spawnSync(
@@ -69,8 +61,4 @@ console.log(
   `ci-node: running ${included.length} test files; ${skipped.length} excluded:`,
 );
 for (const line of skipped) console.log(`  excluded: ${line}`);
-run(defaultOffParallel, []);
-run(rendererRequired, [], {
-  ...process.env,
-  AUTHORED_VNEXT_RENDERER_ENABLED: "true",
-});
+run(included, []);

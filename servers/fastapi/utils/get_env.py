@@ -328,61 +328,6 @@ def _int_setting(key: str, default: int, settings: RuntimeSettings | None) -> in
     return env_int(key, default, settings=settings)
 
 
-def is_authored_html_normalize_enabled(
-    settings: RuntimeSettings | None = None,
-) -> bool:
-    """Whether harmless authored-HTML admission findings are normalised first.
-
-    On by default: the whitelist in ``utils/authored_html_normalize.py`` is
-    strictly a subset of what admission already treats as harmless, so the
-    flag exists to allow disabling the rewrite for isolation, not because the
-    default carries a real risk.
-    """
-    parsed = parse_bool_or_none(get_setting_env("AUTHORED_HTML_NORMALIZE_ENABLED", settings))
-    return True if parsed is None else parsed
-
-
-def is_authored_quality_loop_enabled(
-    settings: RuntimeSettings | None = None,
-) -> bool:
-    """Whether a figure slide is rendered as several CSS-only candidates.
-
-    Off by default. With the flag unset every slide is rendered exactly once,
-    from the HTML its author wrote, as it was before best-of-N existed.
-    """
-    return _is_truthy(get_setting_env("AUTHORED_QUALITY_LOOP_ENABLED", settings))
-
-
-def get_authored_quality_loop_candidates(
-    settings: RuntimeSettings | None = None,
-) -> int:
-    """Candidates rendered per figure slide, baseline included, clamped to 1-4."""
-    return max(1, min(4, _int_setting("AUTHORED_QUALITY_LOOP_CANDIDATES", 3, settings)))
-
-
-def is_authored_design_critique_enabled(
-    settings: RuntimeSettings | None = None,
-) -> bool:
-    """Whether the closed-operation design critic runs. Off by default."""
-    return _is_truthy(get_setting_env("AUTHORED_DESIGN_CRITIQUE_ENABLED", settings))
-
-
-def is_authored_retain_checkpoint_html_enabled(
-    settings: RuntimeSettings | None = None,
-) -> bool:
-    """Whether published decks keep their pre-repair slide HTML in checkpoints.
-
-    Off by default: publication nulls ``author_html``/``illustrated_html`` to
-    save storage. Bench runs turn it on so the offline fit replay
-    (``docs/authored-fit-magnitude-measurement-design-20260904.md`` section 6)
-    can measure how far slides missed before repair.
-    """
-    parsed = parse_bool_or_none(
-        get_setting_env("AUTHORED_RETAIN_CHECKPOINT_HTML", settings)
-    )
-    return False if parsed is None else parsed
-
-
 def is_authored_infographic_plan_enabled(
     settings: RuntimeSettings | None = None,
 ) -> bool:
@@ -408,22 +353,6 @@ def is_authored_composition_envelope_enabled(
     """
     return _is_truthy(
         get_setting_env("AUTHORED_COMPOSITION_ENVELOPE_ENABLED", settings)
-    )
-
-
-def is_authored_visual_story_plan_enabled(
-    settings: RuntimeSettings | None = None,
-) -> bool:
-    """Whether the deck-wide visual story plan is frozen and briefed to the author.
-
-    The plan (story kind + silhouette per slide, 2026-08-22) is off by default
-    (2026-09-05): its silhouettes (stepped path, diagonal balance) and
-    metric-dominance rule produced stair-stepped roadmaps, cascading cards and
-    pseudo-chart pill bars the user rejected; off, each slide composes as
-    before 2026-08-22.
-    """
-    return _is_truthy(
-        get_setting_env("AUTHORED_VISUAL_STORY_PLAN_ENABLED", settings)
     )
 
 

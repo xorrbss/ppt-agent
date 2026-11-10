@@ -2622,7 +2622,6 @@ def test_partial_svg_deadline_retry_enters_verified_append_only_fork(monkeypatch
         monkeypatch.setattr(service, "_lock_workspace_mutation_admission",
                             AsyncMock(return_value=(presentation, 0)))
         monkeypatch.setattr(service, "_verified_export_retry_v2_authority", AsyncMock(return_value=None))
-        monkeypatch.setattr(service, "_verified_authored_local_fit_checkpoint_recovery", AsyncMock(return_value=None))
         monkeypatch.setattr(service, "_is_explicit_authored_capacity_recovery", lambda *args: False)
         monkeypatch.setattr(service, "_is_retryable_raster_tenant_handoff", lambda *args: False)
         monkeypatch.setattr(service, "get_workspace_owner_scope", lambda: source.owner_scope)

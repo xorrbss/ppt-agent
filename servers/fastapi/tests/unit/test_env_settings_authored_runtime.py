@@ -30,27 +30,6 @@ def test_module_reads_no_env_at_import_and_stays_below_services():
 # --- test hooks -------------------------------------------------------------
 
 
-def test_test_failure_hooks_default_off():
-    hooks = ar.get_authored_test_failure_hooks()
-    assert hooks == ar.AuthoredTestFailureHooks(enabled=False, slide=0, stage="")
-
-
-@pytest.mark.parametrize("raw", ["1", "true", " TRUE ", "yes", "on"])
-def test_test_failure_hooks_opt_in(monkeypatch, raw):
-    monkeypatch.setenv("AUTHORED_TEST_FAILURES_ENABLED", raw)
-    monkeypatch.setenv("AUTHORED_TEST_FAILURE_SLIDE", " 3 ")
-    monkeypatch.setenv("AUTHORED_TEST_FAILURE_STAGE", " Author ")
-    hooks = ar.get_authored_test_failure_hooks()
-    assert (hooks.enabled, hooks.slide, hooks.stage) == (True, 3, "author")
-
-
-def test_test_failure_hooks_malformed_slide_is_none(monkeypatch):
-    monkeypatch.setenv("AUTHORED_TEST_FAILURE_SLIDE", "two")
-    assert ar.get_authored_test_failure_hooks().slide is None
-    monkeypatch.setenv("AUTHORED_TEST_FAILURE_SLIDE", "")
-    assert ar.get_authored_test_failure_hooks().slide == 0
-
-
 # --- storage / retention -----------------------------------------------------
 
 
@@ -66,21 +45,6 @@ def test_directories_blank_is_unset(monkeypatch):
     assert ar.get_fastembed_icon_cache_dir() == "/c"
 
 
-def test_evidence_retention_defaults_and_clamp(monkeypatch):
-    retention = ar.get_authored_evidence_retention_settings()
-    assert retention.ttl_seconds == 86400.0
-    assert retention.byte_budget == 512 * 1024 * 1024
-    monkeypatch.setenv("AUTHORED_EVIDENCE_RETENTION_TTL_SECONDS", "-5")
-    monkeypatch.setenv("AUTHORED_EVIDENCE_RETENTION_BYTE_BUDGET", "-1")
-    retention = ar.get_authored_evidence_retention_settings()
-    assert (retention.ttl_seconds, retention.byte_budget) == (0.0, 0)
-    monkeypatch.setenv("AUTHORED_EVIDENCE_RETENTION_TTL_SECONDS", "abc")
-    monkeypatch.setenv("AUTHORED_EVIDENCE_RETENTION_BYTE_BUDGET", "1.5")
-    retention = ar.get_authored_evidence_retention_settings()
-    assert retention.ttl_seconds == 86400.0
-    assert retention.byte_budget == 512 * 1024 * 1024
-
-
 def test_dom_metrics_budget_none_unset_raises_malformed(monkeypatch):
     assert ar.get_authored_dom_metrics_cache_byte_budget() is None
     monkeypatch.setenv("AUTHORED_DOM_METRICS_CACHE_BYTE_BUDGET", "1024")
@@ -92,15 +56,6 @@ def test_dom_metrics_budget_none_unset_raises_malformed(monkeypatch):
 
 
 # --- pipeline knobs ----------------------------------------------------------
-
-
-@pytest.mark.parametrize(
-    ("raw", "expected"), [(None, 8), ("3", 3), ("0", 1), ("-2", 1), ("x", 8)]
-)
-def test_slide_pipeline_concurrency(monkeypatch, raw, expected):
-    if raw is not None:
-        monkeypatch.setenv("AUTHORED_SLIDE_PIPELINE_CONCURRENCY", raw)
-    assert ar.get_authored_slide_pipeline_concurrency() == expected
 
 
 @pytest.mark.parametrize(
@@ -124,14 +79,6 @@ def test_powerpoint_qa_interactive_is_opt_in(monkeypatch):
     assert ar.is_authored_powerpoint_qa_interactive_observation_enabled() is True
     monkeypatch.setenv("AUTHORED_POWERPOINT_QA_INTERACTIVE_OBSERVATION", "maybe")
     assert ar.is_authored_powerpoint_qa_interactive_observation_enabled() is False
-
-
-def test_semantic_dual_output_mode_raw(monkeypatch):
-    assert ar.get_authored_semantic_dual_output_mode() == "shadow"
-    monkeypatch.setenv("AUTHORED_SEMANTIC_DUAL_OUTPUT_MODE", " Declared ")
-    assert ar.get_authored_semantic_dual_output_mode() == "declared"
-    monkeypatch.setenv("AUTHORED_SEMANTIC_DUAL_OUTPUT_MODE", "bogus")
-    assert ar.get_authored_semantic_dual_output_mode() == "bogus"
 
 
 def test_reasoning_effort_raw_text(monkeypatch):
@@ -191,55 +138,6 @@ def test_renderer_worker_marker(monkeypatch):
 
 
 # --- slidespec ----------------------------------------------------------------
-
-
-def test_repair_proposal_llm_default_on_falsy_disables(monkeypatch):
-    assert ar.is_slidespec_repair_proposal_llm_enabled() is True
-    monkeypatch.setenv("SLIDESPEC_REPAIR_PROPOSAL_LLM_ENABLED", "garbage")
-    assert ar.is_slidespec_repair_proposal_llm_enabled() is True
-    monkeypatch.setenv("SLIDESPEC_REPAIR_PROPOSAL_LLM_ENABLED", " Off ")
-    assert ar.is_slidespec_repair_proposal_llm_enabled() is False
-
-
-@pytest.mark.parametrize(
-    ("raw", "expected"), [(None, 3), ("5", 5), ("0", 1), ("99", 8), ("x", 3)]
-)
-def test_slidespec_slide_concurrency(monkeypatch, raw, expected):
-    if raw is not None:
-        monkeypatch.setenv("SLIDESPEC_SLIDE_CONCURRENCY", raw)
-    assert ar.get_slidespec_slide_concurrency() == expected
-
-
-def test_rollout_defaults():
-    rollout = ar.get_slidespec_rollout_settings()
-    assert rollout == ar.SlidespecRolloutSettings(
-        repair_shadow=False,
-        repair_apply=True,
-        repair_all_slides=True,
-        kill_switch=False,
-        canary_basis_points=10_000,
-        rollout_salt="v1",
-    )
-
-
-def test_rollout_flags_blank_is_off_and_salt_verbatim(monkeypatch):
-    monkeypatch.setenv("SLIDESPEC_REPAIR_APPLY", "")
-    monkeypatch.setenv("SLIDESPEC_KILL_SWITCH", " yes ")
-    monkeypatch.setenv("SLIDESPEC_REPAIR_ROLLOUT_SALT", "")
-    rollout = ar.get_slidespec_rollout_settings()
-    assert rollout.repair_apply is False
-    assert rollout.kill_switch is True
-    assert rollout.rollout_salt == ""
-
-
-@pytest.mark.parametrize(
-    ("raw", "expected"),
-    [("true", 10_000), ("100", 10_000), ("12.5", 1250), ("250", 10_000),
-     ("-3", 0), ("abc", 0), ("", 0)],
-)
-def test_rollout_canary_basis_points(monkeypatch, raw, expected):
-    monkeypatch.setenv("SLIDESPEC_REPAIR_CANARY", raw)
-    assert ar.get_slidespec_rollout_settings().canary_basis_points == expected
 
 
 # --- raster -----------------------------------------------------------------

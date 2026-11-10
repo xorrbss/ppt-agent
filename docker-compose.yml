@@ -104,16 +104,6 @@ x-presenton-env: &presenton-env
   CHAT_FIRST_WORKSPACE_ENABLED: ${CHAT_FIRST_WORKSPACE_ENABLED:-false}
   CHAT_FIRST_WORKSPACE_RUNTIME_PROFILE: ${CHAT_FIRST_WORKSPACE_RUNTIME_PROFILE:-}
   NEXT_PUBLIC_CHAT_FIRST_WORKBENCH_ENABLED: ${NEXT_PUBLIC_CHAT_FIRST_WORKBENCH_ENABLED:-false}
-  # SlideSpec is the default quality-repair path. Set SLIDESPEC_KILL_SWITCH=true
-  # for an immediate legacy rollback; the other flags support diagnostics.
-  SLIDESPEC_REPAIR_SHADOW: ${SLIDESPEC_REPAIR_SHADOW:-false}
-  SLIDESPEC_REPAIR_CANARY: ${SLIDESPEC_REPAIR_CANARY:-100}
-  SLIDESPEC_REPAIR_APPLY: ${SLIDESPEC_REPAIR_APPLY:-true}
-  SLIDESPEC_REPAIR_ALL_SLIDES: ${SLIDESPEC_REPAIR_ALL_SLIDES:-true}
-  SLIDESPEC_KILL_SWITCH: ${SLIDESPEC_KILL_SWITCH:-false}
-  SLIDESPEC_REPAIR_ROLLOUT_SALT: ${SLIDESPEC_REPAIR_ROLLOUT_SALT:-v1}
-  NEXT_PUBLIC_SLIDESPEC_REPAIR_CANARY_UI: ${NEXT_PUBLIC_SLIDESPEC_REPAIR_CANARY_UI:-true}
-  NEXT_PUBLIC_SLIDESPEC_REPAIR_ALL_SLIDES: ${NEXT_PUBLIC_SLIDESPEC_REPAIR_ALL_SLIDES:-true}
   # Do not enable this on the stock image: it does not ship a malware scanner
   # or trusted signature-definition update strategy.
   WORKSPACE_ASSET_MALWARE_SCAN_MODE: ${WORKSPACE_ASSET_MALWARE_SCAN_MODE:-disabled}
@@ -143,8 +133,6 @@ services:
       dockerfile: Dockerfile
       args:
         NEXT_PUBLIC_CHAT_FIRST_WORKBENCH_ENABLED: ${NEXT_PUBLIC_CHAT_FIRST_WORKBENCH_ENABLED:-false}
-        NEXT_PUBLIC_SLIDESPEC_REPAIR_CANARY_UI: ${NEXT_PUBLIC_SLIDESPEC_REPAIR_CANARY_UI:-true}
-        NEXT_PUBLIC_SLIDESPEC_REPAIR_ALL_SLIDES: ${NEXT_PUBLIC_SLIDESPEC_REPAIR_ALL_SLIDES:-true}
     # nginx only proxies /api/v1/* to FastAPI; everything else (including
     # /api/health) goes to Next.js (see nginx.conf), so this reaches
     # Next.js's own /api/health route through the full nginx front. That
@@ -181,8 +169,6 @@ services:
       dockerfile: Dockerfile
       args:
         NEXT_PUBLIC_CHAT_FIRST_WORKBENCH_ENABLED: ${NEXT_PUBLIC_CHAT_FIRST_WORKBENCH_ENABLED:-false}
-        NEXT_PUBLIC_SLIDESPEC_REPAIR_CANARY_UI: ${NEXT_PUBLIC_SLIDESPEC_REPAIR_CANARY_UI:-true}
-        NEXT_PUBLIC_SLIDESPEC_REPAIR_ALL_SLIDES: ${NEXT_PUBLIC_SLIDESPEC_REPAIR_ALL_SLIDES:-true}
     deploy:
       resources:
         reservations:
@@ -321,8 +307,6 @@ services:
       dockerfile: Dockerfile
       args:
         NEXT_PUBLIC_CHAT_FIRST_WORKBENCH_ENABLED: ${NEXT_PUBLIC_CHAT_FIRST_WORKBENCH_ENABLED:-false}
-        NEXT_PUBLIC_SLIDESPEC_REPAIR_CANARY_UI: ${NEXT_PUBLIC_SLIDESPEC_REPAIR_CANARY_UI:-true}
-        NEXT_PUBLIC_SLIDESPEC_REPAIR_ALL_SLIDES: ${NEXT_PUBLIC_SLIDESPEC_REPAIR_ALL_SLIDES:-true}
     depends_on:
       postgres:
         condition: service_healthy

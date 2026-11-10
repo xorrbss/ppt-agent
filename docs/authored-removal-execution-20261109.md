@@ -573,6 +573,91 @@ The full pytest suite and `npm run test:next-ci` run before each PR merges.
   names); shrink `scripts/structural-layering-allowlist.json` with each
   deletion (it fails on entries whose file no longer exists); regenerate
   `servers/fastapi/tests/svg_unit_subset.txt`.
+  **B5 done 2026-11-11.** Deleted (131 files): the orphan non-SQL models
+  `models/authored_vnext/semantic/{editable_mvp_completion,lifecycle,native_capabilities,release_evidence_v3,release_profile_v3}`,
+  `utils/env_settings/authored_release`; the mounted but uncalled editor
+  event write path (`POST /presentation/{id}/editor-events`, feature module
+  `authored-editor-events`, its service and request model; nothing in the
+  frontend called it; the `authored_slide_editor_events` table and SQL model
+  stay for a follow-up migration, and its table tests stay); the authored
+  local-fit checkpoint hydration retry in `workspace_service`
+  (`_verified_authored_local_fit_checkpoint_recovery`; it admitted only failed
+  authored `template.apply`/`design.apply` operations with
+  `authored_local_fit_geometry_unresolved`, which nothing produces); the
+  `ApplyMasterToPresentation*` models; `contracts/authored_vnext/{deck,deck_ir,narrative_ir,semantic}`
+  (nothing reads them; `deck_ir`'s generator only exported kept modules);
+  the Next.js Chrome renderer in `lib/authored-hybrid` (`browser-source` and
+  its parts, `chrome-*`, `cdp-pipe`, `capture-*`, `css-paint-browser`,
+  `shadow-effect-browser`, `export-admission`, `font-policy`,
+  `html-instrumentation`, `observation`, `renderer-isolation`, `security*`,
+  `windows-cleanup-coordinator` and their tests; nothing outside the folder
+  imported them); scripts `start-authored-vnext-dev.ps1` (and
+  `dev:authored-vnext:windows`), `authored_admission_shadow_report.py`,
+  `authored-vnext-quality/`, `authored-hybrid-evidence-retention.mjs` (and its
+  `test:next-ci` entry), `authored-release-readiness-operations.mjs`,
+  `authored_deck_richness*`, `authored_infographic_weekly_report.py`,
+  `authored_live_series_provider_usage.py` with its runner, and the tests of
+  all of these. Frontend: `OutlinePage`'s `masterClient.applyToPresentation`
+  branch with `masterApplyCas.ts`, the client method, endpoint and request
+  type; `WorkspaceChatPanel` always sends `analyze_only` (the
+  `analyze_and_fix` branch and `SLIDESPEC_WORKSPACE_REPAIR_ENABLED` are gone);
+  the unused quality-review types and normalizers in `authored.ts` and the
+  four `authored-quality-normaliz*` files; `WorkspaceOperationCard`'s
+  `page_remake_slide_index` offer (nothing writes it since B3); the orphaned
+  Chart.js and datalabels files in `public/vendor`. The trusted wire no longer
+  stages a non-svg export bundle (raster PNG slides) or `sourceSlides`; the
+  export worker still refuses such a bundle with
+  `public_export_bundle_schema_unsupported`. Renderer contract: the seven
+  Next.js sources left `attestation.py`'s source-tree digest, and
+  `verify_contract.py` lost the four checks that pinned
+  `renderer-isolation.ts` and `contract.json` its `next_execution_boundary`;
+  the renderer image never contained them (it copies only the FastAPI
+  import closure), the Python worker isolation checks are unchanged, and the
+  source-tree digest changes as with any source change. Knobs removed (zero
+  readers left): the eight `SLIDESPEC_*` and two `NEXT_PUBLIC_SLIDESPEC_*`
+  (compose, Dockerfile build args), and 59 `AUTHORED_*` knobs (release and
+  gate-0 evidence, semantic bundle/hybrid, editable MVP, vNext
+  generation/compatibility, quality loop, design critique, retain checkpoint
+  HTML, visual story plan, style anchor, illustration share/concurrency, VQA,
+  header repair, text-scale rung, repair calls, streaming, wave barrier,
+  in-render fit sample, evidence retention, slide pipeline concurrency, test
+  failure hooks), 16 of them from the settings registry. Kept: every §4.3
+  name; `AUTHORED_RENDERER_LEGACY_ENABLED` (the renderer policy, slide capture,
+  `invoke.py` and the contract still read it); `AUTHORED_RESUME_MAX_ATTEMPTS`
+  (read by the pipeline); `AUTHORED_VNEXT_OOXML_WORKER_TOKEN` (see below).
+  **Not done, owner decision needed (release gate):**
+  `scripts/public-service-release-gate.mjs` takes its cross-owner evidence
+  from `servers/fastapi/scripts/public_service_malicious_corpus_evidence.py`,
+  which drives the unmounted vNext export router; several surviving routes
+  could carry the same cross-owner property (workspace artifact download plus
+  operation cancel, the master router, presentation CRUD), so the router,
+  `integration` export half, `lib/ooxml-vnext`, `/api/internal/ooxml-vnext`,
+  `contracts/authored_vnext/{export,ooxml}`, `lib/authored-hybrid/pptx-archive`
+  and `AUTHORED_VNEXT_OOXML_WORKER_TOKEN` stay. The gate's crash-recovery
+  runner `scripts/public-service-crash-recovery.py` generates an authored deck
+  (unusable since P1, with a dangling `authored_checkpoint_service` import);
+  retargeting it to svg or retiring that evidence is the same decision, so it
+  stays, as do the controlled-load scripts the gate's product evidence uses.
+  Also kept: `bench_authored_render_policy.py` (benchmarks the shared
+  `slide_capture` cache), `authored_fit_replay_*` (a DOM-category contract
+  test imports it), `authored_infographic_fit_*` and
+  `authored_run_contact_sheet*` (generic or kept-code tools),
+  `benchmarks/authored-infographic`. Import checker `check` over the 25
+  deleted Python files: 0 hits, 0 new unresolved; closure top 374/33, all
+  897/128 (from 378/37 and 907/138 before B5 and P4). Structural layering
+  passes (25 entries, none for deleted files); reviewed key added to the
+  partial-recovery ledger (`workspace_service`); the svg subset list is 417
+  files. Checks: `ruff`, `import server`, `verify_contract.py`, master
+  generator `--check`, `test:settings-registry`,
+  `verify-authored-release-required-checks.mjs`, targeted pytest 1,015
+  passed with 2 failures, one fixed (a stale internal env name) and one that
+  fails on `origin/main` too (`test_runtime_capabilities_error_registry_and_privacy_are_exact`,
+  the registered `authored_page_remake_unsupported_presentation` missing from
+  the contract fixture); `required-ci-contract.test.mjs` fails only the CRLF
+  `uv.lock` match; Next: tsc, `check:i18n`, webpack build pass, the Node
+  suite fails only the CRLF `requestVerbosity` test. The fake-LLM harness
+  (port 18761, fresh app data) generated a 5-page svg deck and exported PPTX
+  and PDF.
 - **B6 final.** Full pytest, `test:next-ci`, `ruff`, Next build, and the
   fake-LLM harness (`servers/fastapi/scripts/fake_llm_e2e/`) for svg
   generation, remake, checkpoint recovery and PPTX/PDF export. The harness

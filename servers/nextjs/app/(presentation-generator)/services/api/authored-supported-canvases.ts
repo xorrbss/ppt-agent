@@ -1,4 +1,4 @@
-import { isRecord } from "./authored-quality-normalize-base";
+import { isRecord } from "@/lib/guards";
 
 /** Mirrors the picker rows admission can gate per style (A4 rows are excluded: their
  * availability comes from `getDocumentCanvasCapabilities()`, not the style catalogue). */

@@ -594,18 +594,6 @@ def test_export_subprocess_limit_kills_descendants_and_reports_recycle(
     tmp_path: Path,
     trusted_worker_runtime: object,
 ) -> None:
-    launcher = (
-        Path(__file__).resolve().parents[4] / "scripts" / "start-authored-vnext-dev.ps1"
-    ).read_text(encoding="utf-8")
-    for variable, value in {
-        "PPT_WORKER_MEMORY_LIMIT_BYTES": "1073741824",
-        "PPT_WORKER_CPU_MILLIS": "600000",
-        "PPT_WORKER_PID_LIMIT": "64",
-        "PPT_WORKER_OPEN_FILE_LIMIT": "512",
-        "PPT_WORKER_OUTPUT_LIMIT_BYTES": "536870912",
-        "PPT_WORKER_WALL_CLOCK_SECONDS": "600",
-    }.items():
-        assert f'"{variable}" = "{value}"' in launcher
     operation_id = uuid.uuid4()
     svg = b'<svg xmlns="http://www.w3.org/2000/svg" width="320" height="180"/>'
     slide = _artifact(

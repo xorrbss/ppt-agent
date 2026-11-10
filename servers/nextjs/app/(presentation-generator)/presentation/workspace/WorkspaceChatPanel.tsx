@@ -58,9 +58,6 @@ import { finalPptxReviewStatusFor } from "./workspaceChatPanelReviewStatus";
 
 export { parseQualityReviewSlideRange } from "./workspaceChatPanelUtils";
 export { finalPptxReviewStatusFor } from "./workspaceChatPanelReviewStatus";
-const SLIDESPEC_WORKSPACE_REPAIR_ENABLED =
-  process.env.NEXT_PUBLIC_SLIDESPEC_REPAIR_CANARY_UI !== "false" &&
-  process.env.NEXT_PUBLIC_SLIDESPEC_REPAIR_ALL_SLIDES !== "false";
 
 export default function WorkspaceChatPanel({
   presentationId,
@@ -293,7 +290,7 @@ export default function WorkspaceChatPanel({
         : "전체 슬라이드를";
 
     await commandDispatcher(
-      svgReviewOnly ? `${subject} 현재 화면의 품질을 검토해 줘` : `${subject} 고품질 검수하고 문제를 자동 수정해 줘`,
+      `${subject} 현재 화면의 품질을 검토해 줘`,
       {
         commandType: "quality.review",
         context: {
@@ -303,13 +300,7 @@ export default function WorkspaceChatPanel({
               ? "current"
               : "all",
           slide_indices: slideIndices,
-          mode: svgReviewOnly ? "analyze_only" : "analyze_and_fix",
-          ...(!svgReviewOnly && SLIDESPEC_WORKSPACE_REPAIR_ENABLED
-            ? { slidespec_opt_in: true }
-            : {}),
-          ...(svgReviewOnly || selectedSlide === undefined
-            ? {}
-            : { current_slide: selectedSlide }),
+          mode: "analyze_only",
         },
       },
     );
@@ -320,7 +311,6 @@ export default function WorkspaceChatPanel({
     qualityReviewRange,
     qualityReviewScope,
     reviewRequiredIndices,
-    svgReviewOnly,
   ]);
 
   const handleQualityReviewRangeInput = useCallback(
@@ -667,7 +657,7 @@ export default function WorkspaceChatPanel({
                     {t("qualityReviewScope")}
                   </h3>
                   <p className="mt-1 text-xs leading-5 text-slate-500">
-                    {t(svgReviewOnly ? "svgQualityReviewDescription" : "qualityReviewDescription")}
+                    {t("svgQualityReviewDescription")}
                   </p>
                 </div>
               </div>
@@ -832,7 +822,7 @@ export default function WorkspaceChatPanel({
                   data-testid="quality-review-options-submit"
                   className="rounded-lg bg-indigo-600 px-3 py-2 text-xs font-semibold text-white hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                  {t(svgReviewOnly ? "startSvgReview" : "startReview")}
+                  {t("startSvgReview")}
                 </button>
               </div>
             </article>

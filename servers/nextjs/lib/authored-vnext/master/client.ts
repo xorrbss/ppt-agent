@@ -7,7 +7,6 @@ import {
   isRecord,
   type CreateDeckRequest,
   type CreateDraftRequest,
-  type ApplyMasterToPresentationRequest,
   type AiMasterAnalysis,
   type AiMasterCandidateDecision,
   type AiMasterEvidence,
@@ -919,17 +918,6 @@ export class AuthoredVnextMasterClient {
       throw new Error("Master API returned a non-published master");
     }
     return published;
-  }
-
-  async applyToPresentation(
-    presentationId: string,
-    request: ApplyMasterToPresentationRequest,
-    signal?: AbortSignal,
-  ): Promise<void> {
-    await this.request(
-      AUTHORED_VNEXT_MASTER_ENDPOINTS.applyToPresentation(presentationId),
-      { method: "POST", body: JSON.stringify(request), signal },
-    );
   }
 
   async createDraft(request: CreateDraftRequest, signal?: AbortSignal): Promise<MasterRevisionEnvelope> {

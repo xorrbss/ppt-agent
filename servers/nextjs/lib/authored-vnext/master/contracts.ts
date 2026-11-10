@@ -25,8 +25,6 @@ export const AUTHORED_VNEXT_MASTER_ENDPOINTS = {
     `${AUTHORED_VNEXT_MASTER_API_PREFIX}/masters/${encodeURIComponent(masterId)}/revisions/${revision}`,
   head: (masterId: string) =>
     `${AUTHORED_VNEXT_MASTER_API_PREFIX}/masters/${encodeURIComponent(masterId)}/head`,
-  applyToPresentation: (presentationId: string) =>
-    `${AUTHORED_VNEXT_MASTER_API_PREFIX}/presentations/${encodeURIComponent(presentationId)}/apply`,
   preview: `${AUTHORED_VNEXT_MASTER_API_PREFIX}/preview`,
   decks: `${AUTHORED_VNEXT_MASTER_API_PREFIX}/decks`,
   regenerateBody: (deckId: string, slideId: string) =>
@@ -717,18 +715,6 @@ export interface SaveAiMasterAnalysisRequest {
 export interface RevisionCasRequest {
   expectedRevision: number;
   expectedDigest: MasterDigest;
-}
-
-export interface ApplyMasterToPresentationRequest {
-  masterPin: {
-    masterId: string;
-    revision: number;
-    digest: MasterDigest;
-  };
-  expectedPresentationRevision: number;
-  expectedDeckRevision: number;
-  expectedDeckDigest: MasterDigest;
-  idempotencyKey: string;
 }
 
 export interface PreviewRequest {
