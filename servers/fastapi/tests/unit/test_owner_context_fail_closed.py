@@ -162,7 +162,7 @@ def test_owned_select_with_a_tenant_but_no_owner_reads_nobody() -> None:
                         PresentationModel(
                             id=uuid.uuid4(),
                             owner_id=owner,
-                            mode="authored",
+                            mode="svg",
                             content=content,
                             n_slides=1,
                             language="en",
@@ -195,7 +195,7 @@ def test_owned_update_and_delete_inside_request_without_identity_raise() -> None
                     PresentationModel(
                         id=uuid.uuid4(),
                         owner_id=owner_id,
-                        mode="authored",
+                        mode="svg",
                         content="owned",
                         n_slides=1,
                         language="en",

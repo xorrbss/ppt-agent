@@ -18,6 +18,8 @@ from sqlmodel import SQLModel
 
 from api.v1.ppt.endpoints import workspace as workspace_endpoint
 from models.sql.presentation import PresentationModel
+from models.sql.slide import SlideModel
+from tests.support.minimal_svg_deck import minimal_svg_slide, minimal_svg_theme
 from models.sql.presentation_export_attempt import PresentationExportAttempt
 from models.sql.user import User
 from models.sql.workspace import (
@@ -44,6 +46,7 @@ from services.workspace_runtime_profile import resolve_workspace_runtime_profile
 WORKSPACE_TABLES = [
     User.__table__,
     PresentationModel.__table__,
+    SlideModel.__table__,
     WorkspaceConversation.__table__,
     WorkspaceMessage.__table__,
     WorkspaceAsset.__table__,
@@ -123,11 +126,13 @@ async def _exercise_vertical_flow(tmp_path: Path, monkeypatch) -> None:
                 n_slides=5,
                 language="ko",
                 layout={"name": "gate-e"},
-                mode="authored",
-                theme={"mode": "authored"},
+                mode="svg",
+                theme=minimal_svg_theme(),
                 revision=0,
             )
             session.add(presentation)
+            await session.flush()
+            session.add(minimal_svg_slide(presentation.id))
             await session.flush()
             presentation_id = presentation.id
             asset = WorkspaceAsset(

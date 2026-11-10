@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from tests.support.existing_authored_rows import add_existing_authored_presentation
 import asyncio
 import uuid
 from contextlib import contextmanager
@@ -70,7 +71,7 @@ async def _deck(session_maker, owner_id: uuid.UUID) -> uuid.UUID:
     presentation_id = uuid.uuid4()
     async with session_maker() as session:
         with _owner(owner_id):
-            session.add(
+            await add_existing_authored_presentation(session, 
                 PresentationModel(
                     id=presentation_id,
                     owner_id=owner_id,

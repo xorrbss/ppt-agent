@@ -176,6 +176,12 @@ _GROUPS = (
     (422, False, "This generation option is no longer available. Generate the presentation again.", (
         "authored_strategy_removed",
     )),
+    # A deck whose driver was removed (Template V2, or authored since
+    # 2026-11-10) can only be listed and deleted; every other operation on it,
+    # including one queued before the removal, is refused with this code.
+    (422, False, "This presentation uses a format that is no longer supported. It can only be deleted.", (
+        "unsupported_presentation_driver",
+    )),
 )
 
 

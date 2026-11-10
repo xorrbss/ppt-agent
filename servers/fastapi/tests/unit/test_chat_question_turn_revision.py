@@ -9,6 +9,7 @@ what the turn actually holds rather than by which tools it named.
 
 from __future__ import annotations
 
+from tests.support.existing_authored_rows import add_existing_authored_presentation
 import asyncio
 import os
 import uuid
@@ -94,7 +95,7 @@ async def _seed(maker):
             mode="authored",
             revision=START_REVISION,
         )
-        session.add(presentation)
+        await add_existing_authored_presentation(session, presentation)
         await session.flush()
         conversation = WorkspaceConversation(
             presentation_id=presentation.id, next_position=2

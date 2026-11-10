@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from tests.support.existing_authored_rows import add_existing_authored_presentation
 import asyncio
 from pathlib import Path
 import uuid
@@ -85,7 +86,7 @@ async def _seed_source(maker) -> PresentationModel:
             revision=7,
             share_token=f"source-{uuid.uuid4().hex}",
         )
-        session.add(source)
+        await add_existing_authored_presentation(session, source)
         await session.commit()
         return source
 

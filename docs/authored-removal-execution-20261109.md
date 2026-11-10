@@ -12,7 +12,7 @@ are stale and must be re-located. Decision record:
 
 | Item | 2026-11-05 design | Now |
 |---|---|---|
-| P0 production queries | Run, then pick D2 option A or C | Not run (no production access). D2 is **option C**: every authored deck gets a PPTX and a PDF snapshot before the driver is removed. |
+| P0 production queries | Run, then pick D2 option A or C | Not run (no production access). D2 was first option C (snapshots); on 2026-11-10 the owner changed it to **option A without a grace period**: no snapshot or backup, the driver is removed and an authored deck behaves like a removed Template V2 deck (listed as unsupported, opening it is a 422, delete works). |
 | D3 sync `/generate` | Retire, or shim if an external caller exists | Keep the route. With authored gone every request is svg, which it already refuses with `422 svg_generation_requires_async_route`. No shim. |
 | P1 rejection point | Pydantic validator on the request model | The admission boundary (each entry point and the staged-job replay). The authored code stays until P3, so internal authored tests keep running until then. |
 | Order | P0 → P5 | P1 first. P2 and P3 follow after P1 lands. |
@@ -22,8 +22,8 @@ are stale and must be re-located. Decision record:
 | Phase | Status |
 |---|---|
 | P0 decision record | Done (this document and the spec-memory record) |
-| P1 stop new authored generation | In progress |
-| P2 existing decks (option C) | Not started |
+| P1 stop new authored generation | Done (merged 2026-11-10) |
+| P2 existing decks (option A) | In progress |
 | P3 authored-only code | Not started |
 | P4 database | Not started |
 | P5 docs and guards | Not started (CLAUDE.md records the decision only) |

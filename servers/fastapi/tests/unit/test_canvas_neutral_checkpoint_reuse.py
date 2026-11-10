@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from tests.support.existing_authored_rows import add_existing_authored_presentation
 import asyncio
 from pathlib import Path
 from types import SimpleNamespace
@@ -74,7 +75,7 @@ async def _seed(maker, *, theme, operation_id: uuid.UUID):
             mode="authored",
             theme=theme,
         )
-        session.add(presentation)
+        await add_existing_authored_presentation(session, presentation)
         await session.flush()
 
         task = AsyncPresentationGenerationTaskModel(status="pending")

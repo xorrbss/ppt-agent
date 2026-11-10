@@ -1,3 +1,4 @@
+from tests.support.existing_authored_rows import add_existing_authored_presentation
 import asyncio
 import uuid
 from types import SimpleNamespace
@@ -142,14 +143,17 @@ def test_review_import_failure_never_calls_legacy_page_reauthor(monkeypatch) -> 
     )
 
     async def run_review_after_rollback():
+        nonlocal presentation
         engine = create_async_engine("sqlite+aiosqlite:///:memory:")
         try:
             async with engine.begin() as connection:
                 for model in (PresentationModel, AsyncPresentationGenerationTaskModel):
                     await connection.run_sync(model.__table__.create)
             async with AsyncSession(engine, expire_on_commit=False) as session:
-                session.add_all([presentation, task])
+                await add_existing_authored_presentation(session, presentation)
+                session.add_all([task])
                 await session.commit()
+                presentation = await session.get(PresentationModel, presentation_id)
                 for partial_claim, change_during_import in ((False, False), (True, False), (True, True)):
                     runtime.update(model="paired-review-model", change_during_import=change_during_import)
                     before_policy = quality_service._style_comparison_observation_metadata()

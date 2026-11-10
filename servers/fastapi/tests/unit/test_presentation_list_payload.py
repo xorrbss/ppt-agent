@@ -9,6 +9,7 @@ the editor — still serves it in full.
 
 from __future__ import annotations
 
+from tests.support.existing_authored_rows import add_existing_authored_presentation
 import asyncio
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -80,14 +81,18 @@ async def _database(path: Path):
 
 
 async def _seed(maker) -> tuple[uuid.UUID, uuid.UUID, uuid.UUID]:
-    """One authored deck, one svg deck, one staging deck that stays hidden."""
+    """One pre-existing authored deck, one svg deck, one hidden staging deck.
+
+    The authored driver was removed on 2026-11-10, so both authored rows are
+    written as rows that predate the removal (the ORM write boundary refuses a
+    new one).
+    """
 
     authored_id = uuid.uuid4()
     svg_id = uuid.uuid4()
     staging_id = uuid.uuid4()
     async with maker() as session, session.begin():
-        session.add_all(
-            [
+        for row in (
                 PresentationModel(
                     id=authored_id,
                     content="authored prompt",
@@ -98,6 +103,20 @@ async def _seed(maker) -> tuple[uuid.UUID, uuid.UUID, uuid.UUID]:
                     mode="authored",
                     lifecycle_status=PRESENTATION_LIFECYCLE_PUBLISHED,
                 ),
+                PresentationModel(
+                    id=staging_id,
+                    content="staging prompt",
+                    n_slides=1,
+                    language="en",
+                    title="Staging deck",
+                    mode="authored",
+                    theme={"mode": "authored"},
+                    lifecycle_status=PRESENTATION_LIFECYCLE_STAGING,
+                ),
+        ):
+            await add_existing_authored_presentation(session, row)
+        session.add_all(
+            [
                 PresentationModel(
                     id=svg_id,
                     content="svg prompt",
@@ -110,18 +129,6 @@ async def _seed(maker) -> tuple[uuid.UUID, uuid.UUID, uuid.UUID]:
                     mode="svg",
                     theme={"mode": "svg"},
                     lifecycle_status=PRESENTATION_LIFECYCLE_PUBLISHED,
-                ),
-                PresentationModel(
-                    id=staging_id,
-                    content="staging prompt",
-                    n_slides=1,
-                    language="en",
-                    title="Staging deck",
-                    # A staging shell is stamped authored the moment generation
-                    # creates it, so it carries that identity here too.
-                    mode="authored",
-                    theme={"mode": "authored"},
-                    lifecycle_status=PRESENTATION_LIFECYCLE_STAGING,
                 ),
                 SlideModel(
                     presentation=authored_id,
@@ -187,8 +194,14 @@ def test_presentation_list_withholds_slide_html_and_never_selects_it(tmp_path: P
             assert set(by_id) == {authored_id, svg_id}, "staging deck leaked"
             assert staging_id not in by_id
 
-            # The list withholds authored HTML for every deck, authored or not.
+            # An authored deck is listed as unsupported (driver removed
+            # 2026-11-10), with no slides; every other deck withholds HTML.
+            assert isinstance(by_id[authored_id], UnsupportedPresentationListItem)
+            assert by_id[authored_id].unsupported_template_format is True
+            assert by_id[authored_id].title == "Authored deck"
             for deck in decks:
+                if isinstance(deck, UnsupportedPresentationListItem):
+                    continue
                 assert len(deck.slides) == 1
                 assert deck.slides[0].html_content is None
 
@@ -210,19 +223,6 @@ def test_presentation_list_withholds_slide_html_and_never_selects_it(tmp_path: P
             )
 
             # Everything the cards actually render survives untouched.
-            authored_slide = by_id[authored_id].slides[0]
-            assert authored_slide.content == {
-                "image": "/static/cover.png",
-                "__authored__": True,
-            }
-            assert authored_slide.layout_group == "authored"
-            assert authored_slide.layout == "authored:cover"
-            assert authored_slide.index == 0
-            assert authored_slide.speaker_note == "cover note"
-            assert authored_slide.properties == {"source": "authored"}
-            assert by_id[authored_id].title == "Authored deck"
-            assert by_id[authored_id].mode == "authored"
-            assert by_id[authored_id].theme == LIST_THEME
             assert by_id[svg_id].theme == {"mode": "svg"}
             # Both large JSON columns are reduced inside SQL, not after fetch.
             assert any("json_remove(presentations.theme" in sql for sql in statements)
@@ -237,7 +237,7 @@ def test_presentation_list_withholds_slide_html_and_never_selects_it(tmp_path: P
             # rather than disappearing, so existing clients keep their key.
             encoded = jsonable_encoder(decks)
             for deck in encoded:
-                for slide in deck["slides"]:
+                for slide in deck.get("slides", []):
                     assert "html_content" in slide
                     assert slide["html_content"] is None
 
@@ -253,21 +253,22 @@ def test_presentation_list_withholds_slide_html_and_never_selects_it(tmp_path: P
             assert set(cards) == {authored_id, svg_id}
             assert summary.total == 2
             assert cards[authored_id].thumbnail_url == "/static/cover.png"
-            assert cards[authored_id].profile["driver_id"] == "authored"
+            assert cards[authored_id].unsupported_template_format is True
+            assert cards[authored_id].profile is None
+            assert cards[authored_id].theme is None
             assert cards[svg_id].profile["driver_id"] == "svg-v1"
-            assert cards[authored_id].theme["authored_vnext"]["canvas"] == LIST_THEME["authored_vnext"]["canvas"]
             assert "slides" not in jsonable_encoder(cards[authored_id])
             assert "content" not in jsonable_encoder(cards[authored_id])
-            assert "authoredQualityGate" not in cards[authored_id].theme
             assert not any("html_content" in sql or "svg_content" in sql for sql in statements)
             assert not any("json_remove" in sql for sql in statements)
 
             async with maker() as session:
                 cover = await presentation_crud.get_presentation_cover(svg_id, session)
                 assert cover.slide.svg_content == "<svg><text>SVG cover</text></svg>"
-                authored_cover = await presentation_crud.get_presentation_cover(authored_id, session)
-                assert authored_cover.slide.html_content == AUTHORED_COVER_HTML
-                assert "svgReceipt" not in authored_cover.slide.content
+                with pytest.raises(HTTPException) as authored_cover:
+                    await presentation_crud.get_presentation_cover(authored_id, session)
+                assert authored_cover.value.status_code == 409
+                assert authored_cover.value.detail == "unsupported_presentation_driver"
                 with pytest.raises(HTTPException) as hidden_cover:
                     await presentation_crud.get_presentation_cover(staging_id, session)
                 assert hidden_cover.value.status_code == 404
@@ -292,11 +293,12 @@ def test_presentation_list_withholds_slide_html_and_never_selects_it(tmp_path: P
             ]
             assert stored[0].content["svgReceipt"] == SVG_DETAIL
             async with maker() as session:
-                detail = await presentation_crud._get_presentation_with_slides(
-                    authored_id, session
-                )
-                assert detail.theme == STORED_THEME
-                assert detail.slides[0].content["svgReceipt"] == SVG_DETAIL
+                with pytest.raises(HTTPException) as detail:
+                    await presentation_crud._get_presentation_with_slides(
+                        authored_id, session
+                    )
+                assert detail.value.status_code == 422
+                assert detail.value.detail == "unsupported_presentation_driver"
         finally:
             await engine.dispose()
 
@@ -360,11 +362,10 @@ def test_server_search_pagination_total_and_owner_scope_match(tmp_path: Path):
                     n_slides=1,
                     language="ko",
                     title=title,
-                    # Every deck this fork can create is authored; a row with
-                    # no identity describes one of the retired React-template
-                    # formats, which no longer resolves a profile.
-                    mode="authored",
-                    theme={"mode": "authored"},
+                    # Every deck this fork can create is svg since the
+                    # authored driver was removed (2026-11-10).
+                    mode="svg",
+                    theme={"mode": "svg"},
                     updated_at=updated_at,
                     lifecycle_status=(
                         PRESENTATION_LIFECYCLE_PUBLISHED
@@ -478,21 +479,21 @@ async def _seed_unsupported_legacy_row(maker) -> tuple[uuid.UUID, uuid.UUID]:
             [
                 PresentationModel(
                     id=authored_id,
-                    content="authored prompt",
+                    content="svg prompt",
                     n_slides=1,
                     language="ko",
-                    title="Authored deck",
-                    mode="authored",
-                    theme={"mode": "authored"},
+                    title="SVG deck",
+                    mode="svg",
+                    theme={"mode": "svg"},
                     lifecycle_status=PRESENTATION_LIFECYCLE_PUBLISHED,
                 ),
                 SlideModel(
                     presentation=authored_id,
-                    layout_group="authored",
-                    layout="authored:cover",
+                    layout_group="svg",
+                    layout="svg",
                     index=0,
-                    content={"title": "Authored cover"},
-                    html_content="<section>Authored cover</section>",
+                    content={"title": "SVG cover"},
+                    svg_content="<svg><text>SVG cover</text></svg>",
                 ),
             ]
         )
@@ -541,9 +542,9 @@ def test_presentation_all_marks_unresolvable_legacy_row_instead_of_500(
             by_id = {deck.id: deck for deck in decks}
             assert set(by_id) == {authored_id, legacy_id}
 
-            authored_deck = by_id[authored_id]
-            assert isinstance(authored_deck, presentation_crud.PresentationWithSlides)
-            assert authored_deck.profile.driver_id == "authored"
+            svg_deck = by_id[authored_id]
+            assert isinstance(svg_deck, presentation_crud.PresentationWithSlides)
+            assert svg_deck.profile.driver_id == "svg-v1"
 
             legacy_deck = by_id[legacy_id]
             assert isinstance(legacy_deck, UnsupportedPresentationListItem)
@@ -589,22 +590,36 @@ def test_get_presentation_unresolvable_driver_returns_422_not_500(tmp_path: Path
     asyncio.run(scenario())
 
 
-def test_single_presentation_read_still_serves_authored_html(tmp_path: Path):
+def test_single_presentation_read_refuses_a_pre_existing_authored_deck(tmp_path: Path):
+    """The authored driver was removed on 2026-11-10 (option A): the editor
+    read of an existing authored deck fails closed with 422, its HTML is
+    never served, and the row and slides stay stored."""
+
     async def scenario():
         engine, maker = await _database(tmp_path / "single-payload.db")
         try:
-            authored_id, _native_id, _staging_id = await _seed(maker)
+            authored_id, svg_id, _staging_id = await _seed(maker)
 
             async with maker() as session:
-                deck = await presentation_crud.get_presentation(authored_id, session)
+                with pytest.raises(HTTPException) as excinfo:
+                    await presentation_crud.get_presentation(authored_id, session)
+                assert excinfo.value.status_code == 422
+                assert excinfo.value.detail == "unsupported_presentation_driver"
+                deck = await presentation_crud.get_presentation(svg_id, session)
+                assert deck.profile.driver_id == "svg-v1"
 
-            assert [slide.html_content for slide in deck.slides] == [
+            async with maker() as session:
+                stored = (
+                    await session.scalars(
+                        select(SlideModel)
+                        .where(SlideModel.presentation == authored_id)
+                        .order_by(SlideModel.index)
+                    )
+                ).all()
+            assert [slide.html_content for slide in stored] == [
                 AUTHORED_COVER_HTML,
                 AUTHORED_SECOND_HTML,
             ]
-            assert jsonable_encoder(deck)["slides"][0]["html_content"] == (
-                AUTHORED_COVER_HTML
-            )
         finally:
             await engine.dispose()
 

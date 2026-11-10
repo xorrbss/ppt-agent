@@ -1,3 +1,4 @@
+from tests.support.existing_authored_rows import add_existing_authored_presentation
 import asyncio
 from pathlib import Path
 from types import SimpleNamespace
@@ -276,7 +277,7 @@ def test_rejected_local_patch_gets_one_bounded_full_fallback(
         )
 
         async with AsyncSession(engine, expire_on_commit=False) as session:
-            session.add(presentation)
+            await add_existing_authored_presentation(session, presentation)
             session.add(slide)
             session.add(task)
             await session.commit()

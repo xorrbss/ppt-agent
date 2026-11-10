@@ -8,6 +8,7 @@ from fastapi import HTTPException
 from api.v1.ppt.endpoints import outlines as outlines_endpoint
 from models.content_brief_model import ContentBrief
 from models.sql.presentation import PresentationModel
+from services.compatibility_migration.admission import stamp_new_svg_presentation
 from tests.conftest import FakeAsyncSession
 from utils.llm_calls import generate_content_brief as content_brief_module
 from utils.llm_calls import generate_presentation_outlines as outline_module
@@ -77,8 +78,13 @@ def test_stream_outlines_stops_after_content_brief_usage_limit(tmp_path):
         get_results={presentation_id: presentation},
         # The outline writer admits only a staged deck whose generate operation
         # is still awaiting activation; this is that deck.
-        scalar_result=uuid.uuid4(),
+        # The same stub answers the svg outline's read of that operation's
+        # generation settings (none chosen: the free header).
+        scalar_result=types.SimpleNamespace(id=uuid.uuid4(), request_payload={}),
     )
+    # A staging shell is stamped at create; since the authored driver was
+    # removed (2026-11-10) that identity is svg, and an unstamped row is refused.
+    stamp_new_svg_presentation(presentation)
     request = types.SimpleNamespace(is_disconnected=AsyncMock(return_value=False))
     generate_outline = MagicMock()
 
@@ -151,8 +157,13 @@ def test_stream_outlines_preserves_markdown_document_in_brief_outline_and_memory
         get_results={presentation_id: presentation},
         # The outline writer admits only a staged deck whose generate operation
         # is still awaiting activation; this is that deck.
-        scalar_result=uuid.uuid4(),
+        # The same stub answers the svg outline's read of that operation's
+        # generation settings (none chosen: the free header).
+        scalar_result=types.SimpleNamespace(id=uuid.uuid4(), request_payload={}),
     )
+    # A staging shell is stamped at create; since the authored driver was
+    # removed (2026-11-10) that identity is svg, and an unstamped row is refused.
+    stamp_new_svg_presentation(presentation)
     request = types.SimpleNamespace(is_disconnected=AsyncMock(return_value=False))
 
     async def fake_generate_ppt_outline(*_args, **_kwargs):

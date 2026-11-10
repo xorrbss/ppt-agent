@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from tests.support.existing_authored_rows import add_existing_authored_presentation
 import asyncio
 import os
 import uuid
@@ -24,6 +25,7 @@ from models.sql.async_presentation_generation_status import (
 )
 from models.sql.presentation import (
     PRESENTATION_LIFECYCLE_DELETED,
+    PRESENTATION_LIFECYCLE_PUBLISHED,
     PRESENTATION_LIFECYCLE_STAGING,
     PresentationModel,
 )
@@ -225,12 +227,12 @@ async def _approved_delete_runner_tombstones_staging_and_failed_all_modes(
             _drop_runner_finalizer,
         )
 
-        # Every mode this fork can persist, in both lifecycles that a delete
-        # has to cope with. Retired formats -- the React-template "adaptive"
-        # deck and the Template V2 "template" deck -- cannot exist here any
-        # more, and the profile resolver refuses to describe one.
+        # An authored deck predates the removal of its driver (2026-11-10,
+        # option A): like a Template V2 deck it can no longer be opened, but
+        # deleting it must keep working, from both lifecycles it can be in.
         cases = (
             ("authored", PRESENTATION_LIFECYCLE_STAGING),
+            ("authored", PRESENTATION_LIFECYCLE_PUBLISHED),
         )
         for case_index, (mode, lifecycle_status) in enumerate(cases):
             async with maker() as session, session.begin():
@@ -252,14 +254,14 @@ async def _approved_delete_runner_tombstones_staging_and_failed_all_modes(
                     revision=4,
                     share_token=f"private-share-{case_index}",
                 )
-                session.add(presentation)
+                await add_existing_authored_presentation(session, presentation)
                 await session.flush()
                 presentation_id = presentation.id
 
             command_request = WorkspaceCommandRequest(
                 command=f"Delete the {mode} presentation",
                 command_type="presentation.delete",
-                idempotency_key=f"delete-{mode}",
+                idempotency_key=f"delete-{mode}-{case_index}",
                 expected_revision=4,
                 context={"source": "test"},
             )
@@ -587,7 +589,7 @@ async def _delete_recovery_treats_same_operation_tombstone_as_committed_effect(
                 # identity described a retired React-template format.
                 mode="authored",
             )
-            session.add(presentation)
+            await add_existing_authored_presentation(session, presentation)
             await session.flush()
             presentation_id = presentation.id
 
@@ -636,7 +638,7 @@ async def _delete_recovery_treats_same_operation_tombstone_as_committed_effect(
                 # identity described a retired React-template format.
                 mode="authored",
             )
-            session.add(other_presentation)
+            await add_existing_authored_presentation(session, other_presentation)
             await session.flush()
             other_presentation_id = other_presentation.id
 
@@ -1044,7 +1046,7 @@ async def _account_cascade_keeps_cleanup_snapshot_recoverable(
                 # identity described a retired React-template format.
                 mode="authored",
             )
-            session.add(presentation)
+            await add_existing_authored_presentation(session, presentation)
             await session.flush()
             presentation_id = presentation.id
             conversation = WorkspaceConversation(presentation_id=presentation_id)

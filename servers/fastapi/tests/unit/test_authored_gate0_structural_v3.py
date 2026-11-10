@@ -8,6 +8,7 @@ import uuid
 
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 import pytest
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlmodel import SQLModel
 
@@ -36,7 +37,7 @@ from models.sql.presentation import PresentationModel
 from models.sql.presentation_export_attempt import PresentationExportAttempt
 from models.sql.user import User
 from models.sql.workspace import WorkspaceOperation  # noqa: F401
-from services.authored_vnext.semantic.canonical import canonical_digest
+from services.authored_vnext.semantic.canonical import SemanticContractError
 from services.authored_vnext.semantic.gate0_structural_v3 import (
     execute_gate0_structural_case_v3,
     gate0_structural_sealed_completion_count_v3,
@@ -45,7 +46,7 @@ from services import database  # noqa: F401  # register production owner scoping
 from utils.owner_context import reset_current_owner_id, set_current_owner_id
 
 
-def test_gate0_structural_34_cases_are_signed_and_never_promote(
+def test_gate0_structural_cases_are_refused_since_the_authored_driver_removal(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     private_key = Ed25519PrivateKey.generate()
@@ -128,43 +129,14 @@ def test_gate0_structural_34_cases_are_signed_and_never_promote(
                             }
                         ),
                     )
-                    status_code, payload = await execute_gate0_structural_case_v3(session, request=request)
-                    assert status_code == expected_status
-                    assert payload["errorCode"] == expected_error
-                    assert payload["authorityDomain"] == "structural_test"
-                    assert payload["productionAuthorityGranted"] is False
-                    assert payload["productionValidatorAccepted"] is False
-                    assert payload["releaseReportStatus"] == "not-verified"
-                    assert len(payload["executionTrace"]["spans"]) == 7
-                    for span in payload["executionTrace"]["spans"]:
-                        assert span["serverObserved"] is True
-                        assert span["operationId"]
-                        assert span["inputDigest"].startswith("sha256:")
-                        assert span["outputDigest"].startswith("sha256:")
-                        assert span["evidenceRef"]
-                    if ordinal > 1:
-                        evidence = payload["mutationEvidence"]
-                        assert evidence["baselineSubjectDigest"] != evidence["mutatedSubjectDigest"]
-                        digest_value = dict(evidence)
-                        mutation_digest = digest_value.pop("mutationDigest")
-                        assert canonical_digest(digest_value) == mutation_digest
-                    assert payload["postState"]["sealedCompletionCount"] == 0
-                    assert payload["postState"]["actualProductReceiptCount"] == 0
-                    assert payload["postState"]["actualProductPromotionReady"] is False
-                    if ordinal == 34:
-                        attempts = payload["executionTrace"]["completionCasAttempts"]
-                        assert [item["outcome"] for item in attempts] == [
-                            "sealed",
-                            "conflict",
-                        ]
-                        assert attempts[0]["durableRecordId"] == attempts[1]["durableRecordId"]
-                        assert attempts[1]["errorCode"] == "completion-seal-conflict"
-                        assert payload["postState"]["structuralCompletionState"] == "sealed"
-                    trace = dict(payload["executionTrace"])
-                    signature = base64.b64decode(trace.pop("signatureBase64"), validate=True)
-                    trace_digest = trace.pop("traceDigest")
-                    assert canonical_digest(trace) == trace_digest
-                    private_key.public_key().verify(signature, trace_digest.encode("ascii"))
+                    # The authored driver was removed on 2026-11-10: a case can
+                    # no longer write its authored subject deck, so every case
+                    # is refused before any row is written.
+                    del expected_status, expected_error
+                    with pytest.raises(SemanticContractError) as refused:
+                        await execute_gate0_structural_case_v3(session, request=request)
+                    assert refused.value.code == "authored_strategy_removed"
+                    assert (await session.execute(select(PresentationModel))).first() is None
                     assert await gate0_structural_sealed_completion_count_v3(session, run_id=run_id, case_id=case_id) == 0
             finally:
                 reset_current_owner_id(owner_token)

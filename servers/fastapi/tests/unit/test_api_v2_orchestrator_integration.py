@@ -346,7 +346,7 @@ def test_sql_adapter_projects_durable_operation_and_delegates_cancel_without_exe
         now = datetime.now(timezone.utc)
         async with maker() as session, session.begin():
             session.add(User(id=owner, username="adapter-owner", hashed_password="test"))
-            session.add(PresentationModel(id=presentation_id, owner_id=owner, content="durable", n_slides=1, language="en", mode="authored", theme={}))
+            session.add(PresentationModel(id=presentation_id, owner_id=owner, content="durable", n_slides=1, language="en", mode="svg", theme={}))
             conversation = WorkspaceConversation(id=uuid.uuid4(), owner_id=owner, owner_scope=str(owner), presentation_id=presentation_id)
             session.add(conversation)
             conversation_id = conversation.id
@@ -668,7 +668,7 @@ def test_sql_adapter_requires_current_publication_and_rejects_unwired_export_cap
                     content="published",
                     n_slides=1,
                     language="en",
-                    mode="authored",
+                    mode="svg",
                     theme={},
                     revision=3,
                 )
@@ -864,7 +864,7 @@ def test_public_export_requires_generation_authority_in_the_actor_tenant(
                     content="tenant-a presentation",
                     n_slides=1,
                     language="en",
-                    mode="authored",
+                    mode="svg",
                     theme={},
                 )
             )

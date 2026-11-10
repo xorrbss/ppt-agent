@@ -340,99 +340,6 @@ def _request():
     )
 
 
-def test_remake_that_passes_the_gate_publishes_the_remade_slide(
-    monkeypatch, tmp_path
-):
-    _install_deck_stubs(monkeypatch, tmp_path, [_TERMINAL_HTML])
-    calls: list[object] = []
-    _install_remake(monkeypatch, calls, candidate=_REMADE_HTML)
-
-    owner_token = set_current_owner_id(uuid.uuid4())
-    try:
-        result, presentation = _run(
-            _generate_on_sqlite(tmp_path, _request(), _outline(1))
-        )
-    finally:
-        reset_current_owner_id(owner_token)
-
-    assert result.path == "deck.pptx"
-    gate = presentation.theme["authoredQualityGate"]
-    assert "flaggedSlides" not in gate
-    assert gate["status"] == "passed"
-    # Exactly one remake call, for the terminal slide only.
-    assert calls == [[0]]
-
-
-def test_remake_that_stays_terminal_publishes_the_deck_with_a_flag(
-    monkeypatch, tmp_path
-):
-    _install_deck_stubs(monkeypatch, tmp_path, [_TERMINAL_HTML])
-    calls: list[object] = []
-    # A candidate that still carries the terminal marker fails the re-run gate.
-    _install_remake(monkeypatch, calls, candidate=_TERMINAL_HTML)
-
-    owner_token = set_current_owner_id(uuid.uuid4())
-    try:
-        result, presentation = _run(
-            _generate_on_sqlite(tmp_path, _request(), _outline(1))
-        )
-    finally:
-        reset_current_owner_id(owner_token)
-
-    assert result.path == "deck.pptx"
-    gate = presentation.theme["authoredQualityGate"]
-    assert _pop_slide_ids(gate["flaggedSlides"]) == [
-        {
-            "index": 0,
-            "reason": "composition_safety:overlap",
-            "remakeAttempted": True,
-            "remakeOutcome": "remake_gate_failed",
-        }
-    ]
-    # The residual evidence is still recorded next to the flag.
-    assert gate["residualIssueCount"] == 1
-    assert gate["documentCompleted"] is True
-    assert gate["qualityPass"] is False
-    assert calls == [[0]]
-
-
-def test_the_flagged_slide_id_matches_the_actual_persisted_slide(
-    monkeypatch, tmp_path
-):
-    """Defect 1 (editor flagged-slide badge review): the receipt's ``index``
-
-    is a generation-time position, not a durable handle -- a client-side
-    reorder renumbers every slide's ``index`` and persists it, which would
-    then match the receipt's frozen index to a different slide. Publication
-    backfills each entry with the id of the slide it actually describes, so
-    the client can key its badge by that id instead.
-    """
-
-    # Two slides: only the second is terminal, so the flag must name it and
-    # not the first (whose id publication assigns first).
-    _install_deck_stubs(monkeypatch, tmp_path, [_REMADE_HTML, _TERMINAL_HTML])
-    calls: list[object] = []
-    _install_remake(monkeypatch, calls, candidate=_TERMINAL_HTML)
-
-    owner_token = set_current_owner_id(uuid.uuid4())
-    try:
-        result, presentation = _run(
-            _generate_on_sqlite(tmp_path, _request(), _outline(2))
-        )
-        slides = _run(_slides_for(tmp_path, presentation.id))
-    finally:
-        reset_current_owner_id(owner_token)
-
-    assert result.path == "deck.pptx"
-    flagged = presentation.theme["authoredQualityGate"]["flaggedSlides"]
-    assert [entry["index"] for entry in flagged] == [1]
-
-    flagged_slide = next(slide for slide in slides if slide.index == 1)
-    other_slide = next(slide for slide in slides if slide.index == 0)
-    assert flagged[0]["slideId"] == str(flagged_slide.id)
-    assert flagged[0]["slideId"] != str(other_slide.id)
-
-
 def test_knob_off_keeps_todays_failed_deck(monkeypatch, tmp_path):
     monkeypatch.setenv("AUTHORED_PUBLISH_FLAGGED_SLIDES", "false")
     _install_deck_stubs(monkeypatch, tmp_path, [_TERMINAL_HTML])
@@ -450,23 +357,6 @@ def test_knob_off_keeps_todays_failed_deck(monkeypatch, tmp_path):
         "authored_composition_safety_gate_failed"
     )
     assert calls == []
-
-
-def test_exactly_one_remake_call_per_terminal_slide(monkeypatch, tmp_path):
-    _install_deck_stubs(
-        monkeypatch, tmp_path, [_REMADE_HTML, _TERMINAL_HTML, _TERMINAL_HTML]
-    )
-    calls: list[object] = []
-    # Every candidate stays terminal, so no attempt can be mistaken for a retry.
-    _install_remake(monkeypatch, calls, candidate=_TERMINAL_HTML)
-
-    owner_token = set_current_owner_id(uuid.uuid4())
-    try:
-        _run(_generate_on_sqlite(tmp_path, _request(), _outline(3)))
-    finally:
-        reset_current_owner_id(owner_token)
-
-    assert calls == [[1], [2]]
 
 
 def test_remake_budget_flags_without_calling_the_provider_again(monkeypatch):
@@ -1102,62 +992,6 @@ def _locally_accepted_whole_page_failure_stub(monkeypatch, htmls, flagged_index)
     )
 
 
-def test_source_reflow_unresolved_repair_is_predeclared_and_published_flagged(
-    monkeypatch, tmp_path
-):
-    monkeypatch.setenv("AUTHORED_PUBLISH_FLAGGED_SLIDES_SOURCE_REFLOW", "true")
-    deck = [_REMADE_HTML, _TERMINAL_HTML]
-    _install_deck_stubs(monkeypatch, tmp_path, deck)
-    evidence, _recorded, _recorded_v3 = _install_receipt_evidence(monkeypatch)
-    _flagged_pipeline_stub(monkeypatch, deck, 1, evidence=evidence)
-    browser_calls, final_gate_flags = _install_source_reflow_contract_stubs(
-        monkeypatch, len(deck)
-    )
-    fail_closed_values = _install_source_reflow_unresolved_round(monkeypatch)
-
-    def forbidden_validation(*_args, **_kwargs):
-        raise AssertionError("unresolved source repair must not be validated")
-
-    monkeypatch.setattr(
-        authored_generation_mod, "validate_repair_result", forbidden_validation
-    )
-    owner_token = set_current_owner_id(uuid.uuid4())
-    try:
-        result, presentation = _run(
-            _generate_on_sqlite(
-                tmp_path, _source_reflow_request(len(deck)), _outline(len(deck))
-            )
-        )
-    finally:
-        reset_current_owner_id(owner_token)
-
-    assert result.path == "deck.pptx"
-    assert fail_closed_values == [False]
-    assert final_gate_flags == [[1]]
-    assert browser_calls == [(len(deck), len(deck))]
-    assert _pop_slide_ids(
-        presentation.theme["authoredQualityGate"]["flaggedSlides"]
-    ) == [
-        {
-            "index": 1,
-            "reason": "composition_safety:gate_repair_not_admitted",
-            "remakeAttempted": False,
-            "remakeOutcome": "verbatim_flag_only",
-        }
-    ]
-    # The flag also says which of the two things it is. The final gate measured
-    # this slide (``final_gate_flags == [[1]]``), so it is a review requirement
-    # and the reviewer-facing list carries it.
-    # ``tests/unit/test_authored_flag_classification.py`` fixes the rule, including
-    # the other direction where a flag with nothing measured is kept out of that
-    # list; this pins that the pipeline applies the rule to what it publishes.
-    gate = presentation.theme["authoredQualityGate"]
-    assert [entry["classification"] for entry in gate["flaggedSlides"]] == [
-        REVIEW_REQUIRED
-    ]
-    assert [page["index"] for page in gate["reviewPages"]] == [1]
-
-
 def test_source_reflow_unresolved_repair_still_fails_with_fallback_disabled(
     monkeypatch, tmp_path
 ):
@@ -1185,45 +1019,6 @@ def test_source_reflow_unresolved_repair_still_fails_with_fallback_disabled(
     assert fail_closed_values == [True]
 
 
-def test_source_reflow_unresolved_vqa_is_predeclared_and_published_flagged(
-    monkeypatch, tmp_path
-):
-    monkeypatch.setenv("AUTHORED_PUBLISH_FLAGGED_SLIDES_SOURCE_REFLOW", "true")
-    deck = [_REMADE_HTML, _REMADE_HTML]
-    _install_deck_stubs(monkeypatch, tmp_path, deck)
-    evidence, _recorded, _recorded_v3 = _install_receipt_evidence(monkeypatch)
-    _flagged_pipeline_stub(monkeypatch, deck, None, evidence=evidence)
-    browser_calls, final_gate_flags = _install_source_reflow_contract_stubs(
-        monkeypatch, len(deck)
-    )
-    fail_closed_values = _install_source_reflow_vqa_unresolved(monkeypatch, 1)
-    request = _source_reflow_request(len(deck))
-    request.vision_qa = True
-
-    owner_token = set_current_owner_id(uuid.uuid4())
-    try:
-        result, presentation = _run(
-            _generate_on_sqlite(tmp_path, request, _outline(len(deck)))
-        )
-    finally:
-        reset_current_owner_id(owner_token)
-
-    assert result.path == "deck.pptx"
-    assert fail_closed_values == [False]
-    assert final_gate_flags == [[1]]
-    assert browser_calls == [(len(deck), len(deck))]
-    assert _pop_slide_ids(
-        presentation.theme["authoredQualityGate"]["flaggedSlides"]
-    ) == [
-        {
-            "index": 1,
-            "reason": "composition_safety:gate_repair_not_admitted",
-            "remakeAttempted": False,
-            "remakeOutcome": "verbatim_flag_only",
-        }
-    ]
-
-
 def test_source_reflow_unresolved_vqa_still_fails_with_fallback_disabled(
     monkeypatch, tmp_path
 ):
@@ -1245,47 +1040,6 @@ def test_source_reflow_unresolved_vqa_still_fails_with_fallback_disabled(
 
     assert getattr(caught.value, "code", None) == "authored_vqa_residual_dom_issues"
     assert fail_closed_values == [True]
-
-
-def test_flagged_visibility_only_readback_publishes_and_records_reason(
-    monkeypatch, tmp_path
-):
-    monkeypatch.setenv("AUTHORED_PUBLISH_FLAGGED_SLIDES_SOURCE_REFLOW", "true")
-    deck = [_REMADE_HTML, _TERMINAL_HTML]
-    block_id = "source-slide:2:text:1"
-    _install_deck_stubs(monkeypatch, tmp_path, deck)
-    evidence, _recorded, _recorded_v3 = _install_receipt_evidence(monkeypatch)
-    _flagged_pipeline_stub(monkeypatch, deck, 1, evidence=evidence)
-    receipt = _browser_failure_receipt(
-        len(deck), block_id=block_id, slide_index=1
-    )
-    _install_source_reflow_contract_stubs(
-        monkeypatch, len(deck), browser_receipt=receipt
-    )
-    _install_source_reflow_unresolved_round(monkeypatch)
-    request = _source_reflow_request(len(deck))
-    _bind_source_block(request, slide_index=1, block_id=block_id)
-
-    owner_token = set_current_owner_id(uuid.uuid4())
-    try:
-        result, presentation = _run(
-            _generate_on_sqlite(tmp_path, request, _outline(len(deck)))
-        )
-    finally:
-        reset_current_owner_id(owner_token)
-
-    assert result.path == "deck.pptx"
-    gate = presentation.theme["authoredQualityGate"]
-    flagged = _pop_slide_ids(gate["flaggedSlides"])[0]
-    assert flagged["reasons"] == [
-        "composition_safety:gate_repair_not_admitted", "source_visibility"
-    ]
-    assert flagged["sourceVisibilityBlockIds"] == [block_id]
-    source_readback = gate["sourceReadback"]
-    assert source_readback["passed"] is False
-    assert source_readback["verified"] is False
-    assert source_readback["integrityVerified"] is True
-    assert source_readback["flaggedVisibilityFailures"] == [block_id]
 
 
 def test_flagged_fallback_still_rejects_a_missing_source_block(monkeypatch, tmp_path, caplog):
@@ -1398,110 +1152,6 @@ def test_fallback_disabled_keeps_strict_visibility_readback(monkeypatch, tmp_pat
 
     assert getattr(caught.value, "code", None) == "source_content_browser_readback_failed"
     assert caught.value.retryable is True
-
-
-def test_local_fit_accepted_whole_page_failure_flags_one_slide_without_aborting_the_deck(
-    monkeypatch, tmp_path
-):
-    """A later geometry finding is D7 evidence, not a deck-wide local-fit abort."""
-
-    deck = [_REMADE_HTML, _TERMINAL_HTML, _REMADE_HTML]
-    _install_deck_stubs(monkeypatch, tmp_path, deck)
-    _locally_accepted_whole_page_failure_stub(monkeypatch, deck, flagged_index=1)
-    repair_calls = _install_repair_round(monkeypatch, raises=None)
-    remake_calls: list[object] = []
-    _install_remake(monkeypatch, remake_calls, candidate=_TERMINAL_HTML)
-
-    owner_token = set_current_owner_id(uuid.uuid4())
-    try:
-        result, presentation = _run(
-            _generate_on_sqlite(tmp_path, _request(), _outline(3))
-        )
-        slides = _run(_slides_for(tmp_path, presentation.id))
-    finally:
-        reset_current_owner_id(owner_token)
-
-    assert result.path == "deck.pptx"
-    assert [slide.index for slide in slides] == [0, 1, 2]
-    # A local-fit accepted capture that later fails the whole-page gate is
-    # already terminal evidence. It must not spend the provider repair/remake
-    # budget and must not prevent either neighbouring slide from publishing.
-    assert repair_calls == []
-    assert remake_calls == []
-    assert _pop_slide_ids(presentation.theme["authoredQualityGate"]["flaggedSlides"]) == [
-        {
-            "index": 1,
-            "reason": "composition_safety:local_fit",
-            "remakeAttempted": False,
-            "remakeOutcome": "not_attempted",
-            "reasons": ["local_fit:whole_page_geometry"],
-        }
-    ]
-
-
-def test_repair_round_residual_reaches_the_remake_instead_of_failing_the_deck(
-    monkeypatch, tmp_path
-):
-    deck = [_REMADE_HTML, _TERMINAL_HTML]
-    _install_deck_stubs(monkeypatch, tmp_path, deck)
-    _flagged_pipeline_stub(monkeypatch, deck, 1)
-    round_calls = _install_repair_round(monkeypatch, raises=_residual_round_error)
-    remake_calls: list[object] = []
-    # Both remakes stay terminal, so the deck must publish with the flag.
-    _install_remake(monkeypatch, remake_calls, candidate=_TERMINAL_HTML)
-
-    owner_token = set_current_owner_id(uuid.uuid4())
-    try:
-        result, presentation = _run(
-            _generate_on_sqlite(tmp_path, _request(), _outline(2))
-        )
-    finally:
-        reset_current_owner_id(owner_token)
-
-    assert result.path == "deck.pptx"
-    # The round ran once, over the terminal slide only (the deck's HTML reaches
-    # it QID-sealed by the scene envelope, so match the marker, not the source).
-    assert [len(call) for call in round_calls] == [1]
-    assert TERMINAL_MARKER in round_calls[0][0]
-    # Both remakes, for the residual slide only: one ahead of the round and one
-    # behind it.
-    assert remake_calls == [[1], [1]]
-    assert _pop_slide_ids(
-        presentation.theme["authoredQualityGate"]["flaggedSlides"]
-    ) == [
-        {
-            "index": 1,
-            "reason": "composition_safety:overlap",
-            "remakeAttempted": True,
-            "remakeOutcome": "remake_budget_exhausted",
-            "remakeCount": 2,
-        }
-    ]
-
-
-def test_repair_round_residual_publishes_clean_when_the_remake_passes(
-    monkeypatch, tmp_path
-):
-    deck = [_REMADE_HTML, _TERMINAL_HTML]
-    _install_deck_stubs(monkeypatch, tmp_path, deck)
-    _flagged_pipeline_stub(monkeypatch, deck, 1)
-    _install_repair_round(monkeypatch, raises=_residual_round_error)
-    remake_calls: list[object] = []
-    _install_remake(monkeypatch, remake_calls, candidate=_REMADE_HTML)
-
-    owner_token = set_current_owner_id(uuid.uuid4())
-    try:
-        result, presentation = _run(
-            _generate_on_sqlite(tmp_path, _request(), _outline(2))
-        )
-    finally:
-        reset_current_owner_id(owner_token)
-
-    assert result.path == "deck.pptx"
-    assert remake_calls == [[1]]
-    gate = presentation.theme["authoredQualityGate"]
-    assert "flaggedSlides" not in gate
-    assert gate["status"] == "passed"
 
 
 def test_repair_round_residual_still_fails_the_deck_with_the_knob_off(
@@ -1828,58 +1478,6 @@ def _unadmitted_gate_repair_deck(monkeypatch, tmp_path, violations, *, remake):
     return remake_calls
 
 
-def test_unadmitted_gate_repair_with_a_layout_defect_publishes_flagged(
-    monkeypatch, tmp_path
-):
-    remake_calls = _unadmitted_gate_repair_deck(
-        monkeypatch, tmp_path, _ELEMENT_NAMED_VIOLATIONS, remake=_TERMINAL_HTML
-    )
-
-    owner_token = set_current_owner_id(uuid.uuid4())
-    try:
-        result, presentation = _run(
-            _generate_on_sqlite(tmp_path, _request(), _outline(2))
-        )
-    finally:
-        reset_current_owner_id(owner_token)
-
-    assert result.path == "deck.pptx"
-    # Both remakes for the unadmitted slide only, then the flag.
-    assert remake_calls == [[1], [1]]
-    gate = presentation.theme["authoredQualityGate"]
-    assert _pop_slide_ids(gate["flaggedSlides"]) == [
-        {
-            "index": 1,
-            "reason": policy_mod.GATE_REPAIR_NOT_ADMITTED_REASON,
-            "remakeAttempted": True,
-            "remakeOutcome": "remake_budget_exhausted",
-            "remakeCount": 2,
-        }
-    ]
-
-
-def test_unadmitted_gate_repair_publishes_clean_when_the_remake_passes(
-    monkeypatch, tmp_path
-):
-    remake_calls = _unadmitted_gate_repair_deck(
-        monkeypatch, tmp_path, _ELEMENT_NAMED_VIOLATIONS, remake=_REMADE_HTML
-    )
-
-    owner_token = set_current_owner_id(uuid.uuid4())
-    try:
-        result, presentation = _run(
-            _generate_on_sqlite(tmp_path, _request(), _outline(2))
-        )
-    finally:
-        reset_current_owner_id(owner_token)
-
-    assert result.path == "deck.pptx"
-    assert remake_calls == [[1]]
-    gate = presentation.theme["authoredQualityGate"]
-    assert "flaggedSlides" not in gate
-    assert gate["status"] == "passed"
-
-
 def test_a_measured_over_budget_candidate_still_fails_the_deck(monkeypatch, tmp_path):
     # The remake ahead of the round is rejected, so the round's candidate is
     # the one measured over budget.
@@ -2005,108 +1603,6 @@ def _ordered_rounds_deck(monkeypatch, tmp_path, *, patched=None, remakes):
     remake_calls: list[object] = []
     _install_remakes(monkeypatch, remake_calls, candidates=remakes)
     return round_calls, remake_calls
-
-
-def test_an_admitted_remake_first_never_calls_the_patch_round(monkeypatch, tmp_path):
-    round_calls, remake_calls = _ordered_rounds_deck(
-        monkeypatch, tmp_path, remakes=[_REMADE_HTML]
-    )
-
-    owner_token = set_current_owner_id(uuid.uuid4())
-    try:
-        result, presentation = _run(
-            _generate_on_sqlite(tmp_path, _request(), _outline(2))
-        )
-    finally:
-        reset_current_owner_id(owner_token)
-
-    assert result.path == "deck.pptx"
-    # The remake ran first and was admitted, so the patch round was left with
-    # nothing to repair and never called the provider.
-    assert remake_calls == [[1]]
-    assert round_calls == []
-    gate = presentation.theme["authoredQualityGate"]
-    assert "flaggedSlides" not in gate
-    assert gate["status"] == "passed"
-    # A remade slide is still a slide the bounded round rewrote.
-    assert gate["repairedSlideIndices"] == [1]
-
-
-def test_a_rejected_remake_first_falls_back_to_the_patch_round(monkeypatch, tmp_path):
-    round_calls, remake_calls = _ordered_rounds_deck(
-        monkeypatch, tmp_path, patched=_REMADE_HTML, remakes=[_TERMINAL_HTML]
-    )
-
-    owner_token = set_current_owner_id(uuid.uuid4())
-    try:
-        result, presentation = _run(
-            _generate_on_sqlite(tmp_path, _request(), _outline(2))
-        )
-    finally:
-        reset_current_owner_id(owner_token)
-
-    assert result.path == "deck.pptx"
-    # One remake, rejected, then the patch round for that slide only.
-    assert remake_calls == [[1]]
-    assert [len(call) for call in round_calls] == [1]
-    gate = presentation.theme["authoredQualityGate"]
-    assert "flaggedSlides" not in gate
-    assert gate["status"] == "passed"
-
-
-def test_a_second_remake_rescues_a_slide_both_rounds_missed(monkeypatch, tmp_path):
-    round_calls, remake_calls = _ordered_rounds_deck(
-        monkeypatch, tmp_path, remakes=[_TERMINAL_HTML, _REMADE_HTML]
-    )
-
-    owner_token = set_current_owner_id(uuid.uuid4())
-    try:
-        result, presentation = _run(
-            _generate_on_sqlite(tmp_path, _request(), _outline(2))
-        )
-    finally:
-        reset_current_owner_id(owner_token)
-
-    assert result.path == "deck.pptx"
-    # Remake, patch round, remake -- in that order, all for the one slide.
-    assert remake_calls == [[1], [1]]
-    assert [len(call) for call in round_calls] == [1]
-    gate = presentation.theme["authoredQualityGate"]
-    assert "flaggedSlides" not in gate
-    assert gate["status"] == "passed"
-
-
-def test_two_failed_remakes_publish_the_slide_flagged_with_its_count(
-    monkeypatch, tmp_path
-):
-    round_calls, remake_calls = _ordered_rounds_deck(
-        monkeypatch, tmp_path, remakes=[_TERMINAL_HTML]
-    )
-
-    owner_token = set_current_owner_id(uuid.uuid4())
-    try:
-        result, presentation = _run(
-            _generate_on_sqlite(tmp_path, _request(), _outline(2))
-        )
-    finally:
-        reset_current_owner_id(owner_token)
-
-    assert result.path == "deck.pptx"
-    assert remake_calls == [[1], [1]]
-    assert [len(call) for call in round_calls] == [1]
-    # Two spent remakes and a patch round later the slide is still terminal,
-    # so it is published flagged with the count that proves nothing is left.
-    assert _pop_slide_ids(
-        presentation.theme["authoredQualityGate"]["flaggedSlides"]
-    ) == [
-        {
-            "index": 1,
-            "reason": "composition_safety:overlap",
-            "remakeAttempted": True,
-            "remakeOutcome": "remake_budget_exhausted",
-            "remakeCount": 2,
-        }
-    ]
 
 
 def test_the_knob_off_deck_keeps_patch_first_and_never_remakes(monkeypatch, tmp_path):
@@ -2316,37 +1812,6 @@ def _receipt_deck(monkeypatch, tmp_path, deck):
     return recorded, recorded_v3
 
 
-def test_a_flagged_slide_never_blocks_the_receipt_capacity_gate(monkeypatch, tmp_path):
-    recorded, recorded_v3 = _receipt_deck(
-        monkeypatch, tmp_path, [_REMADE_HTML, _TERMINAL_HTML]
-    )
-
-    owner_token = set_current_owner_id(uuid.uuid4())
-    try:
-        result, presentation = _run(
-            _generate_on_sqlite(tmp_path, _request(), _outline(2))
-        )
-    finally:
-        reset_current_owner_id(owner_token)
-
-    assert result.path == "deck.pptx"
-    gate = presentation.theme["authoredQualityGate"]
-    assert gate["capacityStatus"] == "passed"
-    assert gate["qualityPass"] is False
-    assert gate["documentCompleted"] is True
-    assert gate["residualIssueCount"] == 1
-    assert isinstance(gate["qualityReceiptV3"], dict)
-    assert [entry["index"] for entry in gate["flaggedSlides"]] == [1]
-    # The excluded slide is named in the evidence, never silently dropped.
-    assert recorded[-1]["capacity"]["flaggedSlideIndices"] == [1]
-    assert recorded[-1]["capacity"]["violations"] == []
-    assert [entry["index"] for entry in recorded[-1]["safety"]["flagged"]] == [1]
-    assert [
-        entry["index"]
-        for entry in recorded_v3[-1]["safety_evidence"]["flagged"]
-    ] == [1]
-
-
 def test_a_capacity_failure_on_an_unflagged_slide_still_blocks(monkeypatch, tmp_path):
     _receipt_deck(monkeypatch, tmp_path, [_CAPACITY_HTML, _TERMINAL_HTML])
 
@@ -2406,44 +1871,6 @@ def _install_metrics_gap(monkeypatch, gap_marker):
         capacity_role_evidence,
     )
     monkeypatch.setattr(slide_capture, "ensure_browser_metrics", recollect)
-
-
-@pytest.mark.parametrize(
-    "legacy_lane",
-    [False, True],
-    ids=["streaming_tail", "legacy_barrier_non_streaming"],
-)
-def test_a_sealed_ledger_gap_is_recollected_instead_of_blocking(
-    monkeypatch, tmp_path, legacy_lane
-):
-    """Bench run 24 (P0 knobs) versus run 25 (P1): same sha, same fixture.
-
-    The legacy barrier / non-streaming lane holds a slide's telemetry longer
-    before it is sealed, so its ledger entry can be a gap where the streaming
-    lane's is not. Whichever lane produced it, the gap is not evidence about
-    the published bytes: it is re-collected before the deck is judged.
-    """
-
-    if legacy_lane:
-        monkeypatch.setenv("AUTHORED_WAVE_BARRIER_DISABLED", "false")
-        monkeypatch.setenv("AUTHORED_TAIL_STREAMING_ENABLED", "false")
-
-    _receipt_deck(monkeypatch, tmp_path, [_REMADE_HTML, _TERMINAL_HTML])
-    _install_metrics_gap(monkeypatch, "REMADE")
-
-    owner_token = set_current_owner_id(uuid.uuid4())
-    try:
-        result, presentation = _run(
-            _generate_on_sqlite(tmp_path, _request(), _outline(2))
-        )
-    finally:
-        reset_current_owner_id(owner_token)
-
-    assert result.path == "deck.pptx"
-    gate = presentation.theme["authoredQualityGate"]
-    assert gate["capacityStatus"] == "passed"
-    assert gate["status"] == "blocked"
-    assert gate["qualityPass"] is False
 
 
 # ---------------------------------------------------------------------------
@@ -2568,71 +1995,6 @@ def test_repair_checkpoints_carry_the_workspace_fencing_token(monkeypatch, tmp_p
 # not by list position) let the second entry silently replace the first,
 # dropping the author-stage reason.
 # ---------------------------------------------------------------------------
-
-
-def test_a_slide_flagged_by_both_stages_keeps_both_reasons(monkeypatch, tmp_path):
-    _install_deck_stubs(monkeypatch, tmp_path, [_TERMINAL_HTML])
-    author_flag = {
-        "index": 0,
-        "reason": "author:attempts_exhausted",
-        "remakeAttempted": True,
-        "remakeOutcome": "placeholder",
-    }
-
-    async def fake_pipeline(
-        outline,
-        brand,
-        style,
-        header_contract=None,
-        page_number_mode="none",
-        chapter_plan=None,
-        illustration_plan=None,
-        instructions=None,
-        **_job_kwargs,
-    ):
-        return authored_service.AuthoredGenerationPipelineResult(
-            deck=AuthoredDeckResult([_TERMINAL_HTML], "DESIGN SYSTEM"),
-            pngs=[b"png"],
-            elapsed=0.1,
-            author_work=0.1,
-            illustration_work=0.0,
-            render_work=0.1,
-            local_fit_receipts=_fit_receipts([_TERMINAL_HTML]),
-            author_flagged_slides=(author_flag,),
-        )
-
-    monkeypatch.setattr(
-        authored_service, "_author_illustrate_render_pipeline", fake_pipeline
-    )
-    calls: list[object] = []
-    # The remake candidate still carries the terminal marker, so the slide
-    # stays terminal and the D7 fallback flags it too, with its own reason.
-    _install_remake(monkeypatch, calls, candidate=_TERMINAL_HTML)
-
-    owner_token = set_current_owner_id(uuid.uuid4())
-    try:
-        result, presentation = _run(
-            _generate_on_sqlite(tmp_path, _request(), _outline(1))
-        )
-    finally:
-        reset_current_owner_id(owner_token)
-
-    assert result.path == "deck.pptx"
-    entries = _pop_slide_ids(presentation.theme["authoredQualityGate"]["flaggedSlides"])
-    # One merged entry: the author-stage entry's own fields (it came first),
-    # plus every distinct reason both stages recorded for this slide.
-    assert entries == [
-        {
-            "index": 0,
-            "reason": "author:attempts_exhausted",
-            "remakeAttempted": True,
-            "remakeOutcome": "placeholder",
-            "reasons": [
-                "author:attempts_exhausted",
-                "composition_safety:overlap",
-            ],
-        }
-    ]
 
 
 # ---------------------------------------------------------------------------

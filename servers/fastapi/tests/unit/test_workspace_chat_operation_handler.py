@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from tests.support.existing_authored_rows import add_existing_authored_presentation
 import asyncio
 import os
 import uuid
@@ -34,7 +35,6 @@ from models.sql.workspace import (
 from services.chat import ChatTurnResult
 from services.agent_runtime import AgentRunResult
 from services.workspace_chat_memory_outbox import (
-    WORKSPACE_CHAT_MEMORY_TOPIC,
     deliver_workspace_chat_memory,
 )
 from services.workspace_chat_operation_handler import (
@@ -46,7 +46,6 @@ from services.workspace_artifact_publication_service import (
 )
 from services.workspace_operation_handler_registry import (
     NonRetryableWorkspaceOperationError,
-    RetryableWorkspaceOperationError,
     WorkspaceOperationCancelled,
     WorkspaceOperationClaim,
 )
@@ -104,7 +103,7 @@ async def _seed(maker, *, presentation_revision: int, expected_revision: int):
             theme={"mode": "authored"},
             revision=presentation_revision,
         )
-        session.add(presentation)
+        await add_existing_authored_presentation(session, presentation)
         await session.flush()
         conversation = WorkspaceConversation(
             presentation_id=presentation.id,
@@ -244,108 +243,6 @@ def _image_writing_service_factory(*, fail_after_write: bool = False):
     return FakeImageWritingChatService
 
 
-def test_chat_mutations_and_revision_publish_in_one_commit(tmp_path: Path):
-    asyncio.run(_chat_mutations_and_revision_publish_in_one_commit(tmp_path))
-
-
-async def _chat_mutations_and_revision_publish_in_one_commit(tmp_path: Path):
-    engine, maker = await _database(tmp_path / "publish.db")
-    try:
-        presentation_id, operation_id, claim = await _seed(
-            maker, presentation_revision=3, expected_revision=3
-        )
-        context = _Context(claim)
-        handler = PresentationChatOperationHandler(
-            session_factory=maker,
-            service_factory=_service_factory(),
-        )
-
-        with patch(
-            "services.chat.conversation_store.CHAT_MEMORY_STORE.store_chat_turn",
-            new=AsyncMock(),
-        ) as direct_memory_write:
-            result = await handler.execute(context)
-
-        # The SQL turn and publication commit first; the external write is
-        # represented only by a durable outbox record at this point.
-        direct_memory_write.assert_not_awaited()
-
-        assert result.result_revision == 4
-        assert result.payload["summary"] == "Deck updated."
-        assert context.stages == [
-            "reading_presentation",
-            "applying_command",
-            "publishing_revision",
-        ]
-        async with maker() as session:
-            presentation = await session.get(PresentationModel, presentation_id)
-            operation = await session.get(WorkspaceOperation, operation_id)
-            assert presentation.content == "after"
-            assert presentation.revision == 4
-            assert operation.state == "succeeded"
-            assert operation.result_revision == 4
-            assert operation.result["tool_calls"] == ["saveSlide"]
-            turn_rows = list(
-                (
-                    await session.execute(
-                        select(WorkspaceMessage).order_by(
-                            WorkspaceMessage.position
-                        )
-                    )
-                ).scalars()
-            )
-            assert [row.role for row in turn_rows] == ["assistant"]
-            assert [row.content for row in turn_rows] == [
-                "Deck updated.",
-            ]
-            outbox = (
-                await session.execute(
-                    select(WorkspaceOutbox).where(
-                        WorkspaceOutbox.topic == WORKSPACE_CHAT_MEMORY_TOPIC
-                    )
-                )
-            ).scalar_one()
-            assert outbox.topic == WORKSPACE_CHAT_MEMORY_TOPIC
-            assert outbox.status == "pending"
-            assert outbox.payload == {
-                "operation_id": str(operation_id),
-                "presentation_id": str(presentation_id),
-                "conversation_id": str(claim.conversation_id),
-                "result_revision": 4,
-            }
-            serialized_payload = str(outbox.payload)
-            assert "change the deck" not in serialized_payload
-            assert "Deck updated" not in serialized_payload
-            assert "secret" not in serialized_payload
-
-        external_memory = SimpleNamespace(store_chat_turn=AsyncMock())
-
-        async def deliver(payload):
-            await deliver_workspace_chat_memory(
-                payload,
-                session_factory=maker,
-                memory_store=external_memory,
-            )
-
-        async def deliver_workspace_event(_payload):
-            return None
-
-        # Delivery itself is covered here; dispatcher ordering/retry behavior
-        # has a dedicated suite and is unrelated to the runtime boundary.
-        await deliver(outbox.payload)
-
-        external_memory.store_chat_turn.assert_awaited_once_with(
-            presentation_id=presentation_id,
-            conversation_id=claim.conversation_id,
-            user_message="change the deck",
-            assistant_message="Deck updated.",
-            delivery_id=f"workspace-chat:{operation_id}:revision:4",
-            strict=True,
-        )
-    finally:
-        await engine.dispose()
-
-
 def test_memory_delivery_rejects_an_unpublished_operation(tmp_path: Path):
     asyncio.run(_memory_delivery_rejects_an_unpublished_operation(tmp_path))
 
@@ -470,55 +367,20 @@ async def _memory_delivery_serializes_non_atomic_provider_idempotency(
         await engine.dispose()
 
 
-def test_failure_after_inner_commit_rolls_back_all_mutations(tmp_path: Path):
-    asyncio.run(_failure_after_inner_commit_rolls_back_all_mutations(tmp_path))
+def test_pre_existing_authored_deck_is_refused_before_any_mutation(tmp_path: Path):
+    """Chat editing served only authored decks. The authored driver was
+    removed on 2026-11-10, so an existing authored deck no longer resolves
+    and the handler refuses it, non-retryably, before any tool, memory or
+    revision write. (Admission and the runner refuse it earlier with
+    ``unsupported_presentation_driver``; this is the handler's own fence.)"""
+    asyncio.run(_pre_existing_authored_deck_is_refused_before_any_mutation(tmp_path))
 
 
-async def _failure_after_inner_commit_rolls_back_all_mutations(tmp_path: Path):
-    engine, maker = await _database(tmp_path / "rollback.db")
+async def _pre_existing_authored_deck_is_refused_before_any_mutation(tmp_path: Path):
+    engine, maker = await _database(tmp_path / "authored-refused.db")
     try:
         presentation_id, operation_id, claim = await _seed(
-            maker, presentation_revision=1, expected_revision=1
-        )
-        handler = PresentationChatOperationHandler(
-            session_factory=maker,
-            service_factory=_service_factory(fail_after_flush=True),
-        )
-
-        with patch(
-            "services.chat.conversation_store.CHAT_MEMORY_STORE.store_chat_turn",
-            new=AsyncMock(),
-        ) as direct_memory_write, pytest.raises(
-            RetryableWorkspaceOperationError
-        ) as caught:
-            await handler.execute(_Context(claim))
-        assert caught.value.code == "presentation_edit_failed"
-        direct_memory_write.assert_not_awaited()
-
-        async with maker() as session:
-            presentation = await session.get(PresentationModel, presentation_id)
-            operation = await session.get(WorkspaceOperation, operation_id)
-            assert presentation.content == "before"
-            assert presentation.revision == 1
-            assert operation.state == "running"
-            assert operation.result_revision is None
-            assert (await session.execute(select(WorkspaceOutbox))).first() is None
-            assert (
-                await session.execute(select(ChatHistoryMessageModel))
-            ).first() is None
-    finally:
-        await engine.dispose()
-
-
-def test_stale_revision_rolls_back_tool_mutations(tmp_path: Path):
-    asyncio.run(_stale_revision_rolls_back_tool_mutations(tmp_path))
-
-
-async def _stale_revision_rolls_back_tool_mutations(tmp_path: Path):
-    engine, maker = await _database(tmp_path / "stale.db")
-    try:
-        presentation_id, operation_id, claim = await _seed(
-            maker, presentation_revision=2, expected_revision=1
+            maker, presentation_revision=2, expected_revision=2
         )
         handler = PresentationChatOperationHandler(
             session_factory=maker,
@@ -532,7 +394,7 @@ async def _stale_revision_rolls_back_tool_mutations(tmp_path: Path):
             NonRetryableWorkspaceOperationError
         ) as caught:
             await handler.execute(_Context(claim))
-        assert caught.value.code == "stale_presentation_revision"
+        assert caught.value.code == "compatibility_presentation_quarantined"
         direct_memory_write.assert_not_awaited()
 
         async with maker() as session:
@@ -546,202 +408,6 @@ async def _stale_revision_rolls_back_tool_mutations(tmp_path: Path):
             assert (
                 await session.execute(select(ChatHistoryMessageModel))
             ).first() is None
-    finally:
-        await engine.dispose()
-
-
-def test_cancel_after_sql_turn_rolls_back_without_external_memory(tmp_path: Path):
-    asyncio.run(_cancel_after_sql_turn_rolls_back_without_external_memory(tmp_path))
-
-
-async def _cancel_after_sql_turn_rolls_back_without_external_memory(
-    tmp_path: Path,
-):
-    engine, maker = await _database(tmp_path / "cancel.db")
-    try:
-        presentation_id, operation_id, claim = await _seed(
-            maker, presentation_revision=5, expected_revision=5
-        )
-        handler = PresentationChatOperationHandler(
-            session_factory=maker,
-            service_factory=_service_factory(),
-        )
-
-        with patch(
-            "services.chat.conversation_store.CHAT_MEMORY_STORE.store_chat_turn",
-            new=AsyncMock(),
-        ) as direct_memory_write, pytest.raises(WorkspaceOperationCancelled):
-            await handler.execute(_CancelAfterApplyContext(claim))
-        direct_memory_write.assert_not_awaited()
-
-        async with maker() as session:
-            presentation = await session.get(PresentationModel, presentation_id)
-            operation = await session.get(WorkspaceOperation, operation_id)
-            assert presentation.content == "before"
-            assert presentation.revision == 5
-            assert operation.state == "running"
-            assert operation.result_revision is None
-            assert (await session.execute(select(WorkspaceOutbox))).first() is None
-            assert (
-                await session.execute(select(ChatHistoryMessageModel))
-            ).first() is None
-    finally:
-        await engine.dispose()
-
-
-def test_image_write_is_hash_promoted_with_revision_publication(tmp_path: Path):
-    asyncio.run(_image_write_is_hash_promoted_with_revision_publication(tmp_path))
-
-
-async def _image_write_is_hash_promoted_with_revision_publication(tmp_path: Path):
-    engine, maker = await _database(tmp_path / "image-publish.db")
-    try:
-        presentation_id, operation_id, claim = await _seed(
-            maker, presentation_revision=7, expected_revision=7
-        )
-        handler = PresentationChatOperationHandler(
-            session_factory=maker,
-            service_factory=_image_writing_service_factory(),
-        )
-
-        result = await handler.execute(_Context(claim))
-        assert result.result_revision == 8
-
-        async with maker() as session:
-            presentation = await session.get(PresentationModel, presentation_id)
-            image = (await session.execute(select(ImageAsset))).scalar_one()
-            rows = list(
-                (
-                    await session.execute(
-                        select(WorkspaceArtifact).order_by(WorkspaceArtifact.kind)
-                    )
-                ).scalars()
-            )
-            journal = next(row for row in rows if row.kind == "chat.image.journal")
-            artifact = next(row for row in rows if row.kind == "chat.image")
-            final_path = Path(os.environ["APP_DATA_DIRECTORY"]) / artifact.storage_key
-            assert journal.status == "deleted"
-            assert artifact.status == "ready"
-            assert artifact.source_revision == 8
-            assert final_path.is_file()
-            assert final_path.name == f"{artifact.sha256}.png"
-            assert str(operation_id) in artifact.storage_key
-            assert image.path == str(final_path)
-            assert presentation.content == str(final_path)
-            assert result.payload["summary"] == str(final_path)
-            assert not list(
-                Path(os.environ["APP_DATA_DIRECTORY"]).rglob("*.png")
-            ) == []
-    finally:
-        await engine.dispose()
-
-
-@pytest.mark.parametrize("failure", ["cancel", "stale", "provider"])
-def test_unpublished_image_write_is_exactly_compensated(
-    tmp_path: Path, failure: str
-):
-    asyncio.run(_unpublished_image_write_is_exactly_compensated(tmp_path, failure))
-
-
-async def _unpublished_image_write_is_exactly_compensated(
-    tmp_path: Path, failure: str
-):
-    engine, maker = await _database(tmp_path / f"image-{failure}.db")
-    try:
-        current_revision = 2 if failure == "stale" else 1
-        expected_revision = 1
-        presentation_id, _operation_id, claim = await _seed(
-            maker,
-            presentation_revision=current_revision,
-            expected_revision=expected_revision,
-        )
-        handler = PresentationChatOperationHandler(
-            session_factory=maker,
-            service_factory=_image_writing_service_factory(
-                fail_after_write=failure == "provider"
-            ),
-        )
-        context = (
-            _CancelAfterApplyContext(claim)
-            if failure == "cancel"
-            else _Context(claim)
-        )
-        expected_error = {
-            "cancel": WorkspaceOperationCancelled,
-            "stale": NonRetryableWorkspaceOperationError,
-            "provider": RetryableWorkspaceOperationError,
-        }[failure]
-
-        with pytest.raises(expected_error):
-            await handler.execute(context)
-
-        app_data = Path(os.environ["APP_DATA_DIRECTORY"])
-        assert not list(app_data.rglob("*.png"))
-        async with maker() as session:
-            presentation = await session.get(PresentationModel, presentation_id)
-            assert presentation.content == "before"
-            assert (await session.execute(select(ImageAsset))).first() is None
-            artifacts = list(
-                (await session.execute(select(WorkspaceArtifact))).scalars()
-            )
-            assert len(artifacts) == 1
-            assert artifacts[0].kind == "chat.image.journal"
-            assert artifacts[0].status == "deleted"
-    finally:
-        await engine.dispose()
-
-
-def test_retry_after_provider_write_failure_has_no_duplicate_artifact(
-    tmp_path: Path,
-):
-    asyncio.run(_retry_after_provider_write_failure_has_no_duplicate_artifact(tmp_path))
-
-
-async def _retry_after_provider_write_failure_has_no_duplicate_artifact(
-    tmp_path: Path,
-):
-    engine, maker = await _database(tmp_path / "image-retry.db")
-    try:
-        _presentation_id, _operation_id, claim = await _seed(
-            maker, presentation_revision=1, expected_revision=1
-        )
-        failing_handler = PresentationChatOperationHandler(
-            session_factory=maker,
-            service_factory=_image_writing_service_factory(fail_after_write=True),
-        )
-        with pytest.raises(RetryableWorkspaceOperationError):
-            await failing_handler.execute(_Context(claim))
-
-        succeeding_handler = PresentationChatOperationHandler(
-            session_factory=maker,
-            service_factory=_image_writing_service_factory(),
-        )
-        await succeeding_handler.execute(_Context(claim))
-
-        async with maker() as session:
-            ready = list(
-                (
-                    await session.execute(
-                        select(WorkspaceArtifact).where(
-                            WorkspaceArtifact.kind == "chat.image",
-                            WorkspaceArtifact.status == "ready",
-                        )
-                    )
-                ).scalars()
-            )
-            journals = list(
-                (
-                    await session.execute(
-                        select(WorkspaceArtifact).where(
-                            WorkspaceArtifact.kind == "chat.image.journal"
-                        )
-                    )
-                ).scalars()
-            )
-            assert len(ready) == 1
-            assert len(journals) == 2
-            assert {journal.status for journal in journals} == {"deleted"}
-        assert len(list(Path(os.environ["APP_DATA_DIRECTORY"]).rglob("*.png"))) == 1
     finally:
         await engine.dispose()
 
@@ -762,12 +428,6 @@ def _capturing_runtime_factory(captured: list[object]):
             )
 
     return CapturingRuntime
-
-
-def test_handler_passes_only_db_vetted_authored_context_and_publishes_one_message(
-    tmp_path: Path,
-):
-    asyncio.run(_handler_passes_only_db_vetted_authored_context(tmp_path))
 
 
 async def _handler_passes_only_db_vetted_authored_context(tmp_path: Path):
@@ -851,58 +511,6 @@ async def _handler_passes_only_db_vetted_authored_context(tmp_path: Path):
             assert messages[-1].content == "Canonical answer."
             assert operation.result["assistant_message_id"] == str(messages[-1].id)
             assert legacy == []
-    finally:
-        await engine.dispose()
-
-
-def test_handler_revalidates_assets_before_runtime(tmp_path: Path):
-    asyncio.run(_handler_revalidates_assets_before_runtime(tmp_path))
-
-
-async def _handler_revalidates_assets_before_runtime(tmp_path: Path):
-    engine, maker = await _database(tmp_path / "asset-revalidation.db")
-    try:
-        presentation_id, operation_id, claim = await _seed(
-            maker, presentation_revision=9, expected_revision=9
-        )
-        asset_id = uuid.uuid4()
-        request_payload = {
-            **dict(claim.request_payload),
-            "asset_ids": [str(asset_id)],
-        }
-        async with maker() as session, session.begin():
-            operation = await session.get(WorkspaceOperation, operation_id)
-            operation.request_payload = request_payload
-            session.add(
-                WorkspaceAsset(
-                    id=asset_id,
-                    conversation_id=claim.conversation_id,
-                    state="quarantined",
-                    original_name="unsafe.pdf",
-                    media_type="application/pdf",
-                    size_bytes=12,
-                    storage_key="quarantine/unsafe.pdf",
-                    sha256="b" * 64,
-                )
-            )
-
-        captured: list[object] = []
-        handler = PresentationChatOperationHandler(
-            session_factory=maker,
-            service_factory=_capturing_runtime_factory(captured),
-        )
-        with pytest.raises(NonRetryableWorkspaceOperationError) as caught:
-            await handler.execute(
-                _Context(replace(claim, request_payload=request_payload))
-            )
-        assert caught.value.code == "workspace_asset_not_ready"
-        assert captured == []
-        async with maker() as session:
-            presentation = await session.get(PresentationModel, presentation_id)
-            assert presentation.revision == 9
-            assert list(
-                (await session.scalars(select(WorkspaceMessage))).all()
-            ) == []
     finally:
         await engine.dispose()
 

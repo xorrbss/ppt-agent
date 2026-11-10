@@ -2,6 +2,7 @@
 import React, { useEffect, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { AlertCircle, Loader2 } from "lucide-react";
+import { useTranslations } from "next-intl";
 
 import { RootState } from "@/store/store";
 import { setPresentationData } from "@/store/slices/presentationGeneration";
@@ -9,11 +10,13 @@ import { getApiUrl, normalizeBackendAssetUrls } from "@/utils/api";
 import { applyPresentationThemeToElement } from "@/app/(presentation-generator)/presentation/utils/applyPresentationThemeDom";
 import SlideScale from "@/app/(presentation-generator)/components/PresentationRender";
 import { getPublicHeader } from "@/app/(presentation-generator)/services/api/header";
+import { isUnsupportedPresentationDriverError } from "@/lib/unsupported-presentation";
 
-type Status = "loading" | "ready" | "notfound" | "error";
+type Status = "loading" | "ready" | "notfound" | "unsupported" | "error";
 
 const PublicPresentationView = ({ token }: { token: string }) => {
   const dispatch = useDispatch();
+  const tCommunity = useTranslations("community");
   const { presentationData } = useSelector(
     (state: RootState) => state.presentationGeneration
   );
@@ -35,7 +38,24 @@ const PublicPresentationView = ({ token }: { token: string }) => {
           if (!cancelled) setStatus("notfound");
           return;
         }
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        if (!res.ok) {
+          // A deck made with a removed generation mode is refused with a
+          // 4xx `unsupported_presentation_driver`; say so instead of "retry".
+          let body: unknown = null;
+          try {
+            body = await res.json();
+          } catch {
+            body = null;
+          }
+          if (
+            res.status < 500 &&
+            isUnsupportedPresentationDriverError({ status: res.status, ...(body as object) })
+          ) {
+            if (!cancelled) setStatus("unsupported");
+            return;
+          }
+          throw new Error(`HTTP ${res.status}`);
+        }
         const data = await res.json();
         if (cancelled) return;
         dispatch(setPresentationData(normalizeBackendAssetUrls(data)));
@@ -60,6 +80,23 @@ const PublicPresentationView = ({ token }: { token: string }) => {
     return (
       <div className="flex min-h-screen items-center justify-center bg-[#f3f4f7]">
         <Loader2 className="h-6 w-6 animate-spin text-gray-400" />
+      </div>
+    );
+  }
+
+  if (status === "unsupported") {
+    return (
+      <div
+        className="flex min-h-screen flex-col items-center justify-center bg-[#f3f4f7] px-6 text-center"
+        data-testid="public-unsupported-presentation"
+      >
+        <AlertCircle className="mb-4 h-12 w-12 text-gray-400" />
+        <h1 className="text-lg font-semibold text-[#101323]">
+          {tCommunity("unsupportedPresentationTitle")}
+        </h1>
+        <p className="mt-1 text-sm text-gray-500">
+          {tCommunity("unsupportedPresentationDescription")}
+        </p>
       </div>
     );
   }

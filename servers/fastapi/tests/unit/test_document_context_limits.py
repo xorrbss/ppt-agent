@@ -12,6 +12,7 @@ from api.v1.ppt.endpoints import outlines as outlines_endpoint
 from services import presentation_generation_pipeline as presentation_generate
 from models.generate_presentation_request import GeneratePresentationRequest
 from models.sql.presentation import PresentationModel
+from services.compatibility_migration.admission import stamp_new_svg_presentation
 from services.documents_loader import DocumentsLoader
 from tests.conftest import FakeAsyncSession
 from utils.document_context import (
@@ -205,8 +206,13 @@ def test_outline_stream_emits_safe_error_and_skips_llm_for_oversized_document(
         get_results={presentation_id: presentation},
         # The outline writer admits only a staged deck whose generate operation
         # is still awaiting activation; this is that deck.
-        scalar_result=uuid.uuid4(),
+        # The same stub answers the svg outline's read of that operation's
+        # generation settings (none chosen: the free header).
+        scalar_result=types.SimpleNamespace(id=uuid.uuid4(), request_payload={}),
     )
+    # A staging shell is stamped at create; since the authored driver was
+    # removed (2026-11-10) that identity is svg, and an unstamped row is refused.
+    stamp_new_svg_presentation(presentation)
     request = types.SimpleNamespace(is_disconnected=AsyncMock(return_value=False))
     limit_error = DocumentContextLimitError(
         actual_chars=50_001,

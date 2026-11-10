@@ -133,8 +133,8 @@ async def seed_export_operation(
         content="export deck",
         n_slides=n_slides,
         language="ko",
-        mode="authored",
-        theme={"mode": "authored"},
+        mode="svg",
+        theme={"mode": "svg"},
     )
     session.add(presentation)
     await session.flush()

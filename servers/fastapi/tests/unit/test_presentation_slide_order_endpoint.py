@@ -21,6 +21,8 @@ process that normally claims and executes the operation out-of-request.
 """
 from __future__ import annotations
 
+from tests.support.existing_authored_rows import add_existing_authored_presentation
+from tests.support.minimal_svg_deck import minimal_svg_slide, minimal_svg_theme
 import asyncio
 import uuid
 from pathlib import Path
@@ -29,6 +31,7 @@ import httpx
 import pytest
 from fastapi import FastAPI
 from sqlalchemy import event, select
+from sqlalchemy.exc import OperationalError
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlmodel import SQLModel
 
@@ -91,7 +94,7 @@ def _app(session_factory):
     return app
 
 
-async def _seed_presentation(maker, *, n_slides: int):
+async def _seed_presentation(maker, *, n_slides: int, authored: bool = False):
     # Owner scoping (services/database.py's do_orm_execute hook) is applied
     # on read based on the current owner contextvar. The endpoint always
     # reads under OWNER_ID (set in the request-scoped session_dependency
@@ -101,17 +104,26 @@ async def _seed_presentation(maker, *, n_slides: int):
     try:
         async with maker() as session, session.begin():
             session.add(User(id=OWNER_ID, username="slide-order-endpoint", hashed_password="test-only"))
+            # Every deck this fork creates is svg since the authored driver
+            # was removed (2026-11-10); ``authored=True`` writes a
+            # pre-existing authored row instead.
             presentation = PresentationModel(
                 content="source", n_slides=n_slides, language="en", title="title",
-                mode="authored", version="v1-standard", lifecycle_status="published",
-                revision=1, theme={"mode": "authored"}, owner_id=OWNER_ID,
+                mode="svg", version="v1-standard", lifecycle_status="published",
+                revision=1, theme=minimal_svg_theme(), owner_id=OWNER_ID,
             )
-            session.add(presentation)
+            if authored:
+                await add_existing_authored_presentation(session, presentation)
+            else:
+                session.add(presentation)
             await session.flush()
             slide_ids: list[uuid.UUID] = []
             for index in range(n_slides):
-                slide = SlideModel(presentation=presentation.id, layout_group="custom",
-                                   layout="content", index=index, content={"title": f"slide-{index}"})
+                slide = (
+                    SlideModel(presentation=presentation.id, layout_group="custom",
+                               layout="content", index=index, content={"title": f"slide-{index}"})
+                    if authored else minimal_svg_slide(presentation.id, index)
+                )
                 session.add(slide)
                 await session.flush()
                 slide_ids.append(slide.id)
@@ -125,7 +137,13 @@ async def _drain_forever(runner: WorkspaceOperationRunner, stop: asyncio.Event) 
     """Stand-in for the real worker process: claim+run anything queued while
     the endpoint's own request handler is polling for a terminal state."""
     while not stop.is_set():
-        dispatched = await runner.dispatch_once()
+        try:
+            dispatched = await runner.dispatch_once()
+        except OperationalError:
+            # Like the real run loop, a transient sqlite lock (an svg
+            # publication re-stamping every page holds the writer) is
+            # recovered by polling again, not by killing the dispatcher.
+            dispatched = 0
         if dispatched == 0:
             try:
                 await asyncio.wait_for(stop.wait(), timeout=0.05)
@@ -150,12 +168,21 @@ async def harness(tmp_path):
     finally:
         stop.set()
         await drain_task
+        # An svg publication can still be finishing its claim when the
+        # endpoint has answered; let it end before the database goes away.
+        active = tuple(runner._active.values())
+        if active:
+            await asyncio.gather(*active, return_exceptions=True)
         await engine.dispose()
 
 
 @pytest.mark.anyio
-async def test_endpoint_accepts_a_thirty_slide_deck_without_500(harness):
+async def test_endpoint_accepts_a_thirty_slide_deck_without_500(harness, monkeypatch):
     maker, app = harness
+    # Publishing an svg deck re-stamps every page; give thirty pages room.
+    import api.v1.ppt.endpoints.presentation_slide_order as slide_order_module
+
+    monkeypatch.setattr(slide_order_module, "_POLL_BUDGET_SECONDS", 60.0)
     presentation_id, slide_ids = await _seed_presentation(maker, n_slides=30)
     new_order = list(reversed(slide_ids))
 
@@ -563,3 +590,27 @@ async def test_endpoint_records_only_the_request_tenant(tmp_path, monkeypatch, r
             assert payload["principal_tenant_id"] == request_tenant
     finally:
         await engine.dispose()
+
+
+@pytest.mark.anyio
+async def test_endpoint_refuses_a_pre_existing_authored_deck(harness):
+    """The authored driver was removed on 2026-11-10: reordering an existing
+    authored deck is refused with the code its read answers, and no
+    operation is recorded."""
+    maker, app = harness
+    presentation_id, slide_ids = await _seed_presentation(maker, n_slides=2, authored=True)
+
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url=BASE_URL) as client:
+        response = await client.patch(
+            f"/api/v1/ppt/presentation/{presentation_id}/slides/order",
+            json={"slide_ids": [str(s) for s in reversed(slide_ids)], "expected_revision": 1},
+        )
+
+    assert response.status_code == 422, response.text
+    assert response.json()["detail"] == "unsupported_presentation_driver"
+    async with maker() as session:
+        operations = (await session.scalars(
+            select(WorkspaceOperation).where(WorkspaceOperation.presentation_id == presentation_id)
+        )).all()
+    assert operations == []

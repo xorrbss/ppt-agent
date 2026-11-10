@@ -1,3 +1,4 @@
+from tests.support.existing_authored_rows import add_existing_authored_presentation
 import asyncio
 import json
 import logging
@@ -6,12 +7,10 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
-from PIL import Image
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlmodel import SQLModel, select
 
 from models.presentation_from_template import AuthoredQualityReviewRequest
-from models.generate_presentation_request import GeneratePresentationRequest
 from models.presentation_outline_model import (
     PresentationOutlineModel,
     SlideOutlineModel,
@@ -23,7 +22,6 @@ from models.sql.authored_exact_provenance import AuthoredExactProvenance
 from models.sql.presentation import PresentationModel
 from models.sql.presentation_version import PresentationVersionModel
 from models.sql.slide import SlideModel
-from services import authored_presentation_service as authored_service
 from services import authored_quality_review_service as quality_service
 from services import presentation_version_service as version_service
 from services.authored_exact_provenance import (
@@ -35,8 +33,6 @@ from utils.authored_styles import (
     AuthoredStyle,
 )
 from utils.authored_ocr_quality import OcrQualityResult
-from services.generation_core.authoring.author_deck import AuthoredDeckResult
-from utils.owner_context import reset_current_owner_id, set_current_owner_id
 from services.generation_core.authoring.author_slide import (
     EXACT_RECONSTRUCTION,
     STYLE_REFERENCE,
@@ -187,7 +183,7 @@ def test_unimportable_authored_deck_is_preserved_without_page_regeneration(
         )
 
         async with AsyncSession(engine, expire_on_commit=False) as session:
-            session.add(presentation)
+            await add_existing_authored_presentation(session, presentation)
             session.add_all(_slides(presentation.id))
             session.add(task)
             await session.commit()
@@ -407,7 +403,7 @@ def test_unimportable_exact_deck_preserves_original_png_bytes_without_snapshot(
             )
 
         async with AsyncSession(engine, expire_on_commit=False) as session:
-            session.add(presentation)
+            await add_existing_authored_presentation(session, presentation)
             session.add_all(slides)
             session.add(_exact_provenance_row(presentation_id, style))
             session.add(task)
@@ -474,196 +470,6 @@ def test_unimportable_exact_deck_preserves_original_png_bytes_without_snapshot(
     _run(runner())
 
 
-def test_exact_generation_provenance_survives_unimportable_review_without_model_call(
-    tmp_path, monkeypatch
-):
-    async def runner():
-        engine = await _make_engine(tmp_path / "exact-generation-review.db")
-        source_paths = (
-            tmp_path / "private-source-0.png", tmp_path / "private-source-1.png",
-        )
-        Image.new("RGB", (1280, 720), "white").save(source_paths[0])
-        Image.new("RGB", (1280, 720), "navy").save(source_paths[1])
-        style = AuthoredStyle(
-            id="exact-source",
-            name="Exact source",
-            description="Private test preset",
-            preview_bg="#FFFFFF",
-            preview_accent="#000000",
-            brief="Reconstruct the supplied sources.",
-            reference_mode=EXACT_RECONSTRUCTION,
-            assets_root=tmp_path,
-            slide_reference_images=source_paths,
-            slide_reference_indices=(0, 1),
-        )
-        outline = PresentationOutlineModel(
-            slides=[
-                SlideOutlineModel(content="Cover content"),
-                SlideOutlineModel(content="Detail content"),
-            ]
-        )
-        pipeline = authored_service.AuthoredGenerationPipelineResult(
-            deck=AuthoredDeckResult(
-                [
-                    '<!DOCTYPE html><html><head><meta charset="utf-8"></head><body><h1 data-qid="slide.0.title">generated cover</h1></body></html>',
-                    '<!DOCTYPE html><html><head><meta charset="utf-8"></head><body><h1 data-qid="slide.1.title">generated detail</h1></body></html>',
-                ],
-                "EXACT DESIGN",
-            ),
-            pngs=[b"generated-cover", b"generated-detail"],
-            elapsed=0.1,
-            author_work=0.1,
-            illustration_work=0.0,
-            render_work=0.1,
-        )
-
-        monkeypatch.setenv("AUTHORED_EXACT_RECONSTRUCTION_ENABLED", "1")
-        monkeypatch.setenv("AUTHORED_EXACT_STYLE_IDS", "exact-source")
-        monkeypatch.setattr(
-            authored_service, "resolve_authored_style", lambda _: style
-        )
-        monkeypatch.setattr(
-            authored_service,
-            "_author_illustrate_render_pipeline",
-            lambda *args, **kwargs: _async_value(pipeline),
-        )
-        monkeypatch.setattr(authored_service, "find_chrome", lambda: True)
-        monkeypatch.setattr(
-            authored_service,
-            "_save_slide_pngs",
-            lambda presentation_id, pngs: [
-                "authored/generated/slide-0.png",
-                "authored/generated/slide-1.png",
-            ],
-        )
-        monkeypatch.setattr(
-            authored_service,
-            "_build_authored_export",
-            lambda *args, **kwargs: "generated.pptx",
-        )
-        from utils import llm_provider
-
-        monkeypatch.setattr(
-            llm_provider,
-            "get_llm_provider",
-            lambda: SimpleNamespace(value="stub"),
-        )
-        monkeypatch.setattr(llm_provider, "get_model", lambda: "stub-model")
-
-        snapshot_id = "a" * 32
-        materialize_calls = []
-
-        async def materialize_snapshot(
-            resolved_style, saved_snapshot_id, *, expected_slide_count
-        ):
-            materialize_calls.append(
-                (resolved_style.id, saved_snapshot_id, expected_slide_count)
-            )
-            return style
-
-        monkeypatch.setattr(
-            authored_service,
-            "materialize_exact_source_style",
-            materialize_snapshot,
-        )
-        monkeypatch.setattr(
-            quality_service,
-            "materialize_exact_source_style",
-            materialize_snapshot,
-        )
-
-        presentation_id = uuid.uuid4()
-        async with AsyncSession(engine, expire_on_commit=False) as session:
-            generation_request = GeneratePresentationRequest(
-                content="Exact topic",
-                # An omitted strategy resolves to svg, which would validate
-                # the style against the registered presets instead.
-                strategy="authored",
-                template="authored",
-                authored_style="exact-source",
-            )
-            generation_request._authored_exact_snapshot_id = snapshot_id
-            await authored_service.generate_authored_presentation(
-                generation_request,
-                presentation_id,
-                outline,
-                "English",
-                session,
-            )
-
-            saved = await session.get(PresentationModel, presentation_id)
-            provenance = await session.get(AuthoredExactProvenance, presentation_id)
-            assert saved.theme["style"] == "exact-source"
-            assert "reference_mode" not in saved.theme
-            assert str(tmp_path) not in str(saved.theme)
-            assert provenance is not None
-            assert str(tmp_path) not in str(provenance.provenance)
-            assert provenance.provenance["source_snapshot_id"] == snapshot_id
-
-            task = AsyncPresentationGenerationTaskModel(status="pending", message="queued")
-            session.add(task)
-            await session.commit()
-            critique_calls = []
-
-            async def fake_critique(pngs, contexts=None, **kwargs):
-                critique_calls.append((list(pngs), kwargs))
-                return [SlideCritique(needs_fix=False)]
-
-            monkeypatch.setattr(
-                quality_service, "resolve_authored_style", lambda _: style
-            )
-            monkeypatch.setattr(
-                quality_service,
-                "prepare_authored_deck",
-                lambda *args: SimpleNamespace(
-                    roles=("COVER", "CLOSING"),
-                    reference_images=tuple((path,) for path in source_paths),
-                    reference_mode=EXACT_RECONSTRUCTION,
-                    brand=Brand(topic="Exact topic"),
-                    design_system="EXACT DESIGN",
-                ),
-            )
-            monkeypatch.setattr(
-                quality_service,
-                "render_html_to_png",
-                lambda html: _async_bytes(html.encode()),
-            )
-            monkeypatch.setattr(
-                quality_service, "critique_authored", fake_critique
-            )
-            monkeypatch.setattr(
-                quality_service,
-                "_observe_critique_cache",
-                lambda images, contexts, **_: (0, len(images)),
-            )
-
-            await quality_service.run_authored_quality_review(
-                presentation_id,
-                AuthoredQualityReviewRequest(
-                    scope="current", slide_indices=[1]
-                ),
-                task,
-                session,
-            )
-
-            assert critique_calls == []
-            assert task.data["reviewed_count"] == 1
-            assert task.data["fixed_count"] == 0
-            assert task.data["rejection_reasons"] == {"legacy_preserved.no_geometry_trigger": 1}
-            assert task.data["metrics"].get("automatic_page_regeneration_calls", 0) == 0
-            assert materialize_calls == [
-                ("exact-source", snapshot_id, 2),
-            ]
-
-        await engine.dispose()
-
-    owner_token = set_current_owner_id(uuid.uuid4())
-    try:
-        _run(runner())
-    finally:
-        reset_current_owner_id(owner_token)
-
-
 def test_unimportable_legacy_exact_theme_stops_before_render_or_model(
     tmp_path, monkeypatch
 ):
@@ -677,7 +483,7 @@ def test_unimportable_legacy_exact_theme_stops_before_render_or_model(
             status="pending", message="queued"
         )
         async with AsyncSession(engine, expire_on_commit=False) as session:
-            session.add(presentation)
+            await add_existing_authored_presentation(session, presentation)
             session.add_all(_slides(presentation.id))
             session.add(task)
             await session.commit()
@@ -773,7 +579,7 @@ def test_unimportable_review_never_reaches_legacy_revise_or_cas(
             status="pending", message="queued"
         )
         async with AsyncSession(engine, expire_on_commit=False) as session:
-            session.add(presentation)
+            await add_existing_authored_presentation(session, presentation)
             session.add_all(_slides(presentation_id))
             session.add(task)
             await session.commit()
@@ -928,7 +734,7 @@ def test_unimportable_exact_review_does_not_call_legacy_image_critique(
         critique_calls = []
 
         async with AsyncSession(engine, expire_on_commit=False) as session:
-            session.add(presentation)
+            await add_existing_authored_presentation(session, presentation)
             session.add_all(_slides(presentation.id))
             session.add(_exact_provenance_row(presentation.id, style))
             session.add(task)
@@ -995,7 +801,7 @@ def test_unimportable_exact_review_does_not_accept_legacy_html_rewrite(
         critique_calls = []
 
         async with AsyncSession(engine, expire_on_commit=False) as session:
-            session.add(presentation)
+            await add_existing_authored_presentation(session, presentation)
             session.add_all(_slides(presentation.id))
             session.add(_exact_provenance_row(presentation.id, style))
             session.add(task)
@@ -1105,7 +911,7 @@ def test_exact_quality_review_rejects_non_improving_candidate_without_snapshot(
         style = _exact_style(source_paths)
 
         async with AsyncSession(engine, expire_on_commit=False) as session:
-            session.add(presentation)
+            await add_existing_authored_presentation(session, presentation)
             session.add_all(_slides(presentation.id))
             session.add(_exact_provenance_row(presentation.id, style))
             session.add(task)

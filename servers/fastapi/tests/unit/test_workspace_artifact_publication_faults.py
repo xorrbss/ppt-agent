@@ -91,7 +91,7 @@ async def _seed_running_operation(maker, *, owner_id: uuid.UUID | None = None):
             content="artifact fault injection",
             n_slides=1,
             language="en",
-            mode="authored",
+            mode="svg",
             lifecycle_status=PRESENTATION_LIFECYCLE_STAGING,
             revision=0,
         )

@@ -97,7 +97,7 @@ def test_account_deletion_revokes_provider_secret_and_cascades_job_state(
                         layout={},
                         # Every deck this fork creates is authored; a row with no
                         # identity described a retired React-template format.
-                        mode="authored",
+                        mode="svg",
                     )
                 )
                 session.add(

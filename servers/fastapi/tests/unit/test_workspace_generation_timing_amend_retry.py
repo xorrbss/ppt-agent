@@ -136,7 +136,7 @@ async def _seed_running_generate_operation(maker):
             language="en",
             layout={"name": "test"},
             revision=3,
-            mode="authored",
+            mode="svg",
         )
         session.add(presentation)
         await session.flush()

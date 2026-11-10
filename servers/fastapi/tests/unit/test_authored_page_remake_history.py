@@ -1,5 +1,6 @@
 """Remake history must survive a reload and report only what is still usable."""
 
+from tests.support.existing_authored_rows import add_existing_authored_presentation
 import asyncio
 import uuid
 from functools import wraps
@@ -53,7 +54,7 @@ async def _seed(session: AsyncSession):
         mode="authored",
         theme={"mode": "authored"},
     )
-    session.add(presentation)
+    await add_existing_authored_presentation(session, presentation)
     await session.flush()
     slide = SlideModel(
         presentation=presentation.id,

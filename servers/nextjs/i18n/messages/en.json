@@ -1367,9 +1367,14 @@
     "codexSessionExpiredDescription": "The session could not be refreshed automatically. Refresh the ChatGPT connection in Settings and try again."
   },
   "community": {
-    "unsupportedProfile": "Unsupported presentation profile",
+    "unsupportedPresentationThumbnail": "Preview unavailable",
+    "unsupportedPresentationDashboard": "Go to dashboard",
+    "unsupportedPresentationDescription": "It was made with a generation mode that has been removed. You can delete it from the dashboard.",
+    "unsupportedPresentationTitle": "This presentation can no longer be opened",
+    "unsupportedPresentationBadge": "Can no longer be opened",
+    "unsupportedProfile": "This presentation was made with a generation mode that has been removed and can no longer be opened. You can delete it.",
     "presentationEditor": "Presentation editor",
-    "unsupportedTemplateFormat": "This template format is no longer supported",
+    "unsupportedTemplateFormat": "This presentation was made with a generation mode that has been removed and can no longer be opened. You can delete it from the dashboard.",
     "loadFailureTitle": "Something went wrong",
     "loadFailureDescription": "The presentation could not be loaded. Try again.",
     "refreshPage": "Refresh page",

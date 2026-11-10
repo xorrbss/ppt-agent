@@ -1,5 +1,6 @@
 """Deck-scoped header updates against a real session: what persists, what does not."""
 
+from tests.support.existing_authored_rows import add_existing_authored_presentation
 import asyncio
 import uuid
 
@@ -10,12 +11,10 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 
 from models.authored_header_contract import (
     LEGACY_FIXED_BAND_SCHEMA_VERSION,
-    HeaderEyebrowSpec,
-    HeaderSublineSpec,
-    HeaderTickSpec,
     HeaderTitleSpec,
     default_header_contract,
 )
+from models.presentation_profiles import PresentationProfileError
 from models.sql.presentation import PresentationModel
 from models.sql.presentation_version import PresentationVersionModel  # noqa: F401
 from models.sql.slide import SlideModel
@@ -68,7 +67,7 @@ async def _seed(engine, *, slide_count: int = 3, contract=None) -> uuid.UUID:
     if contract is not None:
         theme["headerContract"] = contract.model_dump(mode="json")
     async with AsyncSession(engine, expire_on_commit=False) as session:
-        session.add(
+        await add_existing_authored_presentation(session, 
             PresentationModel(
                 id=presentation_id,
                 content="deck",
@@ -109,64 +108,6 @@ def _revision(monkeypatch, revised):
     return fake_revise
 
 
-def test_a_style_change_is_applied_to_every_slide_and_persisted(monkeypatch, tmp_path):
-    """A colour is the whole of a style change: it moves no row and no band.
-
-    A type size would be a different request entirely — it changes how tall the
-    title block renders, which the band root's own declaration would then
-    contradict, so it is reported for re-authoring instead of patched.
-    """
-
-    async def runner():
-        engine = await _engine(tmp_path / "header.db")
-        contract = default_header_contract(primary="#2563EB")
-        presentation_id = await _seed(engine, contract=contract)
-        _revision(
-            monkeypatch,
-            lambda current: current.model_copy(
-                update={"title": HeaderTitleSpec(color="#111827")}
-            ),
-        )
-
-        async with AsyncSession(engine, expire_on_commit=False) as session:
-            outcome = await update_deck_header(
-                session, presentation_id, "제목 색을 더 진하게"
-            )
-
-        assert outcome.applied is True
-        assert outcome.updated_slides == (0, 1, 2)
-        assert outcome.structural == ()
-
-        async with AsyncSession(engine, expire_on_commit=False) as session:
-            slides = (
-                await session.execute(
-                    select(SlideModel)
-                    .where(SlideModel.presentation == presentation_id)
-                    .order_by(SlideModel.index)
-                )
-            ).scalars().all()
-            presentation = await session.get(PresentationModel, presentation_id)
-            versions = (
-                await session.execute(
-                    select(PresentationVersionModel).where(
-                        PresentationVersionModel.presentation_id == presentation_id
-                    )
-                )
-            ).scalars().all()
-
-        assert all("color:#111827" in (s.html_content or "").replace(" ", "") for s in slides)
-        # The band the slides derived is untouched, so each still agrees with the
-        # height written beside it.
-        assert all('data-header-band="135"' in (s.html_content or "") for s in slides)
-        # Slide body content survives the header rewrite.
-        assert all(f"제목 {s.index}" in (s.html_content or "") for s in slides)
-        assert presentation.theme["headerContract"]["title"]["color"] == "#111827"
-        assert len(versions) == 1
-        await engine.dispose()
-
-    _run(runner())
-
-
 def test_an_unchanged_contract_touches_nothing(monkeypatch, tmp_path):
     async def runner():
         engine = await _engine(tmp_path / "noop.db")
@@ -187,38 +128,6 @@ def test_an_unchanged_contract_touches_nothing(monkeypatch, tmp_path):
         assert outcome.applied is False
         assert outcome.updated_slides == ()
         assert versions == []
-        await engine.dispose()
-
-    _run(runner())
-
-
-def test_a_structural_change_is_reported_for_reauthoring(monkeypatch, tmp_path):
-    async def runner():
-        engine = await _engine(tmp_path / "structural.db")
-        contract = default_header_contract(primary="#2563EB")
-        presentation_id = await _seed(engine, contract=contract)
-        _revision(
-            monkeypatch,
-            lambda current: current.model_copy(
-                update={
-                    "subline": HeaderSublineSpec(enabled=True),
-                    "eyebrow": HeaderEyebrowSpec(
-                        color="#B91C1C", tick=HeaderTickSpec(color="#B91C1C")
-                    ),
-                }
-            ),
-        )
-
-        async with AsyncSession(engine, expire_on_commit=False) as session:
-            outcome = await update_deck_header(
-                session, presentation_id, "부제 추가하고 강조색 빨강으로"
-            )
-
-        assert outcome.applied is True
-        assert "subline.enabled" in outcome.structural
-        assert outcome.needs_reauthor is True
-        # The patchable half still landed.
-        assert outcome.updated_slides == (0, 1, 2)
         await engine.dispose()
 
     _run(runner())
@@ -295,3 +204,33 @@ def test_a_deck_with_no_stored_contract_falls_back_without_requirement_badges():
 
     assert contract.requirements.enabled is False
     assert contract.eyebrow.tick.color == "#0B4EA2"
+
+
+def test_a_header_change_on_a_pre_existing_authored_deck_cannot_be_written(monkeypatch, tmp_path):
+    """The authored driver was removed on 2026-11-10: the profile write
+    boundary refuses the theme change on an existing authored deck, so the
+    update writes nothing. (Workspace admission refuses the request earlier
+    with ``unsupported_presentation_driver``; this is the last fence.)"""
+
+    async def runner():
+        engine = await _engine(tmp_path / "header-refused.db")
+        contract = default_header_contract(primary="#2563EB")
+        presentation_id = await _seed(engine, contract=contract)
+        _revision(
+            monkeypatch,
+            lambda current: current.model_copy(
+                update={"title": HeaderTitleSpec(color="#111827")}
+            ),
+        )
+
+        async with AsyncSession(engine, expire_on_commit=False) as session:
+            with pytest.raises(PresentationProfileError) as refused:
+                await update_deck_header(session, presentation_id, "제목 색을 더 진하게")
+            assert refused.value.code == "unsupported_presentation_driver"
+
+        async with AsyncSession(engine, expire_on_commit=False) as session:
+            stored = await session.get(PresentationModel, presentation_id)
+            assert stored.theme["headerContract"] == contract.model_dump(mode="json")
+        await engine.dispose()
+
+    _run(runner())

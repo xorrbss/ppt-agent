@@ -1011,7 +1011,7 @@ def test_quota_pause_reset_is_persisted_on_the_operation(tmp_path):
                     content="quota pause",
                     n_slides=1,
                     language="en",
-                    mode="authored",
+                    mode="svg",
                     theme={},
                 )
             )

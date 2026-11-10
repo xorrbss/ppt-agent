@@ -794,6 +794,12 @@ PARTIAL_RECOVERY_CODE_LEDGER = VerifierRevisionLedger(
         # (admission already normalizes it). svg admission, rendering and recovery of stored
         # svg decks are unchanged.
         "5c43414ccc4a637cc6ceb2dd19d59b93ec1888c1d8779bdc5d0cbaec1292b291": "svg-partial-recovery-code/1",
+        # 2026-11-10 authored driver removal (P2, option A): workspace admission, actions and
+        # the runner refuse every operation except deletion on a deck whose driver is no
+        # longer registered (an authored or Template V2 deck) with
+        # unsupported_presentation_driver. An svg deck resolves svg-v1 and takes every path
+        # exactly as before; svg recovery of stored decks is unchanged.
+        "2291a090226c0db7da672bee37dbbcfbddceb9e7a5819208020bfe3665d408aa": "svg-partial-recovery-code/1",
     }),
 )
 

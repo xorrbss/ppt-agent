@@ -23,13 +23,14 @@ CAPABILITY_SCHEMA_VERSION: Final = 1
 # "v2-standard" and mode "template" remain accepted identity values so a
 # pre-existing row is refused with a clear error instead of an unhandled
 # exception; no driver claims them since Template V2 was removed 2026-09-25.
+# The same holds for mode/theme mode "authored" and the "authored" driver id
+# literal since the authored driver was removed (2026-11-10, authored-removal
+# P2, option A): an existing authored deck resolves to
+# ``unsupported_presentation_driver`` exactly like a Template V2 deck.
 _KNOWN_VERSIONS: Final = frozenset({"v1-standard", "v2-standard"})
 _KNOWN_MODES: Final = frozenset({None, "template", "authored", "svg"})
 _KNOWN_THEME_MODES: Final = frozenset({None, "template", "authored", "svg"})
-_DRIVER_IDS: Final[tuple[PresentationDriverId, ...]] = (
-    "authored",
-    "svg-v1",
-)
+_DRIVER_IDS: Final[tuple[PresentationDriverId, ...]] = ("svg-v1",)
 
 
 class PresentationProfileError(ValueError):
@@ -177,18 +178,6 @@ def _validate_common_identity(identity: PersistedIdentity) -> tuple[
     return generation_mode, cast(str | None, mode), cast(str, version), theme
 
 
-def _validate_authored(profile: PresentationProfile, identity: PersistedIdentity) -> None:
-    generation_mode, mode, version, theme = _validate_common_identity(identity)
-    if generation_mode != "standard":
-        raise PresentationProfileError("authored_generation_mode_conflict")
-    if mode != "authored" and theme.get("mode") != "authored":
-        raise PresentationProfileError("authored_identity_conflict")
-    if version != "v1-standard":
-        raise PresentationProfileError("authored_version_conflict")
-    if profile.content_model != "authored":
-        raise PresentationProfileError("authored_content_model_conflict")
-
-
 def _validate_svg(profile: PresentationProfile, identity: PersistedIdentity) -> None:
     _, mode, version, _ = _validate_common_identity(identity)
     if mode != "svg" or version != "v1-standard" or profile.content_model != "svg":
@@ -216,24 +205,7 @@ def _capabilities(
     )
 
 
-_AUTHORED_EDITOR = EditorCapabilities(False, False, False, False, True, True)
-
-
 _DRIVERS: dict[PresentationDriverId, PresentationDriver] = {
-    "authored": PresentationDriver(
-        driver_id="authored",
-        content_model="authored",
-        generation_strategy="authored",
-        validate=_validate_authored,
-        capabilities=_capabilities(
-            "authored",
-            renderer="authored",
-            editor_adapter="authored-readonly",
-            editor=_AUTHORED_EDITOR,
-            export_adapter="authored-hybrid",
-            export_editable_pptx=True,
-        ),
-    ),
     "svg-v1": PresentationDriver(
         driver_id="svg-v1",
         content_model="svg",
