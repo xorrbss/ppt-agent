@@ -302,6 +302,11 @@ def contains_token(path: Path, token: bytes) -> bool:
     overlap = len(token) - 1
     tail = b""
     try:
+        if path.stat().st_size < len(token):
+            # A file shorter than the token cannot hold it.  Live processes
+            # keep tiny lock sentinels (Qdrant ``.lock``, 13 bytes) open
+            # without share access, so opening them fails on Windows.
+            return False
         with path.open("rb") as stream:
             while chunk := stream.read(1024 * 1024):
                 observed = tail + chunk
@@ -687,12 +692,17 @@ def main() -> int:
             job = generation_state(database_path, task_id)
             operation = operation_state(database_path, operation_id)
             now = datetime.now(timezone.utc)
+            # A workspace-linked job's own lease column is not the liveness
+            # authority (its heartbeat skips linked jobs, and a live run was
+            # observed with it NULL); the operation lease is.  The job lease
+            # must only not be a still-future lease.
+            job_lease = job["lease_expires_at"] if job else None
             return bool(
                 job and job["state"] in {"running", "awaiting_resume"}
                 and operation["state"] == "running"
-                and job["lease_expires_at"] and operation["lease_expires_at"]
-                and parse_time(job["lease_expires_at"]) <= now
+                and operation["lease_expires_at"]
                 and parse_time(operation["lease_expires_at"]) <= now
+                and (not job_lease or parse_time(job_lease) <= now)
             )
 
         wait_until(leases_expired, manifest["leaseSeconds"] + 30, "both durable leases to expire")
@@ -876,7 +886,7 @@ def main() -> int:
                     "transport": "signed-session-cookie",
                     "isolatedArtifactTokenByteScan": "failed",
                 }
-                evidence["failureDetail"] = str(scan_error)[:800]
+                evidence["scanFailureDetail"] = str(scan_error)[:800]
         atomic_json(evidence_path, evidence)
         raise
     finally:
