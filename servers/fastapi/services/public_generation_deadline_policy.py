@@ -275,12 +275,12 @@ def public_generation_remake_cap(slide_count: int) -> int:
     """Return the remakes one deck may spend, read from the fallback policy.
 
     Both bounds are read rather than copied so this budget cannot drift from
-    the module that enforces them.  The import is deferred because
-    ``authored_terminal_slide_fallback`` pulls in the browser capture stack,
-    which admission must not load.
+    the module that enforces them.  They live in ``services.remake_caps``,
+    which ``authored_terminal_slide_fallback`` re-exports, because the
+    fallback pulls in the browser capture stack, which admission must not load.
     """
 
-    from services.authored_terminal_slide_fallback import (
+    from services.remake_caps import (
         MAX_REMAKES_PER_SLIDE,
         MAX_TERMINAL_REMAKES_PER_DECK,
     )

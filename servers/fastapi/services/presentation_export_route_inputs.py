@@ -17,7 +17,7 @@ from models.sql.slide import SlideModel
 from services.presentation_export_capabilities import (
     PresentationExportFreshnessError,
 )
-from services.authored_local_fit_policy import html_digest
+from utils.hashing import sha256_prefixed
 
 
 def resolve_authored_local_fit_receipts(
@@ -46,7 +46,7 @@ def resolve_authored_local_fit_receipts(
             not isinstance(receipt, Mapping)
             or not isinstance(slide.html_content, str)
             or receipt.get("slideIndex") != index
-            or receipt.get("finalHtmlDigest") != html_digest(slide.html_content)
+            or receipt.get("finalHtmlDigest") != sha256_prefixed(slide.html_content.encode("utf-8"))
         ):
             raise PresentationExportFreshnessError(
                 "authored_local_fit_export_evidence_stale",

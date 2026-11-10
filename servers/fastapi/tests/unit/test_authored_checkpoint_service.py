@@ -80,6 +80,10 @@ async def _checkpoint_database(tmp_path, monkeypatch):
         )
     maker = async_sessionmaker(engine, expire_on_commit=False)
     monkeypatch.setattr(checkpoints, "async_session_maker", maker)
+    # svg calls the shared row writes directly, without the facade's session sync.
+    from services import generation_checkpoint_rows
+
+    monkeypatch.setattr(generation_checkpoint_rows, "async_session_maker", maker)
     monkeypatch.setenv(
         "AUTHORED_CHECKPOINT_DIRECTORY", str(tmp_path / "render-artifacts")
     )

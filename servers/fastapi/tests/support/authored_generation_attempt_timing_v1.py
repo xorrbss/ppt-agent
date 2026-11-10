@@ -13,7 +13,6 @@ from services.authored_generation_timing_receipt import (
     GENERATION_ATTEMPT_OUTCOMES,
     GENERATION_ATTEMPT_TIMING_STAGES,
     GenerationAttemptTimingReceipt,
-    QualityReceiptV2,
     _attempt_causes,
     _attempt_receipt_digest,
     _bounded_timing_ms,
@@ -23,9 +22,12 @@ from services.authored_generation_timing_receipt import (
     _partial_stage_timings,
     _persist_attempt_records,
     _provider_usage,
-    _quality_receipt_digest,
     generation_attempt_timing_receipt_path,
     public_attempt_id,
+)
+from services.authored_quality_receipt_v2 import (
+    QualityReceiptV2,
+    _receipt_digest as _quality_receipt_digest,
 )
 
 

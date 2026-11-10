@@ -1108,7 +1108,7 @@ async def _dispatch_ready_jobs() -> None:
         # Lazy import avoids coupling generic durable-job model initialization
         # to authored checkpoint storage. The sweeper is interval-gated and
         # deletes only old terminal/orphan UUID directories in bounded batches.
-        from services.authored_checkpoint_service import (
+        from services.checkpoint_artifact_sweep import (
             maybe_sweep_expired_checkpoint_artifacts,
         )
 

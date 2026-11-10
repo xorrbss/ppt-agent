@@ -14,6 +14,7 @@ from models.sql.async_presentation_generation_status import (
 )
 from models.sql.presentation_generation_job import PresentationGenerationJob
 from services import authored_checkpoint_service as checkpoints
+from services import checkpoint_artifact_sweep
 from services import presentation_generation_job_service as jobs
 
 
@@ -325,13 +326,17 @@ def test_periodic_sweep_is_interval_gated(monkeypatch):
             return {"deleted_terminal": calls}
 
         ticks = iter((10.0, 50.0, 111.0))
-        monkeypatch.setattr(checkpoints, "sweep_expired_checkpoint_artifacts", fake_sweep)
         monkeypatch.setattr(
-            checkpoints.time,
+            checkpoint_artifact_sweep, "sweep_expired_checkpoint_artifacts", fake_sweep
+        )
+        monkeypatch.setattr(
+            checkpoint_artifact_sweep.time,
             "monotonic",
             lambda: next(ticks, 111.0),
         )
-        monkeypatch.setattr(checkpoints, "_last_artifact_sweep_monotonic", None)
+        monkeypatch.setattr(
+            checkpoint_artifact_sweep, "_last_artifact_sweep_monotonic", None
+        )
         monkeypatch.setenv("AUTHORED_CHECKPOINT_SWEEP_INTERVAL_SECONDS", "100")
 
         assert await checkpoints.maybe_sweep_expired_checkpoint_artifacts() == {
@@ -398,7 +403,7 @@ def test_dispatch_continues_when_artifact_sweep_fails(tmp_path, monkeypatch):
         monkeypatch.setattr(jobs, "async_session_maker", maker)
         monkeypatch.setattr(jobs, "recover_generation_jobs", fake_recover)
         monkeypatch.setattr(
-            checkpoints,
+            checkpoint_artifact_sweep,
             "maybe_sweep_expired_checkpoint_artifacts",
             failing_sweep,
         )

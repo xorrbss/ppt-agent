@@ -67,9 +67,6 @@ from services.account_deletion_service import (
     AccountDeletionFenceConflict,
     require_active_account_generation,
 )
-from services.authored_composition_policy import (
-    AUTHORED_CAPACITY_BOUNDED_REPAIR_REVISION,
-)
 from services.workspace_error_registry import resolve_workspace_error
 from services.generation_failure_class import generation_operation_failure_class
 from services.public_operation_admission import (

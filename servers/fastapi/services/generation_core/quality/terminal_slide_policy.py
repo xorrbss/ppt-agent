@@ -16,9 +16,10 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from services.authored_generation_preflight import over_budget_violations
-from utils.get_env import (
-    is_authored_publish_flagged_slides_enabled,
-    is_authored_publish_flagged_slides_source_reflow_enabled,
+# The rollout switch both drivers read lives with the SVG driver's
+# ``TerminalPolicy``; re-exported for the historical callers.
+from services.generation_core.quality.terminal_policy import (
+    publish_flagged_allowed as publish_flagged_allowed,
 )
 from utils.llm_calls.author_slide_effort import EXACT_RECONSTRUCTION
 
@@ -77,24 +78,6 @@ def terminal_fallback_active(
     return _composition_switch(profile, "strict_dom_gate") and _composition_switch(
         profile, "allow_summarization"
     )
-
-
-def publish_flagged_allowed(*, source_reflow: bool, exact_reconstruction: bool) -> bool:
-    """The format-neutral half of :func:`terminal_fallback_active`.
-
-    Whether this class of deck may publish a flagged page at all, read from the
-    rollout switches every driver shares: an exact reconstruction never may, a
-    source-reflow deck behind its own switch, and any other deck behind the
-    general one (both default on: a page's quality never fails a deck). ``terminal_fallback_active`` adds the HTML
-    driver's composition-profile switches on top; the SVG driver's
-    ``TerminalPolicy`` resolves from this alone.
-    """
-
-    if exact_reconstruction:
-        return False
-    if source_reflow:
-        return is_authored_publish_flagged_slides_source_reflow_enabled()
-    return is_authored_publish_flagged_slides_enabled()
 
 
 def declare_exhausted_repair_budget(

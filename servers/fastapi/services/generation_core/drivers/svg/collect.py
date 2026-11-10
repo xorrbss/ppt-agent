@@ -673,7 +673,7 @@ async def _generate_prepared_deck(
                     state.page_failures[index] = error
                     state.dispatch_frozen = True
                     if job is not None:
-                        from services.authored_checkpoint_service import fail_stage
+                        from services.generation_checkpoint_rows import fail_stage_committed as fail_stage
                         # This row is the evidence that keeps an automatic
                         # retry from buying the deck again. A sibling's global
                         # error cancels this task; the bounded write is joined
@@ -709,7 +709,7 @@ async def _generate_prepared_deck(
                 return _IsolatedPage(index, unstarted=False)
             state.fatal_error = state.fatal_error or error
             if job is not None and error.code != "authored_attempt_lost":
-                from services.authored_checkpoint_service import fail_stage
+                from services.generation_checkpoint_rows import fail_stage_committed as fail_stage
                 await fail_stage(job_id=job.id, slide_index=index, stage=error.stage,
                     attempt_token=job.attempt_token, error=error,
                     request_id=getattr(request, "_request_id", None),

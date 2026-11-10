@@ -172,6 +172,47 @@ The full pytest suite and `npm run test:next-ci` run before each PR merges.
   `authored_local_fit_policy`, `composition_policy`,
   `public_generation_deadline_policy`, `get_env` → `get_env_authored_publish`,
   `renderer_worker_policy` → `env_settings.authored_runtime`.
+  Analysed 2026-11-10 [V]: svg never reaches the HTML admission branch at
+  run time. It calls only `initialize_checkpoints`, `fail_stage` and
+  `progress_for_task` (the non-authored branch), none of which calls
+  `get_checkpoint`, `admit_checkpoint_write` or `enforce_receipts`; the edges
+  are imports. Split into three PRs: B1b-1 service seams, B1b-2 render and
+  authoring edges (capture/fit, `resolve_style_primary`, `authoring_model`,
+  `reference_parts`), B1b-3 the vNext `__init__` files and the page remake split.
+  Kept as shared and renamed later: the checkpoint fence, errors, publish fence,
+  provider attempt ledger, observability and artifacts modules,
+  `authored_qid_namespace`, `authored_dom_tags`, `authored_local_fit_policy`,
+  `authored_provider_rate_profile`, `renderer_worker_policy`,
+  `env_settings/authored_runtime`.
+  **B1b-1 done 2026-11-10**, names unchanged and re-exported from the old
+  modules: `services/generation_checkpoint_rows.py` (`STAGES`,
+  `initialize_checkpoints`, `fail_stage`, `progress_for_task`, plus
+  `fail_stage_committed`, the same committed write the facade makes),
+  `services/checkpoint_artifact_sweep.py` (the dispatcher's interval-gated
+  sweep), `services/remake_caps.py` (`MAX_REMAKES_PER_SLIDE`,
+  `MAX_TERMINAL_REMAKES_PER_DECK`, read by the timing receipt and the public
+  deadline policy), `services/generation_receipt_storage.py` (receipt root,
+  manifest path/lock/digest, `public_attempt_id`; the timing receipt imports
+  the QualityReceipt v2 digest only inside the authored-only
+  `create_generation_timing_receipt`), `services/stage_error_diagnostics.py`
+  (the owner-capacity diagnostic validator `AuthoredStageError.as_safe_dict`
+  runs on every page failure), `services/workspace_recovery_revision.py`, and
+  `publish_flagged_allowed` in `generation_core/quality/terminal_policy.py`.
+  svg callers (`drivers/svg/collect.py`, `publish.py`,
+  `svg_presentation_checkpoint`, the cleanup journal, `provider_idempotency`,
+  the progress endpoint, the job dispatcher) no longer import
+  `authored_checkpoint_service`/`_state`; `presentation_export_route_inputs`
+  hashes with `sha256_prefixed`; `workspace_service` lost an unused import.
+  Not split, unlike the design: `authored_checkpoint_artifacts` (its imports
+  are light, so `checkpoint_root`/`atomic_write` stay there until B4).
+  Svg module-level closure: 175 → 54 authored-named modules (626 → 412
+  modules; `author_slide`, `authored_admission*`, `authored_terminal_slide_fallback`,
+  `authored_composition_policy` and `authored_quality_receipt_v2` are gone
+  from it); the function-local closure is unchanged until B1b-2/B1b-3. Tests
+  retargeted: the two string patches of `fail_stage`, the sweeper's interval
+  and dispatcher patches, the shared checkpoint database helper (it also
+  redirects the rows module), the attempt-timing v1 support module. New
+  reviewed keys for the partial-recovery and page-render code identities.
 - **B2 frontend (parallel with B1).** Delete the authored-vnext generation and
   workbench UI, `components/authored-vnext`, `lib/authored-vnext/{flow,workbench}`,
   the element editor, template changer, header actions and the ExportMenu

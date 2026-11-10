@@ -307,7 +307,7 @@ def _authored_retry_reserver() -> _AuthoredRetryReservation | None:
     lease = lease_provider_attempt_reservations()
     if lease is None:
         return None
-    from services.authored_checkpoint_state import reserve_provider_overload_retry
+    from services.authored_provider_attempt_ledger import reserve_provider_overload_retry
 
     return _AuthoredRetryReservation(lease, loop, reserve_provider_overload_retry)
 

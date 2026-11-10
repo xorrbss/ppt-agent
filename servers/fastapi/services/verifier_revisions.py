@@ -810,6 +810,12 @@ PARTIAL_RECOVERY_CODE_LEDGER = VerifierRevisionLedger(
         # into shared modules that svg now imports instead of the authored modules. No
         # behaviour or output changed.
         "f49c67d6eb5245d7754852d01c190faff84345489e3c6a9e93cf8a2efe64e21f": "svg-partial-recovery-code/1",
+        # 2026-11-10 authored removal P3 B1b-1 (move only): the checkpoint row writes,
+        # the artifact sweep, the remake caps, the receipt storage helpers and the
+        # stage-error diagnostic moved unchanged into shared modules, and svg calls
+        # them instead of the authored checkpoint facade; workspace_service lost an
+        # unused import. No behaviour or output changed.
+        "96cc634baa88bb8105a718387bfa55724579b30c731c7801b25834756fd7f277": "svg-partial-recovery-code/1",
     }),
 )
 
@@ -991,6 +997,12 @@ PAGE_RENDER_CODE_LEDGER = VerifierRevisionLedger(
         # into shared modules that svg now imports instead of the authored modules. No
         # behaviour or output changed.
         "04477540fe1568d3037cf29d15e1498f1d5d33c436a12d59bff7d65bc6371742": "svg-page-render-code/1",
+        # 2026-11-10 authored removal P3 B1b-1 (move only): the checkpoint row writes,
+        # the artifact sweep, the remake caps, the receipt storage helpers and the
+        # stage-error diagnostic moved unchanged into shared modules, and svg calls
+        # them instead of the authored checkpoint facade; workspace_service lost an
+        # unused import. No behaviour or output changed.
+        "881eea645c3e963db51d1cf5de4867df129b62f1d22f1162f6f68c740e913872": "svg-page-render-code/1",
     }),
 )
 

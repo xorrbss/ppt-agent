@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import shutil as _shutil
-import time
 from typing import Any, Mapping
 import uuid
 
@@ -12,6 +11,7 @@ from models.sql.authored_slide_checkpoint import AuthoredSlideCheckpoint
 from services import authored_checkpoint_artifacts as _artifacts
 from services import authored_checkpoint_fence as _fence
 from services import authored_checkpoint_state as _state
+from services import generation_checkpoint_rows as _rows
 from services.authored_admission_receipt import AdmissionReceipt
 from services.authored_checkpoint_artifacts import (
     _artifact_sweep_batch_size,
@@ -38,7 +38,6 @@ from services.authored_checkpoint_errors import (
     is_retryable_exception,
     sanitize_exception_message,
 )
-from services.authored_checkpoint_sweep_budget import _configured_positive_int
 from services.authored_checkpoint_publish_fence import (
     begin_publish,
     complete_publish,
@@ -53,19 +52,20 @@ from services.authored_slide_checkpoint_bundle import (
     SlideCheckpointConflict,
     SlideCheckpointCorrupt,
 )
-from services.authored_generation_observability import log_authored_generation_observation
+from services.checkpoint_artifact_sweep import (
+    maybe_sweep_expired_checkpoint_artifacts as maybe_sweep_expired_checkpoint_artifacts,
+)
 from services.database import async_session_maker
 from utils.datetime_utils import get_current_utc_datetime
 
 
-_DEFAULT_SWEEP_INTERVAL_SECONDS = 60 * 60
-_last_artifact_sweep_monotonic: float | None = None
 shutil = _shutil
 
 
 def _sync_session_maker() -> None:
     _artifacts.async_session_maker = async_session_maker
     _state.async_session_maker = async_session_maker
+    _rows.async_session_maker = async_session_maker
     # The shared fencing primitives moved out of ``_state``; they open their own
     # sessions on the paths that do not receive one, so they follow the same
     # redirection (tests point this facade at a scratch database).
@@ -123,37 +123,6 @@ async def sweep_expired_checkpoint_artifacts(
         max_bytes=max_bytes,
         max_files=max_files,
     )
-
-
-async def maybe_sweep_expired_checkpoint_artifacts() -> dict[str, int] | None:
-    """Run the bounded sweeper at most once per configured process interval."""
-
-    global _last_artifact_sweep_monotonic
-    interval = _configured_positive_int(
-        "AUTHORED_CHECKPOINT_SWEEP_INTERVAL_SECONDS",
-        _DEFAULT_SWEEP_INTERVAL_SECONDS,
-    )
-    now = time.monotonic()
-    if (
-        _last_artifact_sweep_monotonic is not None
-        and now - _last_artifact_sweep_monotonic < interval
-    ):
-        return None
-    _last_artifact_sweep_monotonic = now
-    result = await sweep_expired_checkpoint_artifacts()
-    log_authored_generation_observation(
-        name="artifact_sweep",
-        outcome="success",
-        scanned_terminal=result.get("scanned_terminal", 0),
-        deleted_terminal=result.get("deleted_terminal", 0),
-        scanned_orphan=result.get("scanned_orphan", 0),
-        deleted_orphan=result.get("deleted_orphan", 0),
-        deleted_bytes=result.get("deleted_bytes", 0),
-        deleted_files=result.get("deleted_files", 0),
-        skipped_budget=result.get("skipped_budget", 0),
-        errors=result.get("errors", 0),
-    )
-    return result
 
 
 async def initialize_checkpoints(
