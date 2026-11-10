@@ -395,6 +395,29 @@ The full pytest suite and `npm run test:next-ci` run before each PR merges.
   without waiting for B1 [I: P2 made authored unreachable]. Then HTML
   authoring modules, the rest of `authored_vnext` and the remaining
   `authored_*` services. SQL models stay until P4.
+  **B4a done 2026-11-10.** Deleted 13 Python files and 11 authored-only unit
+  tests (the delete set is the fixpoint of `authored_removal_imports.py check`,
+  repeated until 0 source hits): `services/slidespec_candidate_selection.py`,
+  the six `scripts/slidespec_*` benchmark/replayer tools, and the vNext
+  `semantic` modules `editable_mvp_completion`, `editable_mvp_completion_codec`,
+  `gate0_structural_v3`, `lifecycle`, `native_capabilities`, `qualification_v3`.
+  Kept, because a kept module still imports them: the other `slidespec_*`
+  services, `slidespec_repair_context`, `utils/slidespec_*`, the SlideSpec
+  `utils/llm_calls` and `models/slidespec_v1` (`services/svg_page_remake.py`
+  imports `slidespec_artifact_store`, and the authored quality review service,
+  a B4b deletion, imports the rest); the vNext `ooxml`, `deck_ir`,
+  `narrative_ir` packages and the rest of `semantic` (imported by
+  `account_deletion_controller`, `integration/worker`, `public_v2_orchestrator`,
+  `workspace_operation_runner`, `workspace_service`, the svg font modules via
+  `semantic.typography`, and the authored services of B4b), with every package
+  `__init__`; they become deletable once B4b/B4c remove those importers or move
+  the shared pieces. Tests: the deleted modules left the module lists of
+  `test_datetime_utils_as_utc`, `test_sha256_expression_migration` and
+  `test_no_bare_timeout_literals`; `test_evidence_lattice_active_bundle` and
+  its slidespec fixture stay. Closure unchanged (top 393/46, all 1,171/338);
+  structural layering passes (26 entries, none removed); no svg file changed,
+  so no reviewed keys; the svg subset list lost the 4 deleted tests (502
+  files). Checks: `ruff`, `import server`, targeted pytest 269 passed.
 - **B5 contracts, scripts, tests, env.** `contracts/authored_vnext` except master
   parts; delete authored-only tests and edit svg tests; remove `SLIDESPEC_*` and
   authored-only `AUTHORED_*` knobs (settings registry included, never §4.3

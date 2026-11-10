@@ -38,7 +38,6 @@ FROZEN_PREFIXES = (
     "services/source_content/raster_",
     "services/slidespec_repair_",
     "services/slidespec_dom_evidence",
-    "services/slidespec_candidate_selection",
     "services/slidespec_pipeline_performance",
 )
 
