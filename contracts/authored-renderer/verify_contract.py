@@ -57,7 +57,6 @@ def verify() -> list[dict[str, Any]]:
     seccomp = _load("chromium-seccomp.json")
     slide_capture_files = (
         "slide_capture.py",
-        "slide_capture_batch.py",
         "slide_capture_chrome_discovery.py",
         "slide_capture_pipe.py",
         "slide_capture_pipe_render.py",

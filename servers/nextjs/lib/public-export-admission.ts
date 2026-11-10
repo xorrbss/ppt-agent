@@ -30,10 +30,13 @@ export interface PublicExportAdmission {
   commandType: "export.pptx" | "export.pdf";
   idempotencyKey: string;
   expectedRevision: number;
+  /**
+   * Only ``format`` selects the export. The Hybrid PPTX mode and its font
+   * embedding were authored-only and were removed with the authored strategy;
+   * ``font_embedding: false`` is still forwarded when a client states it.
+   */
   context: {
-    pptx_mode: "fidelity" | "hybrid";
-    /** Omitted means the backend may apply its language-aware default. */
-    font_embedding?: boolean;
+    font_embedding?: false;
   };
 }
 
@@ -59,14 +62,12 @@ function canonicalRequestIdentity(value: {
   presentationId: string;
   format: string;
   expectedRevision: number;
-  pptxMode: string;
-  fontEmbedding?: boolean;
+  fontEmbedding?: false;
 }): string {
   return JSON.stringify([
     value.presentationId,
     value.expectedRevision,
     value.format,
-    value.pptxMode,
     value.fontEmbedding,
   ]);
 }
@@ -100,17 +101,18 @@ export function parsePublicExportAdmission(
     );
   }
 
-  const pptxMode = value.pptxMode ?? "fidelity";
-  if (pptxMode !== "fidelity" && pptxMode !== "hybrid") {
+  // "fidelity" was the only mode that did not need the removed Hybrid export,
+  // so it is still accepted as a no-op for older clients.
+  if (value.pptxMode !== undefined && value.pptxMode !== "fidelity") {
     throw new PublicExportAdmissionError("Invalid PPTX export mode", 400);
   }
   const fontEmbedding = value.fontEmbedding;
   if (fontEmbedding !== undefined && typeof fontEmbedding !== "boolean") {
     throw new PublicExportAdmissionError("Invalid font embedding option", 400);
   }
-  if (fontEmbedding && (format !== "pptx" || pptxMode !== "hybrid")) {
+  if (fontEmbedding === true) {
     throw new PublicExportAdmissionError(
-      "Font embedding requires Hybrid PPTX export",
+      "Font embedding is not available for this export",
       400,
     );
   }
@@ -125,7 +127,6 @@ export function parsePublicExportAdmission(
         presentationId,
         format,
         expectedRevision,
-        pptxMode,
         fontEmbedding,
       }),
     )
@@ -136,10 +137,7 @@ export function parsePublicExportAdmission(
     commandType: `export.${format}`,
     idempotencyKey: suppliedIdempotencyKey || `public-export-v1:${digest}`,
     expectedRevision,
-    context: {
-      pptx_mode: pptxMode,
-      ...(fontEmbedding === undefined ? {} : { font_embedding: fontEmbedding }),
-    },
+    context: fontEmbedding === undefined ? {} : { font_embedding: fontEmbedding },
   };
 }
 

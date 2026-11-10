@@ -42,7 +42,7 @@ const included = all.filter((file) => {
 
 // Chrome integration tests exercise the opt-in renderer. They must not turn
 // on the product feature for the default-off and fail-closed test group.
-const RENDERER_REQUIRED = /^lib\/authored-hybrid\/(?:authored-hybrid-e2e|chrome|cleanup|font-layout-chrome|google-fonts-trust-boundary|security)\.test\.mjs$/;
+const RENDERER_REQUIRED = /^lib\/authored-hybrid\/(?:security)\.test\.mjs$/;
 const rendererRequired = included.filter((file) => RENDERER_REQUIRED.test(file));
 const defaultOffParallel = included.filter(
   (file) => !RENDERER_REQUIRED.test(file),

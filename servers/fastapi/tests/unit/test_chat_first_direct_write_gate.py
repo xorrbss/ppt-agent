@@ -6,7 +6,6 @@ from fastapi import HTTPException
 
 from services import presentation_generation_pipeline as generation_pipeline
 from api.v1.ppt.endpoints import (
-    authored_operations as presentation_endpoints,
     presentation_crud,
     presentation_generate,
     presentation_versions,
@@ -19,7 +18,6 @@ from services.workspace_legacy_write_gate import (
 
 
 _GUARDED_ENDPOINTS = (
-    "retemplate",
     "slide_edit",
     "slide_edit_html",
     "restore",
@@ -43,14 +41,6 @@ class _ProbeSession:
 async def _call_guarded_endpoint(name: str, session: _ProbeSession):
     entity_id = uuid.uuid4()
 
-    if name == "retemplate":
-        return await presentation_endpoints.retemplate_authored_presentation(
-            entity_id,
-            object(),
-            object(),
-            object(),
-            session,
-        )
     if name == "slide_edit":
         return await slide.edit_slide(entity_id, "edit", session)
     if name == "slide_edit_html":

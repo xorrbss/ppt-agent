@@ -8,15 +8,12 @@ import os
 import sys
 import time
 import uuid
-import zipfile
 from dataclasses import replace
 from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
-import pypdfium2 as pdfium
 from PIL import Image
-from pptx import Presentation
 
 from services.isolated_worker_contracts import (
     ARTIFACT_REF_SCHEMA,
@@ -44,11 +41,8 @@ from services.trusted_executor.contracts import (
     SandboxPolicy,
 )
 from workers import public_worker_runtime
-from workers.public_export_worker import (
-    EXPORT_BUNDLE_SCHEMA,
-    EXPORT_CHECKPOINT_BUNDLE_SCHEMA,
-    execute_export,
-)
+from workers.public_export_worker import execute_export
+from workers.public_svg_export_worker import SVG_EXPORT_SCHEMA
 from workers.public_worker_runtime import LocalContentAddressedStore
 
 
@@ -458,241 +452,6 @@ def worker_cache_limits(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("PUBLIC_WORKER_ARTIFACT_CACHE_TTL_SECONDS", "900")
 
 
-def _hybrid_export_fixture(tmp_path: Path) -> tuple[IsolatedWorkerJob, ArtifactRef]:
-    """One editable-hybrid bundle naming a raster checkpoint and its source."""
-
-    operation_id = uuid.uuid4()
-    image = Image.new("RGB", (1280, 720), "#1265E3")
-    png_stream = io.BytesIO()
-    image.save(png_stream, format="PNG")
-    image.close()
-    png = png_stream.getvalue()
-    slide = _artifact(
-        operation_id=operation_id,
-        payload=png,
-        storage_key="tenant/owner/slide.png",
-        kind="slide-png",
-        media_type="image/png",
-    )
-    _store_payload(tmp_path, slide, png)
-    html = b"<html><body><h1>Slide</h1></body></html>"
-    source = _artifact(
-        operation_id=operation_id,
-        payload=html,
-        storage_key="tenant/owner/slide.html",
-        kind="slide-html",
-        media_type="text/html",
-    )
-    _store_payload(tmp_path, source, html)
-    bundle_payload = json.dumps(
-        {
-            "schemaVersion": EXPORT_CHECKPOINT_BUNDLE_SCHEMA,
-            "canonicalExportIdentity": hashlib.sha256(b"identity").hexdigest(),
-            "exportFormat": "pptx",
-            "exportMode": "editable-hybrid",
-            "renderAdapter": "public-isolated-hybrid",
-            "fontEmbedding": True,
-            "slides": [
-                {
-                    "slideIndex": 0,
-                    "artifactRef": slide.to_wire(),
-                    "validationDigest": hashlib.sha256(b"validation").hexdigest(),
-                }
-            ],
-            "sourceSlides": [{"slideIndex": 0, "artifactRef": source.to_wire()}],
-        },
-        sort_keys=True,
-        separators=(",", ":"),
-    ).encode("utf-8")
-    bundle = _artifact(
-        operation_id=operation_id,
-        payload=bundle_payload,
-        storage_key="tenant/owner/hybrid-bundle.json",
-        kind="export-bundle",
-        media_type="application/vnd.presenton.export-bundle+json",
-    )
-    _store_payload(tmp_path, bundle, bundle_payload)
-    return (
-        IsolatedWorkerJob(
-            role="export",
-            operation_id=operation_id,
-            attempt_token="attempt-token-1234567890",
-            fencing_token=1,
-            input_digest=bundle.sha256,
-            input_artifact=bundle,
-            capability="validated-by-runtime",
-            deadline_epoch_seconds=int(time.time()) + 300,
-        ),
-        bundle,
-    )
-
-
-def test_export_worker_keeps_the_fidelity_deck_when_hybrid_assembly_fails(
-    tmp_path: Path,
-    worker_cache_limits: None,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """A failed assembly must cost the reason, never the user's export."""
-
-    from workers import public_export_worker
-
-    job, bundle = _hybrid_export_fixture(tmp_path)
-    # An assembler command that exits non-zero with a stable reason code.
-    monkeypatch.setenv(
-        "PUBLIC_EXPORT_HYBRID_COMMAND_JSON",
-        json.dumps(
-            [
-                sys.executable,
-                "-c",
-                "import sys;sys.stdin.read();"
-                'print(\'{"schemaVersion":"public-hybrid-export-result/v1",'
-                '"ok":false,"errorCode":"hybrid_chrome_unavailable"}\');'
-                "sys.exit(1)",
-            ]
-        ),
-    )
-    store = LocalContentAddressedStore(tmp_path)
-
-    output = asyncio.run(public_export_worker.execute_export(job, store))
-
-    assert output.artifact.kind == "presentation-pptx"
-    assert output.evidence["requestedExportMode"] == "editable-hybrid"
-    assert output.evidence["deliveredExportMode"] == "fidelity-raster"
-    assert output.evidence["fallbackReason"] == "hybrid_chrome_unavailable"
-    with zipfile.ZipFile(io.BytesIO(store.read(output.artifact))) as archive:
-        assert "ppt/slides/slide1.xml" in archive.namelist()
-    assert bundle.kind == "export-bundle"
-
-
-def test_export_worker_publishes_the_assembled_hybrid_deck(
-    tmp_path: Path,
-    worker_cache_limits: None,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """A successful assembly replaces the raster deck and reports its evidence."""
-
-    from workers import public_export_worker
-
-    job, _bundle = _hybrid_export_fixture(tmp_path)
-    monkeypatch.setenv(
-        "PUBLIC_EXPORT_HYBRID_COMMAND_JSON",
-        json.dumps(
-            [
-                sys.executable,
-                "-c",
-                "import json,sys;job=json.loads(sys.stdin.read());"
-                "open(job['outputPath'],'wb').write(b'assembled-hybrid-package');"
-                "print(json.dumps({'schemaVersion':'public-hybrid-export-result/v1',"
-                "'ok':True,'errorCode':None,"
-                "'structural':{'slideCount':1,'nativeShapeElements':4}}))",
-            ]
-        ),
-    )
-    store = LocalContentAddressedStore(tmp_path)
-
-    output = asyncio.run(public_export_worker.execute_export(job, store))
-
-    assert output.evidence["deliveredExportMode"] == "editable-hybrid"
-    assert output.evidence["fallbackReason"] is None
-    assert output.evidence["structural"] == {"slideCount": 1, "nativeShapeElements": 4}
-    assert store.read(output.artifact) == b"assembled-hybrid-package"
-
-
-@pytest.mark.parametrize("export_format", ["pptx", "pdf"])
-def test_export_worker_builds_portrait_artifacts_with_exact_canvas(
-    tmp_path: Path,
-    worker_cache_limits: None,
-    export_format: str,
-) -> None:
-    operation_id = uuid.uuid4()
-    image = Image.new("RGB", (720, 1280), "#1265E3")
-    png_stream = io.BytesIO()
-    image.save(png_stream, format="PNG")
-    image.close()
-    png = png_stream.getvalue()
-    slide = _artifact(
-        operation_id=operation_id,
-        payload=png,
-        storage_key="tenant/owner/slide.png",
-        kind="slide-png",
-        media_type="image/png",
-    )
-    _store_payload(tmp_path, slide, png)
-    bundle_payload = json.dumps(
-        {
-            "schemaVersion": EXPORT_CHECKPOINT_BUNDLE_SCHEMA,
-            "canonicalExportIdentity": hashlib.sha256(b"identity").hexdigest(),
-            "exportFormat": export_format,
-            "exportMode": "fidelity-raster",
-            "renderAdapter": "chromium-raster-v2",
-            "canvas": {
-                "contractVersion": "authored-canvas/v1",
-                "aspectRatio": "9:16",
-                "widthPx": 720,
-                "heightPx": 1280,
-                "locale": "ko-KR",
-                "safeArea": {"x": 64, "y": 64, "width": 592, "height": 1152},
-            },
-            "slides": [
-                {
-                    "slideIndex": 0,
-                    "artifactRef": slide.to_wire(),
-                    "validationDigest": hashlib.sha256(b"validation").hexdigest(),
-                }
-            ],
-        },
-        sort_keys=True,
-        separators=(",", ":"),
-    ).encode("utf-8")
-    bundle = _artifact(
-        operation_id=operation_id,
-        payload=bundle_payload,
-        storage_key="tenant/owner/export-bundle.json",
-        kind="export-bundle",
-        media_type="application/vnd.presenton.export-bundle+json",
-    )
-    _store_payload(tmp_path, bundle, bundle_payload)
-    job = IsolatedWorkerJob(
-        role="export",
-        operation_id=operation_id,
-        attempt_token="attempt-token-1234567890",
-        fencing_token=1,
-        input_digest=bundle.sha256,
-        input_artifact=bundle,
-        capability="validated-by-runtime",
-        deadline_epoch_seconds=int(time.time()) + 300,
-    )
-    store = LocalContentAddressedStore(tmp_path)
-
-    output = asyncio.run(execute_export(job, store)).artifact
-
-    assert output.kind == f"presentation-{export_format}"
-    assert output.owner_id == bundle.owner_id
-    assert output.created_by_operation_id == operation_id
-    payload = store.read(output)
-    assert hashlib.sha256(payload).hexdigest() == output.sha256
-    if export_format == "pptx":
-        with zipfile.ZipFile(io.BytesIO(payload)) as archive:
-            assert "ppt/presentation.xml" in archive.namelist()
-        deck = Presentation(io.BytesIO(payload))
-        assert (deck.slide_width, deck.slide_height) == (6_858_000, 12_192_000)
-    else:
-        with pdfium.PdfDocument(store.verified_path(output)) as document:
-            assert len(document) == 1
-            page = document[0]
-            assert page.get_size() == pytest.approx((540, 960), abs=0.01)
-            rendered = page.render(scale=1).to_pil().convert("RGB")
-            try:
-                assert rendered.size == (540, 960)
-                for point in ((5, 5), (270, 480), (534, 954)):
-                    assert rendered.getpixel(point) == pytest.approx(
-                        (18, 101, 227), abs=2
-                    )
-            finally:
-                rendered.close()
-                page.close()
-
-
 def test_render_worker_forwards_portrait_canvas_and_checks_png_size(
     tmp_path: Path,
     worker_cache_limits: None,
@@ -848,22 +607,19 @@ def test_export_subprocess_limit_kills_descendants_and_reports_recycle(
     }.items():
         assert f'"{variable}" = "{value}"' in launcher
     operation_id = uuid.uuid4()
-    image = Image.new("RGB", (320, 180), "#1265E3")
-    png_stream = io.BytesIO()
-    image.save(png_stream, format="PNG")
-    image.close()
-    png = png_stream.getvalue()
+    svg = b'<svg xmlns="http://www.w3.org/2000/svg" width="320" height="180"/>'
     slide = _artifact(
         operation_id=operation_id,
-        payload=png,
-        storage_key="tenant/owner/resource-slide.png",
-        kind="slide-png",
-        media_type="image/png",
+        payload=svg,
+        storage_key="tenant/owner/resource-slide.svg",
+        kind="slide-svg",
+        media_type="image/svg+xml",
     )
-    _store_payload(tmp_path, slide, png)
+    _store_payload(tmp_path, slide, svg)
     bundle_payload = json.dumps(
         {
-            "schemaVersion": EXPORT_BUNDLE_SCHEMA,
+            # Opaque to the child below, which never parses its input.
+            "schemaVersion": SVG_EXPORT_SCHEMA,
             "exportFormat": "pptx",
             "slides": [slide.to_wire()],
         },
@@ -1012,162 +768,6 @@ def test_artifact_ref_rejects_paths_and_session_fields() -> None:
         ArtifactRef.from_wire({**base, "cookie": "session=secret"})
 
 
-def test_next_export_route_admits_hybrid_without_executing_it() -> None:
-    """The route still only admits; the isolated worker is the only executor.
-
-    An editable-hybrid public export now exists
-    (`public-export.hybrid-in-isolated-lane`), so this pins both halves of that
-    decision: the browser-facing route hands the requested mode to the durable
-    command and runs no exporter of its own, and the process that does run
-    Chrome plus the OOXML assembler is the isolated export worker.
-    """
-
-    nextjs = Path(__file__).resolve().parents[3] / "nextjs"
-    route = (
-        nextjs / "app" / "api" / "export-presentation" / "route.ts"
-    ).read_text(encoding="utf-8")
-    # Unchanged intent: the route performs no export work in the Next process.
-    assert "/api/v1/ppt/workspace/presentations/" in route
-    assert "runBundledPresentationExport" not in route
-    assert "runAuthoredHybridPresentationExport" not in route
-    assert "child_process" not in route
-    assert "export_task.json" not in route
-    # New intent: the requested output mode reaches the durable command, so a
-    # hybrid request is admitted rather than silently downgraded at the edge.
-    assert "context: admission.context" in route
-    admission = (nextjs / "lib" / "public-export-admission.ts").read_text(
-        encoding="utf-8"
-    )
-    assert '"hybrid"' in admission and "font_embedding" in admission
-
-    # The assembler child is launched from the isolated worker package only.
-    hybrid = (
-        Path(__file__).resolve().parents[2] / "workers" / "public_export_hybrid.py"
-    ).read_text(encoding="utf-8")
-    assert "create_subprocess_exec" in hybrid
-    for durable in (
-        "services/workspace_quality_export_operation_handlers.py",
-        "services/public_export_operation.py",
-        "services/workspace_service.py",
-    ):
-        source = (Path(__file__).resolve().parents[2] / durable).read_text(
-            encoding="utf-8"
-        )
-        assert "create_subprocess_exec" not in source
-        assert "from workers.public_export_hybrid import" not in source
-
-
-def test_export_worker_rejects_a_hybrid_bundle_without_authored_sources() -> None:
-    """Hybrid must name the sources it measures; a bare mode flip is refused."""
-
-    from workers import public_export_worker
-
-    owner_id = uuid.uuid4()
-    operation_id = uuid.uuid4()
-    reference = ArtifactRef(
-        artifact_id=uuid.uuid4(),
-        owner_id=owner_id,
-        tenant_id="tenant",
-        kind="export-bundle",
-        sha256="a" * 64,
-        size_bytes=32,
-        media_type="application/vnd.presenton.export-bundle+json",
-        storage_key="v1/bundle",
-        created_by_operation_id=operation_id,
-        retention_class="ephemeral",
-    )
-    job = SimpleNamespace(input_artifact=reference, operation_id=operation_id)
-
-    def store_for(payload):
-        class Store:
-            def read(self, _reference):
-                return json.dumps(payload).encode("utf-8")
-
-        return Store()
-
-    base = {
-        "schemaVersion": "public-export-bundle/v2",
-        "canonicalExportIdentity": "b" * 64,
-        "exportFormat": "pptx",
-        "exportMode": "editable-hybrid",
-        "renderAdapter": "public-isolated-hybrid",
-        "slides": [],
-    }
-    for payload, expected in (
-        (base, "public_export_bundle_identity_invalid"),
-        ({**base, "fontEmbedding": True}, "public_export_bundle_invalid_shape"),
-    ):
-        with pytest.raises(public_export_worker.PublicWorkerExecutionError) as raised:
-            public_export_worker._read_bundle(job, store_for(payload))
-        assert raised.value.code == expected
-
-
-def test_hybrid_assembler_budget_reserves_time_to_assemble_and_store(
-    tmp_path: Path,
-) -> None:
-    """The assembler must stop before the worker's own deadline.
-
-    An assembler allowed to spend the entire job budget leaves nothing for
-    OOXML assembly and the CAS write, and the worker expires with no file at
-    all. It must instead degrade its last slides to raster and still deliver.
-    """
-
-    from workers import public_export_hybrid
-
-    echo = tmp_path / "echo-job.py"
-    echo.write_text(
-        "import json,sys\n"
-        "job=json.loads(sys.stdin.read())\n"
-        "open(job['outputPath'],'wb').write(b'x')\n"
-        "print(json.dumps({'schemaVersion':'public-hybrid-export-result/v1',"
-        "'ok':True,'errorCode':None,'structural':{'budgetMillis':job['budgetMillis']}}))\n",
-        encoding="utf-8",
-    )
-    base = tmp_path / "base.pptx"
-    base.write_bytes(b"base")
-    html = tmp_path / "slide.html"
-    html.write_text("<html></html>", encoding="utf-8")
-    environment = {
-        "PUBLIC_EXPORT_HYBRID_COMMAND_JSON": json.dumps(
-            [sys.executable, str(echo)]
-        ),
-    }
-    # A ten-minute export retains two minutes for packaging without starving
-    # the final pages with the previous fixed four-minute reserve.
-    budget_seconds = 600.0
-
-    outcome = asyncio.run(
-        public_export_hybrid.assemble_hybrid_pptx(
-            base_pptx=base,
-            html_paths=[html],
-            scratch=tmp_path,
-            font_embedding=False,
-            budget_seconds=budget_seconds,
-            environment=environment,
-        )
-    )
-
-    assert outcome.fallback_reason is None
-    assembler_millis = outcome.evidence["structural"]["budgetMillis"]
-    reserve_millis = 120_000
-    assert assembler_millis == int(budget_seconds * 1000) - reserve_millis
-    assert reserve_millis >= 60_000
-
-    # A budget that cannot even cover the reserve never starts the assembler.
-    exhausted = asyncio.run(
-        public_export_hybrid.assemble_hybrid_pptx(
-            base_pptx=base,
-            html_paths=[html],
-            scratch=tmp_path / "second",
-            font_embedding=False,
-            budget_seconds=float(public_export_hybrid.MIN_ASSEMBLY_RESERVE_SECONDS),
-            environment=environment,
-        )
-    )
-    assert exhausted.output_path is None
-    assert exhausted.fallback_reason == "hybrid_assembler_budget_exhausted"
-
-
 def test_hybrid_quality_summary_persists_bounded_slide_fallback_codes() -> None:
     from services.public_export_hybrid_evidence import (
         HYBRID_QUALITY_SUMMARY_SCHEMA,
@@ -1220,34 +820,6 @@ def test_hybrid_quality_summary_persists_bounded_slide_fallback_codes() -> None:
     }
 
 
-def _hybrid_bundle_payload(**overrides: object) -> dict:
-    declared = {
-        "schemaVersion": "public-hybrid-declared-semantic/v1",
-        "slideIndex": 0,
-        "bundleDigest": "sha256:" + "b" * 64,
-        "fontSetDigest": "sha256:" + "c" * 64,
-        "declaredElementIds": ["q-a"],
-        "declaredElements": [
-            {"elementId": "q-a", "kind": "shape", "sourceDigest": "sha256:" + "d" * 64}
-        ],
-    }
-    payload = {
-        "schemaVersion": EXPORT_CHECKPOINT_BUNDLE_SCHEMA,
-        "canonicalExportIdentity": "a" * 64,
-        "exportFormat": "pptx",
-        "exportMode": "editable-hybrid",
-        "renderAdapter": "public-isolated-hybrid",
-        "fontEmbedding": True,
-        "slides": [],
-        "sourceSlides": [],
-        "semanticSlides": [declared],
-        "exportAttemptId": str(uuid.uuid4()),
-        "rendererSourceDigest": "sha256:" + "e" * 64,
-    }
-    payload.update(overrides)
-    return payload
-
-
 def test_hybrid_recovery_evidence_is_bounded_and_content_free() -> None:
     from services.public_export_hybrid_evidence import bounded_hybrid_worker_evidence
     evidence = bounded_hybrid_worker_evidence({
@@ -1265,38 +837,6 @@ def test_hybrid_recovery_evidence_is_bounded_and_content_free() -> None:
     assert evidence["editability"]["powerpointInteraction"] == {"status": "not-run"}
     assert evidence["editability"]["slides"][0]["reasons"] == ["source-role-unknown"]
     assert "assemblyMillis" not in evidence["timing"]
-
-
-def test_hybrid_recovery_wire_preflight_uses_serialized_bytes(tmp_path: Path, monkeypatch) -> None:
-    from workers import public_export_hybrid
-    captured = []
-
-    class Process:
-        returncode = 1
-        async def communicate(self, payload):
-            captured.append(payload)
-            return json.dumps({"schemaVersion": "public-hybrid-export-result/v1", "ok": False,
-                               "errorCode": "fixture-stop"}).encode(), b""
-
-    async def launch(*args, **kwargs):
-        return Process()
-
-    monkeypatch.setattr(public_export_hybrid.asyncio, "create_subprocess_exec", launch)
-    kwargs = dict(base_pptx=tmp_path / "base.pptx", html_paths=[tmp_path / "한글.html"],
-                  scratch=tmp_path, font_embedding=False, budget_seconds=600,
-                  environment={"PUBLIC_EXPORT_HYBRID_COMMAND_JSON": json.dumps([sys.executable])})
-    assert public_export_hybrid.MAX_HYBRID_JOB_BYTES == 8 * 1024 * 1024
-    asyncio.run(public_export_hybrid.assemble_hybrid_pptx(**kwargs))
-    size = len(captured[0])
-    assert b"\\u" in captured[0]
-    for limit in (size + 1, size):
-        monkeypatch.setattr(public_export_hybrid, "MAX_HYBRID_JOB_BYTES", limit)
-        outcome = asyncio.run(public_export_hybrid.assemble_hybrid_pptx(**kwargs))
-        assert outcome.fallback_reason == "fixture-stop"
-    monkeypatch.setattr(public_export_hybrid, "MAX_HYBRID_JOB_BYTES", size - 1)
-    outcome = asyncio.run(public_export_hybrid.assemble_hybrid_pptx(**kwargs))
-    assert outcome.fallback_reason == "hybrid_job_wire_limit"
-    assert len(captured) == 3
 
 
 def test_hybrid_recovery_fragment_readback_binds_crop_bytes_and_placement() -> None:
@@ -1339,131 +879,74 @@ def test_hybrid_recovery_fragment_readback_binds_crop_bytes_and_placement() -> N
         validate_raster_fragments([(digest, placement, payload)], **kwargs)
 
 
-def test_export_worker_refuses_a_declared_graph_without_its_sealed_identity(
-    tmp_path: Path,
-    worker_cache_limits: None,
-) -> None:
-    """The graph is sealed against an attempt and a renderer; both must travel."""
 
-    from workers import public_export_worker
 
-    job, _bundle = _hybrid_export_fixture(tmp_path)
+def test_next_export_route_admits_without_executing_it() -> None:
+    """The route only admits; the isolated worker is the only executor.
 
-    real_store = LocalContentAddressedStore(tmp_path)
+    The editable-hybrid lane was removed with the authored strategy, so the
+    admission no longer names a PPTX mode and nothing launches an assembler.
+    """
 
-    def store_for(payload):
-        class Store:
-            def read(self, _reference):
-                return json.dumps(payload).encode("utf-8")
-
-            def verified_path(self, reference):
-                return real_store.verified_path(reference)
-
-        return Store()
-
-    real = json.loads(real_store.read(job.input_artifact).decode("utf-8"))
-    base = _hybrid_bundle_payload(
-        slides=real["slides"], sourceSlides=real["sourceSlides"]
+    nextjs = Path(__file__).resolve().parents[3] / "nextjs"
+    route = (
+        nextjs / "app" / "api" / "export-presentation" / "route.ts"
+    ).read_text(encoding="utf-8")
+    assert "/api/v1/ppt/workspace/presentations/" in route
+    assert "runBundledPresentationExport" not in route
+    assert "runAuthoredHybridPresentationExport" not in route
+    assert "child_process" not in route
+    assert "export_task.json" not in route
+    assert "context: admission.context" in route
+    admission = (nextjs / "lib" / "public-export-admission.ts").read_text(
+        encoding="utf-8"
     )
-
-    accepted = public_export_worker._read_bundle(job, store_for(base))
-    assert len(accepted.semantic_slides) == 1
-    assert accepted.export_attempt_id == base["exportAttemptId"]
-    assert accepted.renderer_source_digest == base["rendererSourceDigest"]
-
-    for overrides, expected in (
-        ({"exportAttemptId": ""}, "public_export_semantic_binding_invalid"),
-        ({"rendererSourceDigest": "not-a-digest"}, "public_export_semantic_binding_invalid"),
-        ({"semanticSlides": []}, "public_export_semantic_binding_invalid"),
-        (
-            {"semanticSlides": [{"slideIndex": 7, "declaredElementIds": [], "declaredElements": []}]},
-            "public_export_semantic_slide_invalid",
-        ),
+    assert '"hybrid"' not in admission and "pptx_mode" not in admission
+    assert not (nextjs / "scripts" / "public-hybrid-export-worker.mjs").exists()
+    for durable in (
+        "services/workspace_quality_export_operation_handlers.py",
+        "services/public_export_operation.py",
+        "services/workspace_service.py",
+        "workers/public_export_worker.py",
     ):
-        payload = {**base, **overrides}
-        with pytest.raises(public_export_worker.PublicWorkerExecutionError) as raised:
-            public_export_worker._read_bundle(job, store_for(payload))
-        assert raised.value.code == expected
-
-    # Dropping the identity keys entirely is a shape error, not a silent drop.
-    without_identity = {key: value for key, value in base.items() if key != "exportAttemptId"}
-    with pytest.raises(public_export_worker.PublicWorkerExecutionError) as raised:
-        public_export_worker._read_bundle(job, store_for(without_identity))
-    assert raised.value.code == "public_export_bundle_invalid_shape"
-
-    # A hybrid bundle with no graph at all stays valid and observed-only.
-    observed_only = {
-        key: value
-        for key, value in base.items()
-        if key not in {"semanticSlides", "exportAttemptId", "rendererSourceDigest"}
-    }
-    assert public_export_worker._read_bundle(job, store_for(observed_only)).semantic_slides == []
+        source = (Path(__file__).resolve().parents[2] / durable).read_text(
+            encoding="utf-8"
+        )
+        assert "create_subprocess_exec" not in source
 
 
-def test_hybrid_assembler_puts_the_declared_graph_on_the_child_job(
-    tmp_path: Path,
+@pytest.mark.parametrize(
+    "payload",
+    [
+        b'{"schemaVersion":"public-export-bundle/v1","exportFormat":"pptx","slides":[]}',
+        b'{"schemaVersion":"public-export-bundle/v2","exportMode":"editable-hybrid"}',
+        b"not json",
+    ],
+)
+def test_export_worker_refuses_a_bundle_that_is_not_an_svg_export(
+    tmp_path: Path, worker_cache_limits: None, payload: bytes
 ) -> None:
-    """The assembler child is the only consumer, and it gets the whole graph."""
-
-    from workers import public_export_hybrid
-
-    echo = tmp_path / "echo-job.py"
-    echo.write_text(
-        "import json,sys\n"
-        "job=json.loads(sys.stdin.read())\n"
-        "open(job['outputPath'],'wb').write(b'x')\n"
-        "print(json.dumps({'schemaVersion':'public-hybrid-export-result/v1',"
-        "'ok':True,'errorCode':None,'structural':{"
-        "'semanticSlides':len(job.get('semanticSlides',[])),"
-        "'exportAttemptId':job.get('exportAttemptId'),"
-        "'rendererSourceDigest':job.get('rendererSourceDigest')}}))\n",
-        encoding="utf-8",
+    operation_id = uuid.uuid4()
+    bundle = _artifact(
+        operation_id=operation_id,
+        payload=payload,
+        storage_key="tenant/owner/raster-bundle.json",
+        kind="export-bundle",
+        media_type="application/vnd.presenton.export-bundle+json",
     )
-    base = tmp_path / "base.pptx"
-    base.write_bytes(b"base")
-    html = tmp_path / "slide.html"
-    html.write_text("<html></html>", encoding="utf-8")
-    environment = {
-        "PUBLIC_EXPORT_HYBRID_COMMAND_JSON": json.dumps([sys.executable, str(echo)])
-    }
-    declared = [{"slideIndex": 0, "declaredElementIds": [], "declaredElements": []}]
-    attempt_id = str(uuid.uuid4())
-    renderer_digest = "sha256:" + "f" * 64
-
-    outcome = asyncio.run(
-        public_export_hybrid.assemble_hybrid_pptx(
-            base_pptx=base,
-            html_paths=[html],
-            scratch=tmp_path / "run",
-            font_embedding=False,
-            budget_seconds=1030.0,
-            semantic_slides=declared,
-            export_attempt_id=attempt_id,
-            renderer_source_digest=renderer_digest,
-            environment=environment,
-        )
+    _store_payload(tmp_path, bundle, payload)
+    job = IsolatedWorkerJob(
+        role="export",
+        operation_id=operation_id,
+        attempt_token="attempt-token-1234567890",
+        fencing_token=1,
+        input_digest=bundle.sha256,
+        input_artifact=bundle,
+        capability="validated-by-runtime",
+        deadline_epoch_seconds=int(time.time()) + 300,
     )
 
-    assert outcome.fallback_reason is None
-    assert outcome.evidence["structural"] == {
-        "semanticSlides": 1,
-        "exportAttemptId": attempt_id,
-        "rendererSourceDigest": renderer_digest,
-    }
+    with pytest.raises(public_worker_runtime.PublicWorkerExecutionError) as refused:
+        asyncio.run(execute_export(job, LocalContentAddressedStore(tmp_path)))
 
-    # A graph that does not cover every slide never reaches the child.
-    mismatched = asyncio.run(
-        public_export_hybrid.assemble_hybrid_pptx(
-            base_pptx=base,
-            html_paths=[html],
-            scratch=tmp_path / "mismatch",
-            font_embedding=False,
-            budget_seconds=1030.0,
-            semantic_slides=[*declared, {"slideIndex": 1}],
-            export_attempt_id=attempt_id,
-            renderer_source_digest=renderer_digest,
-            environment=environment,
-        )
-    )
-    assert mismatched.output_path is None
-    assert mismatched.fallback_reason == "hybrid_assembler_semantic_binding_invalid"
+    assert refused.value.code == "public_export_bundle_schema_unsupported"

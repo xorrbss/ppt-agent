@@ -7,7 +7,6 @@ import { ESLint } from "eslint";
 
 const NEXTJS_ROOT = fileURLToPath(new URL("..", import.meta.url));
 const REGRESSION_FILES = [
-  "app/(export)/pdf-maker/PdfMakerPage.tsx",
   "app/(presentation-generator)/(dashboard)/dashboard/components/Header.tsx",
   "app/(presentation-generator)/(dashboard)/settings/SettingPage.tsx",
   "app/(presentation-generator)/(dashboard)/theme/components/ThemePanel/ThemeCard.tsx",

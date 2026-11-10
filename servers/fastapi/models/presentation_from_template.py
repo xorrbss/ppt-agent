@@ -2,19 +2,9 @@ from typing import Annotated, List, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from models.generate_presentation_request import AuthoredMasterPinInput
-
 
 ReviewScope = Literal["all", "current", "subset"]
 SlideIndex = Annotated[int, Field(strict=True, ge=0)]
-
-
-class RetemplatePresentationRequest(BaseModel):
-    """Resolved immutable inputs for re-authoring an authored deck."""
-
-    authored_style: str
-    master_pin: AuthoredMasterPinInput | None = None
-    vision_qa: bool = False
 
 
 class AuthoredQualityReviewRequest(BaseModel):

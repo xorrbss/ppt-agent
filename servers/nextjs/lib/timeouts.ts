@@ -3,7 +3,7 @@
  * per-file copies agreed on; change them here, not at a call site.
  */
 
-/** Fetching a persisted presentation for export or the pdf-maker view. */
+/** Fetching a persisted presentation for export. */
 export const PRESENTATION_FETCH_TIMEOUT_MS = 20_000;
 
 /** Polling cadence for long-running operations (remake, template change, codex auth). */

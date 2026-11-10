@@ -156,4 +156,3 @@ class AgentRunResult:
     artifacts: tuple[RuntimeArtifact, ...] = ()
     tool_summaries: tuple[ToolSummary, ...] = ()
     approval_request: ApprovalRequest | None = None
-    page_remake_slide_index: int | None = None

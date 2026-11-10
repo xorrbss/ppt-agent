@@ -12,7 +12,6 @@ import pytest
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from api.v1.ppt.endpoints.authored_vnext.semantic.router import AUTHORED_SEMANTIC_ROUTER
 from models.authored_vnext.semantic.contracts import ProductReadinessProjectionV1
 from models.authored_vnext.semantic.readiness import (
     CapabilityEnvironmentV2,
@@ -555,22 +554,4 @@ async def _exercise_readiness(monkeypatch: pytest.MonkeyPatch) -> None:
     assert v1.promotion_ready is False
     assert v1.full_native_parity_ready is False
     assert v1.independent_vnext_generation_ready is False
-
-    paths = {route.path for route in AUTHORED_SEMANTIC_ROUTER.routes}
-    assert (
-        "/presentation/{presentation_id}/authored-emission/capability-projection-v2"
-        in paths
-    )
-    assert (
-        "/presentation/{presentation_id}/authored-emission/export-attempt-bindings-v2"
-        in paths
-    )
-    assert "/authored-emission/capability-receipts-v2" in paths
-    assert (
-        "/presentation/{presentation_id}/authored-emission/visual-evidence-artifacts-v2"
-        in paths
-    )
-    assert (
-        "/authored-emission/capability-receipts-v2/{receipt_digest}/revoke" in paths
-    )
     await engine.dispose()

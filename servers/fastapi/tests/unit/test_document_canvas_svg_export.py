@@ -11,13 +11,11 @@ import sys
 from xml.etree import ElementTree as ET
 import zipfile
 
-from PIL import Image, ImageDraw
-import pypdfium2 as pdfium
+from PIL import Image
 import pytest
 
 from services.authored_canvas import canvas_metadata_for_aspect_ratio
 from services.document_canvas import document_canvas_for_orientation
-from workers.public_export_worker import _build_pdf
 from workers.public_svg_export_worker import VENDOR_ROOT, convert_pptx, converter_digest
 
 NS = {
@@ -120,45 +118,6 @@ def test_worker_native_page_elements_and_legacy_return_sequence(tmp_path):
                 body_properties = shape.find("p:txBody/a:bodyPr", NS)
                 assert body_properties.find("a:noAutofit", NS) is not None
                 assert body_properties.find("a:spAutoFit", NS) is None
-
-
-@pytest.mark.parametrize(
-    "orientation,width_pt,height_pt",
-    [
-        ("landscape", 841.8897637795, 595.2755905512),
-        ("portrait", 595.2755905512, 841.8897637795),
-    ],
-)
-def test_worker_pdf_media_and_paint_matrix(tmp_path, orientation, width_pt, height_pt):
-    canvas = document_canvas_for_orientation(orientation)
-    png = tmp_path / "slide.png"
-    image = Image.new("RGB", (canvas.width_px, canvas.height_px), "white")
-    ImageDraw.Draw(image).rectangle((60, 60, 159, 159), fill="red")
-    image.save(png)
-
-    class Store:
-        def verified_path(self, reference):
-            return png
-
-    target = tmp_path / "deck.pdf"
-    _build_pdf([object()], Store(), target, canvas)
-    with pdfium.PdfDocument(target) as document:
-        page = document[0]
-        assert page.get_size() == pytest.approx((width_pt, height_pt), abs=0.01)
-        objects = list(page.get_objects())
-        assert len(objects) == 1
-        assert objects[0].get_matrix().get() == pytest.approx((width_pt, 0, 0, height_pt, 0, 0), abs=0.01)
-        bitmap = objects[0].get_bitmap()
-        try:
-            pixels = bitmap.to_pil().convert("RGB")
-            assert pixels.size == (canvas.width_px, canvas.height_px)
-            assert pixels.getpixel((60, 60)) == (255, 0, 0)
-            assert pixels.getpixel((159, 159)) == (255, 0, 0)
-            assert pixels.getpixel((59, 59)) == (255, 255, 255)
-            assert pixels.getpixel((160, 160)) == (255, 255, 255)
-        finally:
-            bitmap.close()
-        page.close()
 
 
 def test_context_restored_after_failure_and_parallel_rejected():

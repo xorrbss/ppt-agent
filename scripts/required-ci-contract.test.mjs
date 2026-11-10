@@ -999,10 +999,12 @@ test("developer documentation matches the executable lint and test workflow", ()
   assert.doesNotMatch(claude, /does \*\*not\*\* include `servers\/nextjs\/tests\/`/u);
 });
 
-// The authored-hybrid export contracts used to be pinned by a GitHub-only
-// Windows workflow that never ran for this fork. What still runs them is the
-// shared Next.js Node suite on Bitbucket, which discovers every *.test.mjs
-// under lib/ except the dedicated end-to-end flows.
+// The authored-hybrid contracts used to be pinned by a GitHub-only Windows
+// workflow that never ran for this fork. What still runs them is the shared
+// Next.js Node suite on Bitbucket, which discovers every *.test.mjs under lib/
+// except the dedicated end-to-end flows. The Hybrid export itself was removed
+// with the authored strategy; the renderer isolation and the PPTX archive
+// reader it shared with the renderer contract and OOXML vNext remain.
 test("the Bitbucket Node suite discovers the authored-hybrid export contracts", () => {
   const nodeRunner = read("servers/nextjs/scripts/run-ci-node-tests.mjs");
   const exclusions = nodeRunner.slice(
@@ -1012,7 +1014,7 @@ test("the Bitbucket Node suite discovers the authored-hybrid export contracts", 
 
   assert.match(nodeRunner, /const ROOTS = \[[^\]]*"lib"[^\]]*\]/u);
   assert.doesNotMatch(exclusions, /authored-hybrid/u);
-  for (const contract of ["mode", "pptx-archive", "cleanup"]) {
+  for (const contract of ["pptx-archive", "renderer-isolation", "security"]) {
     const relativePath = `servers/nextjs/lib/authored-hybrid/${contract}.test.mjs`;
     assert.ok(read(relativePath).length > 0, `${relativePath} must exist`);
     assert.doesNotMatch(

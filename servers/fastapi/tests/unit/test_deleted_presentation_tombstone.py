@@ -11,7 +11,6 @@ import pytest
 from fastapi import HTTPException
 
 from api.v1.ppt.endpoints import outlines as outlines_endpoint
-from api.v1.ppt.endpoints import authored_operations as presentation_endpoint
 from api.v1.ppt.endpoints import presentation_crud
 from api.v1.ppt.endpoints import presentation_versions
 from models.sql.presentation import (
@@ -75,14 +74,6 @@ async def _call_deleted_mutation(
     presentation: PresentationModel,
     session: _TombstoneSession,
 ):
-    if name == "retemplate":
-        return await presentation_endpoint.retemplate_authored_presentation(
-            presentation.id,
-            object(),
-            object(),
-            object(),
-            session,
-        )
     if name == "restore":
         return await presentation_versions.restore_presentation_version(
             presentation.id,
@@ -169,7 +160,6 @@ def test_legacy_delete_preserves_existing_durable_tombstone(monkeypatch):
 @pytest.mark.parametrize(
     "mutation",
     (
-        "retemplate",
         "restore",
     ),
 )
