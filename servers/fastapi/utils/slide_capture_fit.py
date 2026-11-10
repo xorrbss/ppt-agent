@@ -30,15 +30,15 @@ import re
 from collections.abc import Callable, Mapping
 from typing import Any
 
-from utils.authored_fit_edits import apply_fit_edits
-from utils.authored_fragmentation_gate import fit_font_floor_px
-from utils.authored_fragmentation_gate import page_number_max_font_px as resolved_page_number_max_font_px
 from utils.authored_qid_namespace import ensure_authored_qids
-from utils.slide_capture_fit_in_render_script import FIT_CLASS
-from utils.slide_capture_fit_in_render_script import FIT_VERSION as IN_RENDER_FIT_VERSION
-from utils.slide_capture_fit_in_render_script import fit_script_fragment as in_render_fit_script_fragment
-from utils.slide_capture_fit_script import FIT_VERSION, fit_script_fragment
 from utils.hashing import sha256_prefixed
+from utils.render_fit_floor import fit_font_floor_px
+from utils.render_fit_floor import page_number_max_font_px as resolved_page_number_max_font_px
+from utils.slide_capture_fit_class import FIT_CLASS
+
+# The fitter scripts and the edit replay are imported where a fit is requested:
+# only authored HTML asks for one, and every other render (svg included) only
+# needs the request check and ``NO_FIT_PRELUDE``.
 
 _HTML_TAG_PATTERN = re.compile(r"<html(?:\s[^>]*)?>", re.IGNORECASE)
 _CLASS_PATTERN = re.compile(
@@ -60,6 +60,7 @@ def require_qid_complete(html: str) -> None:
 
 def fit_probe_prelude(policy: Mapping[str, Any] | None = None) -> str:
     """Return the local fitter and its no-throw ``__codexFitPass`` probe API."""
+    from utils.slide_capture_fit_script import FIT_VERSION, fit_script_fragment
 
     encoded = json.dumps(
         dict(policy or {}),
@@ -100,6 +101,9 @@ def in_render_fit_probe_prelude(
     ``font_floor_px`` is the shrink floor; ``None`` resolves it from the
     fragmentation gate knobs (the gate floor when on, 12px otherwise).
     """
+    from utils.slide_capture_fit_in_render_script import FIT_VERSION as IN_RENDER_FIT_VERSION
+    from utils.slide_capture_fit_in_render_script import fit_script_fragment as in_render_fit_script_fragment
+
     floor = fit_font_floor_px() if font_floor_px is None else font_floor_px
     page_max = resolved_page_number_max_font_px() if page_number_max_font_px is None else page_number_max_font_px
     return in_render_fit_script_fragment(font_floor_px=floor, page_max_px=page_max) + (
@@ -264,6 +268,8 @@ def fit_capture_fields(
         if metrics is not None:
             metrics = cache_metrics(html, metrics) or metrics
         return digest, None, report, metrics
+    from utils.authored_fit_edits import apply_fit_edits
+
     fitted_html = apply_fit_edits(html, edits)
     if metrics is not None:
         metrics = cache_metrics(fitted_html, metrics) or metrics

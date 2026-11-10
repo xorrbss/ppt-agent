@@ -669,7 +669,7 @@ async def _svg_timeout_repurchase_bound_consent(tmp_path, monkeypatch, *, mixed=
 
     monkeypatch.setattr("utils.llm_provider.get_llm_provider", lambda: LLMProvider.CODEX)
     monkeypatch.setattr("utils.llm_provider.get_model", lambda: "gpt-6-sol")
-    monkeypatch.setattr("utils.llm_calls.author_prompt_profile.authoring_model", lambda model: model)
+    monkeypatch.setattr("utils.llm_calls.author_model_pin.authoring_model", lambda model: model)
     monkeypatch.setattr("services.svg_presentation_checkpoint._read_png",
                         lambda payload: b"cached PNG" if payload.get("png_sha256") else None)
     admissions = []

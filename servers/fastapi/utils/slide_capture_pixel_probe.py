@@ -8,7 +8,7 @@ import math
 import re
 from typing import Any, Mapping
 
-from utils.authored_dom_quality import ensure_authored_qids
+from utils.authored_qid_namespace import ensure_authored_qids
 from models.canvas_defaults import DEFAULT_CANVAS_HEIGHT_PX, DEFAULT_CANVAS_WIDTH_PX
 
 SLIDE_W = DEFAULT_CANVAS_WIDTH_PX

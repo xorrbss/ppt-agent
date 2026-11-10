@@ -393,7 +393,7 @@ async def author_source_svg_layout(
         provider_call_admission,
         record_provider_call,
     )
-    from utils.llm_calls.author_prompt_profile import authoring_model
+    from utils.llm_calls.author_model_pin import authoring_model
     from utils.llm_calls.author_prompt_split import author_messages
     from services.generation_core.authoring.author_call_runtime import (
         _AUTHOR_EXECUTOR,

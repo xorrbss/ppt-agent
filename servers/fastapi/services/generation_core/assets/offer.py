@@ -25,6 +25,7 @@ from pathlib import Path
 from typing import Any, Literal, Optional, Sequence
 
 from services import svg_outline_spans
+from services.generation_core.assets.style_primary import resolve_style_primary
 from utils.hashing import sha256_hex
 
 LOGGER = logging.getLogger(__name__)
@@ -101,8 +102,6 @@ _FALLBACK_ICON_INK = "#1E5EFF"
 
 def icon_ink(brand, style) -> str:
     """The deck accent icons are painted with: the author's own (an explicit brand colour wins)."""
-    from services.generation_core.authoring.author_slide_design_system import resolve_style_primary
-
     return resolve_style_primary(brand, style) or _FALLBACK_ICON_INK
 
 

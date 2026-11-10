@@ -20,20 +20,8 @@ from utils.llm_calls.author_slide_brief import (
 )
 from models.canvas_defaults import DEFAULT_CANVAS_HEIGHT_PX, DEFAULT_CANVAS_WIDTH_PX
 from utils.authored_font_stack import LOCAL_FONT_FALLBACKS, css_font_stack  # noqa: F401
-
-
-def resolve_style_primary(brand: Any, style: Any | None) -> Any:
-    """The primary colour the author uses: an explicit brand colour, else the style's, else the brand's."""
-    primary = getattr(brand, "primary", None)
-    if style is None or getattr(style, "id", None) == "default":
-        return primary
-    if getattr(brand, "primary_is_explicit", False):
-        return primary
-    return (
-        getattr(style, "primary_color", None)
-        or getattr(style, "preview_accent", None)
-        or primary
-    )
+# Re-exported: svg asset offers read it from its own module.
+from services.generation_core.assets.style_primary import resolve_style_primary as resolve_style_primary
 
 
 def apply_style_defaults(brand: Any, style: Any | None) -> Any:

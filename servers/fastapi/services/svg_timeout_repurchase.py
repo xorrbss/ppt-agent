@@ -264,7 +264,7 @@ The returned hash is the approval contract. It is not permission to retry;
            and str(call.id) not in unknown_call_ids for call in calls):
         _reject()
     from utils.llm_provider import get_llm_provider, get_model
-    from utils.llm_calls.author_prompt_profile import authoring_model
+    from utils.llm_calls.author_model_pin import authoring_model
 
     manifest = {
         "recovery_revision": recovery_revision,
@@ -431,7 +431,7 @@ async def build_append_only_svg_recovery_manifest(session, operation, *, present
     from services.svg_authoring_profile import read_authoring_profile
     from services.generation_core.runtime.profile import resolve_svg_runtime_profile
     from utils.llm_provider import get_llm_provider, get_model
-    from utils.llm_calls.author_prompt_profile import authoring_model
+    from utils.llm_calls.author_model_pin import authoring_model
     from utils.owner_context import get_current_owner_id, get_current_tenant_id
 
     now = get_current_utc_datetime()

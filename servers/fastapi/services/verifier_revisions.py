@@ -342,6 +342,12 @@ COMMON_HEADER_VERIFIER_LEDGER = VerifierRevisionLedger(
         # writing policy protects names the request source joins with a middle dot (강원·제주권).
         # No stored deck carries a v7 marker; stored pages are not re-rendered by this change.
         "sha256:3ccbf3f484cfc74eec0f8dd9888f51f66f5a6549cc2d4a13302d86dcbd9606c5": "svg-common-header-verifier/1",
+        # 2026-11-10 authored removal P3 B1b-2 (move only): svg capture, authoring and
+        # asset offers import the qid namespace, the fit type floor, the reference image
+        # attachment, the authoring-model pin and the style primary from shared modules
+        # instead of the authored DOM quality, fragmentation gate, image-rule, prompt
+        # profile and design-system modules. No behaviour or output changed.
+        "sha256:ae323c21b6fdb7af02752f447468298e562fe3c492238ab8dae3d341c87bfdba": "svg-common-header-verifier/1",
     }),
 )
 
@@ -534,6 +540,12 @@ WHOLE_PAGE_VERIFIER_LEDGER = VerifierRevisionLedger(
         # into shared modules that svg now imports instead of the authored modules. No
         # behaviour or output changed.
         "e49c5aaa9627fe6cd2adbe8d02c22ca2e481db50ebc3b224fa3644ec841ea663": "svg-whole-page-verifier/1",
+        # 2026-11-10 authored removal P3 B1b-2 (move only): svg capture, authoring and
+        # asset offers import the qid namespace, the fit type floor, the reference image
+        # attachment, the authoring-model pin and the style primary from shared modules
+        # instead of the authored DOM quality, fragmentation gate, image-rule, prompt
+        # profile and design-system modules. No behaviour or output changed.
+        "6e8c378ac183b5f1c3edca1f4c70ddf6495b29c8ef59bb79ef9e69c6c3e5fbee": "svg-whole-page-verifier/1",
     }),
 )
 
@@ -816,6 +828,12 @@ PARTIAL_RECOVERY_CODE_LEDGER = VerifierRevisionLedger(
         # them instead of the authored checkpoint facade; workspace_service lost an
         # unused import. No behaviour or output changed.
         "96cc634baa88bb8105a718387bfa55724579b30c731c7801b25834756fd7f277": "svg-partial-recovery-code/1",
+        # 2026-11-10 authored removal P3 B1b-2 (move only): svg capture, authoring and
+        # asset offers import the qid namespace, the fit type floor, the reference image
+        # attachment, the authoring-model pin and the style primary from shared modules
+        # instead of the authored DOM quality, fragmentation gate, image-rule, prompt
+        # profile and design-system modules. No behaviour or output changed.
+        "aadbeea426be5ccc39fac090fb9921413c2d582c4392fa5cded7dd97cccd64dc": "svg-partial-recovery-code/1",
     }),
 )
 
@@ -1003,6 +1021,12 @@ PAGE_RENDER_CODE_LEDGER = VerifierRevisionLedger(
         # them instead of the authored checkpoint facade; workspace_service lost an
         # unused import. No behaviour or output changed.
         "881eea645c3e963db51d1cf5de4867df129b62f1d22f1162f6f68c740e913872": "svg-page-render-code/1",
+        # 2026-11-10 authored removal P3 B1b-2 (move only): svg capture, authoring and
+        # asset offers import the qid namespace, the fit type floor, the reference image
+        # attachment, the authoring-model pin and the style primary from shared modules
+        # instead of the authored DOM quality, fragmentation gate, image-rule, prompt
+        # profile and design-system modules. No behaviour or output changed.
+        "4421da7d9c3a15153a3334a8314072d563398e23e0fc8cd8159611defb715fb5": "svg-page-render-code/1",
     }),
 )
 

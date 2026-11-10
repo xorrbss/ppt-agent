@@ -97,7 +97,7 @@ def build_chain(module, setattr_):
     whose preimages are not in the repository, so the digest doubles map the
     scripted stand-ins onto those pinned values.
     """
-    import utils.llm_calls.author_prompt_profile as author_profile
+    import utils.llm_calls.author_model_pin as author_profile
     import utils.llm_provider as llm_provider
 
     registry = incident.incident_registry()

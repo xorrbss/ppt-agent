@@ -14,7 +14,7 @@ from pathlib import Path
 from collections.abc import Mapping
 from typing import Any
 
-from utils.authored_dom_quality import ensure_authored_qids
+from utils.authored_qid_namespace import ensure_authored_qids
 from models.canvas_defaults import DEFAULT_CANVAS_SIZE_PX
 from utils.hashing import sha256_hex, sha256_prefixed
 
