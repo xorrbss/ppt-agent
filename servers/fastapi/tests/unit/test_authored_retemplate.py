@@ -5,7 +5,7 @@ import pytest
 from fastapi import BackgroundTasks, HTTPException
 from starlette.requests import Request
 
-from api.v1.ppt.endpoints.authored_operations import (
+from services.authored_retemplate_request import (
     build_authored_retemplate_generation_request,
 )
 from models.presentation_from_template import RetemplatePresentationRequest
@@ -318,3 +318,31 @@ def test_retemplate_rejects_missing_semantic_manuscript(fake_async_session):
 
     assert exc_info.value.status_code == 400
     assert "semantic content" in exc_info.value.detail
+
+
+def test_retemplate_endpoint_refuses_authored_regeneration_before_any_work(monkeypatch):
+    """Retemplating regenerates with authored, removed on 2026-11-09."""
+    import uuid
+
+    from api.v1.ppt.endpoints import authored_operations
+
+    builder = AsyncMock()
+    queue = AsyncMock()
+    monkeypatch.setattr(authored_operations, "require_legacy_presentation_write_path", lambda *_args: None)
+    monkeypatch.setattr("services.authored_retemplate_request.build_authored_retemplate_generation_request", builder)
+    monkeypatch.setattr("services.presentation_generation_pipeline.queue_presentation_generation", queue)
+
+    with pytest.raises(HTTPException) as refused:
+        asyncio.run(
+            authored_operations.retemplate_authored_presentation(
+                uuid.uuid4(),
+                RetemplatePresentationRequest(authored_style="default"),
+                object(),
+                BackgroundTasks(),
+                object(),
+            )
+        )
+
+    assert (refused.value.status_code, refused.value.detail) == (422, "authored_strategy_removed")
+    builder.assert_not_awaited()
+    queue.assert_not_awaited()

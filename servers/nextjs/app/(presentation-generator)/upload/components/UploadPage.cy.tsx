@@ -113,7 +113,7 @@ describe("<UploadPage /> authored-only creation", () => {
       fileName: "source.pptx",
       mimeType: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
     });
-    cy.get('[data-testid="generation-strategy-svg"]').should("be.enabled").click();
+    cy.get('[data-testid="generation-strategy-selector"]').should("not.exist");
 
     cy.get('[data-testid="source-content-selection-summary"]')
       .should("contain", "원본 화면을 편집 가능한 텍스트와 표로 A4에 재구성")
@@ -129,11 +129,7 @@ describe("<UploadPage /> authored-only creation", () => {
       );
     });
 
-    // The company-standard master picker is an authored-only feature; svg is
-    // now the landing default, so this test selects authored explicitly to
-    // exercise it.
     const store = makeStore();
-    store.dispatch(setPptGenUploadState({ generationStrategy: "authored" }));
 
     mount(
       <NextIntlClientProvider locale="ko" messages={koMessages} timeZone="Asia/Seoul">

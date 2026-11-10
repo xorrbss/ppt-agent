@@ -32,7 +32,6 @@ interface ConfigurationSelectsProps {
     sourceContentMode?: boolean;
     authoredStyle: string;
     hasCompanyStandard?: boolean;
-    generationStrategy?: "authored" | "svg";
     sourceDocumentCanvas?: DocumentCanvas | null;
 }
 
@@ -172,7 +171,6 @@ export function ConfigurationSelects({
     sourceContentMode = false,
     authoredStyle,
     hasCompanyStandard = false,
-    generationStrategy = "svg",
     sourceDocumentCanvas = null,
 }: ConfigurationSelectsProps) {
     const [openSlides, setOpenSlides] = useState(false);
@@ -192,11 +190,9 @@ export function ConfigurationSelects({
                 sourceContentMode={sourceContentMode}
                 authoredStyle={authoredStyle}
                 hasCompanyStandard={hasCompanyStandard}
-                generationStrategy={generationStrategy}
                 sourceDocumentCanvas={sourceDocumentCanvas}
             />
-            {generationStrategy === "svg" ? (
-                <div className="flex items-center gap-2 text-sm text-slate-700">
+            <div className="flex items-center gap-2 text-sm text-slate-700">
                     <label htmlFor="svg-common-header-mode">{t("commonHeaderModeLabel")}</label>
                     <select
                         id="svg-common-header-mode"
@@ -218,10 +214,9 @@ export function ConfigurationSelects({
                             {t("commonHeaderCoverException")}
                         </label>
                     ) : null}
-                </div>
-            ) : null}
-            {generationStrategy === "svg" && (config.commonHeaderMode ?? "uniform") === "uniform" ? <CommonHeaderDesignInput config={config} onConfigChange={onConfigChange} /> : null}
-            {generationStrategy === "svg" && sourceContentMode && hasCommonHeader(config.commonHeaderMode) ? (
+            </div>
+            {(config.commonHeaderMode ?? "uniform") === "uniform" ? <CommonHeaderDesignInput config={config} onConfigChange={onConfigChange} /> : null}
+            {sourceContentMode && hasCommonHeader(config.commonHeaderMode) ? (
                 <p className="basis-full text-sm text-amber-700" role="alert">
                     {t("commonHeaderSourcePreservationNote")}
                 </p>

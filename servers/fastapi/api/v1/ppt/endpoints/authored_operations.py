@@ -10,7 +10,6 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from api.v1.ppt.endpoints.presentation_helpers import build_export_cookie_header
 from models.presentation_from_template import (
     AuthoredPageRemakePreviewRequest,
     AuthoredPageRemakePublishRequest,
@@ -45,7 +44,6 @@ from utils.authored_patch_engine import (
     SetStyleAction,
     SetTextAction,
 )
-from services.authored_retemplate_request import build_authored_retemplate_generation_request
 
 
 AUTHORED_OPERATIONS_ROUTER = APIRouter(prefix="/presentation", tags=["Presentation"])
@@ -236,8 +234,9 @@ async def publish_authored_page_remake_candidate(id: uuid.UUID, slide_index: int
 
 @AUTHORED_OPERATIONS_ROUTER.post("/{id}/retemplate", response_model=AsyncPresentationGenerationTaskModel)
 async def retemplate_authored_presentation(id: uuid.UUID, request: RetemplatePresentationRequest, request_http: Request, background_tasks: BackgroundTasks, sql_session: AsyncSession = Depends(get_async_session)):
-    from api.v1.ppt.endpoints.presentation_generate import queue_presentation_generation
+    from services.generation_core.admission.strategy import AUTHORED_STRATEGY_REMOVED
 
+    # Retemplating regenerates the deck with the authored strategy, removed on
+    # 2026-11-09: refuse before the exact-source snapshot or any durable row.
     require_legacy_presentation_write_path(id)
-    generation_request = await build_authored_retemplate_generation_request(id, request, sql_session)
-    return await queue_presentation_generation(generation_request, background_tasks, sql_session, export_cookie_header=build_export_cookie_header(request_http))
+    raise HTTPException(status_code=422, detail=AUTHORED_STRATEGY_REMOVED)

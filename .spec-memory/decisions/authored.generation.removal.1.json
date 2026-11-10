@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 1,
+  "key": "authored.generation.removal",
+  "revision": 1,
+  "status": "accepted",
+  "authority": "user",
+  "summary": "Remove the authored generation strategy; svg is the only generation path. Supersedes the 2026-11-07 freeze of non-SVG modes for authored.",
+  "scope": [
+    "authored-generation",
+    "deck-ir",
+    "generation",
+    "public-api",
+    "svg"
+  ],
+  "invariants": [
+    "Phases follow docs/authored-removal-design-20261105.md as refreshed by docs/authored-removal-execution-20261109.md: P1 stop new authored generation, P2 existing decks, P3 authored-only code, P4 database, P5 docs.",
+    "Existing authored decks are handled with option C: before the driver is removed, every authored deck gets an editable PPTX and a PDF snapshot linked from its list entry; production usage was not queried.",
+    "Shared infrastructure svg depends on (style catalogue, canvas, checkpoints, renderer, master pins) is kept; delete by driver, not by file name.",
+    "Persisted and wire literals are never renamed (operation authored_generation, authored_style, style_source authored, driver id literals, AUTHORED_* env names svg reads, authored_slide_checkpoints)."
+  ],
+  "forbidden": [
+    "Silently substituting another strategy for a request svg cannot serve",
+    "Removing the authored driver before every authored deck has a snapshot or a recorded failure",
+    "Deleting a shared module only because its name contains authored"
+  ],
+  "evidence": [
+    "Owner instruction 2026-11-09 in session https://claude.ai/code/session_013Bqj4ui1pBrg9vgrGf2Kek",
+    "docs/authored-removal-design-20261105.md",
+    "docs/authored-removal-execution-20261109.md"
+  ],
+  "supersedes": null,
+  "recordedAt": "2026-11-09T12:00:00+00:00"
+}

@@ -418,10 +418,16 @@ async def create_presentation(
     sql_session: AsyncSession = Depends(get_async_session),
 ):
     from api.v1.ppt.endpoints.presentation_create_canvas import admitted_create_canvas
+    from services.generation_core.admission.strategy import AUTHORED_STRATEGY_REMOVED
 
+    if strategy == "authored":
+        # Authored generation was removed on 2026-11-09; never mint a staging
+        # authored deck shell that no generation could fill.
+        raise HTTPException(status_code=422, detail=AUTHORED_STRATEGY_REMOVED)
     create_canvas = await admitted_create_canvas(
         http_request, page_size, orientation, aspect_ratio,
         strategy=strategy, svg_canvas=svg_canvas,
+        svg_template_pinned=svg_template_pin is not None,
     )
     if (svg_template_pin is None) != (svg_template_mode is None):
         raise HTTPException(status_code=422, detail="svg_template_pin_mode_required")

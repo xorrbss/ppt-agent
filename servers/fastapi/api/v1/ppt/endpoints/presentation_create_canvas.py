@@ -17,6 +17,7 @@ async def admitted_create_canvas(
     *,
     strategy: str = "authored",
     svg_canvas: SvgCanvasInput | None = None,
+    svg_template_pinned: bool = False,
 ) -> dict[str, object]:
     selectors = (
         {"page_size": page_size, "orientation": orientation} if page_size is not None or orientation is not None else {}
@@ -38,10 +39,18 @@ async def admitted_create_canvas(
                 "content": "canvas", "strategy": "svg", **selectors,
                 **({"aspect_ratio": aspect_ratio} if not selectors else {}),
             })
-            canvas = selected_svg_canvas(request)
+            if svg_template_pinned:
+                # A template pin freezes the template's document canvas
+                # (request_canvas_contract's pinned branch).
+                return selected_svg_canvas(request).model_dump(mode="json", by_alias=True)
+            # Otherwise store exactly what the later generation request for this
+            # deck resolves (a plain 16:9 svg deck keeps the authored canvas
+            # metadata), or generation refuses it with authored_canvas_request_mismatch.
+            from services.authored_canvas import request_canvas_metadata
+
+            return request_canvas_metadata(request)
         except (ValueError, ValidationError) as error:
             raise HTTPException(status_code=422, detail="svg_canvas_invalid") from error
-        return canvas.model_dump(mode="json", by_alias=True)
     if svg_canvas is not None or aspect_ratio == "4:3":
         raise HTTPException(status_code=422, detail="svg_canvas_strategy_required")
     if page_size is not None and not a4_writer_admission_enabled():

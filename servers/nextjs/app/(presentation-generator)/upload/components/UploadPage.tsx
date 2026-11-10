@@ -41,10 +41,8 @@ import GenerationGuardDialog from "./upload-page/GenerationGuardDialog";
 import RasterSourceReview from "./upload-page/RasterSourceReview";
 import { useUploadPageState } from "./upload-page/useUploadPageState";
 import { useMasterCatalogController } from "./upload-page/useMasterCatalogController";
-import { useSourceSvgCapability } from "./upload-page/useSourceSvgCapability";
 import { useDashboardPromptHandoff } from "./upload-page/useDashboardPromptHandoff";
 import { SourceContentSummaryPanel } from "./upload-page/SourceContentSummaryPanel";
-import { GenerationStrategySelector } from "./upload-page/GenerationStrategySelector";
 import { GenerateActionRow } from "./upload-page/GenerateActionRow";
 import UploadDesignGallery from "./UploadDesignGallery";
 import { GenerationPreparation } from "../../generation-workspace/GenerationPreparation";
@@ -76,11 +74,7 @@ const UploadPage = ({
   const sourceContentMode = useSelector(
     (state: RootState) => state.pptGenUpload.sourceContentMode,
   );
-  const generationStrategy = useSelector(
-    (state: RootState) => state.pptGenUpload.generationStrategy,
-  );
   const [reviewBeforeGeneration, setReviewBeforeGeneration] = useState(false);
-  const sourceSvgCapability = useSourceSvgCapability(sourceContentMode, authoredStyle);
 
   const {
     files,
@@ -349,25 +343,15 @@ const UploadPage = ({
               ) : null}
             </div>
 
-            <GenerationStrategySelector
-              sourceContentMode={sourceContentMode}
-              generationStrategy={generationStrategy}
-              onChangeStrategy={(strategy) => dispatch(setPptGenUploadState({ generationStrategy: strategy }))}
-              sourceSvgCapability={sourceSvgCapability}
-              pageSize={config.pageSize}
-            />
-
             {sourceContentMode ? (
               <SourceContentSummaryPanel
-                generationStrategy={generationStrategy}
                 authoredStyle={authoredStyle}
-                companyStandard={companyStandard}
                 isSourceContentAnalyzing={isSourceContentAnalyzing}
                 sourceContentSummary={sourceContentSummary}
               />
             ) : null}
 
-            {sourceContentMode && generationStrategy === "svg" && config.pageSize === "A4" && authoredStyle === "screenshot-blue" &&
+            {sourceContentMode && config.pageSize === "A4" && authoredStyle === "screenshot-blue" &&
               <details className="mt-3 rounded-lg border border-slate-200 bg-white p-3 text-sm text-slate-700">
                 <summary className="cursor-pointer font-medium">{tA2b("advancedOptionReviewEveryRegionManually")}</summary>
                 <label className="mt-3 flex items-start gap-2">
@@ -386,7 +370,6 @@ const UploadPage = ({
                     sourceContentMode={sourceContentMode}
                     authoredStyle={authoredStyle}
                     hasCompanyStandard={Boolean(companyStandard) && !sourceContentMode}
-                    generationStrategy={generationStrategy}
                     sourceDocumentCanvas={sourceContentCanvas}
                   />
                 </>
@@ -395,16 +378,16 @@ const UploadPage = ({
                 reviewBeforeGeneration={reviewBeforeGeneration}
                 onReviewBeforeGenerationChange={setReviewBeforeGeneration}
                 onGenerate={handlePrimaryGenerate}
-                disabled={generationBusy || previousGenerationAttempt.blocked || (generationStrategy === "svg" && Boolean(config.svgTemplatePin) && config.svgTemplateCapabilityState !== "available")}
+                disabled={generationBusy || previousGenerationAttempt.blocked || (Boolean(config.svgTemplatePin) && config.svgTemplateCapabilityState !== "available")}
                 generating={loadingState.isLoading}
               />
             </div>
 
-            {generationStrategy === "svg" ? <SvgTemplatePicker config={config} onConfigChange={handleConfigChange} sourceContentMode={sourceContentMode} hasCompanyMaster={Boolean(companyStandard)} /> : null}
+            <SvgTemplatePicker config={config} onConfigChange={handleConfigChange} sourceContentMode={sourceContentMode} hasCompanyMaster={Boolean(companyStandard)} />
 
-            {generationStrategy === "svg" ? <SvgDesignReferenceInput config={config} onConfigChange={handleConfigChange} disabled={Boolean(config.svgTemplatePin || companyStandard)} /> : null}
+            <SvgDesignReferenceInput config={config} onConfigChange={handleConfigChange} disabled={Boolean(config.svgTemplatePin || companyStandard)} />
 
-            {generationStrategy === "authored" && masterAdmissionError ? (
+            {masterAdmissionError ? (
               <div
                 className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2.5 text-sm text-rose-900"
                 role="alert"
@@ -426,7 +409,8 @@ const UploadPage = ({
         </section>
 
         <UploadDesignGallery>
-        {masterFeatureEnabled && generationStrategy === "authored" ? (
+        {/* A source-content restyle never applies a company standard. */}
+        {masterFeatureEnabled && !sourceContentMode ? (
           <section
             className="mx-auto mt-6 max-w-[1080px]"
             aria-labelledby="upload-master-title"
@@ -482,7 +466,7 @@ const UploadPage = ({
           <TemplateSelection />
         </section>
         </UploadDesignGallery>
-        {masterFeatureEnabled && generationStrategy === "authored" ? (
+        {masterFeatureEnabled ? (
           <MasterCatalogDialog
             analysisSourceFile={analysisSourceFile}
             entryMode={masterCatalogEntryMode}

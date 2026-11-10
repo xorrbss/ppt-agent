@@ -51,7 +51,6 @@ describe("usePresentationGeneration durable Upload handoff", () => {
       setPptGenUploadState({
         companyStandard: LATER_REDUX_PIN,
         authoredStyle: "default",
-        authoredVisionQa: false,
       }),
     );
     cy.window().then((window) => {
@@ -62,15 +61,15 @@ describe("usePresentationGeneration durable Upload handoff", () => {
             version: 1,
             idempotencyKey: IDEMPOTENCY_KEY,
             taskId: null,
-            mode: "authored",
+            mode: "svg",
             sourcePresentationId: PRESENTATION_ID,
             status: "starting",
             createdAt: Date.now(),
             deadlineAt: Date.now() + 30 * 60 * 1000,
             progressDurationSeconds: 120,
             authoredRequest: {
+              strategy: "svg",
               language: "Korean",
-              visionQa: false,
               authoredStyle: "default",
               masterPin: CLICK_PIN,
             },

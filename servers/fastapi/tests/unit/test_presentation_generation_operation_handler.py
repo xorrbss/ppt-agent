@@ -1246,95 +1246,76 @@ async def _default_pipeline_merges_publication_result(
         await engine.dispose()
 
 
-def test_default_pipeline_resolves_durable_authored_master_pin_before_generation_handler(
-    tmp_path: Path, monkeypatch
+_STAGED_AUTHORED_PAYLOADS = {
+    # An explicit authored job, with the company-standard master pin that
+    # used to be resolved before authoring.
+    "explicit_authored_with_master_pin": lambda: GeneratePresentationRequest(
+        content="Pinned authored deck",
+        strategy="authored",
+        template="authored",
+        master_pin={
+            "masterId": "master:company",
+            "revision": 7,
+            "digest": f"sha256:{'a' * 64}",
+        },
+    ).model_dump(mode="json", by_alias=True),
+    # The deck-ir engine ran authored generation too.
+    "deck_ir_engine": lambda: GeneratePresentationRequest(
+        content="Deck IR deck", strategy="authored", generationEngine="deck-ir",
+    ).model_dump(mode="json", by_alias=True),
+    # Saved before the strategy resolver existed: an omitted strategy meant
+    # authored then, and staging restores it as authored.
+    "pre_resolver_omitted_strategy": lambda: {
+        key: value
+        for key, value in GeneratePresentationRequest(content="Old deck").model_dump(
+            mode="json", by_alias=True
+        ).items()
+        if key != "strategy"
+    },
+}
+
+
+@pytest.mark.parametrize("payload_name", sorted(_STAGED_AUTHORED_PAYLOADS))
+def test_staged_authored_job_fails_on_dispatch_with_authored_strategy_removed(
+    tmp_path: Path, monkeypatch, payload_name
 ):
     asyncio.run(
-        _default_pipeline_resolves_durable_authored_master_pin_before_generation_handler(
-            tmp_path, monkeypatch
+        _staged_authored_job_fails_on_dispatch(
+            tmp_path, monkeypatch, _STAGED_AUTHORED_PAYLOADS[payload_name]()
         )
     )
 
 
-async def _default_pipeline_resolves_durable_authored_master_pin_before_generation_handler(
-    tmp_path: Path, monkeypatch
+async def _staged_authored_job_fails_on_dispatch(
+    tmp_path: Path, monkeypatch, payload: dict
 ):
-    engine, maker = await _database(tmp_path / "durable-master-pin.db", monkeypatch)
+    engine, maker = await _database(tmp_path / "staged-authored.db", monkeypatch)
     try:
         presentation_id, operation_id, task_id, job_id = (
             await _seed_linked_generation(maker, owner_id=OWNER_ID)
         )
-        digest = f"sha256:{'a' * 64}"
-        durable_request = GeneratePresentationRequest(
-            content="Pinned authored deck",
-            strategy="authored",
-            template="authored",
-            master_pin={
-                "masterId": "master:company",
-                "revision": 7,
-                "digest": digest,
-            },
-        )
         async with maker() as session, session.begin():
             job = await session.get(PresentationGenerationJob, job_id)
             assert job is not None
-            job.request_payload = durable_request.model_dump(mode="json", by_alias=True)
+            job.request_payload = payload
             session.add(job)
 
         from services import presentation_generation_pipeline as endpoint
 
         calls: list[str] = []
-        resolved_master = SimpleNamespace(master_id="master:company", revision=7)
-        validate_exact = endpoint._validate_authored_exact_admission
 
-        def observed_exact_validation(request):
+        def observed_exact_validation(_request):
             calls.append("exact")
-            assert request._authored_master_resolution is None
-            validate_exact(request)
 
-        async def resolve_master_pin(request):
+        async def resolve_master_pin(_request):
             calls.append("master")
-            assert request.master_pin is not None
-            assert request.master_pin.master_id == "master:company"
-            assert request.master_pin.revision == 7
-            assert request.master_pin.digest == digest
-            request._authored_master_resolution = resolved_master
 
-        monkeypatch.setattr(
-            endpoint, "_validate_authored_exact_admission", observed_exact_validation
-        )
-        monkeypatch.setattr(
-            endpoint, "_validate_authored_master_pin_admission", resolve_master_pin
-        )
-
-        async def fake_generation_handler(
-            request,
-            _presentation_id,
-            *,
-            async_status,
-            export_cookie_header,
-            generation_job,
-            progress_reporter,
-            sql_session,
-        ):
+        async def fake_generation_handler(*_args, **_kwargs):
             calls.append("generate")
-            assert calls == ["exact", "master", "generate"]
-            assert request._authored_master_resolution is resolved_master
-            assert export_cookie_header is None
-            assert generation_job.id == job_id
-            assert progress_reporter == context.progress
-            async_status.status = "completed"
-            presentation = await sql_session.get(
-                PresentationModel, presentation_id
-            )
-            assert presentation is not None
-            presentation.revision = 1
-            sql_session.add_all((async_status, presentation))
-            await sql_session.flush()
 
-        monkeypatch.setattr(
-            endpoint, "generate_presentation_handler", fake_generation_handler
-        )
+        monkeypatch.setattr(endpoint, "_validate_authored_exact_admission", observed_exact_validation)
+        monkeypatch.setattr(endpoint, "_validate_authored_master_pin_admission", resolve_master_pin)
+        monkeypatch.setattr(endpoint, "generate_presentation_handler", fake_generation_handler)
         claim = WorkspaceOperationClaim(
             operation_id=operation_id,
             owner_id=OWNER_ID,
@@ -1355,13 +1336,19 @@ async def _default_pipeline_resolves_durable_authored_master_pin_before_generati
         )
         owner_token = set_current_owner_id(OWNER_ID)
         try:
-            result = await handler._run_existing_pipeline(
-                job_id, task_id, None, context
-            )
+            with pytest.raises(NonRetryableWorkspaceOperationError) as raised:
+                await handler._run_existing_pipeline(job_id, task_id, None, context)
         finally:
             reset_current_owner_id(owner_token)
 
-        assert calls == ["exact", "master", "generate"]
-        assert result.result_revision == 1
+        assert raised.value.code == "authored_strategy_removed"
+        # Nothing authored-specific ran: no style, master or generation work.
+        assert calls == []
+        from services.workspace_error_registry import resolve_workspace_error
+
+        public = resolve_workspace_error(raised.value.code)
+        assert (public.code, public.status_code, public.retryable) == (
+            "authored_strategy_removed", 422, False,
+        )
     finally:
         await engine.dispose()

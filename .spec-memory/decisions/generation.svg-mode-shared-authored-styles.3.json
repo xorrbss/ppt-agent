@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 1,
+  "key": "generation.svg-mode-shared-authored-styles",
+  "revision": 3,
+  "status": "accepted",
+  "authority": "user",
+  "summary": "svg is the only generation mode; it keeps sharing the style catalogue that carries authored names. The authored default no longer applies.",
+  "scope": [
+    "generation",
+    "svg",
+    "authored-styles"
+  ],
+  "invariants": [
+    "The style catalogue (utils/authored_styles*, authored_styles data) is svg's and is kept.",
+    "SVG is a full-document generate, store, edit and export mode."
+  ],
+  "forbidden": [
+    "Deleting the shared style catalogue as part of the authored removal"
+  ],
+  "evidence": [
+    "authored.generation.removal@1"
+  ],
+  "supersedes": "generation.svg-mode-shared-authored-styles@2",
+  "recordedAt": "2026-11-09T12:00:00+00:00"
+}

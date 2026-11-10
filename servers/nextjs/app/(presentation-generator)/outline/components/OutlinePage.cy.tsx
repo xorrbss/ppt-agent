@@ -109,7 +109,6 @@ describe("<OutlinePage /> resume banner", () => {
     store.dispatch(
       setPptGenUploadState({
         authoredStyle: "default",
-        authoredVisionQa: false,
         config: null,
       })
     );
@@ -322,7 +321,6 @@ describe("<OutlinePage /> reload recovery", () => {
     publishedStore.dispatch(
       setPptGenUploadState({
         authoredStyle: "default",
-        authoredVisionQa: false,
         companyStandard: {
           masterId: "master:published",
           revision: 1,
@@ -385,7 +383,6 @@ describe("<OutlinePage /> reload recovery", () => {
     autoStore.dispatch(
       setPptGenUploadState({
         authoredStyle: "default",
-        authoredVisionQa: false,
         companyStandard: {
           masterId: "master:auto",
           revision: 1,
@@ -430,7 +427,6 @@ describe("<OutlinePage /> reload recovery", () => {
     templateOnlyStore.dispatch(
       setPptGenUploadState({
         authoredStyle: "osb-smart-banking",
-        authoredVisionQa: false,
         companyStandard: null,
         config: null,
       })

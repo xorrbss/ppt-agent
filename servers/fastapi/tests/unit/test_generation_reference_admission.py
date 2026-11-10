@@ -262,7 +262,7 @@ def test_legacy_files_are_immediately_replaced_by_snapshot_identity(
     request = GeneratePresentationRequest(
         content="legacy upload",
         files=["C:/temporary/upload.txt"],
-        strategy="authored",
+        strategy="svg",
         template="authored",
     )
 

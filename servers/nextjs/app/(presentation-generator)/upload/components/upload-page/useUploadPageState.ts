@@ -20,9 +20,7 @@ import {
   type CompanyStandardSelection,
 } from "@/store/slices/presentationGenUpload";
 import { RootState } from "@/store/store";
-import AuthoredStylesApi, {
-  DEFAULT_AUTHORED_STYLE,
-} from "../../../services/api/authored";
+import AuthoredStylesApi from "../../../services/api/authored";
 import { abortDocumentProcessing } from "./abortDocumentProcessing";
 import {
   fileIdentityOf,
@@ -119,12 +117,6 @@ export const useUploadPageState = ({
   const authoredStyle = useSelector(
     (state: RootState) => state.pptGenUpload.authoredStyle,
   );
-  const authoredVisionQa = useSelector(
-    (state: RootState) => state.pptGenUpload.authoredVisionQa,
-  );
-  const generationStrategy = useSelector(
-    (state: RootState) => state.pptGenUpload.generationStrategy,
-  );
   const sourceContentMode = useSelector(
     (state: RootState) => state.pptGenUpload.sourceContentMode,
   );
@@ -169,22 +161,6 @@ export const useUploadPageState = ({
 
   const handoffRasterGeneration = useRasterHandoff(router, setRasterRecovery);
 
-  useEffect(() => {
-    if (
-      generationStrategy === "authored" &&
-      !sourceContentMode &&
-      config.pageSize !== "A4" && (
-        (config.aspectRatio === "9:16" && authoredStyle !== DEFAULT_AUTHORED_STYLE.id) ||
-        (config.aspectRatio === "9:13" &&
-          ![DEFAULT_AUTHORED_STYLE.id, "kbs-company-proposal"].includes(authoredStyle))
-      )
-    ) {
-      dispatch(
-        setPptGenUploadState({ authoredStyle: DEFAULT_AUTHORED_STYLE.id }),
-      );
-    }
-  }, [authoredStyle, config.aspectRatio, config.pageSize, dispatch, sourceContentMode, generationStrategy]);
-
   const [loadingState, setLoadingState] = useState<LoadingState>({
     isLoading: false,
     message: "",
@@ -210,7 +186,7 @@ export const useUploadPageState = ({
     handleGenerationError, ensureStockImageProviderReady } = createUploadGenerationHandlers({
       config, sourceContentMode, pendingPresentationId, selectedThemeId,
       previousPresentationId: previousGenerationAttempt.presentationId,
-      generationStrategy, authoredVisionQa, authoredStyle, llmConfig, router,
+      authoredStyle, llmConfig, router,
       dispatch, setLoadingState, setCanCancelDocumentProcessing, decomposeAbortControllerRef,
       setPendingPresentationId, recoverCreateRef,
       onPresentationCreated: workspace?.bindPresentation,
@@ -357,31 +333,18 @@ export const useUploadPageState = ({
    * @returns boolean indicating if the configuration is valid
    */
   const validateConfiguration = (selectedFiles: File[]): boolean => {
-    if (sourceContentMode && generationStrategy === "svg" && hasCommonHeader(config.commonHeaderMode)) {
+    if (sourceContentMode && hasCommonHeader(config.commonHeaderMode)) {
       notify.warning(tA2b("commonHeaderModeRequired"), tA2b("commonHeaderSourcePreservationNote"));
       return false;
     }
-    if (generationStrategy === "svg" && config.svgTemplatePin && config.svgTemplateCapabilityState !== "available") {
+    if (config.svgTemplatePin && config.svgTemplateCapabilityState !== "available") {
       notify.warning(tTemplate("capabilityRequiredTitle"), tTemplate("capabilityRequiredBody")); return false;
     }
-    if (generationStrategy === "svg" && config.svgDesignReferencePending) {
+    if (config.svgDesignReferencePending) {
       notify.warning(tA2b("svgReferenceRegistrationRequired"), tA2b("svgReferenceRegistrationRequiredBody")); return false;
     }
-    if (generationStrategy === "svg" && config.svgDesignReferenceSnapshotId && companyStandard) {
+    if (config.svgDesignReferenceSnapshotId && companyStandard) {
       notify.warning(tA2b("svgReferenceSelectionConflict"), tA2b("svgReferenceSelectionConflictBody")); return false;
-    }
-        if (
-            generationStrategy === "authored" &&
-            !sourceContentMode &&
-            config.pageSize !== "A4" &&
-            config.aspectRatio !== "16:9" &&
-            companyStandard
-        ) {
-      notify.warning(
-        tA2b("portraitGenerationLimitation"),
-        tA2b("portraitAuthoredGenerationCannotBeUsedWith"),
-      );
-      return false;
     }
     if (sourceContentMode) {
       const sourceContentError = validateSourceContentFiles(selectedFiles);
@@ -414,32 +377,17 @@ export const useUploadPageState = ({
     return true;
   };
 
-  const ensureSourceContentAuthoredStyle = async (): Promise<boolean> => {
-    try {
-      const styles = await AuthoredStylesApi.getStyles();
-      if (styles.some((style) => style.id === authoredStyle)) return true;
-    } catch {
-      // A source-content run cannot silently substitute another template.
-    }
-    notify.warning(
-      tA2b("pleaseSelectTheAiAuthoredStyleAgain"),
-      tA2b("theSelectedStyleIsNotInThe"),
-    );
-    return false;
-  };
-
   /**
    * Handles the presentation generation process
    */
   const startPresentation = async (auto: boolean) => {
-    let runConfig = config;
+    const runConfig = config;
     if (!aliveRef.current || startInFlightRef.current || previousGenerationAttempt.blocked) return;
     const selectedFiles = filesRef?.current ?? files;
     if (previousGenerationAttempt.info?.attachment_file_names.length && selectedFiles.length === 0) {
       notify.error(tA2b("pleaseCheckTheAttachments"), tA2b("attachTheFilesForTheRevisedRequest"));
       return;
     }
-    const selectedFileIdentity = fileIdentityOf(selectedFiles);
     if (!validateConfiguration(selectedFiles)) return;
     startInFlightRef.current = true;
     // Single entry for every user-initiated start (document, direct and raster
@@ -448,7 +396,7 @@ export const useUploadPageState = ({
       startInFlightRef.current = false;
       return;
     }
-    if (sourceContentMode && generationStrategy === "svg" && config.pageSize !== "A4") {
+    if (sourceContentMode && config.pageSize !== "A4") {
       setLoadingState({
         isLoading: true,
         message: "SVG 원본 보존 지원을 확인하고 있습니다.",
@@ -500,16 +448,13 @@ export const useUploadPageState = ({
     let admitted: SourceContentAdmission | null = sourceContentMode
       ? sourceContentGate.admission
       : null;
-    if (
-      sourceContentMode &&
-      (generationStrategy === "svg" || admitted?.fileIdentity !== selectedFileIdentity)
-    ) {
+    if (sourceContentMode) {
       try {
         admitted = await sourceContentGate.analyze(selectedFiles, {
           // The extractor revision is sealed into the manifest identity. Re-run
           // source SVG analysis on the owned snapshot so a browser-cached pin
           // never masks a newer extractor after a server restart.
-          forceFresh: generationStrategy === "svg",
+          forceFresh: true,
         });
       } catch (error) {
         handleGenerationError(error);
@@ -527,7 +472,7 @@ export const useUploadPageState = ({
       admitted.analysis.summary.tables === 0 &&
       admitted.analysis.summary.charts === 0 &&
       admitted.analysis.summary.imageOccurrences >= admitted.analysis.summary.sourceUnits);
-    if (sourceContentMode && generationStrategy === "svg" && !config.sourceCanvas && imageOnlySource && admitted) {
+    if (sourceContentMode && !config.sourceCanvas && imageOnlySource && admitted) {
       await createRasterRedesignStarter({
         config,
         authoredStyle,
@@ -550,7 +495,7 @@ export const useUploadPageState = ({
       startInFlightRef.current = false;
       return;
     }
-    if (sourceContentMode && generationStrategy === "svg" && config.pageSize === "A4") {
+    if (sourceContentMode && config.pageSize === "A4") {
       const capability = await AuthoredStylesApi.getDocumentCanvasCapabilities({
         generationStrategy: "svg",
         authoredStyle,
@@ -563,7 +508,7 @@ export const useUploadPageState = ({
         return;
       }
     }
-    if (admitted && generationStrategy === "svg" && admitted.analysis.summary.charts > 0) {
+    if (admitted && admitted.analysis.summary.charts > 0) {
       const reason = "원본에 차트가 있어 SVG 재구성을 시작하지 않았습니다. 차트를 이미지로 바꾼 PPTX를 사용해 주세요.";
       notify.warning(
         tA2b("pagesContainingChartsCannotBeRearranged"),
@@ -572,25 +517,15 @@ export const useUploadPageState = ({
       abandonRun(reason);
       return;
     }
-    if (admitted && generationStrategy === "authored" && !(await sourceContentGate.confirmLosses(admitted.analysis.summary))) {
-      abandonRun("원본 콘텐츠 처리 변경에 동의하지 않아 생성을 시작하지 않았습니다. 자료와 처리 방식을 확인해 주세요.");
-      return;
-    }
-    if (sourceContentMode && generationStrategy === "authored" && !(await ensureSourceContentAuthoredStyle())) {
-      abandonRun("선택한 스타일을 현재 카탈로그에서 확인할 수 없어 생성을 시작하지 않았습니다. 스타일을 다시 선택해 주세요.");
-      return;
-    }
-    const resolvedMaster = generationStrategy === "authored"
-      ? await resolveMasterForGeneration()
-      : undefined;
+    const resolvedMaster = await resolveMasterForGeneration();
     if (resolvedMaster === null) {
       abandonRun("회사 표준 마스터를 확인하지 못해 생성을 시작하지 않았습니다. 회사 표준 설정을 확인해 주세요.");
       return;
     }
-    if (!(sourceContentMode && generationStrategy === "svg")) {
+    if (!sourceContentMode) {
       // Check even before the settings effect has upgraded the initial config.
       const capability = await AuthoredStylesApi.getDocumentCanvasCapabilities({
-        generationStrategy,
+        generationStrategy: "svg",
         authoredStyle,
         sourceContentMode,
         // Match stageAutoAuthoredGeneration: source restyle omits masterPin.
@@ -600,10 +535,6 @@ export const useUploadPageState = ({
         notify.warning(tA2b("couldNotCheckPageSettings"), tA2b("couldNotCheckTheServerSPaper"));
         abandonRun("서버의 용지 지원 정보를 확인하지 못해 생성을 시작하지 않았습니다. 잠시 후 다시 시도해 주세요.");
         return;
-      }
-      if (generationStrategy === "authored" && capability.a4.enabled && runConfig.pageSize !== "A4") {
-        runConfig = { ...runConfig, pageSize: "A4", orientation: runConfig.orientation ?? "landscape" };
-        setConfig(runConfig);
       }
       if (runConfig.pageSize === "A4" && (!capability.a4.enabled || capability.a4.selection?.enabled !== true)) {
         notify.warning(tA2b("a4GenerationLimitation"), tA2b("a4GenerationIsNotReadyForThe"));

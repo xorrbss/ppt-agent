@@ -141,8 +141,7 @@ describe("PresentationGenerationApi.generateAuthoredAsync", () => {
         content: "Outline title",
         slides_markdown: ["# Outline title"],
         language: "Korean",
-        strategy: "authored",
-        vision_qa: true,
+        strategy: "svg",
         authored_style: "strategic-navy",
         idempotency_key: "authored-generation-key",
       })
@@ -158,14 +157,13 @@ describe("PresentationGenerationApi.generateAuthoredAsync", () => {
         slides_markdown: ["# Outline title"],
         language: "Korean",
         template: "authored",
-        // 1e4a818 made the authored strategy explicit alongside the legacy
-        // `template` field; the backend resume path reads `strategy`.
-        strategy: "authored",
+        // The strategy is explicit alongside the legacy `template` field; the
+        // backend resume path reads `strategy`. New generation is svg only.
+        strategy: "svg",
         export_as: "pptx",
         // Export refuses a deck whose generation receipt says "development",
-        // so the UI asks for the release policy on every authored run.
+        // so the UI asks for the release policy on every run.
         qualityProfile: "release",
-        vision_qa: true,
         authored_style: "strategic-navy",
         aspect_ratio: "16:9",
       });

@@ -30,10 +30,9 @@ function buildBody(content, opts) {
   // include_title_slide defaults true server-side; only send when toggled off.
   if (opts.noTitle) body.include_title_slide = false;
   if (opts.toc) body.include_table_of_contents = true;
-  if (opts.visionQa) body.vision_qa = true;
-  // Preserve the authored request shape unless a style preset was explicitly given.
+  // Style preset id (svg admission reads it as authored_style).
   if (opts.authoredStyle) body.authored_style = opts.authoredStyle;
-  // Authored-mode brand tokens (ignored by the template path).
+  // Brand tokens forwarded to the generation request.
   if (opts.primaryColor) body.primary_color = opts.primaryColor;
   if (opts.fonts) body.fonts = opts.fonts;
   if (opts.wordmark) body.wordmark = opts.wordmark;
@@ -113,51 +112,6 @@ function startHeartbeat(label = "generating") {
       process.stderr.write("\r\x1b[K");
     }
   };
-}
-
-// ---------- core generate ----------
-
-export async function generateOne(content, opts) {
-  const url = `${opts.base}/api/v1/ppt/presentation/generate`;
-  const headers = {
-    "Content-Type": "application/json",
-    Accept: "application/json",
-    ...authHeader(opts.user, opts.password),
-  };
-  const body = buildBody(content, opts);
-
-  const stopHeartbeat = startHeartbeat("generating");
-  let res;
-  try {
-    res = await abortableFetch(
-      url,
-      { method: "POST", headers, body: JSON.stringify(body) },
-      opts.timeoutMs,
-      "generate request"
-    );
-  } finally {
-    stopHeartbeat();
-  }
-
-  const { json, text } = await readJsonSafely(res);
-
-  if (!res.ok) {
-    const detail = extractDetail(json, text);
-    if (res.status === 428) {
-      throw new Error(`HTTP 428: server needs first-time login setup — ${detail}`);
-    }
-    if (res.status === 401) {
-      throw new Error(
-        `HTTP 401 Unauthorized — ${detail}. Provide --user/--password (web/Docker) or run against a DISABLE_AUTH backend.`
-      );
-    }
-    throw new Error(`HTTP ${res.status}: ${detail}`);
-  }
-
-  if (!json || !json.presentation_id) {
-    throw new Error(`unexpected response (no presentation_id): ${(text || "").slice(0, 500)}`);
-  }
-  return json; // { presentation_id, path, edit_path }
 }
 
 // ---------- async generate (POST /generate/async + poll GET /status/{id}) ----------

@@ -18,12 +18,11 @@ import { useUploadPageState } from "./useUploadPageState";
  * Regression coverage for the source-content "one click" run in
  * `startPresentation`: analysis raises the full-screen overlay and generation
  * keeps it up, so every path that gives up in between must lower it again.
- * Commit 6da74cf8a shipped that flow with one give-up path (a rejected
- * `ensureSourceContentAuthoredStyle`) resetting `startInFlightRef` but never
- * the overlay, stranding the screen on "원본 콘텐츠를 분석하는 중…" forever.
+ * An earlier revision stranded the screen on "원본 콘텐츠를 분석하는 중…" when
+ * a give-up path reset `startInFlightRef` but never the overlay.
  *
  * This mounts the hook directly (not through `UploadPage`) so the test does
- * not have to drive the master-catalog dialog or template gallery just to
+ * not have to drive the template gallery just to
  * reach `startPresentation`; that mirrors `useSupportingFiles` being tested
  * the same way inside UploadPage.cy.tsx.
  */
@@ -41,7 +40,6 @@ const UploadPageStateHarness = () => {
     files,
     filesRef,
     selectedThemeId: null,
-    masterFeatureEnabled: false,
   });
 
   return (
@@ -64,18 +62,13 @@ const UploadPageStateHarness = () => {
 };
 
 const mountHarness = ({
-  generationStrategy = "authored",
-  authoredStyle = "brand-report",
+  authoredStyle = "default",
 }: {
-  generationStrategy?: "authored" | "svg";
   authoredStyle?: string;
 } = {}) => {
   const reduxStore = makeStore();
   reduxStore.dispatch(setSourceContentMode(true));
-  // "brand-report" is never part of the mocked style catalog below, so
-  // `ensureSourceContentAuthoredStyle` fails deterministically after a
-  // successful analysis -- the exact shape of the shipped regression.
-  reduxStore.dispatch(setPptGenUploadState({ authoredStyle, generationStrategy }));
+  reduxStore.dispatch(setPptGenUploadState({ authoredStyle }));
 
   cy.mount(
     <NextIntlClientProvider locale="ko" messages={koMessages} timeZone="Asia/Seoul">
@@ -131,10 +124,6 @@ describe("useUploadPageState source-content abort paths", () => {
       physicalSize: { widthEmu: 10691813, heightEmu: 7559675 },
       safeArea: { x: 60, y: 60, width: 1068, height: 720 },
     },
-    // Zero tables/charts/rasterFallbackBlocks means `sourceContentLosses`
-    // reports nothing -- `confirmLosses` resolves without ever opening the
-    // loss dialog, so the run reaches `ensureSourceContentAuthoredStyle`
-    // inside the same click.
     summary: {
       sourceType: "pptx",
       sourceUnits: 5,
@@ -173,40 +162,6 @@ describe("useUploadPageState source-content abort paths", () => {
       statusCode: 200,
       body: analysisResponse,
     }).as("analyzeSourceContent");
-    // The style catalog never contains "brand-report" (only the client-side
-    // default gets injected for an empty server list), so
-    // `ensureSourceContentAuthoredStyle` returns false every time this fires.
-    cy.intercept("GET", "**/api/v1/ppt/authored/styles", {
-      statusCode: 200,
-      body: [],
-    }).as("getStyles");
-  });
-
-  it("clears the overlay and releases the run when the authored style check fails after analysis", () => {
-    mountHarness();
-
-    cy.get('[data-testid="harness-generate"]').click();
-    cy.wait("@analyzeSourceContent");
-    cy.wait("@getStyles");
-
-    // The bug: the overlay raised by analysis ("원본 콘텐츠를 분석하는 중…")
-    // never came back down because the give-up path only cleared
-    // `startInFlightRef`, not `loadingState`.
-    cy.get('[data-testid="harness-is-loading"]').should("have.text", "false");
-    cy.get('[data-testid="harness-message"]').should("not.contain", "분석하는 중");
-    cy.get('[data-testid="harness-message"]').should("contain", "스타일을 다시 선택");
-
-    // The other half of the bug: `startInFlightRef` must actually be
-    // released. A second click reuses the cached admission (same file
-    // identity, so `analyze` does not run again) but still re-checks the
-    // authored style -- if the first run were still "in flight", this click
-    // would be swallowed by the early `if (startInFlightRef.current) return;`
-    // guard and `getStyles` would never fire a second time.
-    cy.get('[data-testid="harness-generate"]').click();
-    cy.get("@getStyles.all").should("have.length", 2);
-    cy.get("@analyzeSourceContent.all").should("have.length", 1);
-
-    cy.get('[data-testid="harness-is-loading"]').should("have.text", "false");
   });
 
   it("pauses on the generation guard when another generation is active and starts nothing", () => {
@@ -248,7 +203,7 @@ describe("useUploadPageState source-content abort paths", () => {
         },
       },
     }).as("canvasCapabilities");
-    mountHarness({ generationStrategy: "svg", authoredStyle: "default" });
+    mountHarness();
 
     cy.get('[data-testid="harness-generate"]').click();
     cy.wait("@canvasCapabilities");
@@ -279,7 +234,7 @@ describe("useUploadPageState source-content abort paths", () => {
         summary: { ...analysisResponse.summary, charts: 1 },
       },
     }).as("freshAnalyzeSourceContent");
-    mountHarness({ generationStrategy: "svg", authoredStyle: "default" });
+    mountHarness();
 
     cy.get('[data-testid="harness-page-size"]').should("have.text", "A4");
     cy.get('[data-testid="harness-orientation"]').should("have.text", "landscape");
@@ -319,7 +274,7 @@ describe("useUploadPageState source-content abort paths", () => {
       statusCode: 200,
       body: { id: "presentation-a4-source-svg" },
     }).as("createPresentation");
-    mountHarness({ generationStrategy: "svg", authoredStyle: "default" });
+    mountHarness();
 
     cy.get('[data-testid="harness-generate"]').click();
     cy.wait("@freshAnalyzeSourceContent");

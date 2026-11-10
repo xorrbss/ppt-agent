@@ -192,7 +192,7 @@ def test_v1_async_generation_uses_strict_v2_admission_before_claim(
                 content="Browser v1 generation must use v2 admission",
                 n_slides=3,
                 language="en",
-                strategy="authored",
+                strategy="svg",
                 providerCostCapMicrounits=12_500_000,
             )
             async with maker() as session:
@@ -249,8 +249,9 @@ def test_v1_async_generation_uses_strict_v2_admission_before_claim(
                 assert changed_replay.value.detail == "idempotency_key_payload_conflict"
                 observed.clear()
                 presentation = await session.get(PresentationModel, presentation_id)
+                uncapped = request.model_copy(update={"provider_cost_cap_microunits": None})
                 await generation_pipeline._admit_generation_operation_v2_compatible(
-                    session, request=omitted, presentation=presentation, operation=operation)
+                    session, request=uncapped, presentation=presentation, operation=operation)
                 assert "estimated_cost_limit_microunits" not in observed
                 assert "actual_cost_limit_microunits" not in observed
         finally:
@@ -477,11 +478,10 @@ async def _create(
     idempotency_key: str,
     content: str = "Build a durable strategy deck",
     theme: dict | None = None,
-    # This suite exercises the authored creation/theme path specifically;
-    # the endpoint's own default is svg since D1 (services.compatibility_
-    # migration.admission.stamp_new_svg_presentation), which stamps a
-    # different theme shape (no authored_vnext.canvas).
-    strategy: str = "authored",
+    # svg is the only generation strategy since authored generation was
+    # removed (2026-11-09).
+    strategy: str = "svg",
+    aspect_ratio: str = "16:9",
 ):
     return await presentation_crud.create_presentation(
         content=content,
@@ -497,6 +497,7 @@ async def _create(
         web_search=False,
         theme=theme,
         strategy=strategy,
+        aspect_ratio=aspect_ratio,
         idempotency_key=idempotency_key,
         sql_session=session,
     )
@@ -690,11 +691,13 @@ def test_create_persists_theme_but_only_safe_theme_metadata_in_first_message(
                     idempotency_key=key,
                     theme=theme,
                 )
-            # The server stamps its own authored mode marker on top of the
-            # admitted theme; nothing else about the caller theme changes.
+            # The server stamps its own svg mode marker and canvas on top of
+            # the admitted theme; nothing else about the caller theme changes.
             stamped_theme = first.theme
             assert {key: stamped_theme[key] for key in theme} == theme
-            assert stamped_theme["mode"] == "authored"
+            assert stamped_theme["mode"] == "svg"
+            # A plain 16:9 svg deck keeps the authored canvas metadata, as the
+            # generation request for it resolves.
             assert stamped_theme["authored_vnext"]["canvas"]["contractVersion"] == "authored-canvas/v1"
 
             async with maker() as session:
@@ -786,8 +789,8 @@ def test_legacy_create_ignores_chat_first_theme_admission(tmp_path: Path, monkey
                 )
             assert created.lifecycle_status == PRESENTATION_LIFECYCLE_PUBLISHED
             # The legacy path drops the caller theme entirely: what remains is
-            # only the server-issued authored marker.
-            assert created.theme["mode"] == "authored"
+            # only the server-issued svg marker and the 16:9 canvas.
+            assert created.theme["mode"] == "svg"
             assert created.theme["authored_vnext"]["canvas"]["contractVersion"] == "authored-canvas/v1"
             async with maker() as session:
                 assert await session.scalar(
@@ -966,7 +969,7 @@ def test_generate_activates_and_links_bootstrap_operation(tmp_path: Path, monkey
             content="Build a durable strategy deck",
             n_slides=8,
             language="en",
-            strategy="authored",
+            strategy="svg",
             files=["C:/temporary-upload/source.txt"],
         )
         validated_files: list[list[str]] = []
@@ -1103,7 +1106,7 @@ def test_bare_generate_bootstrap_persists_and_claims_reference_snapshots(
             content="Build from the canonical uploaded reference",
             n_slides=4,
             language="en",
-            strategy="authored",
+            strategy="svg",
             reference_snapshot_ids=[snapshot_id],
         )
         try:
@@ -1142,11 +1145,11 @@ def test_bare_generate_bootstrap_persists_and_claims_reference_snapshots(
                     await session.execute(select(WorkspaceOperation))
                 ).scalar_one()
                 assert presentation.reference_snapshot_ids == [str(snapshot_id)]
-                assert presentation.profile_driver_id == "authored"
+                assert presentation.profile_driver_id == "svg-v1"
                 assert presentation.profile_schema_version == 1
-                assert presentation.mode == "authored"
+                assert presentation.mode == "svg"
                 assert presentation.version == "v1-standard"
-                assert presentation.theme["mode"] == "authored"
+                assert presentation.theme["mode"] == "svg"
                 assert presentation.theme["authored_vnext"]["canvas"]["contractVersion"] == "authored-canvas/v1"
                 assert operation.request_payload["asset_ids"] == [str(asset_id)]
                 assert operation.request_payload["generation_settings"][
@@ -1207,7 +1210,7 @@ def test_generate_admission_rejection_is_atomic_and_replays_failed_task(
             content="Keep this first message after rejected admission",
             n_slides=8,
             language="en",
-            strategy="authored",
+            strategy="svg",
         )
         try:
             async with maker() as session:
@@ -1399,7 +1402,7 @@ def test_raw_path_admission_failure_requires_reattach_without_persisting_locator
             content="Retry document admission safely",
             n_slides=8,
             language="en",
-            strategy="authored",
+            strategy="svg",
             files=["C:/temporary-upload/source.txt"],
         )
         try:
@@ -1536,7 +1539,7 @@ def test_admission_projection_race_does_not_mark_the_response(
             content="Do not claim a projection that lost its race",
             n_slides=8,
             language="en",
-            strategy="authored",
+            strategy="svg",
         )
         try:
             async with maker() as session:
@@ -1700,7 +1703,7 @@ def test_chat_first_generate_rejects_unlinked_legacy_idempotency_replay(
             content="Build a durable strategy deck",
             n_slides=8,
             language="en",
-            strategy="authored",
+            strategy="svg",
         )
         try:
             async with maker() as session:
@@ -1708,6 +1711,11 @@ def test_chat_first_generate_rejects_unlinked_legacy_idempotency_replay(
                     session,
                     presentation_id=presentation_id,
                     idempotency_key=f"presentation-create:{presentation_id}",
+                )
+                # Stage from a copy: staging seals svg admission state onto the
+                # request, which the replayed admission below must not see.
+                staged_payload = generation_pipeline._durable_request_payload(
+                    request.model_copy(deep=True)
                 )
                 task = AsyncPresentationGenerationTaskModel(
                     status="pending",
@@ -1723,12 +1731,8 @@ def test_chat_first_generate_rejects_unlinked_legacy_idempotency_replay(
                         idempotency_key_hash=(
                             generation_pipeline.idempotency_key_hash(generate_key)
                         ),
-                        request_sha256=generation_pipeline.request_sha256(
-                            generation_pipeline._durable_request_payload(request)
-                        ),
-                        request_payload=(
-                            generation_pipeline._durable_request_payload(request)
-                        ),
+                        request_sha256=generation_pipeline.request_sha256(staged_payload),
+                        request_payload=staged_payload,
                         export_cookie_required=False,
                     )
                 )
@@ -2030,7 +2034,7 @@ def _source_content_request(
         n_slides=n_slides,
         language="en",
         template="authored",
-        strategy="authored",
+        strategy="svg",
         authored_style="default",
         sourceMode="source_content_restyle",
         sourceContentManifestPin={

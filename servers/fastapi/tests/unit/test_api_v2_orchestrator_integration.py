@@ -1328,10 +1328,10 @@ async def _submit_source_restyle(
 
 
 @pytest.mark.parametrize("verbatim", [False, True])
-def test_api_submit_source_restyle_charges_source_pages_and_pins_master(
+def test_api_submit_authored_source_restyle_is_rejected_as_removed(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, verbatim: bool,
 ) -> None:
-    """A page-locked restyle is admitted for its source pages, not ``slideCount``."""
+    """An authored (reflow) restyle was removed on 2026-11-09: a 422 before any durable row."""
 
     async def scenario() -> None:
         async def admit_manifest(candidate):
@@ -1347,58 +1347,15 @@ def test_api_submit_source_restyle_charges_source_pages_and_pins_master(
                 tmp_path, monkeypatch, admit_manifest=admit_manifest, submission=submission,
             )
         )
-        assert response.status_code == 202, response.json()
-        assert route_counts == [43]
-        operation_id = uuid.UUID(response.json()["operationId"])
+        assert response.status_code == 422, response.json()
+        assert response.json() == {"detail": {"reasonCode": "authored_strategy_removed"}}
+        assert route_counts == []
+        assert request_plans == []
+        assert generation_settings == {}
         async with maker() as session:
-            operation = await session.get(WorkspaceOperation, operation_id)
-            presentation = await session.get(PresentationModel, operation.presentation_id)
-            job = await session.scalar(
-                select(PresentationGenerationJob).where(
-                    PresentationGenerationJob.workspace_operation_id == operation_id
-                )
-            )
-        assert [plan.slide_count for plan in request_plans] == [43]
-        assert presentation.n_slides == 43
-        assert job.total_slides == 43
-        assert generation_settings["n_slides"] == 43
-        expected_pin = {
-            "masterId": "master:company",
-            "revision": 3,
-            "digest": "sha256:" + ("a" * 64),
-        }
-        assert generation_settings["master_pin"] == expected_pin
-        assert generation_settings["source_mode"] == "source_content_restyle"
-        # The durable job payload uses field names rather than wire aliases.
-        assert job.request_payload["n_slides"] == 43
-        assert job.request_payload["master_pin"] == {
-            "master_id": "master:company",
-            "revision": 3,
-            "digest": "sha256:" + ("a" * 64),
-        }
-        assert job.request_payload["source_mode"] == "source_content_restyle"
-        assert operation.request_payload["generation_request"] == job.request_payload
-        assert job.request_payload["generation_engine"] == "authored"
-        assert job.request_payload["generation_mode"] == "free-design"
-        route = operation.request_payload["generation_route_receipt"]
-        assert route["selectedRoute"] == "authored-fallback"
-        assert route["designPackPin"] is None
-        assert route["outputCapability"] == "fidelity"
-        assert operation.request_payload["generation_strategy"]["selectedStrategy"] == "legacy-authored"
-        if verbatim:
-            from services.presentation_generation_staging import _request_from_durable_payload
-            from services.authored_rollout_profile import ROLLOUT_PROFILE_PAYLOAD_KEY
-
-            expected_profile = {
-                "gate_mode": "enforce", "html_normalization": "tree",
-                "placeholder_authoring": True, "single_repair_loop": True,
-                "repair_loop_model_calls": 1,
-            }
-            assert job.request_payload[ROLLOUT_PROFILE_PAYLOAD_KEY] == expected_profile
-            monkeypatch.setenv("AUTHORED_VERBATIM_PLACEHOLDER_AUTHORING", "false")
-            restored = _request_from_durable_payload(job.request_payload)
-            assert restored._authored_rollout_profile == expected_profile
-            assert restored.source_content_manifest_pin.digest == "sha256:" + "b" * 64
+            assert (await session.scalars(select(WorkspaceOperation))).all() == []
+            assert (await session.scalars(select(PresentationModel))).all() == []
+            assert (await session.scalars(select(PresentationGenerationJob))).all() == []
 
     asyncio.run(scenario())
 
@@ -1412,9 +1369,15 @@ def test_api_submit_source_restyle_rejects_unadmittable_manifest(
         async def admit_manifest(candidate):
             raise SourceContentError("source_content_manifest_invalid", status_code=409)
 
+        # Omitted strategy (svg): an explicit authored restyle is refused
+        # before the manifest is even read.
+        submission = {
+            key: value for key, value in _SOURCE_RESTYLE_SUBMISSION.items()
+            if key not in {"strategy", "masterPin"}
+        }
         response, maker, _settings, request_plans, route_counts = (
             await _submit_source_restyle(
-                tmp_path, monkeypatch, admit_manifest=admit_manifest,
+                tmp_path, monkeypatch, admit_manifest=admit_manifest, submission=submission,
             )
         )
         assert response.status_code == 409

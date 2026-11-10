@@ -1,17 +1,17 @@
 #!/usr/bin/env node
 // ppt-agent.mjs — zero-dependency CLI to drive Presenton presentation generation.
 //
-// Calls POST <base>/api/v1/ppt/presentation/generate (synchronous: blocks until
-// generation finishes) and prints presentation_id, the editor URL, and the deck
-// artifact path. When the request carried --export, the server chains an
+// svg is the only generation strategy (the authored strategy was removed on
+// 2026-11-09). Generation always goes through the async route: it POSTs to
+// <base>/api/v1/ppt/presentation/generate/async and polls
+// GET <base>/api/v1/ppt/presentation/status/<task-id> until the task completes
+// (or fails), respecting --timeout and the progress heartbeat. The synchronous
+// /generate route returns 422 for svg, so this CLI never calls it.
+//
+// The CLI prints presentation_id, the editor URL, and the deck artifact path.
+// When the request carried --export, the server chains an
 // `export.pptx`/`export.pdf` workspace command; --out follows that operation to
 // completion and downloads its artifact.
-//
-// The svg strategy (the server default) always takes the async route below,
-// because the inline endpoint cannot run svg (it has no durable job).
-// With --async (or svg) it instead POSTs to .../generate/async and polls
-// GET <base>/api/v1/ppt/presentation/status/<task-id> until the task completes
-// (or fails), respecting --timeout and the progress heartbeat.
 //
 // Requires Node 18+ (uses global fetch). No npm dependencies.
 //
@@ -24,11 +24,11 @@
 //   --batch <file>           File with one topic per line; each line becomes one deck
 //   --slides <n>             n_slides (default 8, max 50). Use --slides auto to let the model decide
 //   --language <str>         language (default "Korean (한국어)")
-//   --template <name>        retained template id (default "authored")
-//   --strategy <svg|authored> generation strategy (default svg, matches the server default)
+//   --template <name>        retained template field (default "authored"; the server normalizes it)
+//   --strategy svg           accepted for compatibility (svg is the only strategy)
 //   --common-header <uniform|free>
 //                            svg common-header mode (server default uniform: one designed header)
-//   --style <id>             authored-mode style preset id (sent as authored_style)
+//   --style <id>             style preset id (sent as authored_style)
 //   --export <pptx|pdf>      export_as (default pptx)
 //   --aspect-ratio <r>       deck canvas aspect_ratio: 16:9|9:16|9:13|1:1|21:9 (server default 16:9)
 //   --page-size A4 --orientation <landscape|portrait>
@@ -44,8 +44,7 @@
 //                            Useful for web/Docker where the UI origin differs from the API --base
 //   --user <u> --password <p>  HTTP Basic creds for web/Docker (omit for DISABLE_AUTH)
 //   --out <dir>              follow the chained export operation and save its file into <dir>
-//   --async                  use the async generate endpoint and poll status to completion
-//                            (always on for svg, which the synchronous endpoint refuses)
+//   --async                  no-op, accepted for compatibility (generation is always async)
 //   --timeout <sec>          per-request / overall poll timeout in seconds (default 600)
 //   -h, --help               show this help
 //
@@ -58,18 +57,25 @@
 //     --base http://localhost:5000 --export pdf --out ./out
 //
 //   # Batch mode (sequential, continues on per-item failure):
-//   node scripts/ppt-agent.mjs --batch topics.txt --template authored --out ./decks
+//   node scripts/ppt-agent.mjs --batch topics.txt --out ./decks
 //
-//   # Authored mode with a style preset:
-//   node scripts/ppt-agent.mjs --content "2026 AI strategy" --mode authored --style strategic-navy --async --out ./out
+//   # svg deck with a style preset:
+//   node scripts/ppt-agent.mjs --content "2026 AI strategy" --style strategic-navy --out ./out
 
 import { readFile } from "node:fs/promises";
-import { downloadExport, generateOne, generateOneAsync, reportResult } from "./lib/ppt-agent-client.mjs";
+import { downloadExport, generateOneAsync, reportResult } from "./lib/ppt-agent-client.mjs";
 
 const TONES = ["default", "casual", "professional", "funny", "educational", "sales_pitch"];
 const VERBOSITIES = ["concise", "standard", "text-heavy"];
 const EXPORTS = ["pptx", "pdf"];
-const STRATEGIES = ["svg", "authored"];
+// svg is the only generation strategy; the authored strategy was removed 2026-11-09.
+const STRATEGIES = ["svg"];
+// Flags removed with the authored strategy. They are rejected explicitly so a
+// script that still passes them fails loudly instead of being silently ignored.
+const REMOVED_FLAGS = {
+  mode: "--mode was removed with the authored strategy (2026-11-09); svg is the only generation mode",
+  "vision-qa": "--vision-qa was removed with the authored strategy (2026-11-09); it has no svg equivalent",
+};
 const COMMON_HEADER_MODES = ["uniform", "free"];
 // Mirror of GeneratePresentationRequest.aspect_ratio / page_size / orientation.
 const ASPECT_RATIOS = ["16:9", "9:16", "9:13", "1:1", "21:9"];
@@ -82,7 +88,7 @@ const MAX_SLIDES = 50;
 
 function parseArgs(argv) {
   // Flags that take no value.
-  const booleans = new Set(["web-search", "no-title", "toc", "async", "vision-qa", "help", "h"]);
+  const booleans = new Set(["web-search", "no-title", "toc", "async", "help", "h"]);
   const out = { _: [] };
   for (let i = 0; i < argv.length; i++) {
     const tok = argv[i];
@@ -139,20 +145,20 @@ function printHelpAndExit() {
       'Usage: node scripts/ppt-agent.mjs --content "<topic>" [options]',
       "       node scripts/ppt-agent.mjs --batch topics.txt [options]",
       "",
+      "svg is the only generation strategy. Generation always uses the async route.",
+      "",
       "Options:",
       "  --content <text>        prompt/content (required unless --batch)",
       "  --batch <file>          one topic per line",
       "  --slides <n|auto>       n_slides (default 8, max 50)",
       '  --language <str>        default "Korean (한국어)"',
-      "  --template <name>       default authored",
-      "  --strategy <svg|authored>  generation strategy, default svg (server default)",
+      "  --template <name>       template field sent to the server (default authored; server normalizes it)",
+      "  --strategy svg          accepted for compatibility (svg is the only strategy)",
       "  --common-header <uniform|free>  svg header mode (server default uniform)",
-      "  --mode authored         model-authored bespoke-HTML deck (image PPTX/PDF)",
-      "  --style <id>            authored mode: style preset id",
-      "  --vision-qa             authored mode: self-correct flagged slides (slower)",
-      "  --primary-color <hex>   authored mode: brand primary colour (e.g. #2563EB)",
-      "  --fonts <family>        authored mode: brand font family (e.g. 'Noto Sans KR')",
-      "  --wordmark <text>       authored mode: footer wordmark",
+      "  --style <id>            style preset id (sent as authored_style)",
+      "  --primary-color <hex>   brand primary colour (e.g. #2563EB)",
+      "  --fonts <family>        brand font family (e.g. 'Noto Sans KR')",
+      "  --wordmark <text>       footer wordmark",
       "  --export <pptx|pdf>     default pptx",
       "  --aspect-ratio <r>      canvas " + ASPECT_RATIOS.join("|") + " (server default 16:9)",
       "  --page-size A4 --orientation <landscape|portrait>  A4 document canvas (not with --aspect-ratio)",
@@ -166,7 +172,7 @@ function printHelpAndExit() {
       "  --ui-base <url>         UI origin for edit URL (default: --base origin)",
       "  --user <u> --password <p>  HTTP Basic (omit for DISABLE_AUTH)",
       "  --out <dir>             save the chained export's file into <dir>",
-      "  --async                 use async endpoint + poll status (always on for svg)",
+      "  --async                 no-op, accepted for compatibility (generation is always async)",
       "  --timeout <sec>         per-request / overall poll timeout, default 600",
       "  -h, --help              this help",
     ].join("\n")
@@ -205,9 +211,7 @@ function resolveCanvas(args) {
 
 async function processTopic(content, opts) {
   opts.deadline = Date.now() + opts.timeoutMs;
-  const result = opts.asyncMode
-    ? await generateOneAsync(content, opts)
-    : await generateOne(content, opts);
+  const result = await generateOneAsync(content, opts);
   let savedTo = null;
   if (opts.outDir) {
     savedTo = await downloadExport(result, opts);
@@ -219,6 +223,10 @@ async function processTopic(content, opts) {
 async function main() {
   const args = parseArgs(process.argv.slice(2));
   if (args.help || args.h) printHelpAndExit();
+
+  for (const [flag, message] of Object.entries(REMOVED_FLAGS)) {
+    if (args[flag] !== undefined) die(message);
+  }
 
   // --- validate / normalize options ---
   const base = (args.base || "http://127.0.0.1:8000").replace(/\/+$/, "");
@@ -242,6 +250,9 @@ async function main() {
   if (args.style !== undefined && !args.style) {
     die(`--style requires a style preset id`);
   }
+  if (args.strategy === "authored") {
+    die(`--strategy authored was removed (2026-11-09); svg is the only generation strategy. Omit --strategy or pass --strategy svg.`);
+  }
   if (args.strategy !== undefined && !STRATEGIES.includes(args.strategy)) {
     die(`--strategy must be one of ${STRATEGIES.join(", ")} (got "${args.strategy}")`);
   }
@@ -249,9 +260,6 @@ async function main() {
   const commonHeader = args["common-header"];
   if (commonHeader !== undefined && !COMMON_HEADER_MODES.includes(commonHeader)) {
     die(`--common-header must be one of ${COMMON_HEADER_MODES.join(", ")} (got "${commonHeader}")`);
-  }
-  if (commonHeader !== undefined && args.strategy === "authored") {
-    die(`--common-header applies only to the svg strategy`);
   }
 
   const canvas = resolveCanvas(args);
@@ -292,15 +300,12 @@ async function main() {
   const opts = {
     base,
     uiBase,
-    // The synchronous endpoint refuses svg (422 svg_generation_requires_async_route).
-    asyncMode: Boolean(args.async) || args.strategy !== "authored",
     exportAs,
     nSlides,
     slidesProvided,
     language: args.language !== undefined ? args.language : "Korean (한국어)",
-    // --mode authored and the default both select the model-authored bespoke-HTML
-    // pipeline. A supplied template is retained for explicit supported templates.
-    template: args.mode === "authored" ? "authored" : args.template || "authored",
+    // Retained request field; the server normalizes it to "authored" for every strategy.
+    template: args.template || "authored",
     strategy: args.strategy || null,
     commonHeader: commonHeader || null,
     aspectRatio: canvas.aspectRatio,
@@ -309,7 +314,6 @@ async function main() {
     instructions: args.instructions || null,
     tone: args.tone || null,
     verbosity: args.verbosity || null,
-    visionQa: Boolean(args["vision-qa"]),
     authoredStyle: args.style || null,
     primaryColor: args["primary-color"] || null,
     fonts: args["fonts"] || null,

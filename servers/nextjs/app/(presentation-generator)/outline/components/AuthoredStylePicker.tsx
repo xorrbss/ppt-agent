@@ -1,5 +1,4 @@
 "use client";
-import { useTranslations as useA2bTranslations } from "next-intl";
 
 import React, { memo, useCallback, useEffect, useMemo, useState } from "react";
 import { Search, Sparkles, X } from "lucide-react";
@@ -59,18 +58,12 @@ const AuthoredStylePicker = memo(function AuthoredStylePicker({
   isActive,
   onActivate,
 }: AuthoredStylePickerProps) {
-  const tA2b = useA2bTranslations("outlineExtras");
   const dispatch = useDispatch();
-  const authoredVisionQa = useSelector(
-    (state: RootState) => state.pptGenUpload.authoredVisionQa
-  );
   const authoredStyle = useSelector(
     (state: RootState) => state.pptGenUpload.authoredStyle
   );
   const preserveSourceTemplateSelection = useSelector(
-    (state: RootState) =>
-      state.pptGenUpload.sourceContentMode &&
-      state.pptGenUpload.generationStrategy === "svg",
+    (state: RootState) => state.pptGenUpload.sourceContentMode,
   );
   const [styles, setStyles] = useState<AuthoredStyleSummary[]>([
     DEFAULT_AUTHORED_STYLE,
@@ -173,11 +166,6 @@ const AuthoredStylePicker = memo(function AuthoredStylePicker({
     [handleStyleSelect]
   );
   const handleSampleClose = useCallback(() => setPreviewStyleId(null), []);
-  const handleToggleVisionQa = useCallback(
-    (next: boolean) =>
-      dispatch(setPptGenUploadState({ authoredVisionQa: next })),
-    [dispatch]
-  );
   const handleResetFilters = useCallback(() => {
     setCategory("all");
     setSearchQuery("");
@@ -363,26 +351,8 @@ const AuthoredStylePicker = memo(function AuthoredStylePicker({
                     ? "불러오는 중"
                     : DEFAULT_AUTHORED_STYLE.name)}
               </p>
-              {/* The toggle decides more than generation time: the export
-                  gate refuses editable Hybrid PPTX for a deck that carries no
-                  visual-review evidence, and almost every real deck needs it
-                  (a cover or closing slide alone raises the deck to tier T1).
-                  Fidelity PPTX and PDF still export without it. */}
-              <p className="mt-0.5 text-xs leading-5 text-[#666078]">
-                {tA2b("visualReviewIsRequiredToExportAn")}
-              </p>
             </div>
           </div>
-          <label className="flex min-h-11 shrink-0 cursor-pointer select-none items-center gap-2 rounded-xl border border-[#D6D0FF] bg-white px-3 text-xs font-semibold text-[#38324F] focus-within:ring-2 focus-within:ring-brand-accent">
-            <input
-              type="checkbox"
-              checked={authoredVisionQa}
-              onChange={(event) => handleToggleVisionQa(event.target.checked)}
-              data-testid="authored-vision-qa"
-              className="h-4 w-4 shrink-0 accent-[#6750E8]"
-            />
-            고품질 검수 (vision-QA)
-          </label>
         </div>
       )}
 

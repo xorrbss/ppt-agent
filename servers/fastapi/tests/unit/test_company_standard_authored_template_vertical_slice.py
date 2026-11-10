@@ -5,7 +5,7 @@ from copy import deepcopy
 from unittest.mock import AsyncMock, patch
 import uuid
 
-from api.v1.ppt.endpoints.authored_operations import (
+from services.authored_retemplate_request import (
     build_authored_retemplate_generation_request,
 )
 from services.presentation_generation_staging import (

@@ -82,7 +82,7 @@ export const useRasterSessionRecovery = ({
         : recovery.aspectRatio ? { pageSize: undefined, orientation: undefined, aspectRatio: recovery.aspectRatio }
         : { pageSize: "A4", orientation: recovery.orientation }),
     }));
-    dispatch(setPptGenUploadState({ authoredStyle: recovery.authoredStyle, generationStrategy: "svg", sourceContentMode: true }));
+    dispatch(setPptGenUploadState({ authoredStyle: recovery.authoredStyle, sourceContentMode: true }));
     setGenerationAttemptActive(true);
     setLoadingState({ isLoading: true, message: "이전 원본 분석을 다시 불러오는 중…", showProgress: true });
     void (async () => {

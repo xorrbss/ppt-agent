@@ -33,13 +33,12 @@ export interface DurableGenerationTask {
   // Redux copies, and the server 409s a same-key re-POST whose payload drifts
   // (idempotency_key_payload_conflict), so a resume must resend these exactly.
   authoredRequest?: {
-    strategy?: "authored" | "svg";
+    strategy?: "svg";
     commonHeaderDesign?: import("@/lib/common-header-design").CommonHeaderDesign;
   commonHeaderMode?: import("@/lib/common-header-design").CommonHeaderMode;
     commonHeaderCoverException?: boolean;
     language: string | null;
     instructions?: string | null;
-    visionQa: boolean;
     authoredStyle: string;
     /** Legacy selector, omitted for common physical-canvas documents. */
     aspectRatio?: "16:9" | "9:16" | "9:13" | "1:1" | "21:9" | "4:3";
