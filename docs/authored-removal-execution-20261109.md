@@ -664,6 +664,18 @@ The full pytest suite and `npm run test:next-ci` run before each PR merges.
   does not reach the function-local-only paths, so the static check and the
   explicit unit tests above remain the main guard.
 
+  **P5 done 2026-11-11.** Docs only. `CLAUDE.md`: the "Two generation
+  pipelines" section is now "Generation: svg is the only strategy" (what
+  `strategy` still parses, the 422 `authored_strategy_removed`, the one-entry
+  driver registry, authored decks as unsupported/delete-only); authored,
+  SlideSpec and authored-hybrid moved into the retired list with what was
+  kept and why; the SlideSpec status paragraph and knob bullet, the CLI and
+  export/callback/Chart.js sentences were corrected. `AGENTS.md` lost its
+  authored-as-live statements; comments in `scripts/start-local-stack.ps1` and a
+  banner on `docs/authored-vnext-manual-test-handoff.md` mark the deleted
+  launcher. No code changed. The release-gate decision, the unmounted vNext
+  export router and the `authored_slide_editor_events` drop stay open.
+
 One PR per batch (or sub-batch) to GitHub `main`, mirrored to Bitbucket after
 merge.
 
