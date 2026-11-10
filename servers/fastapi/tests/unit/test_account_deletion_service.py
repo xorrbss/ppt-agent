@@ -119,16 +119,6 @@ async def _api_outbox_and_controller_finalize(
     )
     monkeypatch.setattr(
         deletion_controller,
-        "cancel_authored_vnext_generation_operations_for_account",
-        noop,
-    )
-    monkeypatch.setattr(
-        deletion_controller,
-        "cancel_authored_vnext_exports_for_account",
-        noop,
-    )
-    monkeypatch.setattr(
-        deletion_controller,
         "revoke_account_provider_credentials",
         noop,
     )
@@ -318,14 +308,6 @@ async def _finalize_reclaims_expired_claim_with_naive_sqlite_lease(
 
     monkeypatch.setattr(
         deletion_controller, "snapshot_account_workspace_cleanup_targets", noop
-    )
-    monkeypatch.setattr(
-        deletion_controller,
-        "cancel_authored_vnext_generation_operations_for_account",
-        noop,
-    )
-    monkeypatch.setattr(
-        deletion_controller, "cancel_authored_vnext_exports_for_account", noop
     )
     monkeypatch.setattr(
         deletion_controller, "retire_public_artifacts_for_account", noop

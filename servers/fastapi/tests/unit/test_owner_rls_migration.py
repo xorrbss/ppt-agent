@@ -189,10 +189,12 @@ def test_owner_rls_policy_set_covers_every_owner_scoped_table(
     # live registry, so it is excluded here rather than from the frozen
     # historical migration set.
     # ``authored_canonical_revisions`` was dropped by d1a5c7e9b3f2 (authored
-    # removal P4) for the same reason.
+    # removal P4) and ``authored_slide_editor_events`` by e7b2d4f6a8c1 for the
+    # same reason.
     tables_removed_after_this_migration = {
         "template_v2",
         "authored_canonical_revisions",
+        "authored_slide_editor_events",
     }
     frozen_policy = (
         set(migration_module.policy_tables()) - tables_removed_after_this_migration

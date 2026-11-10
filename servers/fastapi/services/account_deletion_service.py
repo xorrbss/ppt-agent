@@ -8,7 +8,6 @@ from sqlalchemy import delete, func, inspect, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from models.sql.account_deletion_request import AccountDeletionRequest
-from models.sql.authored_vnext_repository import AuthoredVNextExportJob
 from models.sql.public_artifact import (
     PublicArtifact,
     PublicArtifactPublication,
@@ -194,49 +193,6 @@ async def lock_account_deletion_marker(
     return user
 
 
-async def cancel_authored_vnext_exports_for_account(
-    session: AsyncSession,
-    *,
-    owner_id: uuid.UUID,
-) -> int:
-    """Fence every active authored-vNext export before the user cascade.
-
-    Incrementing both fences invalidates a worker that already holds a claim.
-    Final publication also rechecks the account deletion generation, so a late
-    worker cannot recreate an artifact pointer after this transaction commits.
-    """
-
-    table_exists = await session.run_sync(
-        lambda sync_session: inspect(sync_session.connection()).has_table(
-            AuthoredVNextExportJob.__tablename__
-        )
-    )
-    if not table_exists:
-        return 0
-    result = await session.execute(
-        update(AuthoredVNextExportJob)
-        .where(
-            AuthoredVNextExportJob.owner_id == owner_id,
-            AuthoredVNextExportJob.state.in_(
-                ("queued", "running", "cancel_requested", "failed")
-            ),
-        )
-        .values(
-            state="cancelled",
-            cancel_requested=True,
-            operation_fence=AuthoredVNextExportJob.operation_fence + 1,
-            fence_token=AuthoredVNextExportJob.fence_token + 1,
-            worker_id=None,
-            lease_expires_at=None,
-            failure_code="account_deletion_in_progress",
-            failure_detail=None,
-            completed_at=get_current_utc_datetime(),
-        )
-        .execution_options(synchronize_session=False)
-    )
-    return int(result.rowcount or 0)
-
-
 async def retire_public_artifacts_for_account(
     session: AsyncSession,
     *,
@@ -381,7 +337,6 @@ __all__ = [
     "AccountDeletionMarker",
     "AccountNotFoundError",
     "ProtectedAccountError",
-    "cancel_authored_vnext_exports_for_account",
     "lock_account_deletion_marker",
     "mark_account_deleting",
     "retire_public_artifacts_for_account",

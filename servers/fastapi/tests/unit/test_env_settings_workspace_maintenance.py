@@ -105,8 +105,7 @@ def test_account_deletion_interval_and_flags(monkeypatch):
     monkeypatch.setenv(name, "12")
     assert wm.get_account_deletion_interval_seconds(5) == 12
 
-    monkeypatch.delenv("AUTHORED_VNEXT_OOXML_PACKAGE_ENABLED", raising=False)
     monkeypatch.delenv("AUTHORED_VNEXT_MASTER_ENABLED", raising=False)
-    assert wm.is_authored_vnext_ooxml_storage_required() is False
+    assert wm.is_authored_vnext_master_storage_required() is False
     monkeypatch.setenv("AUTHORED_VNEXT_MASTER_ENABLED", "TRUE")
-    assert wm.is_authored_vnext_ooxml_storage_required() is True
+    assert wm.is_authored_vnext_master_storage_required() is True

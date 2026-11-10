@@ -28,7 +28,6 @@ if TYPE_CHECKING:
     from utils.runtime_settings import RuntimeSettings
 
 ENV_NAMES: tuple[str, ...] = (
-    "AUTHORED_VNEXT_OOXML_PACKAGE_ENABLED",
     "AUTHORED_VNEXT_MASTER_ENABLED",
     "AUTHORED_VNEXT_REPOSITORY_MODE",
     "AUTHORED_VNEXT_DEFAULT_COMPANY_STANDARD_ID",
@@ -46,13 +45,6 @@ def _opt_in_env(name: str, settings: RuntimeSettings | None) -> bool:
 
 
 # --- opt-in flags (default off; only 1/true/yes/on enable) -----------------
-
-
-def is_authored_vnext_ooxml_package_enabled(
-    settings: RuntimeSettings | None = None,
-) -> bool:
-    """Opt-in: exposes the owner-scoped PPTX import/package router (unchanged contract)."""
-    return _opt_in_env("AUTHORED_VNEXT_OOXML_PACKAGE_ENABLED", settings)
 
 
 def is_deck_ir_dev_fixture_allowed(settings: RuntimeSettings | None = None) -> bool:

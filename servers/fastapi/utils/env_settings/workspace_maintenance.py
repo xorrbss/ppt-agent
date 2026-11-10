@@ -56,7 +56,6 @@ ENV_NAMES: tuple[str, ...] = (
     "WORKSPACE_OPERATION_METRICS_PORT",
     # account_deletion_controller
     "ACCOUNT_DELETION_CONTROLLER_INTERVAL_SECONDS",
-    "AUTHORED_VNEXT_OOXML_PACKAGE_ENABLED",
     "AUTHORED_VNEXT_MASTER_ENABLED",
     # export_retention_service
     "EXPORT_RETENTION_DAYS",
@@ -172,14 +171,8 @@ def get_account_deletion_interval_seconds(
     )
 
 
-def is_authored_vnext_ooxml_storage_required(
+def is_authored_vnext_master_storage_required(
     settings: RuntimeSettings | None = None,
 ) -> bool:
-    """True when either authored-vNext OOXML storage flag is enabled."""
-    return any(
-        env_bool(name, False, settings=settings)
-        for name in (
-            "AUTHORED_VNEXT_OOXML_PACKAGE_ENABLED",
-            "AUTHORED_VNEXT_MASTER_ENABLED",
-        )
-    )
+    """True when the authored-vNext master flag asks for master asset storage."""
+    return env_bool("AUTHORED_VNEXT_MASTER_ENABLED", False, settings=settings)

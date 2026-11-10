@@ -15,7 +15,6 @@ from models.sql.async_presentation_generation_status import (
     AsyncPresentationGenerationTaskModel,
 )
 from models.sql.authored_slide_checkpoint import AuthoredSlideCheckpoint
-from models.sql.authored_slide_editor_event import AuthoredSlideEditorEvent
 from models.sql.chat_history_message import ChatHistoryMessageModel
 from models.sql.image_asset import ImageAsset
 from models.sql.key_value import KeyValueSqlModel
@@ -348,7 +347,6 @@ async def create_db_and_tables():
                         WorkspaceCleanupJournal.__table__,
                         PresentationGenerationJob.__table__,
                         AuthoredSlideCheckpoint.__table__,
-                        AuthoredSlideEditorEvent.__table__,
                         PresentationVersionModel.__table__,
                         SlideModel.__table__,
                         KeyValueSqlModel.__table__,

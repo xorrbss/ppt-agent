@@ -46,8 +46,9 @@ def test_utc_aware_is_unchanged() -> None:
         "services.public_operation_deadline_scope",
         "services.workspace_api_contract",
         "services.workspace_service",
-        # editable_mvp_completion_codec's copy was dead code and is simply gone.
-        "services.authored_vnext.generation.sql_repository",
+        # editable_mvp_completion_codec's copy was dead code and is simply gone,
+        # and the generation SQL repository lost its lease code with the
+        # authored_vnext_generation_operations table.
     ],
 )
 def test_migrated_modules_use_the_shared_helper(module_name: str) -> None:

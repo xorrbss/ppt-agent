@@ -108,7 +108,6 @@ tests/unit/test_authored_run_contact_sheet.py
 tests/unit/test_authored_semantic_bundle_contract.py
 tests/unit/test_authored_slide_checkpoint_bundle.py
 tests/unit/test_authored_slide_checkpoint_migration.py
-tests/unit/test_authored_slide_editor_events.py
 tests/unit/test_authored_slidespec_characterization.py
 tests/unit/test_authored_source_image_free_deck.py
 tests/unit/test_authored_source_image_wiring.py
@@ -150,6 +149,7 @@ tests/unit/test_document_canvas_contain.py
 tests/unit/test_document_canvas_header_clients.py
 tests/unit/test_document_canvas_svg_export.py
 tests/unit/test_drop_authored_only_tables_migration.py
+tests/unit/test_drop_unused_authored_tables_migration.py
 tests/unit/test_env_settings_authored_runtime.py
 tests/unit/test_env_settings_authored_vnext.py
 tests/unit/test_export_canvas_sizes.py
