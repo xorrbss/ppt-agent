@@ -1,4 +1,4 @@
-"""Feature flags, modes and worker wiring for the authored-vNext surfaces.
+"""Feature flags and modes for the authored-vNext surfaces.
 
 Layering: this module may import only stdlib, ``utils.get_env``,
 ``utils.env_parse`` and (type only) ``utils.runtime_settings``.  It never
@@ -28,13 +28,10 @@ if TYPE_CHECKING:
     from utils.runtime_settings import RuntimeSettings
 
 ENV_NAMES: tuple[str, ...] = (
-    "AUTHORED_VNEXT_EXPORT_ENABLED",
     "AUTHORED_VNEXT_OOXML_PACKAGE_ENABLED",
     "AUTHORED_VNEXT_MASTER_ENABLED",
     "AUTHORED_VNEXT_REPOSITORY_MODE",
     "AUTHORED_VNEXT_DEFAULT_COMPANY_STANDARD_ID",
-    "AUTHORED_VNEXT_OOXML_WORKER_TOKEN",
-    "NEXT_INTERNAL_URL",
     "DECK_IR_ALLOW_DEV_FIXTURE",
     "DECK_IR_GENERATION_ENABLED",
     "AUTHORED_RETAINED_REFERENCE_ROOT",
@@ -42,8 +39,6 @@ ENV_NAMES: tuple[str, ...] = (
 
 DEFAULT_REPOSITORY_MODE = "sql"
 DEFAULT_COMPANY_STANDARD_ID = "master:ibiz-proposal-blue"
-DEFAULT_OOXML_WORKER_BASE_URL = "http://127.0.0.1:3000"
-OOXML_WORKER_PATH = "/api/internal/ooxml-vnext"
 
 
 def _opt_in_env(name: str, settings: RuntimeSettings | None) -> bool:
@@ -51,11 +46,6 @@ def _opt_in_env(name: str, settings: RuntimeSettings | None) -> bool:
 
 
 # --- opt-in flags (default off; only 1/true/yes/on enable) -----------------
-
-
-def is_authored_vnext_export_enabled(settings: RuntimeSettings | None = None) -> bool:
-    """Opt-in: exposes the durable vNext PPTX export job router."""
-    return _opt_in_env("AUTHORED_VNEXT_EXPORT_ENABLED", settings)
 
 
 def is_authored_vnext_ooxml_package_enabled(
@@ -109,29 +99,3 @@ def get_authored_retained_reference_root(
 ) -> str | None:
     """Directory holding retained reference PPTX skills; ``None`` when unset."""
     return get_setting_env("AUTHORED_RETAINED_REFERENCE_ROOT", settings)
-
-
-# --- OOXML worker transport -------------------------------------------------
-
-
-def get_authored_vnext_ooxml_worker_token(
-    settings: RuntimeSettings | None = None,
-) -> str:
-    """Bearer token for the internal Next.js OOXML worker, stripped (``""`` unset)."""
-    return (get_setting_env("AUTHORED_VNEXT_OOXML_WORKER_TOKEN", settings) or "").strip()
-
-
-def get_authored_vnext_ooxml_worker_url(
-    settings: RuntimeSettings | None = None,
-) -> str:
-    """Full URL of the internal OOXML worker endpoint.
-
-    Reads ``NEXT_INTERNAL_URL`` directly rather than through
-    ``utils.get_env.get_next_internal_base_url`` because this transport has
-    always defaulted to ``http://127.0.0.1:3000`` (the Next.js port) whereas the
-    shared helper defaults to ``http://localhost`` (the nginx front door).
-    """
-    base_url = get_setting_env("NEXT_INTERNAL_URL", settings)
-    if base_url is None:
-        base_url = DEFAULT_OOXML_WORKER_BASE_URL
-    return f"{base_url.rstrip('/')}{OOXML_WORKER_PATH}"

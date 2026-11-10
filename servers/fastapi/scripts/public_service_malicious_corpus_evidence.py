@@ -25,19 +25,28 @@ import uuid
 import zipfile
 
 from fastapi import FastAPI, Request
-from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
-from sqlalchemy.orm import Session
+import httpx
+from sqlalchemy import event, func, select
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
+from sqlmodel import SQLModel
 
-from api.v1.ppt.endpoints.authored_vnext.export import router as export_router
-from models.authored_vnext.master.operations import (
-    CreateDeckRequest,
-    CreateDraftRequest,
-    MasterCasRequest,
-)
-from models.sql.public_artifact import artifact_storage_key
+from api.error_handling import install_api_error_handling
+from api.v1.ppt.endpoints.workspace import WORKSPACE_ROUTER
+from models.sql.presentation import PresentationModel
+from models.sql.presentation_export_attempt import PresentationExportAttempt
+from models.sql.public_artifact import PublicArtifact, artifact_storage_key
 from models.sql.user import User
+from models.sql.workspace import (
+    WorkspaceActionReceipt,
+    WorkspaceArtifact,
+    WorkspaceConversation,
+    WorkspaceMessage,
+    WorkspaceOperation,
+    WorkspaceOperationEvent,
+    WorkspaceOutbox,
+)
+from services.database import get_async_session
 from services.isolated_worker_contracts import (
     ArtifactRef,
     CapabilityReplayGuard,
@@ -56,16 +65,21 @@ from services.public_worker_profiles import (
     get_public_worker_profile,
     validate_public_worker_environment,
 )
-from services.authored_vnext.integration.artifact_store import BufferedArtifactStore
-from services.authored_vnext.integration.export_service import AuthoredVNextExportService
-from services.authored_vnext.integration.sql_repository import (
-    AuthoredVNextSqlRepository,
-    ExportArtifactInput,
+from services.workspace_artifact_publication_service import (
+    prepare_workspace_generation_artifact,
+    publish_workspace_export_artifact,
 )
-from services.authored_vnext.master.service import AuthoredVNextMasterService
-from services.authored_vnext.master.catalog_seed import catalog_seed_contracts
 from templates.pptx_safety.package_reader import PptxPackageReader, UnsafePptxPackage
-from utils.owner_context import reset_current_owner_id, set_current_owner_id
+from utils.owner_context import (
+    reset_current_owner_id,
+    reset_current_owner_is_admin,
+    reset_current_tenant_id,
+    reset_request_scope_active,
+    set_current_owner_id,
+    set_current_owner_is_admin,
+    set_current_tenant_id,
+    set_request_scope_active,
+)
 
 
 SCHEMA_VERSION = "public-service-malicious-corpus-evidence/v1"
@@ -97,7 +111,11 @@ SECURITY_SOURCE_FILES = (
     "servers/fastapi/workers/public_worker_runtime.py",
     "servers/fastapi/workers/public_render_worker.py",
     "servers/fastapi/templates/pptx_safety/package_reader.py",
-    "servers/fastapi/api/v1/ppt/endpoints/authored_vnext/export/router.py",
+    "servers/fastapi/api/v1/ppt/endpoints/workspace.py",
+    "servers/fastapi/services/workspace_artifact_publication_service.py",
+    "servers/fastapi/services/workspace_api_contract.py",
+    "servers/fastapi/services/workspace_service.py",
+    "servers/fastapi/services/database_owner_scope.py",
     "scripts/public-service-release-gate.mjs",
     *RENDERER_SECURITY_PRODUCER_FILES,
 )
@@ -443,214 +461,332 @@ def _pptx_corpus(root: Path) -> list[dict[str, Any]]:
     return observations
 
 
-class _UnusedWorkerTransport:
-    async def execute(self, _payload: dict[str, Any], _timeout_ms: int) -> dict[str, Any]:
-        raise RuntimeError("cross_owner_attack_must_not_reach_worker")
+_WORKSPACE_TABLES = (
+    User.__table__,
+    PresentationModel.__table__,
+    WorkspaceConversation.__table__,
+    WorkspaceMessage.__table__,
+    WorkspaceOperation.__table__,
+    WorkspaceOperationEvent.__table__,
+    WorkspaceOutbox.__table__,
+    WorkspaceActionReceipt.__table__,
+    PresentationExportAttempt.__table__,
+    PublicArtifact.__table__,
+    WorkspaceArtifact.__table__,
+)
+_WORKSPACE_PREFIX = "/api/v1/ppt/workspace"
+_OWNER_A_EXPORT_BYTES = b"PK\x03\x04owner-a-security-artifact"
+_EXPORT_ATTEMPT_TOKEN = "public-security-export-attempt"
+_EXPORT_FENCING_TOKEN = 1
 
 
 def _http_error_code(response) -> str | None:
     try:
-        detail = response.json().get("detail")
+        body = response.json()
     except Exception:
         return None
+    if not isinstance(body, dict):
+        return None
+    error = body.get("error")
+    if isinstance(error, dict) and isinstance(error.get("code"), str):
+        return error["code"]
+    detail = body.get("detail")
     if isinstance(detail, dict):
         return detail.get("code")
     return detail if isinstance(detail, str) else None
 
 
-def _cross_owner_artifact_checks(
-    root: Path,
-) -> tuple[list[dict[str, Any]], bool, dict[str, Any]]:
-    engine = create_engine(
-        f"sqlite:///{root / 'public-api-owner-isolation.sqlite3'}",
-        connect_args={"check_same_thread": False},
-        poolclass=NullPool,
-    )
-    User.__table__.create(engine, checkfirst=True)
-    with Session(engine) as session:
+async def _seed_owner_a_workspace(
+    maker: async_sessionmaker[AsyncSession], app_data: Path
+) -> dict[str, Any]:
+    """Publish owner A's export through the production workspace publication path."""
+
+    async with maker() as session, session.begin():
         session.add_all(
             [
                 User(id=OWNER_A, username="security-owner-a", hashed_password="test-only"),
                 User(id=OWNER_B, username="security-owner-b", hashed_password="test-only"),
             ]
         )
-        session.commit()
-    AuthoredVNextSqlRepository.create_schema(engine)
-    repositories = {
-        str(owner): AuthoredVNextSqlRepository(
-            engine,
-            owner_scope=str(owner),
-            tenant_id=TENANT_ID,
-            owner_id=owner,
-        )
-        for owner in (OWNER_A, OWNER_B)
+    owner_token = set_current_owner_id(OWNER_A)
+    try:
+        async with maker() as session, session.begin():
+            presentation = PresentationModel(
+                content="Owner-bound workspace export control",
+                n_slides=1,
+                language="en",
+                mode="svg",
+                theme={},
+                revision=0,
+            )
+            session.add(presentation)
+            await session.flush()
+            conversation = WorkspaceConversation(presentation_id=presentation.id)
+            session.add(conversation)
+            await session.flush()
+            export_operation = WorkspaceOperation(
+                conversation_id=conversation.id,
+                presentation_id=presentation.id,
+                anchor_position=1,
+                kind="export.pptx",
+                state="running",
+                idempotency_key_hash=_sha256(b"public-security:export"),
+                request_hash=_sha256(b"public-security:export-request"),
+                request_payload={},
+                expected_revision=0,
+                attempt_token=_EXPORT_ATTEMPT_TOKEN,
+                fencing_token=_EXPORT_FENCING_TOKEN,
+            )
+            # A second, still-queued operation is the cancel target: owner B
+            # must not be able to cancel work that owner A can still cancel.
+            queued_operation = WorkspaceOperation(
+                conversation_id=conversation.id,
+                presentation_id=presentation.id,
+                anchor_position=2,
+                kind="export.pdf",
+                state="queued",
+                idempotency_key_hash=_sha256(b"public-security:queued"),
+                request_hash=_sha256(b"public-security:queued-request"),
+                request_payload={},
+                expected_revision=0,
+            )
+            session.add_all([export_operation, queued_operation])
+            await session.flush()
+            presentation_id = presentation.id
+            export_operation_id = export_operation.id
+            queued_operation_id = queued_operation.id
+        source = app_data / "exports" / "owner-a-security.pptx"
+        source.parent.mkdir(parents=True, exist_ok=True)
+        source.write_bytes(_OWNER_A_EXPORT_BYTES)
+        async with maker() as session:
+            artifact = await prepare_workspace_generation_artifact(
+                session,
+                source_path=str(source),
+                operation_id=export_operation_id,
+                presentation_id=presentation_id,
+                source_revision=0,
+                kind="export.pptx",
+            )
+            await publish_workspace_export_artifact(
+                session,
+                artifact=artifact,
+                attempt_token=_EXPORT_ATTEMPT_TOKEN,
+                fencing_token=_EXPORT_FENCING_TOKEN,
+                export_format="pptx",
+            )
+        source.unlink()
+    finally:
+        reset_current_owner_id(owner_token)
+    return {
+        "presentationId": presentation_id,
+        "exportOperationId": export_operation_id,
+        "queuedOperationId": queued_operation_id,
+        "artifactId": artifact.artifact_id,
+        "artifactSha256": artifact.sha256,
     }
-    owner_a = repositories[str(OWNER_A)]
-    master_service = AuthoredVNextMasterService(owner_a)
-    catalog_contract = catalog_seed_contracts(
-        {
-            "assetId": "asset:public-security-seed",
-            "digest": f"sha256:{'0' * 64}",
-        }
-    )[1]
-    draft = master_service.create_draft(
-        CreateDraftRequest(contract=catalog_contract)
-    )
-    master = master_service.publish(
-        draft.master_id,
-        MasterCasRequest(expected_revision=draft.revision, expected_digest=draft.digest),
-    )
-    deck = master_service.create_deck(
-        CreateDeckRequest(
-            deck_id="deck:public-security-owner-a",
-            master_id=master.master_id,
-            master_revision=master.revision,
-            master_digest=master.digest,
-            slides=[
-                {
-                    "slideId": "slide:public-security-owner-a",
-                    "layoutId": "layout:standard",
-                    "title": {
-                        "text": "Owner-bound artifact control",
-                        "lines": ["Owner-bound artifact control"],
-                        "lineBreakPolicy": "canonical-explicit-uax14-v1",
-                        "uax14Version": "17.0.0",
-                        "tailoring": "ko-space-first-with-id-fallback-v1",
-                        "kinsokuPolicy": "cjk-no-leading-closing-no-trailing-opening",
-                    },
-                    "body": "Owner B must not read or mutate owner A publication state.",
-                }
-            ],
-        )
-    )
-    digests = {
-        "spec": deck.digest,
-        "assetManifest": master.digest,
-        "fontManifest": master.contract.font_manifest.digest or master.digest,
-    }
-    job = owner_a.create_export_job(
-        deck_id=deck.deck_id,
-        deck_revision=deck.revision,
-        deck_digest=deck.digest,
-        master_revision=deck.master_revision,
-        master_digest=deck.master_digest,
-        spec_digest=digests["spec"],
-        asset_manifest_digest=digests["assetManifest"],
-        font_manifest_digest=digests["fontManifest"],
-        idempotency_key="public-security-owner-a",
-        request_payload={"deckId": deck.deck_id},
-        timeout_ms=1_000,
-        max_attempts=1,
-    )
-    claimed = owner_a.claim_export_job(job.id, worker_id="security-seed-worker")
-    artifact_bytes = b"PK\x03\x04owner-a-security-artifact"
-    artifact_store_a = BufferedArtifactStore(root / "api-artifacts" / str(OWNER_A))
-    artifact_digest = artifact_store_a.digest_bytes(artifact_bytes)
-    storage_key, size_bytes = artifact_store_a.publish(
-        artifact_bytes,
-        artifact_digest,
-    )
-    receipt = owner_a.complete_export_job(
-        job.id,
-        fence_token=claimed.fence_token,
-        artifact=ExportArtifactInput(
-            storage_key=storage_key,
-            artifact_digest=artifact_digest,
-            readback_digest=artifact_digest,
-            package_digest=artifact_digest,
-            size_bytes=size_bytes,
-            master_digest=deck.master_digest,
-            spec_digest=digests["spec"],
-            asset_manifest_digest=digests["assetManifest"],
-            font_manifest_digest=digests["fontManifest"],
-        ),
-    )
-    stores = {
-        str(OWNER_A): artifact_store_a,
-        str(OWNER_B): BufferedArtifactStore(root / "api-artifacts" / str(OWNER_B)),
-    }
-    services = {
-        owner: AuthoredVNextExportService(
-            repositories[owner],
-            _UnusedWorkerTransport(),
-            stores[owner],
-        )
-        for owner in repositories
-    }
+
+
+async def _owner_a_state(
+    maker: async_sessionmaker[AsyncSession], seeded: dict[str, Any]
+) -> dict[str, Any]:
+    owner_token = set_current_owner_id(OWNER_A)
+    try:
+        async with maker() as session:
+            export_operation = await session.get(
+                WorkspaceOperation, seeded["exportOperationId"]
+            )
+            queued_operation = await session.get(
+                WorkspaceOperation, seeded["queuedOperationId"]
+            )
+            artifact = await session.get(WorkspaceArtifact, seeded["artifactId"])
+            # Counted across owners on purpose: a receipt written under owner
+            # B's scope would be a successful cross-owner write as well.
+            receipts = await session.scalar(
+                select(func.count())
+                .select_from(WorkspaceActionReceipt)
+                .execution_options(skip_owner_scope=True)
+            )
+            return {
+                "exportOperation": (
+                    export_operation.state,
+                    export_operation.version,
+                    export_operation.owner_id,
+                ),
+                "queuedOperation": (
+                    queued_operation.state,
+                    queued_operation.version,
+                    queued_operation.owner_id,
+                ),
+                "artifact": (artifact.status, artifact.sha256, artifact.owner_id),
+                "actionReceiptCount": receipts,
+            }
+    finally:
+        reset_current_owner_id(owner_token)
+
+
+def _workspace_app(maker: async_sessionmaker[AsyncSession]) -> FastAPI:
+    """The production workspace router behind the production error envelope.
+
+    Only session issuance differs from ``api.main``: the identity comes from a
+    header instead of a login cookie and is bound exactly as
+    ``SessionAuthMiddleware`` binds an authenticated request, and the request
+    session is opened on this run's isolated database.
+    """
+
     app = FastAPI()
+    install_api_error_handling(app)
 
     @app.middleware("http")
     async def bind_owner(request: Request, call_next):
-        raw_owner = request.headers.get("x-security-owner")
-        token = set_current_owner_id(uuid.UUID(raw_owner) if raw_owner else None)
+        owner_token = set_current_owner_id(uuid.UUID(request.headers["x-security-owner"]))
+        admin_token = set_current_owner_is_admin(False)
+        tenant_token = set_current_tenant_id(TENANT_ID)
+        scope_token = set_request_scope_active(True)
         try:
             return await call_next(request)
         finally:
-            reset_current_owner_id(token)
+            reset_request_scope_active(scope_token)
+            reset_current_tenant_id(tenant_token)
+            reset_current_owner_is_admin(admin_token)
+            reset_current_owner_id(owner_token)
 
-    app.include_router(export_router.AUTHORED_VNEXT_EXPORT_ROUTER, prefix="/api/v1/ppt")
-    previous_factory = export_router._service_for_scope
-    previous_enabled = os.environ.get("AUTHORED_VNEXT_EXPORT_ENABLED")
-    export_router._service_for_scope = lambda owner_scope, _owner_id: services[owner_scope]
-    os.environ["AUTHORED_VNEXT_EXPORT_ENABLED"] = "true"
-    prefix = "/api/v1/ppt/authored-vnext/export"
-    headers_a = {"x-security-owner": str(OWNER_A)}
-    headers_b = {"x-security-owner": str(OWNER_B)}
+    async def isolated_session():
+        async with maker() as session:
+            yield session
+
+    app.dependency_overrides[get_async_session] = isolated_session
+    app.include_router(WORKSPACE_ROUTER, prefix="/api/v1/ppt")
+    return app
+
+
+async def _cross_owner_artifact_checks(
+    root: Path,
+) -> tuple[list[dict[str, Any]], bool, dict[str, Any]]:
+    app_data = root / "workspace-app-data"
+    app_data.mkdir(parents=True, exist_ok=True)
+    engine = create_async_engine(
+        f"sqlite+aiosqlite:///{root / 'public-api-owner-isolation.sqlite3'}",
+        poolclass=NullPool,
+    )
+
+    @event.listens_for(engine.sync_engine, "connect")
+    def _sqlite_foreign_keys(connection, _record):
+        connection.execute("PRAGMA foreign_keys=ON")
+
+    previous_app_data = os.environ.get("APP_DATA_DIRECTORY")
+    os.environ["APP_DATA_DIRECTORY"] = str(app_data)
     try:
-        with TestClient(app) as client:
-            same_owner = client.get(
-                f"{prefix}/decks/{deck.deck_id}/artifact", headers=headers_a
+        async with engine.begin() as connection:
+            await connection.run_sync(
+                lambda sync_connection: SQLModel.metadata.create_all(
+                    sync_connection, tables=list(_WORKSPACE_TABLES)
+                )
             )
+        maker = async_sessionmaker(engine, expire_on_commit=False)
+        seeded = await _seed_owner_a_workspace(maker, app_data)
+        before = await _owner_a_state(maker, seeded)
+        artifact_path = f"{_WORKSPACE_PREFIX}/artifacts/{seeded['artifactId']}/download"
+        export_operation = seeded["exportOperationId"]
+        queued_operation = seeded["queuedOperationId"]
+        headers_a = {"x-security-owner": str(OWNER_A)}
+        headers_b = {"x-security-owner": str(OWNER_B)}
+        transport = httpx.ASGITransport(app=_workspace_app(maker))
+        async with httpx.AsyncClient(
+            transport=transport, base_url="http://public-security.invalid"
+        ) as client:
             attacks = (
                 (
                     "api-read-artifact",
                     "read",
-                    client.get(f"{prefix}/decks/{deck.deck_id}/artifact", headers=headers_b),
-                    "authored_vnext_artifact_not_found",
+                    await client.get(artifact_path, headers=headers_b),
+                    "workspace_export_not_found",
                 ),
                 (
-                    "api-read-job",
+                    "api-read-timeline",
                     "read",
-                    client.get(f"{prefix}/jobs/{job.id}", headers=headers_b),
-                    "authored_vnext_export_job_not_found",
-                ),
-                (
-                    "api-cancel-job",
-                    "write",
-                    client.post(
-                        f"{prefix}/jobs/{job.id}/cancel",
+                    await client.get(
+                        f"{_WORKSPACE_PREFIX}/presentations/{seeded['presentationId']}/timeline",
                         headers=headers_b,
-                        json={"operationFence": 1},
                     ),
-                    "authored_vnext_export_job_not_found",
+                    "presentation_not_found",
                 ),
                 (
-                    "api-rollback-artifact",
+                    "api-read-operation-recovery-plan",
+                    "read",
+                    await client.get(
+                        f"{_WORKSPACE_PREFIX}/operations/{export_operation}/recovery-plan",
+                        headers=headers_b,
+                    ),
+                    "workspace_operation_not_found",
+                ),
+                (
+                    "api-cancel-operation",
                     "write",
-                    client.post(
-                        f"{prefix}/decks/{deck.deck_id}/artifacts/{receipt.id}/rollback",
+                    await client.post(
+                        f"{_WORKSPACE_PREFIX}/operations/{queued_operation}/actions",
                         headers=headers_b,
                         json={
-                            "expectedPublicationRevision": 1,
-                            "expectedArtifactDigest": artifact_digest,
+                            "action": "cancel",
+                            "idempotency_key": "public-security-cross-owner-cancel",
+                            "expected_operation_version": 0,
+                            "expected_revision": 0,
                         },
                     ),
-                    "authored_vnext_artifact_not_found",
+                    "workspace_operation_not_found",
+                ),
+                (
+                    "api-retry-operation",
+                    "write",
+                    await client.post(
+                        f"{_WORKSPACE_PREFIX}/operations/{export_operation}/actions",
+                        headers=headers_b,
+                        json={
+                            "action": "retry",
+                            "idempotency_key": "public-security-cross-owner-retry",
+                            "expected_operation_version": 1,
+                            "expected_revision": 0,
+                        },
+                    ),
+                    "workspace_operation_not_found",
                 ),
             )
+            after_attacks = await _owner_a_state(maker, seeded)
+            same_owner = await client.get(artifact_path, headers=headers_a)
+            same_owner_cancel = await client.post(
+                f"{_WORKSPACE_PREFIX}/operations/{queued_operation}/actions",
+                headers=headers_a,
+                json={
+                    "action": "cancel",
+                    "idempotency_key": "public-security-same-owner-cancel",
+                    "expected_operation_version": 0,
+                    "expected_revision": 0,
+                },
+            )
+        after_control = await _owner_a_state(maker, seeded)
     finally:
-        export_router._service_for_scope = previous_factory
-        if previous_enabled is None:
-            os.environ.pop("AUTHORED_VNEXT_EXPORT_ENABLED", None)
+        if previous_app_data is None:
+            os.environ.pop("APP_DATA_DIRECTORY", None)
         else:
-            os.environ["AUTHORED_VNEXT_EXPORT_ENABLED"] = previous_enabled
-    active = owner_a.get_active_artifact(deck.deck_id)
+            os.environ["APP_DATA_DIRECTORY"] = previous_app_data
+        await engine.dispose()
+    owner_rows_bound = (
+        before["exportOperation"] == ("succeeded", 1, OWNER_A)
+        and before["queuedOperation"] == ("queued", 0, OWNER_A)
+        and before["artifact"] == ("ready", _sha256(_OWNER_A_EXPORT_BYTES), OWNER_A)
+        and before["actionReceiptCount"] == 0
+    )
+    attacks_left_state_unchanged = after_attacks == before
+    same_owner_cancelled = bool(
+        same_owner_cancel.status_code == 200
+        and after_control["queuedOperation"][0] == "cancelled"
+        and after_control["actionReceiptCount"] == 1
+    )
     owner_control = bool(
-        same_owner.status_code == 200
-        and same_owner.content == artifact_bytes
-        and active is not None
-        and active[0].revision == 1
-        and active[0].digest == artifact_digest
+        owner_rows_bound
+        and attacks_left_state_unchanged
+        and same_owner.status_code == 200
+        and same_owner.content == _OWNER_A_EXPORT_BYTES
+        and same_owner_cancelled
     )
     observations = []
     for case_id, operation, response, expected_code in attacks:
@@ -659,7 +795,7 @@ def _cross_owner_artifact_checks(
             {
                 "caseId": case_id,
                 "operation": operation,
-                "attemptedProductPath": "authored-vnext-export-http-api",
+                "attemptedProductPath": "workspace-http-api",
                 "expectedHttpStatus": 404,
                 "observedHttpStatus": response.status_code,
                 "expectedErrorCode": expected_code,
@@ -668,11 +804,14 @@ def _cross_owner_artifact_checks(
                 "pass": response.status_code == 404 and observed_code == expected_code,
             }
         )
-    engine.dispose()
     return observations, owner_control, {
-        "artifactId": str(receipt.id),
-        "deckId": deck.deck_id,
-        "digest": artifact_digest,
+        "artifactId": str(seeded["artifactId"]),
+        "presentationId": str(seeded["presentationId"]),
+        "operationId": str(export_operation),
+        "digest": f"sha256:{seeded['artifactSha256']}",
+        "crossOwnerAttemptsLeftOwnerStateUnchanged": attacks_left_state_unchanged,
+        "sameOwnerDownloadStatus": same_owner.status_code,
+        "sameOwnerCancelStatus": same_owner_cancel.status_code,
         "ownerBound": owner_control,
     }
 
@@ -982,7 +1121,7 @@ async def _run(args: argparse.Namespace) -> dict[str, Any]:
         pptx_root = root / "pptx-corpus"
         pptx_root.mkdir()
         pptx_cases = _pptx_corpus(pptx_root)
-        cross_owner, same_owner_control, owner_bound_ref = _cross_owner_artifact_checks(root)
+        cross_owner, same_owner_control, owner_bound_ref = await _cross_owner_artifact_checks(root)
         capability = _capability_checks(signing_key)
 
     html_pass = all(case["pass"] for case in html_cases)

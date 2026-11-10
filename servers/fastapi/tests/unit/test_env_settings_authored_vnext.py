@@ -7,10 +7,7 @@ from utils.env_settings import authored_vnext
 from utils.env_settings.authored_vnext import (
     get_authored_retained_reference_root,
     get_authored_vnext_default_company_standard_id,
-    get_authored_vnext_ooxml_worker_token,
-    get_authored_vnext_ooxml_worker_url,
     get_authored_vnext_repository_mode,
-    is_authored_vnext_export_enabled,
     is_authored_vnext_master_enabled,
     is_authored_vnext_ooxml_package_enabled,
     is_deck_ir_dev_fixture_allowed,
@@ -19,7 +16,6 @@ from utils.env_settings.authored_vnext import (
 
 
 OPT_IN_FLAGS = {
-    "AUTHORED_VNEXT_EXPORT_ENABLED": is_authored_vnext_export_enabled,
     "AUTHORED_VNEXT_OOXML_PACKAGE_ENABLED": is_authored_vnext_ooxml_package_enabled,
     "DECK_IR_ALLOW_DEV_FIXTURE": is_deck_ir_dev_fixture_allowed,
     "DECK_IR_GENERATION_ENABLED": is_deck_ir_generation_enabled,
@@ -76,30 +72,6 @@ def test_retained_reference_root(monkeypatch):
     assert get_authored_retained_reference_root() is None
     monkeypatch.setenv("AUTHORED_RETAINED_REFERENCE_ROOT", "C:/refs")
     assert get_authored_retained_reference_root() == "C:/refs"
-
-
-def test_ooxml_worker_wiring(monkeypatch):
-    assert get_authored_vnext_ooxml_worker_token() == ""
-    # Default is the Next.js port, not get_next_internal_base_url()'s http://localhost.
-    assert get_authored_vnext_ooxml_worker_url() == "http://127.0.0.1:3000/api/internal/ooxml-vnext"
-    monkeypatch.setenv("NEXT_INTERNAL_URL", "http://next:3000///")
-    monkeypatch.setenv("AUTHORED_VNEXT_OOXML_WORKER_TOKEN", " tok ")
-    assert get_authored_vnext_ooxml_worker_url() == "http://next:3000/api/internal/ooxml-vnext"
-    assert get_authored_vnext_ooxml_worker_token() == "tok"
-
-
-def test_http_transport_from_environment(monkeypatch):
-    from services.authored_vnext.integration.worker import (
-        HttpOoxmlWorkerTransport,
-        WorkerError,
-    )
-
-    with pytest.raises(WorkerError):
-        HttpOoxmlWorkerTransport.from_environment()
-    monkeypatch.setenv("AUTHORED_VNEXT_OOXML_WORKER_TOKEN", "t" * 32)
-    transport = HttpOoxmlWorkerTransport.from_environment()
-    assert transport.url == "http://127.0.0.1:3000/api/internal/ooxml-vnext"
-    assert transport.token == "t" * 32
 
 
 def test_module_layering_and_env_names_cover_every_read():

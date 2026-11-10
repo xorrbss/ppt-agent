@@ -4,7 +4,6 @@ servers/fastapi/tests/fixtures/slidespec_active_bundle_*_slide_*.html -text
 # Generated contracts are byte-compared by the cross-platform drift gate.
 contracts/authored_vnext/deck/v1/*.schema.json text eol=lf
 contracts/authored_vnext/master/v1/*.json text eol=lf
-contracts/authored_vnext/export/v1/generated/* text eol=lf
 
 # Template-package manifests pin the byte length and SHA-256 of these JSON
 # entrypoints, so Windows worktrees must retain the Git blob's LF bytes.

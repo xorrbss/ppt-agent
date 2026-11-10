@@ -127,13 +127,10 @@ tests/unit/test_authored_vnext_capability_registry.py
 tests/unit/test_authored_vnext_contract.py
 tests/unit/test_authored_vnext_deck_models.py
 tests/unit/test_authored_vnext_export_contract_drift.py
-tests/unit/test_authored_vnext_export_repository_boundary.py
 tests/unit/test_authored_vnext_generation_repository_boundary.py
 tests/unit/test_authored_vnext_master_contract.py
 tests/unit/test_authored_vnext_master_generated_contract.py
 tests/unit/test_authored_vnext_native_scene_quality.py
-tests/unit/test_authored_vnext_ooxml_capability_binding.py
-tests/unit/test_authored_vnext_ooxml_contract.py
 tests/unit/test_authored_vnext_scene_design_quality.py
 tests/unit/test_authored_vnext_sql_repository.py
 tests/unit/test_authored_vqa_reachability.py

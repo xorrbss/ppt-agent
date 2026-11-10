@@ -16,7 +16,6 @@ from sqlalchemy.exc import DBAPIError, TimeoutError as PoolTimeoutError
 
 from models.api_error_model import APIErrorModel
 from services.assets.contracts import AssetGatewayError
-from services.authored_vnext.integration.worker import WorkerError
 from services.document_conversion_service import DocumentConversionError
 from services.generation_failure_class import classify_generation_failure
 from services.presentation_generation_attempt_timing import _generation_exception_failure, _safe_failure
@@ -32,7 +31,6 @@ from services.workspace_service import WorkspaceServiceError
 
 @pytest.mark.parametrize("error", [
     WorkspaceServiceError("revision_conflict", retryable=True),
-    WorkerError("WORKER_UNAVAILABLE", retryable=True),
     DocumentConversionError("private subprocess output", retryable=True),
     AssetGatewayError("asset_not_ready", retryable=True),
     AssetGatewayError("asset_not_ready"),

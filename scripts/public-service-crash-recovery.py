@@ -1,10 +1,19 @@
 #!/usr/bin/env python3
-"""Inject one owned workspace-worker crash after a real authored checkpoint.
+"""Inject one owned workspace-worker crash after a real svg page checkpoint.
 
 The target API/Next/proxy stack is never started or stopped here.  This runner
 owns only the external workspace worker processes it launches, requires an
 isolated SQLite/app-data root, drives public HTTP endpoints, and emits the
 release-gate crash evidence contract only after durable DB/outbox/fence audit.
+
+It admits one svg generation (``strategy: "svg"``, the only generation
+strategy) on ``/presentation/generate/async`` and kills the first owned worker
+once a page checkpoint has rendered.  svg pages persist in
+``authored_slide_checkpoints`` (the table keeps its historical name; every
+driver writes it): ``render_status = 'completed'`` marks a page whose PNG is
+durable, which is also what the successor counts as checkpoint reuse.  The
+stale-fence probe replays the crashed attempt's own page write through the svg
+checkpoint writer under its old attempt and fencing tokens.
 """
 
 from __future__ import annotations
@@ -32,6 +41,12 @@ MANIFEST_SCHEMA = "public-service-crash-recovery-manifest/v1"
 EVIDENCE_SCHEMA = "public-service-crash-recovery-evidence/v1"
 TERMINAL = {"completed", "error", "failed", "cancelled", "canceled"}
 RC_ID = re.compile(r"^sha256:[0-9a-f]{64}$")
+# Deck options that only steered the removed authored strategy.
+REMOVED_DECK_KEYS = frozenset({"visionQa", "qualityProfile"})
+# Codes ``owned_job`` raises when an attempt no longer holds the fence.
+STALE_FENCE_CODES = frozenset(
+    {"authored_attempt_lost", "authored_workspace_operation_fence_lost"}
+)
 def utc_now() -> str:
     return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 def atomic_json(path: Path, value: dict[str, Any]) -> None:
@@ -160,6 +175,12 @@ def load_manifest(
         raise ValueError("PPT_PROCESS_PROFILE=generation is required")
     if not isinstance(value.get("deck"), dict) or not str(value["deck"].get("content", "")).strip():
         raise ValueError("deck.content is required")
+    removed = sorted(REMOVED_DECK_KEYS & set(value["deck"]))
+    if removed:
+        raise ValueError(
+            f"deck.{removed[0]} was an authored-only option and was removed with "
+            "the authored strategy; svg is the only generation strategy"
+        )
     timeout = value.get("timeoutSeconds", 1800)
     lease = value.get("leaseSeconds", 8)
     if not isinstance(timeout, int) or timeout < 60 or timeout > 3600:
@@ -366,13 +387,34 @@ def operation_state(path: Path, operation_id: str) -> dict[str, Any]:
 
 
 def checkpoint_snapshot(path: Path, job_id: str) -> list[dict[str, Any]]:
+    """Per-page svg checkpoint status rows, without the page payload.
+
+    svg writes ``author_status``/``render_status`` (illustrate is ``skipped``,
+    persist stays ``pending`` until publication) and keeps the rendered PNG
+    digest inside the ``svg_checkpoint`` JSON, not in ``render_sha256``.
+    """
     raw = raw_id(path, "presentation_generation_jobs", job_id)
     return db_rows(
         path,
         "SELECT slide_index, author_status, illustrate_status, render_status, persist_status, "
-        "render_sha256, attempt_token FROM authored_slide_checkpoints WHERE job_id = ? ORDER BY slide_index",
+        "attempt_token, json_extract(svg_checkpoint, '$.png_sha256') AS png_sha256 "
+        "FROM authored_slide_checkpoints WHERE job_id = ? ORDER BY slide_index",
         (raw,),
     )
+
+
+def checkpoint_payload(path: Path, job_id: str, slide_index: int) -> dict[str, Any]:
+    """The svg page payload one checkpoint row holds, as its writer stored it."""
+    raw = raw_id(path, "presentation_generation_jobs", job_id)
+    rows = db_rows(
+        path,
+        "SELECT svg_checkpoint FROM authored_slide_checkpoints WHERE job_id = ? AND slide_index = ?",
+        (raw, slide_index),
+    )
+    payload = parse_payload(rows[0]["svg_checkpoint"]) if rows else {}
+    if not payload.get("svg_content") or not payload.get("png_sha256"):
+        raise RuntimeError("rendered svg checkpoint payload is missing")
+    return payload
 
 
 def parse_time(value: Any) -> datetime:
@@ -427,26 +469,49 @@ def stop_owned_worker(process: subprocess.Popen[Any] | None) -> None:
 def request_body(deck: dict[str, Any]) -> dict[str, Any]:
     body = {
         "content": deck["content"], "n_slides": int(deck.get("nSlides", 5)),
-        "template": "authored", "strategy": "authored", "export_as": "pptx",
+        "strategy": "svg", "export_as": "pptx",
         "include_title_slide": deck.get("includeTitleSlide", True),
         "include_table_of_contents": deck.get("includeTableOfContents", False),
-        "web_search": deck.get("webSearch", False), "vision_qa": deck.get("visionQa", False),
-        "quality_profile": deck.get("qualityProfile", "development"),
+        "web_search": deck.get("webSearch", False),
     }
+    # svg reads its style preset from the request's ``authored_style`` field.
     for source, target in (("language", "language"), ("style", "authored_style"), ("instructions", "instructions")):
         if deck.get(source) is not None:
             body[target] = deck[source]
     return body
 
 
-def stale_fence_probe(database_path: Path, job: dict[str, Any], operation: dict[str, Any]) -> tuple[bool, bool]:
+def stale_fence_probe(
+    database_path: Path,
+    job: dict[str, Any],
+    operation: dict[str, Any],
+    slide_index: int,
+    page_payload: dict[str, Any],
+) -> tuple[bool, bool]:
+    """Replay the crashed attempt's page write and terminal result.
+
+    The page write goes through the svg checkpoint writer exactly as the
+    crashed worker would issue it: the stale job attempt token and the stale
+    workspace fencing token, with the page payload that attempt had persisted.
+    Only a fence rejection from ``owned_job`` counts as rejected; any other
+    error propagates and fails the evidence.
+    """
     server_root = Path(__file__).resolve().parents[1] / "servers" / "fastapi"
     sys.path.insert(0, str(server_root))
     import asyncio
-    from services.authored_checkpoint_service import start_stage
+    from types import SimpleNamespace
+    from services.authored_checkpoint_errors import AuthoredStageError
     from services.database import async_session_maker
+    from services.svg_presentation_checkpoint import _checkpoint as write_svg_checkpoint
     from services.workspace_operation_runner import append_operation_event
     from utils.owner_context import reset_current_owner_id, set_current_owner_id
+
+    stale_job = SimpleNamespace(
+        id=uuid.UUID(str(job["id"])),
+        attempt_token=str(job["attempt_token"]),
+        workspace_operation_id=uuid.UUID(str(operation["id"])),
+        _workspace_fencing_token=int(operation["fencing_token"]),
+    )
 
     async def run() -> tuple[bool, bool]:
         owner = operation.get("owner_id")
@@ -454,11 +519,10 @@ def stale_fence_probe(database_path: Path, job: dict[str, Any], operation: dict[
         try:
             checkpoint_rejected = False
             try:
-                await start_stage(
-                    job_id=uuid.UUID(str(job["id"])), slide_index=0, stage="persist",
-                    attempt_token=str(job["attempt_token"]),
-                )
-            except RuntimeError:
+                await write_svg_checkpoint(stale_job, slide_index, payload=page_payload)
+            except AuthoredStageError as error:
+                if error.code not in STALE_FENCE_CODES:
+                    raise
                 checkpoint_rejected = True
             async with async_session_maker() as session:
                 event = await append_operation_event(
@@ -599,14 +663,19 @@ def main() -> int:
             if not job or job["state"] != "running" or not job["attempt_token"]:
                 return None
             checkpoints = checkpoint_snapshot(database_path, str(job["id"]))
-            completed = [row for row in checkpoints if row["persist_status"] == "completed" or row["render_status"] == "completed"]
+            # A rendered svg page (durable PNG) is what the successor reuses.
+            completed = [row for row in checkpoints if row["render_status"] == "completed"]
             operation = operation_state(database_path, operation_id)
             if completed and operation["state"] == "running" and operation["attempt_token"]:
                 return job, operation, completed
             return None
 
         stale_job, stale_operation, before_checkpoints = wait_until(
-            persisted_checkpoint, manifest["timeoutSeconds"], "one durable authored checkpoint",
+            persisted_checkpoint, manifest["timeoutSeconds"], "one durable svg page checkpoint",
+        )
+        probe_slide_index = int(before_checkpoints[0]["slide_index"])
+        stale_page_payload = checkpoint_payload(
+            database_path, str(stale_job["id"]), probe_slide_index
         )
         first_pid = first.pid
         kill_owned_worker(first)
@@ -650,7 +719,8 @@ def main() -> int:
         # Probe both old fences while the successor still owns a live attempt;
         # terminal state rejection alone would not prove attempt fencing.
         checkpoint_rejected, publication_rejected = stale_fence_probe(
-            database_path, stale_job, stale_operation
+            database_path, stale_job, stale_operation,
+            probe_slide_index, stale_page_payload,
         )
         if not checkpoint_rejected or not publication_rejected:
             raise RuntimeError("stale attempt mutation was accepted while successor was active")
@@ -726,7 +796,9 @@ def main() -> int:
             database_path, operation_id, stale_operation
         )
         converged = bool(
-            final_job and final_job["state"] == "succeeded"
+            # A generation job's success state is "published"; "succeeded"
+            # belongs to the workspace operation.
+            final_job and final_job["state"] == "published"
             and final_job["attempt_number"] > stale_job["attempt_number"]
             and final_operation["state"] == "succeeded"
             and final_operation["attempt_number"] > stale_operation["attempt_number"]

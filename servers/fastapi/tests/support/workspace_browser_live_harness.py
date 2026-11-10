@@ -79,7 +79,6 @@ def _configure_production_environment(
             "CHAT_FIRST_WORKSPACE_SHADOW_ENABLED": "false",
             "AUTHORED_VNEXT_MASTER_ENABLED": "true",
             "AUTHORED_VNEXT_GENERATION_ENABLED": "true",
-            "AUTHORED_VNEXT_EXPORT_ENABLED": "true",
             "AUTHORED_VNEXT_OOXML_PACKAGE_ENABLED": "true",
             "AUTHORED_VNEXT_REPOSITORY_MODE": "sql",
             "WORKSPACE_ASSET_MALWARE_SCAN_MODE": "disabled",

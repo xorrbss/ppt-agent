@@ -7,7 +7,6 @@ from sqlalchemy.exc import SQLAlchemyError
 from constants.provider_registry import ProviderResolutionError
 from models.api_error_model import APIErrorModel
 from services.assets.contracts import AssetGatewayError
-from services.authored_vnext.integration.worker import WorkerError
 from services.document_conversion_service import DocumentConversionError
 from services.workspace_service import WorkspaceServiceError
 from workers.public_worker_store import PublicWorkerExecutionError
@@ -48,7 +47,6 @@ def test_test_module_exception_counts_as_application_owned_inside_source_root():
 
 @pytest.mark.parametrize("error", [
     AssetGatewayError("asset_not_ready"),
-    WorkerError("WORKER_UNAVAILABLE"),
     DocumentConversionError("private subprocess output"),
     WorkspaceServiceError("revision_conflict"),
 ])
