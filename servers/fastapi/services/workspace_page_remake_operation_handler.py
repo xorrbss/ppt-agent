@@ -9,9 +9,11 @@ from sqlalchemy import select
 from models.sql.presentation import PresentationModel
 from models.sql.slide import SlideModel
 from services.authored_page_remake_service import (
+    validated_authored_page_remake_candidate_body,
+)
+from services.page_remake_core import (
     AuthoredPageRemakeError,
     publish_authored_page_remake,
-    validated_authored_page_remake_candidate_body,
 )
 from services.authored_vnext.generation.legacy_bridge import (
     regenerate_legacy_master_body,

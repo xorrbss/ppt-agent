@@ -81,7 +81,7 @@ def test_remeasure_source_preview_never_authors_or_changes_source(monkeypatch, m
     monkeypatch.setattr(remake,"author_slide_svg",author)
     monkeypatch.setattr(remake,"_save_slide_pngs",lambda *args:[task.data["candidate_image"]])
     saved=AsyncMock()
-    monkeypatch.setattr("services.authored_page_remake_service._set_task",saved)
+    monkeypatch.setattr("services.page_remake_core._set_task",saved)
     request=AuthoredPageRemakePreviewRequest(mode=mode,source_digest=source_digest(target.svg_content),svg_content=candidate)
     baseline=deepcopy((target.svg_content,target.content,target.properties))
     asyncio.run(remake.preview_svg(presentation,[target],0,request,task,session))
@@ -217,7 +217,7 @@ def test_digest_mismatch_never_reaches_cas(monkeypatch):
     monkeypatch.setattr(remake, "author_slide_svg", author)
     monkeypatch.setattr(remake, "finalize_svg", lambda svg, **kwargs: svg)
     monkeypatch.setattr(remake,"_save_slide_pngs",lambda *args:[task.data["candidate_image"]])
-    monkeypatch.setattr("services.authored_page_remake_service._set_task", AsyncMock())
+    monkeypatch.setattr("services.page_remake_core._set_task", AsyncMock())
     with pytest.raises(AuthoredPageRemakeError, match="svg_source_classification_missing") as failure:
         asyncio.run(remake.preview_svg(presentation, [target], 0,
             SimpleNamespace(instruction=None), task, session))
@@ -302,7 +302,7 @@ def test_digest_mismatch_never_reaches_cas(monkeypatch):
             quality['passed'] = False
     monkeypatch.setattr(render_driver, '_apply_common_header_quality', apply_header)
     saved = AsyncMock()
-    monkeypatch.setattr('services.authored_page_remake_service._set_task', saved)
+    monkeypatch.setattr('services.page_remake_core._set_task', saved)
     image = task.data['candidate_image']
     monkeypatch.setattr(remake, '_save_slide_pngs', lambda *args: [image])
     asyncio.run(remake.preview_svg(presentation, [target], 0, SimpleNamespace(instruction=None), task, session))

@@ -693,7 +693,7 @@ async def test_candidate_render_failure_still_fails_the_task(tmp_path, monkeypat
             candidate_report=_report(issue=False),
             candidate_render_error=RuntimeError("chromium crashed"),
         )
-        monkeypatch.setattr(remake, "async_session_maker", _SessionFactory(session))
+        monkeypatch.setattr("services.page_remake_core.async_session_maker", _SessionFactory(session))
 
         await remake._run_preview_background(
             presentation.id,
@@ -722,7 +722,7 @@ async def test_generation_failure_still_fails_the_task(tmp_path, monkeypatch):
             candidate_report=_report(issue=False),
             generation_error=RuntimeError("model unavailable"),
         )
-        monkeypatch.setattr(remake, "async_session_maker", _SessionFactory(session))
+        monkeypatch.setattr("services.page_remake_core.async_session_maker", _SessionFactory(session))
 
         await remake._run_preview_background(
             presentation.id,
@@ -1038,7 +1038,7 @@ async def test_remeasure_source_handler_creates_no_provider_scope(monkeypatch, m
 
 @async_test
 async def test_remeasure_rejected_candidate_evidence_is_failed_and_unpublishable(monkeypatch):
-    from services import authored_page_remake_service as service
+    from services import page_remake_core as service
     task=SimpleNamespace(id="candidate-task",status="pending",data=None)
     session=SimpleNamespace(get=AsyncMock(return_value=task),rollback=AsyncMock())
     monkeypatch.setattr(service,"async_session_maker",_SessionFactory(session))

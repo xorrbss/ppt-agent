@@ -22,7 +22,7 @@ from services.authored_batch_remake_service import (
     _record_child_outcome,
     _run_batch_preview_background,
 )
-from services.authored_page_remake_service import _run_preview_background
+from services.page_remake_core import _run_preview_background
 from services.database import async_session_maker
 from services.workspace_operation_handler_registry import (
     NonRetryableWorkspaceOperationError,

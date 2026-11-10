@@ -1,5 +1,6 @@
-"""Master Setup domain service."""
+"""Master Setup domain service.
 
-from .service import AuthoredVNextMasterService
-
-__all__ = ["AuthoredVNextMasterService"]
+Import the submodules directly (``service.AuthoredVNextMasterService``): this
+package runs no code, so reading ``digests`` or ``assets`` does not load the
+service.
+"""
