@@ -12,12 +12,14 @@ import { applyPresentationThemeToElement } from "../utils/applyPresentationTheme
 import { normalizeBackendAssetUrls } from "@/utils/api";
 import { loadFonts } from "../../hooks/useFontLoad";
 import { isUnauthorizedApiError } from "../../services/api/api-error-handler";
+import { isUnsupportedPresentationDriverError } from "@/lib/unsupported-presentation";
 
 
 export const usePresentationData = (
   presentationId: string,
   setLoading: (loading: boolean) => void,
-  setError: (error: boolean) => void
+  setError: (error: boolean) => void,
+  onUnsupportedDriver?: () => void,
 ) => {
   const dispatch = useDispatch();
 
@@ -56,6 +58,13 @@ export const usePresentationData = (
         setLoading(false);
         return;
       }
+      if (isUnsupportedPresentationDriverError(error)) {
+        // The deck was made with a removed generation mode: show the
+        // dedicated notice instead of a retryable load failure.
+        onUnsupportedDriver?.();
+        setLoading(false);
+        return undefined;
+      }
       if (options?.quiet) return undefined;
       setError(true);
       notify.error("프레젠테이션을 불러오지 못했습니다", "프레젠테이션을 불러올 수 없습니다. 다시 시도해 주세요.");
@@ -63,7 +72,7 @@ export const usePresentationData = (
       setLoading(false);
       return undefined;
     }
-  }, [presentationId, dispatch, setLoading, setError]);
+  }, [presentationId, dispatch, setLoading, setError, onUnsupportedDriver]);
 
   return {
     fetchUserSlides,

@@ -57,6 +57,7 @@ import {
 } from "../utils/slideKeyboardNavigation";
 import {
   PresentationLoadError,
+  PresentationUnsupportedNotice,
   PresentationModeView,
 } from "./PresentationTerminalStates";
 import { renderArtifactSlides } from "@/lib/render-service/production-core";
@@ -146,6 +147,8 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
   );
   const [chatTargetedSlides, setChatTargetedSlides] = useState<number[]>([]);
   const [error, setError] = useState(false);
+  const [unsupportedDriver, setUnsupportedDriver] = useState(false);
+  const markUnsupportedDriver = useCallback(() => setUnsupportedDriver(true), []);
   const [rasterOriginalPreserveNoteId, setRasterOriginalPreserveNoteId] = useState<string | null>(null);
   const [generationObservation, setGenerationObservation] = useState<{
     presentationId: string; loading: boolean; operationId: string | null;
@@ -267,6 +270,7 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
     presentation_id,
     setLoading,
     setError,
+    markUnsupportedDriver,
   );
   const {
     content: workspaceStagingContent,
@@ -601,6 +605,9 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
     chatTargetedSlides.length,
     glowingSlideIndex,
   ]);
+  if (unsupportedDriver) {
+    return <PresentationUnsupportedNotice router={router} />;
+  }
   if ((error || previewArtifactState.error) && isPresentMode) {
     return <PresentationLoadError router={router} />;
   }
