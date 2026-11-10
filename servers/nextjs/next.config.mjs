@@ -130,9 +130,12 @@ const nextConfig = {
     // Fidelity tests isolate their distDir per run. Avoid duplicating Turbopack's
     // persistent dev cache on disk in that already-disposable Windows workspace.
     turbopackFileSystemCacheForDev: !process.env.PRESENTON_TEST_NEXT_DIST_DIR,
-    // Native authored-template envelopes include digest-pinned OOXML fragments
-    // and element assets. Keep Next's middleware clone limit aligned with the
-    // internal worker route so valid requests are never silently truncated.
+    // proxy.ts runs on every /api/* request, and Next buffers a copy of the
+    // body up to this size (beyond it the body is silently truncated). In the
+    // supported topologies (nginx, scripts/presenton-local-proxy.mjs) /api/v1/*
+    // goes straight to FastAPI and never reaches this limit; it covers Next's own
+    // /api route handlers and a browser talking to Next directly in development.
+    // Kept above the 10 MB default (2026-11-11), not tied to any one route.
     proxyClientMaxBodySize: "16mb",
   },
   output: "standalone",
