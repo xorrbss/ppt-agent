@@ -126,7 +126,7 @@ def test_redesign_page_reorder_renumbers_footer_without_generic_pipeline(monkeyp
         "trusted_font_materialization": {"worker_materialized": True},
     }))
     monkeypatch.setattr("services.svg_renderer.render_svg_with_metrics", capture)
-    monkeypatch.setattr("services.authored_presentation_artifacts._save_slide_pngs", lambda *_args: ["numbered.png"])
+    monkeypatch.setattr("services.slide_image_sets._save_slide_pngs", lambda *_args: ["numbered.png"])
 
     # slide.index 1 but deck position 0 in this one-slide deck; then move to position 2.
     two = _redesign_slide(0, _pin(approved_region_ids=("p2-r1",)), page_number=1, svg=footer)

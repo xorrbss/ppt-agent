@@ -30,7 +30,8 @@ from services.generation_core.assets.icon_pack import (
     transparent_model_for,
 )
 from utils.asset_directory_utils import get_images_directory
-from services.generation_core.authoring.author_slide import EXACT_RECONSTRUCTION, normalize_reference_mode
+from utils.llm_calls.author_slide_effort import EXACT_RECONSTRUCTION
+from utils.llm_calls.author_slide_options import normalize_reference_mode
 from services.image_generation_service import image_request_scope
 
 LOGGER = logging.getLogger(__name__)

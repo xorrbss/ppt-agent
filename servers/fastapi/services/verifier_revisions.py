@@ -529,6 +529,11 @@ WHOLE_PAGE_VERIFIER_LEDGER = VerifierRevisionLedger(
         # writing policy protects names the request source joins with a middle dot (강원·제주권).
         # No stored deck carries a v7 marker; stored pages are not re-rendered by this change.
         "82c637f944f651a023012f7a92efcc0d6e037173e3bf65244d331d9c457c3573": "svg-whole-page-verifier/1",
+        # 2026-11-10 authored removal P3 B1a (move only): the job semaphore, the slide
+        # image-set helpers, the author provider-call runtime and Brand moved unchanged
+        # into shared modules that svg now imports instead of the authored modules. No
+        # behaviour or output changed.
+        "e49c5aaa9627fe6cd2adbe8d02c22ca2e481db50ebc3b224fa3644ec841ea663": "svg-whole-page-verifier/1",
     }),
 )
 
@@ -800,6 +805,11 @@ PARTIAL_RECOVERY_CODE_LEDGER = VerifierRevisionLedger(
         # unsupported_presentation_driver. An svg deck resolves svg-v1 and takes every path
         # exactly as before; svg recovery of stored decks is unchanged.
         "2291a090226c0db7da672bee37dbbcfbddceb9e7a5819208020bfe3665d408aa": "svg-partial-recovery-code/1",
+        # 2026-11-10 authored removal P3 B1a (move only): the job semaphore, the slide
+        # image-set helpers, the author provider-call runtime and Brand moved unchanged
+        # into shared modules that svg now imports instead of the authored modules. No
+        # behaviour or output changed.
+        "f49c67d6eb5245d7754852d01c190faff84345489e3c6a9e93cf8a2efe64e21f": "svg-partial-recovery-code/1",
     }),
 )
 
@@ -976,6 +986,11 @@ PAGE_RENDER_CODE_LEDGER = VerifierRevisionLedger(
         # (admission already normalizes it). svg admission, rendering and recovery of stored
         # svg decks are unchanged.
         "3695b66f021c71277e19b9b878b396162d6562f597e60c028ded9f388e86ddb0": "svg-page-render-code/1",
+        # 2026-11-10 authored removal P3 B1a (move only): the job semaphore, the slide
+        # image-set helpers, the author provider-call runtime and Brand moved unchanged
+        # into shared modules that svg now imports instead of the authored modules. No
+        # behaviour or output changed.
+        "04477540fe1568d3037cf29d15e1498f1d5d33c436a12d59bff7d65bc6371742": "svg-page-render-code/1",
     }),
 )
 

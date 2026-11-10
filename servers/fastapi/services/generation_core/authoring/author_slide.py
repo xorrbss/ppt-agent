@@ -11,12 +11,9 @@ import inspect
 import logging
 import re
 from collections import Counter
-from concurrent.futures import ThreadPoolExecutor
-from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
 from typing import Mapping, Optional, Protocol, Sequence
-from weakref import WeakKeyDictionary
 
 from utils.llm_calls.author_slide_options import (
     STYLE_REFERENCE as STYLE_REFERENCE,
@@ -33,11 +30,6 @@ from utils.llm_calls.author_source_tags import (
     _apply_source_replacements,
     _remove_start_tag_attribute,
     _source_start_tags,
-)
-from utils.llm_calls.author_slide_admission import (
-    AuthorRateStates,
-    register_rate_limit,
-    wait_for_rate_slot,
 )
 from services.generation_core.authoring import author_slide_prompt
 from utils.llm_calls import author_slide_effort, author_slide_rules
@@ -69,7 +61,7 @@ from utils.llm_calls.author_slide_hidden_overflow import reject_hidden_overflow_
 from services.generation_core.authoring.author_slide_images import illustration_slot_rules, reference_parts, source_image_parts
 from utils.authored_image_slots import scan_slots, source_slot_id_for_asset
 from utils.llm_config import enforce_llm_egress_policy, get_llm_config
-from utils.llm_provider import get_llm_provider, get_model, is_codex_selected
+from utils.llm_provider import get_llm_provider, get_model
 from utils.renderer_isolation import admit_authored_html
 from utils.renderer_worker_policy import RendererPolicyError
 from services.source_images.models import SourceImageCandidate
@@ -83,9 +75,25 @@ from services.provider_usage_instrumentation import (
 from utils.provider_idempotency import provider_generate_call, supports_provider_idempotency
 from services.generation_core.authoring.author_call_spans import ProviderCallSpans, record_call_spans
 from services.generation_core.authoring.author_slide_fallback import reraise_author_call_error, text_only_fallback_applies
-from services.authored_generation_performance import authored_provider_concurrency
 from utils.llm_utils import extract_text, get_generate_kwargs
 from models.canvas_defaults import DEFAULT_CANVAS_HEIGHT_PX, DEFAULT_CANVAS_WIDTH_PX
+# Moved to shared modules so svg authoring does not import this HTML author;
+# re-exported under their historic names for every existing caller and test.
+from services.generation_core.authoring.author_call_runtime import (  # noqa: F401
+    AUTHOR_CONCURRENCY,
+    AUTHOR_RATE_LIMIT_COOLDOWN_SECONDS,
+    AUTHOR_RATE_LIMIT_MAX_COOLDOWN_SECONDS,
+    AUTHOR_REQUESTS_PER_MINUTE,
+    _ANTHROPIC_EFFORTS,
+    _AUTHOR_EXECUTOR,
+    _AUTHOR_RATE_STATES,
+    _apply_anthropic_authoring_reasoning,
+    _authoring_extra_body,
+    _authoring_output_profile,
+    _register_author_rate_limit,
+    _wait_for_author_rate_slot,
+)
+from services.generation_core.style.brand import Brand  # noqa: F401
 
 logger = logging.getLogger(__name__)
 
@@ -115,53 +123,6 @@ def authored_semantic_dual_output_mode() -> str:
     return value
 
 
-# Per-slide authoring makes a blocking provider call (~75s of model reasoning). Run it
-# in a DEDICATED thread pool — NOT asyncio's shared default executor — so a deck's
-# concurrent authoring threads can't starve unrelated blocking work (other LLM calls,
-# exports) that also relies on the default executor. The pool size IS the process-wide
-# authoring concurrency cap: every caller (author_deck's first pass AND the vision-QA
-# re-author) funnels through author_slide_html, so excess calls queue here instead of
-# fanning out to hundreds of provider requests at once. The deck pipeline uses
-# this same provider-specific cap; do not introduce an author-only override.
-try:
-    _selected_provider = str(get_llm_provider().value)
-except Exception:
-    _selected_provider = None
-AUTHOR_CONCURRENCY = authored_provider_concurrency(_selected_provider)
-_AUTHOR_EXECUTOR = ThreadPoolExecutor(
-    max_workers=AUTHOR_CONCURRENCY, thread_name_prefix="author-slide"
-)
-
-# Concurrency bounds in-flight calls; this optional gate also bounds how quickly
-# calls begin. It is useful for providers that publish an RPM quota lower than
-# AUTHOR_CONCURRENCY. Zero keeps the existing behavior until an operator opts in.
-AUTHOR_REQUESTS_PER_MINUTE = _env_nonnegative_float(
-    "AUTHORED_AUTHOR_REQUESTS_PER_MINUTE", 0.0
-)
-AUTHOR_RATE_LIMIT_COOLDOWN_SECONDS = _env_nonnegative_float(
-    "AUTHORED_AUTHOR_RATE_LIMIT_COOLDOWN_SECONDS", 10.0
-)
-AUTHOR_RATE_LIMIT_MAX_COOLDOWN_SECONDS = _env_nonnegative_float(
-    "AUTHORED_AUTHOR_RATE_LIMIT_MAX_COOLDOWN_SECONDS", 60.0
-)
-
-
-_AUTHOR_RATE_STATES: AuthorRateStates = WeakKeyDictionary()
-
-
-async def _wait_for_author_rate_slot() -> None:
-    await wait_for_rate_slot(_AUTHOR_RATE_STATES, AUTHOR_REQUESTS_PER_MINUTE)
-
-
-def _register_author_rate_limit(error: BaseException) -> None:
-    register_rate_limit(
-        error,
-        _AUTHOR_RATE_STATES,
-        AUTHOR_RATE_LIMIT_COOLDOWN_SECONDS,
-        AUTHOR_RATE_LIMIT_MAX_COOLDOWN_SECONDS,
-    )
-
-
 # Appendix A — the design-system brief (the crux IP) now lives in
 # ``author_slide_rules``. These module-level aliases keep the historical import
 # surface of ``services.generation_core.authoring.author_slide`` intact for every existing caller.
@@ -171,21 +132,6 @@ NO_PAGE_NUMBER_MODE = author_slide_rules.NO_PAGE_NUMBER_MODE
 PAGE_NUMBER_MODES = author_slide_rules.PAGE_NUMBER_MODES
 validate_page_number_mode = author_slide_rules.validate_page_number_mode
 type_scale_rules = author_slide_rules.type_scale_rules
-
-
-@dataclass
-class Brand:
-    """The shared design tokens injected into every slide of one deck."""
-
-    topic: str
-    language: str = "Korean"
-    primary: str = "#2563EB"
-    fonts: str = "Noto Sans KR"
-    wordmark: str = ""
-    primary_is_explicit: bool = False
-    fonts_are_explicit: bool = False
-    # Decides the slide type scale: less text per slide means larger type.
-    verbosity: str = "standard"
 
 
 _FALLBACK_SLIDE_MARKER = 'data-presenton-authored-fallback="true"'
@@ -686,88 +632,6 @@ def fallback_slide_html(
         f"<div class=\"bar\"></div><div class=\"eyebrow\">{eyebrow}</div>"
         f"<div class=\"body\">{text}</div>{footer}"
         "</body></html>"
-    )
-
-
-def _authoring_extra_body(
-    effort: Optional[str] = None, *, model: object = None
-) -> Optional[dict]:
-    """Per-slide codex reasoning-effort override (codex-only -- the param 400s on
-    providers that don't support it).
-
-    Thin wrapper over ``author_slide_effort.resolve_authoring_reasoning_level``;
-    the codex check stays here because callers monkeypatch this module's
-    ``is_codex_selected`` to exercise the codex egress path.
-    """
-    if not is_codex_selected():
-        return None
-    level = author_slide_effort.resolve_authoring_reasoning_level(effort, model)
-    return None if level is None else {"reasoning": {"effort": level}}
-
-
-_ANTHROPIC_EFFORTS = {"minimal": "low", "low": "low", "medium": "medium", "high": "high", "xhigh": "max"}
-
-
-def _apply_anthropic_authoring_reasoning(
-    kwargs: dict, effort: Optional[str] = None, *, model: object = None
-) -> dict:
-    """Pass the authored effort to Anthropic as ``output_config.effort`` only.
-
-    Claude models differ in their default. claude-sonnet-5 thinks when
-    ``thinking`` is omitted and spent whole 16k authoring budgets on hidden
-    reasoning (pages returned no text: ``public_provider_empty_output``);
-    claude-sonnet-4-6 does not think by default, and *enabling* adaptive
-    thinking there consumed the budget the same way. Measured on one SVG
-    prompt (16k budget): ``output_config.effort`` alone bounded sonnet-5
-    (omitted: max_tokens with truncated text; medium: 5.8k tokens, complete)
-    and left sonnet-4-6 / opus-4-8 without thinking, whereas adaptive thinking
-    at medium made sonnet-4-6 return 16k thinking tokens and no text. So
-    ``thinking`` is never enabled here; ``none`` disables it.
-
-    An operator who sets AUTHORED_REASONING_EFFORT (or CODEX_REASONING_EFFORT)
-    to a disable word turns the override off, whatever effort the call site
-    passes. Other providers are left unchanged.
-    """
-    from enums.llm_provider import LLMProvider
-
-    try:
-        provider = get_llm_provider()
-    except Exception:
-        # Offline and unit contexts may have no resolvable provider.
-        return kwargs
-    if provider != LLMProvider.ANTHROPIC:
-        return kwargs
-    if author_slide_effort.resolve_authoring_reasoning_level(None, model) is None:
-        return kwargs
-    level = author_slide_effort.resolve_authoring_reasoning_level(effort, model)
-    if level is None:
-        return kwargs
-    extra = kwargs.get("extra_body")
-    extra = dict(extra) if isinstance(extra, dict) else {}
-    if level == "none":
-        extra["thinking"] = {"type": "disabled"}
-    else:
-        extra["output_config"] = {"effort": _ANTHROPIC_EFFORTS.get(level, "medium")}
-    kwargs["extra_body"] = extra
-    return kwargs
-
-
-def _authoring_output_profile(
-    *,
-    role: str,
-    reference_mode: str,
-    structured_context: dict | None,
-    correction_hint: str | None,
-    model: object = None,
-) -> tuple[int, str]:
-    """Select a fast role profile without weakening strict authoring modes."""
-
-    return author_slide_effort.authoring_output_profile(
-        role=role,
-        reference_mode=reference_mode,
-        structured_context=structured_context,
-        correction_hint=correction_hint,
-        model=model,
     )
 
 

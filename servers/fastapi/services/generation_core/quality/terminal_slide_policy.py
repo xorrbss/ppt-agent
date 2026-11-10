@@ -20,7 +20,7 @@ from utils.get_env import (
     is_authored_publish_flagged_slides_enabled,
     is_authored_publish_flagged_slides_source_reflow_enabled,
 )
-from services.generation_core.authoring.author_slide import EXACT_RECONSTRUCTION
+from utils.llm_calls.author_slide_effort import EXACT_RECONSTRUCTION
 
 LOGGER = logging.getLogger(__name__)
 

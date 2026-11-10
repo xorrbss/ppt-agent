@@ -85,7 +85,7 @@ def test_codex_generation_effort_flows_into_the_authored_role_profile(monkeypatc
     """The user-selected Codex preset remains authoritative for authored slides."""
 
     monkeypatch.setenv("AUTHORED_REASONING_EFFORT", "low")
-    monkeypatch.setattr(author_slide_mod, "is_codex_selected", lambda: True)
+    monkeypatch.setattr("services.generation_core.authoring.author_call_runtime.is_codex_selected", lambda: True)
 
     settings = RuntimeSettings.from_sources(
         environ={"CODEX_REASONING_EFFORT": "high"}
@@ -134,7 +134,7 @@ def test_codex_model_reasoning_capability_normalizes_once_at_author_egress(
     async def record_receipt(**kwargs) -> None:
         receipts.append(kwargs)
 
-    monkeypatch.setattr(author_slide_mod, "is_codex_selected", lambda: True)
+    monkeypatch.setattr("services.generation_core.authoring.author_call_runtime.is_codex_selected", lambda: True)
     assert author_slide_mod._authoring_extra_body(
         "minimal", model="gpt-5.6-sol"
     ) == {"reasoning": {"effort": "none"}}
@@ -207,7 +207,7 @@ def test_author_slide_preserves_nonretryable_public_provider_budget_limit(monkey
     monkeypatch.setattr(author_slide_mod, "get_model", lambda: "test-model")
     monkeypatch.setattr(author_slide_mod, "get_llm_provider", lambda: SimpleNamespace(value="test"))
     monkeypatch.setattr(author_slide_mod, "get_generate_kwargs", lambda **kwargs: kwargs)
-    monkeypatch.setattr(author_slide_mod, "is_codex_selected", lambda: False)
+    monkeypatch.setattr("services.generation_core.authoring.author_call_runtime.is_codex_selected", lambda: False)
     monkeypatch.setattr(author_slide_mod, "enforce_llm_egress_policy", lambda: None)
     monkeypatch.setattr(author_slide_mod, "_wait_for_author_rate_slot", no_rate_limit)
     monkeypatch.setattr(author_slide_mod, "provider_call_admission", reject_public_admission)

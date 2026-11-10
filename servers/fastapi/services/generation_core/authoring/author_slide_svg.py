@@ -45,7 +45,7 @@ from utils.llm_calls.author_prompt_cache_key import apply_prompt_cache_key
 from utils.llm_calls.author_prompt_profile import authoring_model
 from utils.llm_calls.author_prompt_split import BLOCK_SEPARATOR, author_messages
 from utils.llm_calls.author_slide_effort import svg_author_call_timeout_seconds
-from services.generation_core.authoring.author_slide import (
+from services.generation_core.authoring.author_call_runtime import (
     _AUTHOR_EXECUTOR, _apply_anthropic_authoring_reasoning, _authoring_extra_body,
     _authoring_output_profile, _wait_for_author_rate_slot,
 )

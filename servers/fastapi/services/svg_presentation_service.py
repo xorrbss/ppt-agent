@@ -45,7 +45,7 @@ __all__ = [
 
 async def generate_svg_presentation(request, presentation_id, outline, language,
                                     sql_session, generation_job=None):
-    from services.authored_presentation_service import _AUTHORED_JOB_SEMAPHORE
+    from services.presentation_job_concurrency import PRESENTATION_JOB_SEMAPHORE
     from utils.owner_context import set_current_tenant_id, reset_current_tenant_id
     tenant_token = None
     if getattr(request, "_raster_reconstruction", False):
@@ -55,11 +55,11 @@ async def generate_svg_presentation(request, presentation_id, outline, language,
         tenant_token = set_current_tenant_id(context.tenant_id)
     try:
         with svg_outline_spans.span("job_semaphore_wait"):
-            await _AUTHORED_JOB_SEMAPHORE.acquire()
+            await PRESENTATION_JOB_SEMAPHORE.acquire()
         try:
             return await _generate(request, presentation_id, outline, language, sql_session, generation_job)
         finally:
-            _AUTHORED_JOB_SEMAPHORE.release()
+            PRESENTATION_JOB_SEMAPHORE.release()
     finally:
         if tenant_token is not None:
             reset_current_tenant_id(tenant_token)

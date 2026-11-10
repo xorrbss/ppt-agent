@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 import uuid
 from typing import Optional
 
@@ -45,7 +44,7 @@ from utils.authored_styles import (
     validate_exact_reconstruction_style,
 )
 from utils.authored_dom_quality import ensure_authored_qids
-from utils.get_env import get_authored_job_concurrency_env
+from services.presentation_job_concurrency import PRESENTATION_JOB_SEMAPHORE
 from services.generation_core.authoring.author_deck import author_planned_slide, prepare_authored_deck
 from services.generation_core.authoring.author_slide import is_fallback_slide_html
 from services.generation_core.authoring.author_vision_qa import revise_authored_deck
@@ -56,9 +55,8 @@ from utils.slide_capture import (
 )
 
 
-# Read once at import time; changing AUTHORED_JOB_CONCURRENCY needs a
-# process restart to take effect.
-_AUTHORED_JOB_SEMAPHORE = asyncio.Semaphore(get_authored_job_concurrency_env())
+# The cap shared with svg generation (``services.presentation_job_concurrency``).
+_AUTHORED_JOB_SEMAPHORE = PRESENTATION_JOB_SEMAPHORE
 _AUTHORED_SLIDE_WORKERS = get_authored_slide_pipeline_concurrency()
 
 

@@ -126,6 +126,35 @@ The full pytest suite and `npm run test:next-ci` run before each PR merges.
   symbols, including the two string `patch()` targets of
   `services.authored_presentation_artifacts._save_slide_pngs`, which would
   otherwise stop patching silently.
+  Done 2026-11-10, names unchanged so existing monkeypatches keep reaching the
+  code: `services/presentation_job_concurrency.py`
+  (`PRESENTATION_JOB_SEMAPHORE`), `services/slide_image_sets.py` (the four
+  image-set helpers), `generation_core/authoring/author_call_runtime.py`
+  (executor, rate gate, reasoning/output settings), `generation_core/style/brand.py`;
+  `EXACT_RECONSTRUCTION` and `normalize_reference_mode` are imported from
+  `utils.llm_calls.author_slide_effort`/`author_slide_options`, where they
+  were already defined. The old modules re-export every moved name. Tests
+  retargeted: the two string patch targets, and the patches of
+  `is_codex_selected`, `get_llm_provider` and the rate constants that the
+  moved functions now read from `author_call_runtime`. No svg module imports
+  `authored_presentation_artifacts`, `authored_presentation_service` or
+  `author_slide` any more, but the authored-named closure is unchanged (175):
+  those modules are still reached through the checkpoint seam
+  (`authored_checkpoint_*` → `authored_admission_*` → `author_slide`) and
+  `authored_generation_timing_receipt` → `authored_terminal_slide_fallback`
+  → `authored_presentation_artifacts`, which is B1b's work. Outside svg,
+  `presentation_generation_pipeline.py:84` (the authored strategy branch),
+  `scripts/canvas_admission_table.py` and
+  `evaluation/hybrid_review/LIVE_BENCHMARK.py` still import them (B3-B5).
+  The moved code changed the source state of three verifier identities, so the
+  new keys are listed as reviewed states of their current revisions in
+  `services/verifier_revisions.py` (whole-page, partial-recovery code, page-render
+  code). Verified against the B0 baseline: `ruff check .`, `import server`,
+  `check` with no new unresolved names, and the svg unit subset with no new
+  failure except the Chrome measurement tests in
+  `test_svg_common_header_space_advance.py`/`test_svg_chart_paint_chromium.py`,
+  which also fail on `main` on this host when run alone (21 of 50 there, 18 here,
+  a different set each run).
 - **B1b cuts that need judgement.** (a) Checkpoint seam:
   `authored_checkpoint_state`, `stage_batch` and `service` import
   `authored_admission_checkpoint` (→ `authored_admission`, `author_slide`),

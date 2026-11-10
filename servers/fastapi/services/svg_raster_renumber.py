@@ -94,7 +94,7 @@ async def renumber_redesign_page(session, presentation, slide, index, *, width, 
         pageNumberRelabel={"from": current, "to": display, "measuredSourceDigest": previous_digest},
     )
     content["svgReceipt"] = receipt
-    from services.authored_presentation_artifacts import _save_slide_pngs
+    from services.slide_image_sets import _save_slide_pngs
     from services.document_canvas import DocumentCanvasMetadata, parse_canvas_metadata
     from services.authored_canvas import presentation_canvas_metadata
     from services.svg_renderer import render_svg_with_metrics

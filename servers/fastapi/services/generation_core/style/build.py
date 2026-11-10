@@ -12,7 +12,7 @@ from typing import Mapping, Optional, Sequence
 
 from models.generate_presentation_request import GeneratePresentationRequest
 from models.presentation_outline_model import PresentationOutlineModel
-from services.generation_core.authoring.author_slide import Brand
+from services.generation_core.style.brand import Brand
 from utils.outline_utils import (
     clean_deck_title,
     get_presentation_title_from_presentation_outline,
