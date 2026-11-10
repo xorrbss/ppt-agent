@@ -80,7 +80,6 @@ _MIGRATED_MODULES = [
     "services.authored_vnext.deck_ir.strategy",
     "services.authored_vnext.generation.ai_text_zones",
     "services.authored_vnext.generation.retained_reference",
-    "services.authored_vnext.generation.sql_repository",
     "services.authored_vnext.master.ai_import",
     "services.authored_vnext.master.digests",
     "services.authored_vnext.master.preview",

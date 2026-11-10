@@ -111,15 +111,3 @@ node --test scripts/benchmarks/authored-infographic/run-benchmark.test.mjs
 These cover the fixture's shape and coverage, the request contract, the receipt
 filename's agreement with the backend's hashing, and the metric arithmetic.
 They never open a socket.
-
-## Weekly report
-
-The benchmark answers "did this library change help?". The weekly report
-answers "what is production doing?" — it joins the same receipts with the
-`authored_slide_editor_events` table:
-
-```sh
-cd servers/fastapi
-APP_DATA_DIRECTORY=<app data> ./.venv/Scripts/python.exe \
-  scripts/authored_infographic_weekly_report.py --days 7
-```

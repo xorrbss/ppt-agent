@@ -14,19 +14,15 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from utils.env_settings.workspace_maintenance import (
     get_account_deletion_interval_seconds,
-    is_authored_vnext_ooxml_storage_required,
+    is_authored_vnext_master_storage_required,
 )
 from models.sql.account_deletion_request import AccountDeletionRequest
 from models.sql.key_value import KeyValueSqlModel
 from services.account_deletion_service import (
     AccountDeletionMarker,
     AccountDeletionFenceConflict,
-    cancel_authored_vnext_exports_for_account,
     lock_account_deletion_marker,
     retire_public_artifacts_for_account,
-)
-from services.authored_vnext.generation.account_lifecycle import (
-    cancel_authored_vnext_generation_operations_for_account,
 )
 from services.authored_vnext.master.assets import quarantine_owner_master_assets
 from services.database import (
@@ -77,11 +73,8 @@ async def _apply_external_account_deletion_io(
             owner_id=str(owner_id),
             expected_generation=generation,
         )
-        # The OOXML package service, whose queued operations this used to
-        # cancel, was removed with authored generation (P3 B4c); its state
-        # files hold no deck content and nothing reads them any more.
-    elif is_authored_vnext_ooxml_storage_required():
-        raise RuntimeError("authored_vnext_ooxml_storage_unavailable")
+    elif is_authored_vnext_master_storage_required():
+        raise RuntimeError("authored_vnext_master_storage_unavailable")
 
     await revoke_account_provider_credentials(session, owner_id=owner_id)
 
@@ -204,11 +197,6 @@ async def finalize_account_deletion_claim(
         return True
 
     await snapshot_account_workspace_cleanup_targets(session, owner_id=user.id)
-    await cancel_authored_vnext_generation_operations_for_account(
-        session,
-        owner_id=user.id,
-    )
-    await cancel_authored_vnext_exports_for_account(session, owner_id=user.id)
     await retire_public_artifacts_for_account(session, owner_id=user.id)
 
     await _run_external_account_deletion_io(

@@ -21,9 +21,6 @@ from models.sql.async_task import AsyncTaskModel  # noqa: F401, E402
 from models.sql.authored_slide_checkpoint import (  # noqa: F401, E402
     AuthoredSlideCheckpoint,
 )
-from models.sql.authored_slide_editor_event import (  # noqa: F401, E402
-    AuthoredSlideEditorEvent,
-)
 from models.sql.chat_history_message import ChatHistoryMessageModel  # noqa: F401, E402
 from models.sql.image_asset import ImageAsset  # noqa: F401, E402
 from models.sql.key_value import KeyValueSqlModel  # noqa: F401, E402
@@ -70,22 +67,12 @@ from models.sql.authored_vnext_repository import (  # noqa: F401, E402
     AuthoredVNextCandidate,
     AuthoredVNextDeckRevision,
     AuthoredVNextEntityHead,
-    AuthoredVNextExportArtifactReceipt,
-    AuthoredVNextExportJob,
     AuthoredVNextMasterRevision,
     AuthoredVNextPublicationPointer,
-    AuthoredVNextQualityDecision,
     AuthoredVNextSlideRevision,
 )
 from models.sql.provider_credential_reference import (  # noqa: F401, E402
     ProviderCredentialReference,
-)
-from models.sql.authored_vnext_generation_operation import (  # noqa: F401, E402
-    AuthoredVNextGenerationOperation,
-)
-from models.sql.authored_semantic_bundle import (  # noqa: F401, E402
-    AuthoredDeckEmissionActivePointer,
-    AuthoredDeckEmissionManifestRecord,
 )
 from models.sql.provider_runtime_reservation import (  # noqa: F401, E402
     ProviderRuntimeBudget,
