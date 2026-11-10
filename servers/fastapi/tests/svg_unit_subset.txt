@@ -100,7 +100,6 @@ tests/unit/test_authored_render_policy.py
 tests/unit/test_authored_renderer_deployment_contract.py
 tests/unit/test_authored_renderer_launcher_frames.py
 tests/unit/test_authored_renderer_worker_framing.py
-tests/unit/test_authored_repair_calls_knob.py
 tests/unit/test_authored_repair_loop.py
 tests/unit/test_authored_repair_receipts.py
 tests/unit/test_authored_resume.py
