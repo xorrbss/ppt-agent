@@ -15,16 +15,11 @@ from sqlalchemy.orm import Session
 from models.authored_vnext.master.contract import DeckMasterContract
 from models.sql.user import User
 from models.authored_vnext.master.operations import (
-    CreateDeckRequest,
     CreateDraftRequest,
     MasterCasRequest,
 )
 from services.authored_vnext.integration.sql_repository import (
     AuthoredVNextSqlRepository,
-    ExportArtifactInput,
-    OperationFenceError,
-    PublicationConflictError,
-    SourceDigestMismatchError,
 )
 from services.authored_vnext.master.errors import (
     MasterNotFoundError,
@@ -33,17 +28,12 @@ from services.authored_vnext.master.errors import (
 from services.authored_vnext.master.service import AuthoredVNextMasterService
 import services.authored_vnext.generation.sql_repository as generation_sql_repository
 from services.authored_vnext.generation.sql_repository import SqlGenerationRepository
-import services.authored_vnext.integration.sql_repository as integration_sql_repository
 from tests.support.authored_vnext_master_fixture import (
-    long_title_slide_payload,
     master_contract_payload,
 )
 
 
 DIGEST_A = "sha256:" + "a" * 64
-DIGEST_B = "sha256:" + "b" * 64
-DIGEST_C = "sha256:" + "c" * 64
-DIGEST_D = "sha256:" + "d" * 64
 
 
 def _repository(
@@ -148,60 +138,6 @@ def _publish_process(
         engine.dispose()
 
 
-def _published_deck(repository: AuthoredVNextSqlRepository):
-    service = AuthoredVNextMasterService(repository)
-    draft = service.create_draft(
-        CreateDraftRequest(contract=DeckMasterContract.model_validate(master_contract_payload()))
-    )
-    master = service.publish(
-        draft.master_id,
-        MasterCasRequest(
-            expected_revision=draft.revision,
-            expected_digest=draft.digest,
-        ),
-    )
-    deck = service.create_deck(
-        CreateDeckRequest(
-            master_id=master.master_id,
-            master_revision=master.revision,
-            master_digest=master.digest,
-            slides=[long_title_slide_payload()],
-            deck_id="deck:sql-test",
-        )
-    )
-    return master, deck
-
-
-def _job(repository, master, deck, key="export-one"):
-    return repository.create_export_job(
-        deck_id=deck.deck_id,
-        deck_revision=deck.revision,
-        deck_digest=deck.digest,
-        master_revision=master.revision,
-        master_digest=master.digest,
-        spec_digest=deck.slides[0].spec_digest,
-        asset_manifest_digest=DIGEST_A,
-        font_manifest_digest=master.contract.font_manifest.digest,
-        expected_package_digest=DIGEST_B,
-        idempotency_key=key,
-        request_payload={"deckDigest": deck.digest, "format": "pptx"},
-    )
-
-
-def _artifact(master, deck, *, digest=DIGEST_C):
-    return ExportArtifactInput(
-        storage_key=f"sha256/{digest.removeprefix('sha256:')}.pptx",
-        artifact_digest=digest,
-        readback_digest=digest,
-        package_digest=DIGEST_B,
-        size_bytes=42,
-        master_digest=master.digest,
-        spec_digest=deck.slides[0].spec_digest,
-        asset_manifest_digest=DIGEST_A,
-        font_manifest_digest=master.contract.font_manifest.digest,
-    )
-
-
 def test_master_cas_is_process_safe_and_owner_scoped(tmp_path: Path) -> None:
     path = tmp_path / "cas.db"
     repository = _repository(path)
@@ -235,165 +171,6 @@ def test_master_cas_is_process_safe_and_owner_scoped(tmp_path: Path) -> None:
     assert repository.get_master(draft.master_id).revision == 2
     with pytest.raises(MasterNotFoundError):
         _repository(path, owner="owner-b").get_master(draft.master_id)
-
-
-def test_export_fence_fail_closed_and_last_known_good(tmp_path: Path) -> None:
-    repository = _repository(tmp_path / "export.db")
-    master, deck = _published_deck(repository)
-    job = _job(repository, master, deck)
-    assert _job(repository, master, deck).id == job.id
-    # A concurrent request captures the same empty publication pointer.
-    stale = _job(repository, master, deck, key="export-two")
-    claimed = repository.claim_export_job(job.id, worker_id="worker-a")
-    receipt = repository.complete_export_job(
-        job.id,
-        fence_token=claimed.fence_token,
-        artifact=_artifact(master, deck),
-    )
-    pointer, active = repository.get_active_artifact(deck.deck_id) or (None, None)
-    assert active.id == receipt.id
-    assert pointer.digest == DIGEST_C
-
-    stale_claim = repository.claim_export_job(stale.id, worker_id="worker-old")
-    repository.fail_export_job(
-        stale.id,
-        fence_token=stale_claim.fence_token,
-        failure_code="worker_timeout",
-    )
-    repository.retry_export_job(stale.id)
-    new_claim = repository.claim_export_job(stale.id, worker_id="worker-new")
-    with pytest.raises(OperationFenceError):
-        repository.complete_export_job(
-            stale.id,
-            fence_token=stale_claim.fence_token,
-            artifact=_artifact(master, deck, digest=DIGEST_D),
-        )
-    with pytest.raises(PublicationConflictError):
-        repository.complete_export_job(
-            stale.id,
-            fence_token=new_claim.fence_token,
-            artifact=_artifact(master, deck, digest=DIGEST_D),
-        )
-    assert repository.get_active_artifact(deck.deck_id)[1].id == receipt.id
-    mismatch = _job(repository, master, deck, key="export-three")
-    mismatch_claim = repository.claim_export_job(mismatch.id, worker_id="worker-mismatch")
-    bad = _artifact(master, deck, digest=DIGEST_D)
-    bad = ExportArtifactInput(**{**bad.__dict__, "readback_digest": DIGEST_A})
-    with pytest.raises(SourceDigestMismatchError):
-        repository.complete_export_job(mismatch.id, fence_token=mismatch_claim.fence_token, artifact=bad)
-    assert repository.get_active_artifact(deck.deck_id)[1].id == receipt.id
-
-    replacement = _job(repository, master, deck, key="export-four")
-    replacement_claim = repository.claim_export_job(replacement.id, worker_id="worker-replacement")
-    repository.complete_export_job(
-        replacement.id,
-        fence_token=replacement_claim.fence_token,
-        artifact=_artifact(master, deck, digest=DIGEST_D),
-    )
-    current_pointer, _ = repository.get_active_artifact(deck.deck_id)
-    rolled_back = repository.rollback_publication(
-        deck_id=deck.deck_id,
-        target_artifact_id=receipt.id,
-        expected_generation=current_pointer.generation,
-        expected_digest=current_pointer.digest,
-    )
-    assert rolled_back.digest == receipt.artifact_digest
-    with pytest.raises(PublicationConflictError):
-        repository.rollback_publication(
-            deck_id=deck.deck_id,
-            target_artifact_id=receipt.id,
-            expected_generation=current_pointer.generation,
-            expected_digest=current_pointer.digest,
-        )
-
-
-def test_export_attempt_one_survives_sqlite_lock_and_idempotent_replay(
-    tmp_path: Path,
-    monkeypatch,
-) -> None:
-    path = tmp_path / "export-lock.db"
-    repository = _repository(path, timeout=0)
-    master, deck = _published_deck(repository)
-    job = _job(repository, master, deck, key="attempt-one-lock")
-    lock_holder = sqlite3.connect(path, timeout=0, check_same_thread=False)
-    delays: list[float] = []
-
-    def release_lock(delay: float) -> None:
-        delays.append(delay)
-        lock_holder.commit()
-
-    monkeypatch.setattr(integration_sql_repository.time, "sleep", release_lock)
-    try:
-        lock_holder.execute("BEGIN IMMEDIATE")
-        claimed = repository.claim_export_job(job.id, worker_id="worker-attempt-one")
-        assert claimed.attempt_count == 1
-
-        lock_holder.execute("BEGIN IMMEDIATE")
-        receipt = repository.complete_export_job(
-            job.id,
-            fence_token=claimed.fence_token,
-            artifact=_artifact(master, deck),
-        )
-    finally:
-        lock_holder.close()
-
-    replay = _job(repository, master, deck, key="attempt-one-lock")
-    completed = repository.get_export_job(job.id)
-    evidence = repository.get_active_export_evidence(deck.deck_id)
-    assert replay.id == job.id
-    assert completed.state == "succeeded"
-    assert completed.attempt_count == 1
-    assert evidence is not None
-    assert evidence["deckId"] == deck.deck_id
-    assert evidence["deckRevision"] == deck.revision
-    assert evidence["deckDigest"] == deck.digest
-    assert evidence["sceneDigest"] == completed.spec_digest
-    assert evidence["publicationRevision"] == 1
-    assert evidence["artifactDigest"] == receipt.artifact_digest
-    assert evidence["pptxSha256"] == receipt.artifact_digest
-    assert evidence["pngSha256"] == []
-    assert evidence["attemptCount"] == 1
-    assert evidence["readBackVerified"] is True
-    assert delays == [
-        integration_sql_repository.SQLITE_LOCK_RETRY_DELAYS[0],
-        integration_sql_repository.SQLITE_LOCK_RETRY_DELAYS[0],
-    ]
-    with Session(repository.engine) as session:
-        assert session.scalar(
-            text(
-                "SELECT count(*) FROM authored_vnext_export_artifact_receipts "
-                "WHERE job_id = :job_id"
-            ),
-            {"job_id": receipt.job_id.hex},
-        ) == 1
-
-
-def test_manual_export_retry_can_reset_an_exhausted_attempt_budget(
-    tmp_path: Path,
-) -> None:
-    repository = _repository(tmp_path / "export-retry-reset.db")
-    master, deck = _published_deck(repository)
-    job = _job(repository, master, deck)
-
-    for attempt in range(job.max_attempts):
-        claimed = repository.claim_export_job(job.id, worker_id=f"worker-{attempt}")
-        repository.fail_export_job(
-            job.id,
-            fence_token=claimed.fence_token,
-            failure_code="worker_timeout",
-        )
-        job = _job(repository, master, deck)
-        if attempt + 1 < job.max_attempts:
-            job = repository.retry_export_job(job.id)
-
-    with pytest.raises(OperationFenceError):
-        repository.retry_export_job(job.id)
-
-    restarted = repository.retry_export_job(job.id, reset_attempts=True)
-    assert restarted.state == "queued"
-    assert restarted.attempt_count == 0
-    assert restarted.failure_code is None
-    assert restarted.failure_detail is None
 
 
 def test_migration_upgrade_and_downgrade(tmp_path: Path) -> None:

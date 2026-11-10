@@ -1,3 +1,0 @@
-from .router import AUTHORED_VNEXT_EXPORT_ROUTER
-
-__all__ = ["AUTHORED_VNEXT_EXPORT_ROUTER"]

@@ -47,15 +47,6 @@ def test_shared_ratio_matches_copy_formula_on_samples() -> None:
             assert relative_luminance(left) == pytest.approx(l_left)
 
 
-def test_export_service_keeps_its_error_type() -> None:
-    from services.authored_vnext.integration import export_service
-
-    assert export_service._contrast_ratio("#000000", "#FFFFFF") == pytest.approx(21.0)
-    assert export_service._relative_luminance("FFFFFF") == pytest.approx(1.0)
-    with pytest.raises(export_service.ExportServiceError):
-        export_service._relative_luminance("not-a-colour")
-
-
 def test_retained_reference_keeps_value_error() -> None:
     from services.authored_vnext.generation import retained_reference
 

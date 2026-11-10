@@ -17,8 +17,6 @@ const EXEMPT = new Map([
   // the 720 edge, so the numbers are canvas presets, not the default canvas.
   ["lib/authored-canvas.ts", "aspect-ratio preset table"],
   ["app/(presentation-generator)/upload/utils/autoCanvas.ts", "picker row geometry table"],
-  // Static fixtures for the OOXML vNext contract tests.
-  ["lib/ooxml-vnext/fixtures/demo-contract.ts", "test fixture"],
 ]);
 
 const SOURCE_ROOTS = ["app", "components", "lib", "store", "utils"];

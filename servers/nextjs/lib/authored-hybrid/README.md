@@ -1,7 +1,8 @@
 # Authored hybrid leftovers
 
 The authored Hybrid PPTX export and its Next.js Chrome renderer were removed
-with the authored generation strategy (authored removal P3, B3 and B5). What
+with the authored generation strategy (authored removal P3, B3 and B5), and
+the PPTX archive reader with the OOXML vNext export (release gate). What
 remains here is shared by surviving code:
 
 - `schema.ts`: the authored slide canvas constants (`AUTHORED_SLIDE_WIDTH_PX`,
@@ -10,8 +11,6 @@ remains here is shared by surviving code:
   stays only for the `LocalFitObservation` type `schema.ts` references.
 - `bundled-fonts-manifest.ts`: the bundled font faces the svg preview fonts
   resolve against.
-- `pptx-archive.ts`: the bounded PPTX archive reader/writer that
-  `lib/ooxml-vnext` uses.
 
 Next.js no longer drives Chrome directly. Slide rendering runs in the Python
 renderer worker under `contracts/authored-renderer`.

@@ -658,6 +658,82 @@ The full pytest suite and `npm run test:next-ci` run before each PR merges.
   suite fails only the CRLF `requestVerbosity` test. The fake-LLM harness
   (port 18761, fresh app data) generated a 5-page svg deck and exported PPTX
   and PDF.
+  **Release gate done 2026-11-11.** The owner chose to move the release
+  gate's evidence off authored code (option 1). Commit `bdbe73558` retargets
+  `servers/fastapi/scripts/public_service_malicious_corpus_evidence.py` to
+  the workspace routes (owner B's artifact download, timeline and
+  recovery-plan reads and operation cancel/retry are denied with 404 and the
+  registered code; owner A's download and cancel succeed) and
+  `scripts/public-service-crash-recovery.py` to an svg deck and the svg
+  checkpoint writer; neither imports vNext export code any more. That
+  unblocked deleting what stayed only for the decision: the unmounted vNext
+  `export` router (`api/v1/ppt/endpoints/authored_vnext/export/`); the export
+  half of `services/authored_vnext/integration` (`export_service`,
+  `artifact_store`, `export_admission_policy`, `export_payload`, the HTTP
+  `worker`) and the export-only repository parts that split out cleanly: the
+  `sql_repository_jobs` and `sql_repository_publication` mixins, the
+  composition mixin's `record_render_receipt`, the facade's
+  `get_active_export_evidence`, its retry wrappers for the deleted methods,
+  the async facade (only the export service used it), and the export-only
+  types (`ExportArtifactInput`, `PublicationConflictError`,
+  `SourceDigestMismatchError`, the request-hash and digest helpers);
+  `contracts/authored_vnext/{export,ooxml}` (and the export line in
+  `.gitattributes`); the Next.js `lib/ooxml-vnext` (including its
+  master-compiler, master-inventory and master-readback modules: nothing
+  outside the folder imported any of it, the kept master router and service
+  never call Next.js, and no script, Dockerfile, package script or
+  `compatibility/slide-master` file names it) and `/api/internal/ooxml-vnext`;
+  `lib/authored-hybrid/pptx-archive` (only those two used it); the knobs
+  `AUTHORED_VNEXT_OOXML_WORKER_TOKEN` and `AUTHORED_VNEXT_EXPORT_ENABLED`
+  (zero readers left; neither was in the settings registry, `start.js`,
+  compose, README or `proxy.ts`, so only `utils/env_settings/authored_vnext`,
+  `tests/support/internal_env_names.py` and a live-harness env line changed,
+  and `NEXT_INTERNAL_URL` left that module's `ENV_NAMES` because only the
+  worker URL read it there). Tests: deleted
+  `test_authored_vnext_ooxml_capability_binding`,
+  `test_authored_vnext_export_integration`,
+  `test_authored_vnext_export_repository_boundary`,
+  `test_authored_vnext_ooxml_contract` and the Next.js tests in the deleted
+  folders; edited by dropping only what reached deleted code:
+  `test_authored_master_style_composition_focused` (two export replay
+  tests), `test_authored_vnext_sql_repository` (three export-job tests and
+  their helpers), `test_authored_vnext_export_contract_drift` (the three
+  export-contract tests; the deck payload validation and migration tests
+  stay), `test_color_contrast_routing`, `test_env_settings_authored_vnext`,
+  the `WorkerError` cases of `test_api_error_exception_codes` and
+  `test_generation_failure_contracts`, the module lists of
+  `test_sha256_expression_migration`, the OOXML fixture exemption in
+  `tests/authored-canvas-literals.test.mjs`, and
+  `required-ci-contract.test.mjs` now pins the remaining
+  `bundled-fonts-manifest` test instead of `pptx-archive`. Kept, with the
+  reason: the master-pin SQL repository (`sql_repository`,
+  `sql_repository_composition`, `sql_repository_types`) used by the master
+  router, `generation/sql_repository`, `generation/legacy_pin` and the
+  catalog seed script; every `authored_vnext_*` table and SQL model,
+  including the export job, artifact receipt and render receipt tables
+  (dropping them is a migration; account deletion's
+  `cancel_authored_vnext_exports_for_account` still fences any existing
+  export-job rows); `AUTHORED_VNEXT_OOXML_PACKAGE_ENABLED` (read by the
+  workspace maintenance settings); and the `proxyClientMaxBodySize: "16mb"`
+  in `next.config.mjs`, whose comment cites the deleted internal worker
+  route, because lowering it changes every proxied request (a separate
+  decision). `legacy_bridge` was already deleted in B4c; nothing live
+  called the export half. Import checker `check` over the 14 deleted Python
+  files: 0 source hits, 0 test hits, 0 new unresolved; closure top 374/33
+  (unchanged), all 895/126 (from 897/128). Structural layering passes (25
+  entries, none removed); the svg subset list is 412 files. Checks: `ruff`,
+  `import server`, `verify_contract.py`, master generator `--check`,
+  `test:settings-registry`, `verify-authored-release-required-checks.mjs`;
+  `required-ci-contract.test.mjs` fails only the CRLF `uv.lock` match;
+  targeted pytest (master API, catalog and assets, account deletion, SQL
+  repository, env settings, internal env names, lifespan, svg admission,
+  workspace runner and publication tests; 466 run) passed except
+  `test_header_v2_metadata_preserves_exact_values_provenance_and_admitted_input`,
+  the header-context budget test that only runs with the private
+  `delivery-backups` artifact (the B4b known failure). Next: tsc, webpack
+  build and `check:i18n` pass, `eslint` reports only the 12 known
+  `WorkspacePartialRecovery.tsx` errors, and the Node suite (446 tests)
+  fails only the CRLF `requestVerbosity` test.
 - **B6 final.** Full pytest, `test:next-ci`, `ruff`, Next build, and the
   fake-LLM harness (`servers/fastapi/scripts/fake_llm_e2e/`) for svg
   generation, remake, checkpoint recovery and PPTX/PDF export. The harness
@@ -674,7 +750,9 @@ The full pytest suite and `npm run test:next-ci` run before each PR merges.
   authored-as-live statements; comments in `scripts/start-local-stack.ps1` and a
   banner on `docs/authored-vnext-manual-test-handoff.md` mark the deleted
   launcher. No code changed. The release-gate decision, the unmounted vNext
-  export router and the `authored_slide_editor_events` drop stay open.
+  export router and the `authored_slide_editor_events` drop stay open (the
+  first two were closed later the same day, see "Release gate done
+  2026-11-11" under B5).
 
 One PR per batch (or sub-batch) to GitHub `main`, mirrored to Bitbucket after
 merge.

@@ -1,4 +1,4 @@
-"""Master, deck, candidate, quality, and render persistence responsibilities."""
+"""Master, deck, and candidate persistence responsibilities."""
 
 from __future__ import annotations
 
@@ -20,7 +20,6 @@ from models.sql.authored_vnext_repository import (
     AuthoredVNextEntityHead,
     AuthoredVNextMasterRevision,
     AuthoredVNextPublicationPointer,
-    AuthoredVNextRenderReceipt,
     AuthoredVNextSlideRevision,
 )
 from services.authored_vnext.master.errors import (
@@ -41,9 +40,7 @@ from services.authored_vnext.master.repository import (
 from .sql_repository_types import (
     ExportJobConflictError,
     ExportableDeck,
-    _hash,
     _json,
-    _require_digest,
     validate_exportable_deck_payload,
 )
 
@@ -430,75 +427,5 @@ class AuthoredVNextCompositionRepositoryMixin:
             raise ExportJobConflictError("candidate write raced") from exc
 
 
-    def record_render_receipt(
-        self,
-        *,
-        deck_id: str,
-        deck_revision: int,
-        slide_id: str,
-        slide_revision: int,
-        renderer: str,
-        idempotency_key: str,
-        input_digest: str,
-        output_digest: str,
-        storage_key: str,
-        width_px: int,
-        height_px: int,
-    ) -> AuthoredVNextRenderReceipt:
-        _require_digest(input_digest, "render input_digest")
-        _require_digest(output_digest, "render output_digest")
-        key_hash = _hash(idempotency_key)
-        try:
-            with self._sessions.begin() as session:
-                self._active_account_generation(session)
-                existing = session.scalar(
-                    select(AuthoredVNextRenderReceipt).where(
-                        *self._scope(AuthoredVNextRenderReceipt),
-                        AuthoredVNextRenderReceipt.idempotency_key_hash == key_hash,
-                    )
-                )
-                if existing is not None:
-                    if (
-                        existing.input_digest,
-                        existing.output_digest,
-                        existing.storage_key,
-                    ) != (input_digest, output_digest, storage_key):
-                        raise ExportJobConflictError("render idempotency payload changed")
-                    return existing
-                row = AuthoredVNextRenderReceipt(
-                    owner_id=self.owner_id,
-                    owner_scope=self.owner_scope,
-                    tenant_id=self.tenant_id,
-                    deck_id=deck_id,
-                    deck_revision=deck_revision,
-                    slide_id=slide_id,
-                    slide_revision=slide_revision,
-                    renderer=renderer,
-                    idempotency_key_hash=key_hash,
-                    input_digest=input_digest,
-                    output_digest=output_digest,
-                    storage_key=storage_key,
-                    width_px=width_px,
-                    height_px=height_px,
-                )
-                session.add(row)
-                session.flush()
-                session.expunge(row)
-                return row
-        except IntegrityError as exc:
-            with self._sessions() as session:
-                existing = session.scalar(
-                    select(AuthoredVNextRenderReceipt).where(
-                        *self._scope(AuthoredVNextRenderReceipt),
-                        AuthoredVNextRenderReceipt.idempotency_key_hash == key_hash,
-                    )
-                )
-                if existing is not None and (
-                    existing.input_digest,
-                    existing.output_digest,
-                    existing.storage_key,
-                ) == (input_digest, output_digest, storage_key):
-                    return existing
-            raise ExportJobConflictError("render receipt write raced") from exc
 
 __all__ = ["AuthoredVNextCompositionRepositoryMixin"]
