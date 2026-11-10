@@ -804,15 +804,6 @@
       "description": "Single authored HTML admission gate rollout: shadow records same-input parity; enforce requires digest-bound admission receipts."
     },
     {
-      "key": "AUTHORED_HTML_NORMALIZE_ENABLED",
-      "type": "boolean",
-      "default": true,
-      "secret": false,
-      "targets": ["fastapi.runtime"],
-      "group": "authored.quality",
-      "description": "Strip a whitelist of harmless authored-HTML admission findings (break/page-break CSS declarations, a hidden attribute on bound or unbound elements) before the renderer admission gate."
-    },
-    {
       "key": "AUTHORED_HTML_NORMALIZATION",
       "type": "enum",
       "default": "legacy",
@@ -823,24 +814,6 @@
       "description": "Authored HTML normalization representation: legacy keeps source-span rewrites; tree uses pinned HTML5 parsing and canonical serialization."
     },
     {
-      "key": "AUTHORED_QUALITY_LOOP_ENABLED",
-      "type": "boolean",
-      "default": false,
-      "secret": false,
-      "targets": ["fastapi.runtime"],
-      "group": "authored.quality",
-      "description": "Render CSS-only density/emphasis candidates for authored figure slides and keep the best measured one."
-    },
-    {
-      "key": "AUTHORED_QUALITY_LOOP_CANDIDATES",
-      "type": "integer",
-      "default": 3,
-      "secret": false,
-      "targets": ["fastapi.runtime"],
-      "group": "authored.quality",
-      "description": "Candidates rendered per figure slide, including the baseline (1-4)."
-    },
-    {
       "key": "IMAGE_GENERATION_TIMEOUT_SECONDS",
       "type": "integer",
       "default": 180,
@@ -848,15 +821,6 @@
       "targets": ["fastapi.runtime"],
       "group": "authored.quality",
       "description": "Per-attempt deadline for one image provider call, in seconds. A picture that exceeds it degrades to the HTML-only figure instead of holding the deck's deadline."
-    },
-    {
-      "key": "AUTHORED_DESIGN_CRITIQUE_ENABLED",
-      "type": "boolean",
-      "default": false,
-      "secret": false,
-      "targets": ["fastapi.runtime"],
-      "group": "authored.quality",
-      "description": "Run the closed-operation design critic on DOM-flagged and figure slides only."
     },
     {
       "key": "AUTHORED_PUBLISH_FLAGGED_SLIDES",
@@ -888,15 +852,6 @@
       "description": "Run the deterministic local fit on verbatim source-reflow decks as well. Off by default: the fitter may shrink type within its 9pt floor and 10% cap, which is a product decision for verbatim source text."
     },
     {
-      "key": "AUTHORED_RETAIN_CHECKPOINT_HTML",
-      "type": "boolean",
-      "default": false,
-      "secret": false,
-      "targets": ["fastapi.runtime"],
-      "group": "authored.quality",
-      "description": "Keep each slide's pre-repair author_html and illustrated_html in authored_slide_checkpoints after the deck is published, for offline fit measurement; the default clears them to save storage."
-    },
-    {
       "key": "AUTHORED_INFOGRAPHIC_PLAN_ENABLED",
       "type": "boolean",
       "default": false,
@@ -923,15 +878,6 @@
       "targets": ["fastapi.runtime"],
       "group": "authored.quality",
       "description": "Density contract for ordinary authored decks: current keeps today's behaviour exactly; august restores the pre-2026-08-28 contract (no server-frozen envelope, no blocking DOM quality gate, no deck-wide figure plan). Source-verbatim and source-outline decks keep their envelope and gate under both."
-    },
-    {
-      "key": "AUTHORED_VISUAL_STORY_PLAN_ENABLED",
-      "type": "boolean",
-      "default": false,
-      "secret": false,
-      "targets": ["fastapi.runtime"],
-      "group": "authored.quality",
-      "description": "Freeze a story kind and silhouette per slide and brief the author with it; off leaves composition to the model as before 2026-08-22."
     },
     {
       "key": "AUTHORED_PROVIDER_RATE_PROFILE",
@@ -1260,15 +1206,6 @@
       "description": "Embed fonts by default in hybrid PPTX exports of CJK-language decks when the caller did not say. Without embedding every Hangul run is exported as a picture."
     },
     {
-      "key": "AUTHORED_STYLE_ANCHOR_ENABLED",
-      "type": "boolean",
-      "default": true,
-      "secret": false,
-      "targets": ["fastapi.runtime"],
-      "group": "authored.quality",
-      "description": "Author the first content slide alone and hand its stylesheet to every other slide as the deck's established visual language."
-    },
-    {
       "key": "AUTHORED_CONTENT_BRIEF_ENABLED",
       "type": "boolean",
       "default": true,
@@ -1276,15 +1213,6 @@
       "targets": ["fastapi.runtime"],
       "group": "authored.quality",
       "description": "Generate the optional knowledge brief before an authored outline. False skips its provider call and grounds the outline directly in the supplied source and document context."
-    },
-    {
-      "key": "AUTHORED_ILLUSTRATION_SHARE",
-      "type": "string",
-      "default": "0.25",
-      "secret": false,
-      "targets": ["fastapi.runtime"],
-      "group": "authored.quality",
-      "description": "Share of content slides (0-1) that receive one generated illustration slot, decided deterministically per deck. 0 disables illustrations and drops the slot rules from the prompt."
     },
     {
       "key": "AUTHORED_EXEMPLAR_ENABLED",
@@ -1323,33 +1251,6 @@
       "description": "Cap each outline slide's usable characters at a per-verbosity ceiling (concise/standard/text-heavy), condensing any slide over it with one bounded call before it reaches the slide-authoring stage."
     },
     {
-      "key": "AUTHORED_HEADER_DETERMINISTIC_REPAIR",
-      "type": "boolean",
-      "default": true,
-      "secret": false,
-      "targets": ["fastapi.runtime"],
-      "group": "authored.quality",
-      "description": "Repair header-contract geometry and part violations deterministically before spending a re-authoring call."
-    },
-    {
-      "key": "AUTHORED_TEXT_SCALE_RUNG_ENABLED",
-      "type": "boolean",
-      "default": true,
-      "secret": false,
-      "targets": ["fastapi.runtime"],
-      "group": "authored.quality",
-      "description": "Try the bounded deterministic text-scale rung on overflow/clipping defects before the first remake."
-    },
-    {
-      "key": "AUTHORED_REPAIR_CALLS_ENABLED",
-      "type": "boolean",
-      "default": true,
-      "secret": false,
-      "targets": ["fastapi.runtime"],
-      "group": "authored.quality",
-      "description": "Spend provider calls repairing a flagged slide: the remake-first round, the bounded patch round and the terminal remake. Off publishes the first-pass slide as it stands (flagged when the gate found a defect) and keeps only the deterministic, render-only repairs, which is the fastest and cheapest way to generate a deck."
-    },
-    {
       "key": "AUTHORED_FRAGMENTATION_GATE_ENABLED",
       "type": "boolean",
       "default": false,
@@ -1386,24 +1287,6 @@
       "description": "Fit card copy inside its card during the first render: grow into slack, then shrink that card's text to a 12px floor. Off by default: local-fit is the active fitter; the in-render path stays available behind this knob."
     },
     {
-      "key": "AUTHORED_IN_RENDER_FIT_VERIFY_SAMPLE",
-      "type": "string",
-      "default": "0.05",
-      "secret": false,
-      "targets": ["fastapi.runtime"],
-      "group": "authored.quality",
-      "description": "Fraction 0-1 of fitted slides re-rendered without the fit to verify the reconstructed HTML measures the same; 1 in the bench, 0.05 at first production enablement, 0 after two weeks at zero mismatches."
-    },
-    {
-      "key": "AUTHORED_DECK_INSTRUMENTS_ENABLED",
-      "type": "boolean",
-      "default": true,
-      "secret": false,
-      "targets": ["fastapi.runtime"],
-      "group": "authored.quality",
-      "description": "Record deck-level quality instruments (empty band, palette conformance, radius families, margin drift, small computed fonts, stretched images) in the receipt. Never a gate."
-    },
-    {
       "key": "AUTHORED_METRICS_CACHE_ENTRIES",
       "type": "integer",
       "default": 64,
@@ -1420,15 +1303,6 @@
       "targets": ["fastapi.runtime"],
       "group": "authored.throughput",
       "description": "Browser-metrics LRU byte budget in megabytes."
-    },
-    {
-      "key": "AUTHORED_WAVE_BARRIER_DISABLED",
-      "type": "boolean",
-      "default": true,
-      "secret": false,
-      "targets": ["fastapi.runtime"],
-      "group": "authored.throughput",
-      "description": "Admit the next authoring call as soon as one finishes (semaphore) instead of waiting for the whole wave."
     },
     {
       "key": "OPENAI_REASONING_EFFORT",
@@ -1538,24 +1412,6 @@
       "targets": ["fastapi.runtime"],
       "group": "authored.throughput",
       "description": "Framed renderer worker processes one per-deck lease may keep open, clamped to 1-4. Higher values render more slides of the same deck concurrently at the cost of one Chromium each; only used when AUTHORED_RENDERER_FRAMED_PROTOCOL_ENABLED is on."
-    },
-    {
-      "key": "AUTHORED_TAIL_STREAMING_ENABLED",
-      "type": "boolean",
-      "default": true,
-      "secret": false,
-      "targets": ["fastapi.runtime"],
-      "group": "authored.throughput",
-      "description": "Start each slide's illustrate/render/quality/checkpoint tail as soon as that slide's own authoring lands, instead of waiting for the whole deck to be authored first. Off restores the phase barrier."
-    },
-    {
-      "key": "AUTHORED_AUTHOR_STREAMING_ENABLED",
-      "type": "boolean",
-      "default": false,
-      "secret": false,
-      "targets": ["fastapi.runtime"],
-      "group": "authored.throughput",
-      "description": "Consume the authoring call as a stream and stop reading a runaway or already-finished response early, counting the abort as one invalid-HTML attempt."
     },
     {
       "key": "AUTHORED_PROMPT_CACHE_KEY_ENABLED",

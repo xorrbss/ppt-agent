@@ -99,7 +99,6 @@ _ASSET_BLOCK_STATES = {"failed", "quarantined", "expired", "deleted"}
 _TERMINAL_OPERATION_STATES = {"succeeded", "failed", "cancelled", "dead_letter"}
 _DESTRUCTIVE_OPERATION_KINDS = WORKSPACE_DESTRUCTIVE_OPERATION_KINDS
 _DEFAULT_DESTRUCTIVE_APPROVAL_TTL_SECONDS = 24 * 60 * 60
-AUTHORED_LOCAL_FIT_CHECKPOINT_HYDRATION_REVISION = "authored-local-fit-checkpoint-hydration/v1"
 _SAFE_ERROR_MESSAGES = {
     "asset_processing_timeout": "An attachment did not finish processing in time.",
     "workspace_asset_failed": "An attachment failed processing and must be reprocessed.",
@@ -1055,112 +1054,6 @@ async def activate_workspace_operation(
     if commit:
         await session.commit()
     return operation, False
-
-
-async def _verified_authored_local_fit_checkpoint_recovery(
-    session: AsyncSession,
-    operation: WorkspaceOperation,
-    request: WorkspaceOperationActionRequest,
-) -> AuthoredSlideCheckpoint | None:
-    """Return the one immutable render checkpoint eligible for hydration."""
-
-    if (
-        request.recovery_revision != AUTHORED_LOCAL_FIT_CHECKPOINT_HYDRATION_REVISION
-        or request.action != "retry"
-        or operation.kind not in {"template.apply", "design.apply"}
-        or operation.state not in {"failed", "dead_letter"}
-        or operation.error_code != "authored_local_fit_geometry_unresolved"
-        or not isinstance(operation.error_detail, Mapping)
-        or operation.error_detail.get("retryable") is not False
-    ):
-        return None
-    raw_job_id = operation.request_payload.get("job_id") if isinstance(operation.request_payload, Mapping) else None
-    try:
-        job_id = uuid.UUID(str(raw_job_id))
-    except (TypeError, ValueError, AttributeError):
-        return None
-    job = await session.scalar(
-        select(PresentationGenerationJob)
-        .where(PresentationGenerationJob.id == job_id)
-        .where(PresentationGenerationJob.workspace_operation_id == operation.id)
-        .where(PresentationGenerationJob.presentation_id == operation.presentation_id)
-        .with_for_update()
-    )
-    if (
-        job is None
-        or not isinstance(job.last_error, Mapping)
-        or not isinstance(job.request_payload, Mapping)
-    ):
-        return None
-    failure = job.last_error
-    slide_index = failure.get("slide_index")
-    if (
-        failure.get("code") != "authored_local_fit_geometry_unresolved"
-        or failure.get("stage") != "render"
-        or isinstance(slide_index, bool)
-        or not isinstance(slide_index, int)
-    ):
-        return None
-    checkpoint = await session.scalar(
-        select(AuthoredSlideCheckpoint)
-        .where(AuthoredSlideCheckpoint.job_id == job.id)
-        .where(AuthoredSlideCheckpoint.slide_index == slide_index)
-        .with_for_update()
-    )
-    if (
-        checkpoint is None
-        or checkpoint.author_status != "completed"
-        or checkpoint.illustrate_status not in {"completed", "skipped"}
-        or checkpoint.render_status != "failed"
-        or checkpoint.persist_status != "completed"
-        or checkpoint.failed_stage != "render"
-        or not isinstance(checkpoint.error, Mapping)
-        or checkpoint.error.get("code") != "authored_local_fit_geometry_unresolved"
-    ):
-        return None
-    try:
-        from services.authored_checkpoint_artifacts import read_valid_evidence_artifact
-        from services.authored_checkpoint_html import checkpoint_stage_html
-        from services.authored_local_fit_evidence_status import reusable_checkpoint_receipt
-        from services.authored_local_fit_geometry import presentation_local_fit_geometry as local_fit_geometry
-        from services.authored_local_fit_policy import local_fit_policy
-
-        geometry = await local_fit_geometry(session, operation.presentation_id)
-        bundle = await read_valid_evidence_artifact(
-            checkpoint, expected_width_px=geometry.viewport_width, expected_height_px=geometry.viewport_height
-        )
-    except Exception:
-        return None
-    if bundle is None or checkpoint_stage_html(checkpoint) != bundle.html:
-        return None
-    fit = bundle.metrics.get("authored_local_fit") if isinstance(bundle.metrics, Mapping) else None
-    manifest = fit.get("exportScaleManifest") if isinstance(fit, Mapping) else None
-    if not isinstance(fit, Mapping) or not isinstance(manifest, Mapping) or tuple(
-        manifest.get(key) for key in geometry._fields
-    ) != tuple(geometry):
-        return None
-    try:
-        policy = local_fit_policy(
-            author_revision=str(fit.get("authorRevision") or ""),
-            original_html_digest=str(fit.get("originalHtmlDigest") or ""),
-            export_width_pt=geometry.width_pt, export_height_pt=geometry.height_pt,
-            viewport_width=geometry.viewport_width, viewport_height=geometry.viewport_height,
-            slide_index=checkpoint.slide_index,
-            policy_revision=str(fit.get("policyRevision") or ""),
-        )
-        receipt = reusable_checkpoint_receipt(
-            bundle.metrics, original_html=checkpoint_stage_html(checkpoint) or "",
-            final_html=bundle.html, slide_index=checkpoint.slide_index,
-            policy=policy, final_png=bundle.png,
-        )
-    except Exception:
-        return None
-    if not isinstance(receipt, Mapping) or (
-        receipt.get("status"), receipt.get("changed"), receipt.get("qualityStatus"),
-        receipt.get("unresolvedReasons"),
-    ) != ("unchanged", False, "passed", []):
-        return None
-    return checkpoint
 
 
 def _capacity_wait_projection(operation: WorkspaceOperation) -> tuple[bool, int | None]:
@@ -2282,12 +2175,6 @@ async def _apply_workspace_action(
         operation,
         request,
     )
-    checkpoint_recovery = await _verified_authored_local_fit_checkpoint_recovery(
-        session,
-        operation,
-        request,
-    )
-    explicit_checkpoint_recovery = checkpoint_recovery is not None
     from services.svg_checkpoint_recovery import verified_svg_recovery_checkpoints
     from services.svg_timeout_repurchase import TimeoutRepurchaseRejected, SVG_TIMEOUT_REPURCHASE, SVG_TIMEOUT_REPURCHASE_V2, SVG_TIMEOUT_REPURCHASE_V3, _bounded_completion_shape
     from services.svg_classification_remeasurement import (
@@ -2306,7 +2193,6 @@ async def _apply_workspace_action(
     if (
         request.recovery_revision is not None
         and not explicit_capacity_recovery
-        and not explicit_checkpoint_recovery
         and svg_recovery is None
         and export_v2_authority is None
     ):
@@ -2323,7 +2209,6 @@ async def _apply_workspace_action(
             and operation.error_detail.get("retryable") is False
             and not raster_tenant_recovery
             and not explicit_capacity_recovery
-            and not explicit_checkpoint_recovery
             and svg_recovery is None
             and header_retry is None
             and not (export_v2_authority is not None
@@ -2370,7 +2255,7 @@ async def _apply_workspace_action(
         }
         if header_retry is not None:
             retry_payload["svg_header_retry"] = deepcopy(header_retry)
-        if explicit_capacity_recovery or explicit_checkpoint_recovery or svg_recovery is not None:
+        if explicit_capacity_recovery or svg_recovery is not None:
             retry_payload["recovery_revision"] = request.recovery_revision
         if partial_recovery:
             retry_payload["recovery_decision"] = request.recovery_decision.model_dump(mode="json")
@@ -2569,7 +2454,7 @@ async def _apply_workspace_action(
                             presentation=recovery_child_presentation if append_only_recovery else presentation,
                             operation=operation,
                             **({"retry_source_operation": source_operation}
-                               if svg_recovery is None and checkpoint_recovery is None
+                               if svg_recovery is None
                                and not explicit_capacity_recovery else {}),
                             partial_svg_recovery=partial_recovery,
                             partial_svg_verification=(svg_recovery.verification if partial_recovery else None),
@@ -2586,13 +2471,6 @@ async def _apply_workspace_action(
                     await bind_admission(session, operation, svg_recovery)
                 elif append_only_recovery:
                     await _bind_append_only_svg_recovery_admission(session, operation, svg_recovery)
-                if checkpoint_recovery is not None:
-                    checkpoint_recovery.render_status = "completed"
-                    checkpoint_recovery.failed_stage = None
-                    checkpoint_recovery.error = None
-                    checkpoint_recovery.failed_at = None
-                    checkpoint_recovery.updated_at = now
-                    session.add(checkpoint_recovery)
                 if svg_recovery is not None and not append_only_recovery and not partial_recovery:
                     from services.svg_checkpoint_recovery import reset_svg_recovery_checkpoints
                     reset_svg_recovery_checkpoints(session, svg_recovery,

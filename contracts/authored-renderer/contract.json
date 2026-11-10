@@ -63,13 +63,7 @@
     },
     "os_isolation_attestation": {
       "name": "AUTHORED_RENDERER_OS_ISOLATION",
-      "production_value": "nonroot-readonly-tmpfs-network-none",
-      "required_by_next_production_boundary": true
-    },
-    "next_execution_boundary": {
-      "name": "AUTHORED_RENDERER_EXECUTION_BOUNDARY",
-      "production_value": "external-worker",
-      "direct_local_chrome": false
+      "production_value": "nonroot-readonly-tmpfs-network-none"
     }
   },
   "failure_policy": {

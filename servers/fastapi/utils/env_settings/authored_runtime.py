@@ -9,9 +9,8 @@ is also a registered runtime setting (``TEMPLATE_V2_DEPLOYMENT_TIER``,
 ``CODEX_REASONING_EFFORT``, ``RASTER_ANALYSIS_PROCESS_WORKERS``) honours the
 admin-managed snapshot.
 
-Nothing here reads the environment at import time.  Call sites that resolve a
-module constant at import (``AUTHORED_SLIDE_PIPELINE_CONCURRENCY``) call the
-accessor at import; the accessor itself is inert until called.
+Nothing here reads the environment at import time.  An accessor is inert
+until called.
 
 Bool contracts, stated once: an *opt-in* flag enables only on ``1/true/yes/on``
 and is off for anything else (``is_truthy``); a *default-on* flag is disabled
@@ -30,8 +29,6 @@ from typing import Literal
 
 from utils.env_parse import FALSY_VALUES, TRUTHY_VALUES, is_truthy
 from utils.get_env import (
-    env_bool,
-    env_float,
     env_int,
     get_codex_reasoning_effort_env,
     get_setting_env,
@@ -41,20 +38,13 @@ from utils.runtime_settings import RuntimeSettings
 
 ENV_NAMES: tuple[str, ...] = (
     # Test hooks that run in production code (see get_authored_test_failure_hooks).
-    "AUTHORED_TEST_FAILURES_ENABLED",
-    "AUTHORED_TEST_FAILURE_SLIDE",
-    "AUTHORED_TEST_FAILURE_STAGE",
     # Authored storage and evidence retention.
     "AUTHORED_CHECKPOINT_DIRECTORY",
     "AUTHORED_QUALITY_RECEIPT_DIRECTORY",
-    "AUTHORED_EVIDENCE_RETENTION_TTL_SECONDS",
-    "AUTHORED_EVIDENCE_RETENTION_BYTE_BUDGET",
     "AUTHORED_DOM_METRICS_CACHE_BYTE_BUDGET",
     # Authored pipeline behaviour.
-    "AUTHORED_SLIDE_PIPELINE_CONCURRENCY",
     "AUTHORED_QUALITY_RECEIPT_V3_PROFILE",
     "AUTHORED_POWERPOINT_QA_INTERACTIVE_OBSERVATION",
-    "AUTHORED_SEMANTIC_DUAL_OUTPUT_MODE",
     "AUTHORED_REASONING_EFFORT",
     "CODEX_REASONING_EFFORT",
     "AUTHORED_EXACT_RECONSTRUCTION_ENABLED",
@@ -71,14 +61,6 @@ ENV_NAMES: tuple[str, ...] = (
     "AUTHORED_RENDERER_REQUIRE_EXTERNAL",
     "TEMPLATE_V2_DEPLOYMENT_TIER",
     # SlideSpec executor and rollout policy.
-    "SLIDESPEC_REPAIR_PROPOSAL_LLM_ENABLED",
-    "SLIDESPEC_SLIDE_CONCURRENCY",
-    "SLIDESPEC_REPAIR_SHADOW",
-    "SLIDESPEC_REPAIR_CANARY",
-    "SLIDESPEC_REPAIR_APPLY",
-    "SLIDESPEC_REPAIR_ALL_SLIDES",
-    "SLIDESPEC_KILL_SWITCH",
-    "SLIDESPEC_REPAIR_ROLLOUT_SALT",
     # Raster redesign pipeline.
     "RASTER_STRICT_PAGE_ERRORS",
     "RASTER_ANALYSIS_PROCESS_WORKERS",
@@ -101,12 +83,6 @@ RENDERER_FLAG_NAMES: frozenset[str] = frozenset(
     }
 )
 
-DEFAULT_EVIDENCE_RETENTION_TTL_SECONDS = 86400.0
-DEFAULT_EVIDENCE_RETENTION_BYTE_BUDGET = 512 * 1024 * 1024
-DEFAULT_SLIDE_PIPELINE_CONCURRENCY = 8
-DEFAULT_SLIDESPEC_SLIDE_CONCURRENCY = 3
-MAX_SLIDESPEC_SLIDE_CONCURRENCY = 8
-DEFAULT_SLIDESPEC_ROLLOUT_SALT = "v1"
 DEFAULT_ARCHIVE_SIGNING_KEY_ID = "compatibility-v1"
 
 QualityReceiptV3Profile = Literal["public", "local-development", "unit-test"]
@@ -131,47 +107,6 @@ def _set_or_default_flag(
 # --------------------------------------------------------------------------
 
 
-@dataclass(frozen=True, slots=True)
-class AuthoredTestFailureHooks:
-    """Failure-injection hooks for the authored checkpoint pipeline.
-
-    ``slide`` is the 1-based slide to fail (``0`` when unset, so nothing
-    matches) and ``None`` when the configured text is not an integer, which
-    the caller treats as "inject nothing".
-    """
-
-    enabled: bool
-    slide: int | None
-    stage: str
-
-
-def get_authored_test_failure_hooks(
-    settings: RuntimeSettings | None = None,
-) -> AuthoredTestFailureHooks:
-    """Read the authored failure-injection test hooks.
-
-    These are TEST HOOKS THAT RUN IN PRODUCTION CODE.  ``should_inject_failure``
-    in ``services/authored_checkpoint_state.py`` consults them on every stage
-    of every slide, and only the caller's tier gate (``ENVIRONMENT`` in
-    ``development``/``test``, or an active ``PYTEST_CURRENT_TEST``) stops them
-    from firing on a production deployment.  They exist so the resumable
-    checkpoint machinery can be exercised end-to-end; never set them outside a
-    non-production tier.  Enablement is strict opt-in (``1/true/yes/on``).
-    """
-    raw_slide = get_setting_env("AUTHORED_TEST_FAILURE_SLIDE", settings)
-    try:
-        slide: int | None = int((raw_slide or "0").strip() or "0")
-    except ValueError:
-        slide = None
-    return AuthoredTestFailureHooks(
-        enabled=is_truthy(get_setting_env("AUTHORED_TEST_FAILURES_ENABLED", settings)),
-        slide=slide,
-        stage=(get_setting_env("AUTHORED_TEST_FAILURE_STAGE", settings) or "")
-        .strip()
-        .lower(),
-    )
-
-
 # --------------------------------------------------------------------------
 # Authored storage, retention and pipeline knobs
 # --------------------------------------------------------------------------
@@ -191,34 +126,6 @@ def get_authored_quality_receipt_directory(
     return _text("AUTHORED_QUALITY_RECEIPT_DIRECTORY", settings)
 
 
-@dataclass(frozen=True, slots=True)
-class AuthoredEvidenceRetentionSettings:
-    ttl_seconds: float
-    byte_budget: int
-
-
-def get_authored_evidence_retention_settings(
-    settings: RuntimeSettings | None = None,
-) -> AuthoredEvidenceRetentionSettings:
-    """Evidence-ledger retention: negatives clamp to zero, malformed text defaults."""
-    return AuthoredEvidenceRetentionSettings(
-        ttl_seconds=env_float(
-            "AUTHORED_EVIDENCE_RETENTION_TTL_SECONDS",
-            DEFAULT_EVIDENCE_RETENTION_TTL_SECONDS,
-            minimum=0.0,
-            on_invalid="clamp",
-            settings=settings,
-        ),
-        byte_budget=env_int(
-            "AUTHORED_EVIDENCE_RETENTION_BYTE_BUDGET",
-            DEFAULT_EVIDENCE_RETENTION_BYTE_BUDGET,
-            minimum=0,
-            on_invalid="clamp",
-            settings=settings,
-        ),
-    )
-
-
 def get_authored_dom_metrics_cache_byte_budget(
     settings: RuntimeSettings | None = None,
 ) -> int | None:
@@ -233,19 +140,6 @@ def get_authored_dom_metrics_cache_byte_budget(
         None,
         minimum=0,
         on_invalid="raise",
-        settings=settings,
-    )
-
-
-def get_authored_slide_pipeline_concurrency(
-    settings: RuntimeSettings | None = None,
-) -> int:
-    """Per-deck slide worker count; ``max(1, n)`` semantics, malformed -> 8."""
-    return env_int(
-        "AUTHORED_SLIDE_PIPELINE_CONCURRENCY",
-        DEFAULT_SLIDE_PIPELINE_CONCURRENCY,
-        minimum=1,
-        on_invalid="clamp",
         settings=settings,
     )
 
@@ -271,14 +165,6 @@ def is_authored_powerpoint_qa_interactive_observation_enabled(
     return is_truthy(
         get_setting_env("AUTHORED_POWERPOINT_QA_INTERACTIVE_OBSERVATION", settings)
     )
-
-
-def get_authored_semantic_dual_output_mode(
-    settings: RuntimeSettings | None = None,
-) -> str:
-    """Raw (stripped, lower-cased) rollout mode; the caller validates the set."""
-    value = get_setting_env("AUTHORED_SEMANTIC_DUAL_OUTPUT_MODE", settings)
-    return (value if value is not None else "shadow").strip().lower()
 
 
 def get_authored_reasoning_effort(
@@ -371,70 +257,6 @@ def is_authored_renderer_worker_process(
 # --------------------------------------------------------------------------
 # SlideSpec executor and rollout policy
 # --------------------------------------------------------------------------
-
-
-def is_slidespec_repair_proposal_llm_enabled(
-    settings: RuntimeSettings | None = None,
-) -> bool:
-    """Default-on; only ``0/false/no/off`` stops LLM repair-plan proposals."""
-    return env_bool("SLIDESPEC_REPAIR_PROPOSAL_LLM_ENABLED", True, settings=settings)
-
-
-def get_slidespec_slide_concurrency(
-    settings: RuntimeSettings | None = None,
-) -> int:
-    """Bounded 1..8 slide scheduler width; malformed text -> 3."""
-    return env_int(
-        "SLIDESPEC_SLIDE_CONCURRENCY",
-        DEFAULT_SLIDESPEC_SLIDE_CONCURRENCY,
-        minimum=1,
-        maximum=MAX_SLIDESPEC_SLIDE_CONCURRENCY,
-        on_invalid="clamp",
-        settings=settings,
-    )
-
-
-@dataclass(frozen=True, slots=True)
-class SlidespecRolloutSettings:
-    repair_shadow: bool
-    repair_apply: bool
-    repair_all_slides: bool
-    kill_switch: bool
-    canary_basis_points: int
-    rollout_salt: str
-
-
-def _slidespec_canary_basis_points(settings: RuntimeSettings | None) -> int:
-    """Explicit percent (0..100, fractional allowed); a truthy word is 100%.
-
-    Malformed text is a closed canary (``0``) rather than a default, exactly
-    as the rollout policy has always parsed it.
-    """
-    raw_value = get_setting_env("SLIDESPEC_REPAIR_CANARY", settings)
-    raw = (raw_value if raw_value is not None else "100").strip().lower()
-    if raw in TRUTHY_VALUES:
-        return 10_000
-    try:
-        return max(0, min(10_000, round(float(raw) * 100)))
-    except (TypeError, ValueError):
-        return 0
-
-
-def get_slidespec_rollout_settings(
-    settings: RuntimeSettings | None = None,
-) -> SlidespecRolloutSettings:
-    """The documented ``SLIDESPEC_*`` review rollout knobs, semantics unchanged."""
-    salt = get_setting_env("SLIDESPEC_REPAIR_ROLLOUT_SALT", settings)
-    return SlidespecRolloutSettings(
-        repair_shadow=_set_or_default_flag("SLIDESPEC_REPAIR_SHADOW", False, settings),
-        repair_apply=_set_or_default_flag("SLIDESPEC_REPAIR_APPLY", True, settings),
-        repair_all_slides=_set_or_default_flag(
-            "SLIDESPEC_REPAIR_ALL_SLIDES", True, settings
-        ),
-        kill_switch=_set_or_default_flag("SLIDESPEC_KILL_SWITCH", False, settings),
-        canary_basis_points=_slidespec_canary_basis_points(settings),
-        rollout_salt=DEFAULT_SLIDESPEC_ROLLOUT_SALT if salt is None else salt,
-    )
 
 
 # --------------------------------------------------------------------------

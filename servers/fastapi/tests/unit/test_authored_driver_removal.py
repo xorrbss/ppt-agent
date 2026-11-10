@@ -21,8 +21,7 @@ from sqlmodel import SQLModel
 import services.database  # noqa: F401 - registers the full model graph
 import test_workspace_operation_runner as runner_test
 from api.v1.ppt.endpoints import presentation_crud, presentation_versions
-from api.v1.ppt.endpoints import authored_editor_events, outlines, presentation_page_operations
-from models.authored_slide_editor_event import AuthoredSlideEditorEventRequest
+from api.v1.ppt.endpoints import outlines, presentation_page_operations
 from models.presentation_profiles import (
     PRESENTATION_DRIVER_REGISTRY,
     PresentationProfileError,
@@ -233,13 +232,6 @@ def test_content_routes_answer_422_for_a_pre_existing_authored_deck(tmp_path: Pa
                     presentation_versions.list_presentation_versions(presentation_id, session),
                     presentation_page_operations.list_authored_page_remake_preview_history(
                         presentation_id, session
-                    ),
-                    authored_editor_events.record_editor_event(
-                        presentation_id,
-                        AuthoredSlideEditorEventRequest(
-                            event_type="export_completed", event_key="refused-event"
-                        ),
-                        session,
                     ),
                     outlines.stream_outlines(presentation_id, None, session),
                 )

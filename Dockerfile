@@ -137,15 +137,10 @@ FROM node:20-bookworm-slim AS nextjs-builder
 WORKDIR /app/servers/nextjs
 
 # This is intentionally a build argument: NEXT_PUBLIC_* values are embedded in
-# the standalone Next bundle. SlideSpec is on by default; deployment profiles
-# can explicitly set the values to false or use the backend kill switch.
+# the standalone Next bundle.
 ARG NEXT_PUBLIC_CHAT_FIRST_WORKBENCH_ENABLED=false
-ARG NEXT_PUBLIC_SLIDESPEC_REPAIR_CANARY_UI=true
-ARG NEXT_PUBLIC_SLIDESPEC_REPAIR_ALL_SLIDES=true
 ENV NEXT_TELEMETRY_DISABLED=1 \
-    NEXT_PUBLIC_CHAT_FIRST_WORKBENCH_ENABLED=${NEXT_PUBLIC_CHAT_FIRST_WORKBENCH_ENABLED} \
-    NEXT_PUBLIC_SLIDESPEC_REPAIR_CANARY_UI=${NEXT_PUBLIC_SLIDESPEC_REPAIR_CANARY_UI} \
-    NEXT_PUBLIC_SLIDESPEC_REPAIR_ALL_SLIDES=${NEXT_PUBLIC_SLIDESPEC_REPAIR_ALL_SLIDES}
+    NEXT_PUBLIC_CHAT_FIRST_WORKBENCH_ENABLED=${NEXT_PUBLIC_CHAT_FIRST_WORKBENCH_ENABLED}
 
 COPY servers/nextjs/package.json servers/nextjs/package-lock.json ./
 RUN --mount=type=cache,target=/root/.npm \

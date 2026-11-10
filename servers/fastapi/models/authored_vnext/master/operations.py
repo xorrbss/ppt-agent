@@ -63,14 +63,6 @@ class LegacyMasterApplyPin(StrictCamelModel):
     digest: Digest
 
 
-class ApplyMasterToPresentationRequest(StrictCamelModel):
-    master_pin: LegacyMasterApplyPin
-    expected_presentation_revision: int = Field(ge=1)
-    expected_deck_revision: int = Field(ge=1)
-    expected_deck_digest: Digest
-    idempotency_key: str = Field(min_length=8, max_length=256)
-
-
 class StatusResponse(StrictCamelModel):
     enabled: bool
     contract_version: Literal["deckmaster-contract/v1"]
@@ -172,12 +164,3 @@ class RegenerateResponse(StrictCamelModel):
     candidate_digest: Digest
     validation: ValidationSummary
     deck: DeckSnapshot
-
-
-class ApplyMasterToPresentationResponse(StrictCamelModel):
-    presentation_id: str
-    presentation_revision: int = Field(ge=1)
-    deck_id: DeckId
-    deck_revision: int = Field(ge=1)
-    deck_digest: Digest
-    master: LegacyMasterApplyPin

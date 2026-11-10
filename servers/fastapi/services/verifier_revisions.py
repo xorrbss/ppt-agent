@@ -860,6 +860,13 @@ PARTIAL_RECOVERY_CODE_LEDGER = VerifierRevisionLedger(
         # generation_core.authoring.reference_images, which defined them all along
         # (author_slide_images only re-exported them). No behaviour or output changed.
         "1544ef57806af41b62768145c40e3327a4c03276a5b706590a985632bf88a806": "svg-partial-recovery-code/1",
+        # 2026-11-11 B5: authored removal P3 B5 deleted the authored local-fit
+        # checkpoint hydration retry from services/workspace_service.py (it
+        # admitted only failed authored template/design operations with
+        # authored_local_fit_geometry_unresolved, which nothing produces any
+        # more). The svg recovery paths are unchanged; no behaviour or output
+        # changed.
+        "d2377e5b2f16d165638e53656da0b31daea0852e33194e4b7e5d5f6fda743b4a": "svg-partial-recovery-code/1",
     }),
 )
 

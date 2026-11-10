@@ -102,28 +102,11 @@ def get_authored_html_normalization(settings: RuntimeSettings | None = None) -> 
     return mode if mode in {"legacy", "tree"} else "legacy"
 
 
-def is_authored_style_anchor_enabled(settings: RuntimeSettings | None = None) -> bool:
-    """Author one anchor slide first and hand its stylesheet to the rest."""
-    return _bool_setting("AUTHORED_STYLE_ANCHOR_ENABLED", True, settings)
-
-
 def is_authored_content_brief_enabled(
     settings: RuntimeSettings | None = None,
 ) -> bool:
     """Generate the optional knowledge brief before an authored outline."""
     return _bool_setting("AUTHORED_CONTENT_BRIEF_ENABLED", True, settings)
-
-
-def get_authored_illustration_share(settings: RuntimeSettings | None = None) -> float:
-    """Share (0..1) of content slides that get one illustration slot; 0 disables."""
-    raw = (get_setting_env("AUTHORED_ILLUSTRATION_SHARE", settings) or "").strip()
-    if not raw:
-        return 0.25
-    try:
-        value = float(raw)
-    except ValueError:
-        return 0.25
-    return max(0.0, min(1.0, value))
 
 
 def is_authored_exemplar_enabled(settings: RuntimeSettings | None = None) -> bool:
@@ -148,13 +131,6 @@ def is_outline_density_ceiling_enabled(settings: RuntimeSettings | None = None) 
     return _bool_setting("OUTLINE_DENSITY_CEILING_ENABLED", False, settings)
 
 
-def is_authored_header_deterministic_repair_enabled(
-    settings: RuntimeSettings | None = None,
-) -> bool:
-    """Repair header geometry/part violations before spending a re-author call."""
-    return _bool_setting("AUTHORED_HEADER_DETERMINISTIC_REPAIR", True, settings)
-
-
 def is_authored_local_fit_source_reflow_enabled(
     settings: RuntimeSettings | None = None,
 ) -> bool:
@@ -166,20 +142,6 @@ def is_authored_local_fit_source_reflow_enabled(
     accessor, so every gate in one attempt agrees about one deck.
     """
     return _bool_setting("AUTHORED_LOCAL_FIT_SOURCE_REFLOW", False, settings)
-
-
-def is_authored_text_scale_rung_enabled(
-    settings: RuntimeSettings | None = None,
-) -> bool:
-    """Try the deterministic text-scale rung before the first remake."""
-    return _bool_setting("AUTHORED_TEXT_SCALE_RUNG_ENABLED", True, settings)
-
-
-def is_authored_repair_calls_enabled(
-    settings: RuntimeSettings | None = None,
-) -> bool:
-    """Spend provider calls repairing a flagged slide (remake, patch, terminal remake)."""
-    return _bool_setting("AUTHORED_REPAIR_CALLS_ENABLED", True, settings)
 
 
 def is_authored_fragmentation_gate_enabled(
@@ -210,33 +172,6 @@ def is_authored_in_render_fit_enabled(settings: RuntimeSettings | None = None) -
     return _bool_setting("AUTHORED_IN_RENDER_FIT_ENABLED", False, settings)
 
 
-def get_authored_in_render_fit_verify_sample(
-    settings: RuntimeSettings | None = None,
-) -> float:
-    """Fraction (0..1) of fitted slides re-rendered without the fit to verify.
-
-    The default is the design's first-enablement sample, not zero: whenever the
-    fit is enabled, the layout-equivalence claim is watched on real
-    decks until ``fit_reconstruction_mismatches`` has stayed at zero across
-    200+ fitted slides (design section 8).
-    """
-    raw = (get_setting_env("AUTHORED_IN_RENDER_FIT_VERIFY_SAMPLE", settings) or "").strip()
-    if not raw:
-        return _VERIFY_SAMPLE_DEFAULT
-    try:
-        value = float(raw)
-    except ValueError:
-        return _VERIFY_SAMPLE_DEFAULT
-    return max(0.0, min(1.0, value))
-
-
-def is_authored_deck_instruments_enabled(
-    settings: RuntimeSettings | None = None,
-) -> bool:
-    """Record deck-level quality instruments in the receipt."""
-    return _bool_setting("AUTHORED_DECK_INSTRUMENTS_ENABLED", True, settings)
-
-
 def get_authored_metrics_cache_entries(settings: RuntimeSettings | None = None) -> int:
     """Browser-metrics LRU entries per process."""
     return _clamped_int("AUTHORED_METRICS_CACHE_ENTRIES", 64, 8, 1024, settings)
@@ -245,11 +180,6 @@ def get_authored_metrics_cache_entries(settings: RuntimeSettings | None = None) 
 def get_authored_metrics_cache_mb(settings: RuntimeSettings | None = None) -> int:
     """Browser-metrics LRU byte budget in megabytes."""
     return _clamped_int("AUTHORED_METRICS_CACHE_MB", 96, 16, 2048, settings)
-
-
-def is_authored_wave_barrier_disabled(settings: RuntimeSettings | None = None) -> bool:
-    """Admit the next authoring call as soon as one finishes."""
-    return _bool_setting("AUTHORED_WAVE_BARRIER_DISABLED", True, settings)
 
 
 def get_openai_reasoning_effort_env(settings: RuntimeSettings | None = None) -> str | None:
@@ -334,18 +264,6 @@ def get_authored_renderer_lease_pool_size(settings: RuntimeSettings | None = Non
     return _clamped_int("AUTHORED_RENDERER_LEASE_POOL_SIZE", 2, 1, 4, settings)
 
 
-def is_authored_tail_streaming_enabled(settings: RuntimeSettings | None = None) -> bool:
-    """Start a slide's illustrate/render/quality tail as its authoring lands."""
-    return _bool_setting("AUTHORED_TAIL_STREAMING_ENABLED", True, settings)
-
-
-def is_authored_author_streaming_enabled(
-    settings: RuntimeSettings | None = None,
-) -> bool:
-    """Read the authoring call as a stream and abort a runaway response early."""
-    return _bool_setting("AUTHORED_AUTHOR_STREAMING_ENABLED", False, settings)
-
-
 def is_authored_prompt_system_hoist_enabled(
     settings: RuntimeSettings | None = None,
 ) -> bool:
@@ -418,8 +336,6 @@ __all__ = [
     "get_authored_author_prompt_model",
     "get_authored_author_prompt_profile",
     "get_authored_composition_envelope_profile",
-    "get_authored_illustration_share",
-    "get_authored_in_render_fit_verify_sample",
     "get_authored_metrics_cache_entries",
     "get_authored_metrics_cache_mb",
     "get_authored_renderer_lease_idle_seconds",
@@ -432,16 +348,12 @@ __all__ = [
     "get_outline_density_floor_chars",
     "get_authored_html_normalization",
     "get_workspace_poll_idle_ceiling_seconds",
-    "is_authored_author_streaming_enabled",
     "is_authored_checkpoint_batching_enabled",
     "is_authored_checkpoint_html_dedupe_enabled",
     "is_authored_content_brief_enabled",
-    "is_authored_deck_instruments_enabled",
     "is_authored_local_stage_async_enabled",
     "is_authored_exemplar_enabled",
     "is_authored_fragmentation_gate_enabled",
-    "is_authored_repair_calls_enabled",
-    "is_authored_header_deterministic_repair_enabled",
     "is_authored_in_render_fit_enabled",
     "is_authored_renderer_framed_protocol_enabled",
     "is_authored_renderer_lease_enabled",
@@ -450,11 +362,7 @@ __all__ = [
     "is_authored_prompt_cache_key_enabled",
     "is_authored_prompt_cache_warmup_enabled",
     "is_authored_prompt_system_hoist_enabled",
-    "is_authored_style_anchor_enabled",
-    "is_authored_tail_streaming_enabled",
-    "is_authored_text_scale_rung_enabled",
     "is_authored_vision_advisory_enabled",
-    "is_authored_wave_barrier_disabled",
     "is_export_font_embedding_default_cjk_enabled",
     "is_outline_density_ceiling_enabled",
 ]

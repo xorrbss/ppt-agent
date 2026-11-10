@@ -1003,8 +1003,8 @@ test("developer documentation matches the executable lint and test workflow", ()
 // workflow that never ran for this fork. What still runs them is the shared
 // Next.js Node suite on Bitbucket, which discovers every *.test.mjs under lib/
 // except the dedicated end-to-end flows. The Hybrid export itself was removed
-// with the authored strategy; the renderer isolation and the PPTX archive
-// reader it shared with the renderer contract and OOXML vNext remain.
+// with the authored strategy and the Next.js Chrome renderer with B5; the PPTX
+// archive reader that OOXML vNext uses remains.
 test("the Bitbucket Node suite discovers the authored-hybrid export contracts", () => {
   const nodeRunner = read("servers/nextjs/scripts/run-ci-node-tests.mjs");
   const exclusions = nodeRunner.slice(
@@ -1014,7 +1014,7 @@ test("the Bitbucket Node suite discovers the authored-hybrid export contracts", 
 
   assert.match(nodeRunner, /const ROOTS = \[[^\]]*"lib"[^\]]*\]/u);
   assert.doesNotMatch(exclusions, /authored-hybrid/u);
-  for (const contract of ["pptx-archive", "renderer-isolation", "security"]) {
+  for (const contract of ["pptx-archive"]) {
     const relativePath = `servers/nextjs/lib/authored-hybrid/${contract}.test.mjs`;
     assert.ok(read(relativePath).length > 0, `${relativePath} must exist`);
     assert.doesNotMatch(

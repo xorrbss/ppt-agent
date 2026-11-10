@@ -74,7 +74,6 @@ _MIGRATED_MODULES = [
     "services.authored_quality_ocr",
     "services.authored_quality_receipt_v2",
     "services.authored_rollout_profile",
-    "services.authored_slide_editor_event_service",
     "services.authored_title_recovery_contract",
     "services.authored_vnext.body_grammar",
     "models.authored_vnext.capability_registry",

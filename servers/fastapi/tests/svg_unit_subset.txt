@@ -8,7 +8,6 @@ tests/unit/test_author_slide_brief.py
 tests/unit/test_author_slide_output_token_limit.py
 tests/unit/test_author_slide_svg_asset_offer.py
 tests/unit/test_authored_admission.py
-tests/unit/test_authored_admission_integration.py
 tests/unit/test_authored_batch_policy.py
 tests/unit/test_authored_batch_remake_preview.py
 tests/unit/test_authored_browser_metrics.py
@@ -22,7 +21,6 @@ tests/unit/test_authored_composition_policy.py
 tests/unit/test_authored_content_brief_flag.py
 tests/unit/test_authored_css_strip.py
 tests/unit/test_authored_deck_receipt_extras.py
-tests/unit/test_authored_deck_richness.py
 tests/unit/test_authored_dom_category_contract.py
 tests/unit/test_authored_dom_fit_magnitude.py
 tests/unit/test_authored_dom_quality.py
@@ -70,7 +68,6 @@ tests/unit/test_authored_infographic_fit_sweep.py
 tests/unit/test_authored_infographic_geometry.py
 tests/unit/test_authored_infographic_library.py
 tests/unit/test_authored_infographic_plan.py
-tests/unit/test_authored_infographic_weekly_report.py
 tests/unit/test_authored_live_benchmark.py
 tests/unit/test_authored_local_fit_applies.py
 tests/unit/test_authored_local_fit_image_text.py
@@ -107,7 +104,6 @@ tests/unit/test_authored_repair_calls_knob.py
 tests/unit/test_authored_repair_loop.py
 tests/unit/test_authored_repair_receipts.py
 tests/unit/test_authored_resume.py
-tests/unit/test_authored_retain_checkpoint_html.py
 tests/unit/test_authored_review_scope_contract.py
 tests/unit/test_authored_rollout_profile.py
 tests/unit/test_authored_run_contact_sheet.py
@@ -131,7 +127,6 @@ tests/unit/test_authored_vnext_ai_text_zones_focused.py
 tests/unit/test_authored_vnext_asset_integrity.py
 tests/unit/test_authored_vnext_capability_registry.py
 tests/unit/test_authored_vnext_contract.py
-tests/unit/test_authored_vnext_deck_matrix_census.py
 tests/unit/test_authored_vnext_deck_models.py
 tests/unit/test_authored_vnext_export_contract_drift.py
 tests/unit/test_authored_vnext_export_repository_boundary.py
@@ -143,13 +138,11 @@ tests/unit/test_authored_vnext_ooxml_capability_binding.py
 tests/unit/test_authored_vnext_ooxml_contract.py
 tests/unit/test_authored_vnext_scene_design_quality.py
 tests/unit/test_authored_vnext_sql_repository.py
-tests/unit/test_authored_vnext_visual_acceptance_contract.py
 tests/unit/test_authored_vqa_reachability.py
 tests/unit/test_canvas_admission_baseline.py
 tests/unit/test_canvas_bench.py
 tests/unit/test_canvas_bench_speed.py
 tests/unit/test_canvas_bench_watch.py
-tests/unit/test_canvas_neutral_checkpoint_reuse.py
 tests/unit/test_canvas_neutral_paint_order_repair.py
 tests/unit/test_canvas_registry.py
 tests/unit/test_canvas_stage_gate.py
@@ -162,7 +155,6 @@ tests/unit/test_document_canvas_contain.py
 tests/unit/test_document_canvas_header_clients.py
 tests/unit/test_document_canvas_svg_export.py
 tests/unit/test_drop_authored_only_tables_migration.py
-tests/unit/test_env_settings_authored_release.py
 tests/unit/test_env_settings_authored_runtime.py
 tests/unit/test_env_settings_authored_vnext.py
 tests/unit/test_export_canvas_sizes.py

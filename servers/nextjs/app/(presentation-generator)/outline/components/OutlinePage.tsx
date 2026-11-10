@@ -5,7 +5,7 @@ import React, { useState, useEffect, useMemo, useRef, useCallback } from "react"
 import { useRouter } from "next/navigation";
 import { RootState } from "@/store/store";
 import { useDispatch, useSelector } from "react-redux";
-import { setPresentationData, setPresentationId, setOutlines } from "@/store/slices/presentationGeneration";
+import { setPresentationId, setOutlines } from "@/store/slices/presentationGeneration";
 import { setPptGenUploadState } from "@/store/slices/presentationGenUpload";
 import { Button } from "@/components/ui/button";
 import { GenerationPreparation } from "../../generation-workspace/GenerationPreparation";
@@ -24,12 +24,11 @@ import {
 } from "../hooks/durableGenerationTask";
 import MasterSelectionSummary from "./MasterSelectionSummary";
 import ResumeGenerationBanner from "./ResumeGenerationBanner";
-import { existingMasterApplyCas, record } from "./masterApplyCas";
+import { recordOrNull as record } from "@/lib/guards";
 import MasterDesignerDialog from "../../authored-vnext/master-setup/MasterDesignerDialog";
 import { isAuthoredVnextMasterEnabled } from "@/lib/authored-vnext/master/contracts";
 import type { MasterRevisionEnvelope } from "@/lib/authored-vnext/master/contracts";
 import {
-  generationMasterPin,
   masterSelectionFromPublished,
 } from "@/lib/authored-vnext/master/selection-storage";
 import { AuthoredVnextMasterClient } from "@/lib/authored-vnext/master/client";
@@ -197,33 +196,9 @@ const OutlinePage: React.FC<{
       ) {
         clearDurableGenerationTask(staged.idempotencyKey);
       }
-      if (initialMasterSettingsOpen) {
-        const current = await DashboardApi.getPresentation(resolvedPresentationId);
-        const cas = existingMasterApplyCas(current);
-        if (!cas) {
-          throw new Error(
-            "현재 문서의 마스터 정보를 확인할 수 없어 적용하지 않았습니다."
-          );
-        }
-        try {
-          await masterClient.applyToPresentation(resolvedPresentationId, {
-            masterPin: generationMasterPin(selection),
-            expectedPresentationRevision: cas.presentationRevision,
-            expectedDeckRevision: cas.deckRevision,
-            expectedDeckDigest: cas.deckDigest,
-            idempotencyKey: `master-apply:${resolvedPresentationId}:${cas.presentationRevision}:${selection.digest}`,
-          });
-        } catch {
-          throw new Error(
-            "마스터를 적용하지 못했습니다. 기존 프레젠테이션 버전은 그대로 유지되었습니다."
-          );
-        }
-        const refreshed = await DashboardApi.getPresentation(resolvedPresentationId);
-        if (refreshed) dispatch(setPresentationData(refreshed));
-      }
       dispatch(setPptGenUploadState({ companyStandard: selection }));
     },
-    [dispatch, initialMasterSettingsOpen, resolvedPresentationId]
+    [dispatch, resolvedPresentationId]
   );
   const slideProgress = useMemo(() => {
     const progress = loadingState.progress;

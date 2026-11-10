@@ -74,15 +74,6 @@ def verify() -> list[dict[str, Any]]:
         for name in slide_capture_files
     )
     renderer_sources = set(source_files(REPOSITORY_ROOT / "servers" / "fastapi"))
-    next_isolation_source = (
-        REPOSITORY_ROOT
-        / "servers"
-        / "nextjs"
-        / "lib"
-        / "authored-hybrid"
-        / "renderer-isolation.ts"
-    ).read_text(encoding="utf-8")
-    attestation_source = (ROOT / "attestation.py").read_text(encoding="utf-8")
     worker = compose["services"][contract["worker"]["service"]]
     checks: list[dict[str, Any]] = []
 
@@ -113,18 +104,6 @@ def verify() -> list[dict[str, Any]]:
     check("runtime-chrome-path", (
         "chromium chromium-sandbox" in dockerfile
         and worker["environment"].get("CHROME_PATH") == "/usr/bin/chromium"
-    ))
-    check("next-renderer-runtime-attested", all(
-        f'"servers/nextjs/lib/authored-hybrid/{name}"' in attestation_source
-        for name in (
-            "browser-source.ts",
-            "chrome-process.ts",
-            "chrome-runner.ts",
-            "chrome-runtime-discovery.ts",
-            "renderer-isolation.ts",
-            "security-data.ts",
-            "security.ts",
-        )
     ))
     check("stdin-pipe", worker.get("stdin_open") is True and worker.get("tty") is False)
     check("container-init", worker.get("init") is True)
@@ -181,33 +160,6 @@ def verify() -> list[dict[str, Any]]:
         environment.get("AUTHORED_RENDERER_OS_ISOLATION")
         == "nonroot-readonly-tmpfs-network-none"
         == contract["product_flags"]["os_isolation_attestation"]["production_value"]
-    ))
-    check("next-production-attestation-fail-closed", all(
-        token in next_isolation_source for token in (
-            # The policy takes the environment as a parameter for tests, so pin
-            # the default binding as well: production is decided from the real
-            # process environment, not from whatever a caller hands in.
-            "environment: NodeJS.ProcessEnv = process.env",
-            'environment.NODE_ENV === "production"',
-            "AUTHORED_RENDERER_OS_ISOLATION",
-            "nonroot-readonly-tmpfs-network-none",
-            "throw new Error",
-        )
-    ))
-    check("next-production-direct-chrome-forbidden", all(
-        token in next_isolation_source for token in (
-            "AUTHORED_RENDERER_EXECUTION_BOUNDARY", '"external-worker"',
-            "direct local Chrome is forbidden",
-            # Production may drive Chrome only under the single-user local
-            # native profile, whose declared name states it is unattested.
-            # Both tokens are pinned so widening that exemption fails here.
-            "production && !localNative",
-            '"local-native-unattested"',
-        )
-    ))
-    check("next-renderer-default-off", (
-        'booleanEnvironment("AUTHORED_VNEXT_RENDERER_ENABLED", false, environment)'
-        in next_isolation_source
     ))
     check("dynamic-release-gate-explicit-enable", all(
         token in dynamic_runner for token in (
