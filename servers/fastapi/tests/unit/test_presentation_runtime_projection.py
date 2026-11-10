@@ -17,8 +17,8 @@ def _presentation(**overrides):
         "updated_at": datetime.now(UTC),
         "slides": [],
         "generation_mode": "standard",
-        "mode": "authored",
-        "theme": {"mode": "authored"},
+        "mode": "svg",
+        "theme": {"mode": "svg"},
         "version": "v1-standard",
         "deck_plan": None,
         "revision": 7,
@@ -31,16 +31,7 @@ def _presentation(**overrides):
 @pytest.mark.parametrize(
     ("overrides", "driver_id"),
     [
-        ({}, "authored"),
-        (
-            {
-                "mode": "svg",
-                "theme": {"mode": "svg"},
-                "version": "v1-standard",
-                "deck_plan": None,
-            },
-            "svg-v1",
-        ),
+        ({}, "svg-v1"),
     ],
 )
 def test_response_projects_all_server_drivers(overrides, driver_id):
@@ -64,16 +55,25 @@ def test_response_rejects_a_removed_template_v2_identity():
         )
 
 
+def test_response_rejects_a_removed_authored_identity():
+    """The authored driver was removed on 2026-11-10 (option A): an existing
+    authored row fails closed like a Template V2 row."""
+    with pytest.raises(ValidationError, match="unsupported_presentation_driver"):
+        PresentationWithSlides.model_validate(
+            _presentation(mode="authored", theme={"mode": "authored"})
+        )
+
+
 def test_response_ignores_spoofed_profile_and_capabilities():
     response = PresentationWithSlides.model_validate(
         _presentation(
-            profile={"driver_id": "svg-v1"},
-            capabilities={"driver_id": "svg-v1"},
+            profile={"driver_id": "authored"},
+            capabilities={"driver_id": "authored"},
         )
     )
 
-    assert response.profile.driver_id == "authored"
-    assert response.capabilities.driver_id == "authored"
+    assert response.profile.driver_id == "svg-v1"
+    assert response.capabilities.driver_id == "svg-v1"
 
 
 def test_response_fails_closed_for_future_persisted_identity():

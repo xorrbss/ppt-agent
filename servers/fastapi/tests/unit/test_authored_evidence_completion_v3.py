@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from tests.support.existing_authored_rows import add_existing_authored_presentation
 import asyncio
 import base64
 from datetime import datetime, timedelta, timezone
@@ -382,17 +383,20 @@ def test_graph_revalidation_rejects_cross_attempt_binding(tmp_path: Path, monkey
             request_digest="sha256:" + "e" * 64,
         )
         async with maker() as session:
+            await add_existing_authored_presentation(
+                session,
+                PresentationModel(
+                    id=presentation_id,
+                    owner_id=owner_id,
+                    content="binding",
+                    n_slides=1,
+                    language="ko",
+                    mode="authored",
+                    revision=1,
+                ),
+            )
             session.add_all(
                 [
-                    PresentationModel(
-                        id=presentation_id,
-                        owner_id=owner_id,
-                        content="binding",
-                        n_slides=1,
-                        language="ko",
-                        mode="authored",
-                        revision=1,
-                    ),
                     AuthoredDeckEmissionActivePointer(
                         owner_id=owner_id,
                         tenant_id="t",

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from tests.support.existing_authored_rows import add_existing_authored_presentation
 import asyncio
 import uuid
 from copy import deepcopy
@@ -195,7 +196,8 @@ async def _database(
     )
     slide = _slide(presentation.id, owner_id)
     async with maker() as session:
-        session.add_all([presentation, slide])
+        await add_existing_authored_presentation(session, presentation)
+        session.add_all([slide])
         await session.commit()
     return engine, maker, presentation.id, slide.id
 

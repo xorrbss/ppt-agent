@@ -130,7 +130,7 @@ def _run_generation(monkeypatch, fake_async_session, ledger, page_counts):
     monkeypatch.setattr(llm_utils, "_stream_generate_events_unadmitted", fake_stream)
     request = GeneratePresentationRequest(
         content="Quarterly business review", n_slides=10, language="English",
-        export_as="pptx", strategy="authored",
+        export_as="pptx", strategy="svg",
     )
     operation_id = uuid.uuid4()
     fake_async_session._scalar_result = 1  # the running operation's fencing token
@@ -149,8 +149,9 @@ def _run_generation(monkeypatch, fake_async_session, ledger, page_counts):
         pipeline.MEM0_PRESENTATION_MEMORY_SERVICE, "store_generation_context", new=AsyncMock(),
     ), patch.object(
         pipeline.CONCURRENT_SERVICE, "run_task", new=Mock(),
-    ), patch.object(
-        pipeline, "generate_authored_presentation", side_effect=stop_after_outline,
+    ), patch(
+        "services.svg_presentation_service.generate_svg_presentation",
+        side_effect=stop_after_outline,
     ):
         # The handler wraps the stop into its error envelope; reaching the
         # authoring step with the outline is what this test needs.

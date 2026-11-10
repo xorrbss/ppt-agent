@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from tests.support.existing_authored_rows import add_existing_authored_presentation
 import asyncio
 import base64
 from hashlib import sha256
@@ -643,7 +644,7 @@ def test_hybrid_v2_binds_attempt_and_separates_logical_readback_backplate() -> N
 async def _seed_attempt_presentation(maker) -> uuid.UUID:
     async with maker() as session, session.begin():
         presentation = _presentation()
-        session.add(presentation)
+        await add_existing_authored_presentation(session, presentation)
         await session.flush()
         return presentation.id
 

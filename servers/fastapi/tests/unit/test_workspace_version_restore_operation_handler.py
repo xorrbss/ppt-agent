@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from tests.support.existing_authored_rows import add_existing_authored_presentation
 import asyncio
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -91,7 +92,7 @@ async def _seed(
             theme={"mode": "authored", "brand": "preserve-me"},
             revision=presentation_revision,
         )
-        session.add(presentation)
+        await add_existing_authored_presentation(session, presentation)
         await session.flush()
         session.add(
             SlideModel(

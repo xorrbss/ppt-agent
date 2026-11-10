@@ -151,8 +151,8 @@ def test_public_admission_enforces_principal_quota_and_provider_hard_caps(
                         content="bounded public generation",
                         n_slides=2,
                         language="ko",
-                        mode="authored",
-                        theme={"mode": "authored"},
+                        mode="svg",
+                        theme={"mode": "svg"},
                     )
                     session.add(presentation)
                     await session.flush()
@@ -436,7 +436,7 @@ def test_phase2_sqlite_lifecycle_is_contract_only(monkeypatch, tmp_path: Path) -
                     content="phase2 lifecycle",
                     n_slides=1,
                     language="en",
-                    mode="authored",
+                    mode="svg",
                     theme={},
                 )
                 session.add(presentation)
@@ -663,8 +663,8 @@ def test_anthropic_cache_counters_are_stored_and_priced_on_the_logical_call(
                     content="bounded public generation",
                     n_slides=2,
                     language="ko",
-                    mode="authored",
-                    theme={"mode": "authored"},
+                    mode="svg",
+                    theme={"mode": "svg"},
                 )
                 session.add(presentation)
                 await session.flush()

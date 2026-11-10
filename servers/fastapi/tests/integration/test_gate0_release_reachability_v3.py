@@ -8,6 +8,7 @@ until the product exposes them, the test proves the API remains fail-closed.
 
 from __future__ import annotations
 
+from tests.support.existing_authored_rows import add_existing_authored_presentation
 import asyncio
 import base64
 from datetime import datetime, timedelta, timezone
@@ -314,7 +315,7 @@ def _build_app(owner_id: uuid.UUID, maker: async_sessionmaker) -> FastAPI:
 
 async def _seed_legacy_presentation(maker: async_sessionmaker, presentation_id: uuid.UUID, owner_id: uuid.UUID) -> None:
     async with maker() as session:
-        session.add(
+        await add_existing_authored_presentation(session, 
             PresentationModel(
                 id=presentation_id,
                 owner_id=owner_id,
@@ -1142,7 +1143,7 @@ async def _seed_fresh_authoritative_bundle(
             mode="authored",
             revision=1,
         )
-        session.add(presentation)
+        await add_existing_authored_presentation(session, presentation)
         session.add_all(slides)
         await session.flush()
         manifest = await publish_authored_semantic_bundle_graph(
@@ -1160,8 +1161,11 @@ async def _seed_fresh_authoritative_bundle(
             master_contract_digest=_sha("master"),
             composition_digest=_sha("composition"),
         )
-        presentation.revision = source_revision
-        session.add(presentation)
+        await session.execute(
+            PresentationModel.__table__.update()
+            .where(PresentationModel.__table__.c.id == presentation_id)
+            .values(revision=source_revision)
+        )
         await session.flush()
         source_bare = manifest.canonical_digest.removeprefix("sha256:")
 

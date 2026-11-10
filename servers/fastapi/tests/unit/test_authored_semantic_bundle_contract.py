@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from tests.support.existing_authored_rows import add_existing_authored_presentation
 import asyncio
 import uuid
 
@@ -189,7 +190,7 @@ async def _exercise_atomic_degraded_graph_publish() -> None:
     owner_id = uuid.uuid4()
     presentation_id = uuid.uuid4()
     async with sessions() as session:
-        session.add(
+        await add_existing_authored_presentation(session, 
             PresentationModel(
                 id=presentation_id,
                 owner_id=owner_id,
@@ -254,7 +255,7 @@ async def _exercise_atomic_degraded_graph_publish() -> None:
         assert projection.readiness.promotion_ready is False
 
         declared_presentation_id = uuid.uuid4()
-        session.add(
+        await add_existing_authored_presentation(session, 
             PresentationModel(
                 id=declared_presentation_id,
                 owner_id=owner_id,

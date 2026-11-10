@@ -1661,6 +1661,12 @@
       "status_code": 422,
       "safe_message": "This generation option is no longer available. Generate the presentation again.",
       "retryable": false
+    },
+    {
+      "code": "unsupported_presentation_driver",
+      "status_code": 422,
+      "safe_message": "This presentation uses a format that is no longer supported. It can only be deleted.",
+      "retryable": false
     }
   ],
   "privacy": {

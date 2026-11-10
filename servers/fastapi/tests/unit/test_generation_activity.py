@@ -123,7 +123,7 @@ async def _generation(
     async with maker() as session:
         presentation = PresentationModel(
             content="generation activity", n_slides=4, language="ko",
-            layout={"name": "test"}, mode="authored", title=title,
+            layout={"name": "test"}, mode="svg", title=title,
         )
         session.add(presentation)
         await session.commit()

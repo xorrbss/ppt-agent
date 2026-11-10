@@ -54,7 +54,7 @@ from services import (
     workspace_operation_runner,
 )
 from services.compatibility_migration.admission import (
-    stamp_new_authored_presentation,
+    stamp_new_svg_presentation,
 )
 from services.public_operation_admission import PUBLIC_DEFAULT_MAX_SLIDES
 from services.public_policy_versions import PUBLIC_DEFAULT_POLICY_VERSION
@@ -1774,7 +1774,7 @@ async def _seed_running_operation(
         # Every persisted presentation must carry a resolvable profile
         # identity; the server stamps it on creation, so the fixture uses
         # the same helper instead of hand-writing the columns.
-        stamp_new_authored_presentation(presentation)
+        stamp_new_svg_presentation(presentation)
         session.add(presentation)
         await session.flush()
         conversation = WorkspaceConversation(presentation_id=presentation.id)

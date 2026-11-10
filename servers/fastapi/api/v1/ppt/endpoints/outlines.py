@@ -30,7 +30,7 @@ from services.mem0_presentation_memory_service import (
     MEM0_PRESENTATION_MEMORY_SERVICE,
 )
 from services.authored_canvas import presentation_canvas_contract
-from services.presentation_access_service import require_live_presentation
+from services.presentation_access_service import require_supported_live_presentation
 from services.references import ReferenceProviderError, admit_reference_snapshots
 from services.workspace_legacy_write_gate import (
     require_outline_bootstrap_write_path,
@@ -119,7 +119,7 @@ async def stream_outlines(
     # unreachable and leave a staged deck with no way to generate its outline.
     # `require_outline_bootstrap_write_path` performs the same rollout
     # evaluation and still re-raises unsupported/unavailable runtimes.
-    presentation = await require_live_presentation(sql_session, id)
+    presentation = await require_supported_live_presentation(sql_session, id)
     await require_outline_bootstrap_write_path(sql_session, presentation)
     common_header_mode = await _outline_common_header_mode(sql_session, presentation)
 

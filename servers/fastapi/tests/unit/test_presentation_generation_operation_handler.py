@@ -107,7 +107,8 @@ async def _seed_linked_generation(maker, *, owner_id: uuid.UUID | None):
                 n_slides=1,
                 language="en",
                 layout={"name": "test"},
-                theme={"mode": "authored"},
+                mode="svg",
+                theme={"mode": "svg"},
                 revision=0,
             )
             session.add(presentation)

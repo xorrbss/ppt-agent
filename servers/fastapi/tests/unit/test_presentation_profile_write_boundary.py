@@ -8,6 +8,7 @@ import pytest
 from services import database as _database  # noqa: F401
 from models.sql.presentation import PresentationModel
 from models.presentation_profiles import PresentationProfileError
+from tests.support.existing_authored_rows import add_existing_authored_presentation_sync
 
 
 def _presentation(**identity: object) -> PresentationModel:
@@ -22,7 +23,6 @@ def _presentation(**identity: object) -> PresentationModel:
 @pytest.mark.parametrize(
     ("identity", "expected_driver"),
     [
-        ({"mode": "authored"}, "authored"),
         ({"mode": "svg", "theme": {"mode": "svg"}}, "svg-v1"),
     ],
 )
@@ -64,26 +64,45 @@ def test_new_presentation_rejects_unknown_client_profile() -> None:
         engine.dispose()
 
 
-def test_server_owned_identity_transition_restamps_profile() -> None:
-    # Template V2 was removed from the driver registry (2026-09-25), so a
-    # transition to that identity can no longer restamp -- it fails to
-    # resolve, like any other retired driver. svg-v1 is the other
-    # currently-registered driver, so it is what exercises a real,
-    # non-authored transition here.
+def test_new_authored_presentation_is_refused() -> None:
+    """The authored driver was removed on 2026-11-10 (authored-removal P2): a
+    new authored row can no longer be written, by mode or by theme mode."""
+    engine = create_engine("sqlite://")
+    PresentationModel.__table__.create(engine)
+    try:
+        for identity in ({"mode": "authored"}, {"theme": {"mode": "authored"}}):
+            with Session(engine) as session:
+                session.add(_presentation(**identity))
+                with pytest.raises(
+                    PresentationProfileError,
+                    match="unsupported_presentation_driver",
+                ):
+                    session.flush()
+    finally:
+        engine.dispose()
+
+
+def test_identity_change_on_a_pre_existing_authored_row_is_refused() -> None:
+    """An authored row written before the removal can still be read, but no
+    identity write can restamp it -- not even a transition to svg, which would
+    relabel authored HTML slides as an svg deck."""
     engine = create_engine("sqlite://")
     PresentationModel.__table__.create(engine)
     try:
         with Session(engine) as session:
             presentation = _presentation(mode="authored")
-            session.add(presentation)
+            add_existing_authored_presentation_sync(session, presentation)
             session.commit()
-            assert presentation.profile_driver_id == "authored"
+            stored = session.get(PresentationModel, presentation.id)
+            assert stored.profile_driver_id == "authored"
 
-            presentation.mode = "svg"
-            presentation.theme = {"mode": "svg"}
-            session.commit()
-            assert presentation.profile_driver_id == "svg-v1"
-            assert presentation.profile_schema_version == 1
+            stored.mode = "svg"
+            stored.theme = {"mode": "svg"}
+            with pytest.raises(
+                PresentationProfileError,
+                match="unsupported_presentation_driver",
+            ):
+                session.flush()
     finally:
         engine.dispose()
 

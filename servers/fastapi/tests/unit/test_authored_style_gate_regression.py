@@ -4,6 +4,7 @@ This file deliberately asserts review orchestration and policy only.  Snapshot,
 asset-publication, and compare-and-swap persistence behavior has dedicated tests.
 """
 
+from tests.support.existing_authored_rows import add_existing_authored_presentation
 import asyncio
 from pathlib import Path
 from types import SimpleNamespace
@@ -261,7 +262,7 @@ def test_style_reference_all_scope_reuses_initial_critiques_and_reviews_each_can
             monkeypatch, fake_critique, fake_compare, fake_revise
         )
         async with AsyncSession(engine, expire_on_commit=False) as session:
-            session.add(presentation)
+            await add_existing_authored_presentation(session, presentation)
             session.add_all(slides)
             session.add(task)
             await session.commit()
@@ -334,7 +335,7 @@ def test_style_reference_current_nonzero_scope_keeps_absolute_position_and_final
             monkeypatch, fake_critique, fake_compare, fake_revise
         )
         async with AsyncSession(engine, expire_on_commit=False) as session:
-            session.add(presentation)
+            await add_existing_authored_presentation(session, presentation)
             session.add_all(slides)
             session.add(task)
             await session.commit()

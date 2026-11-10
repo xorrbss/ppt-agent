@@ -10,7 +10,7 @@ from models.presentation_with_slides import PresentationWithSlides
 from models.document_canvas import DOCUMENT_CANVAS_CONTRACTS_HEADER
 from services import presentation_version_service as version_service
 from services.database import get_async_session
-from services.presentation_access_service import require_live_presentation
+from services.presentation_access_service import require_supported_live_presentation
 from services.workspace_legacy_write_gate import (
     require_legacy_presentation_write_path,
 )
@@ -35,7 +35,7 @@ class VersionSummary(BaseModel):
 async def list_presentation_versions(
     id: uuid.UUID, sql_session: AsyncSession = Depends(get_async_session)
 ):
-    presentation = await require_live_presentation(sql_session, id)
+    presentation = await require_supported_live_presentation(sql_session, id)
 
     versions = await version_service.list_versions(sql_session, id)
     return [
@@ -62,7 +62,7 @@ async def restore_presentation_version(
     canvas_contracts: Optional[str] = Header(default=None, alias=DOCUMENT_CANVAS_CONTRACTS_HEADER),
 ):
     require_legacy_presentation_write_path(id)
-    presentation = await require_live_presentation(sql_session, id)
+    presentation = await require_supported_live_presentation(sql_session, id)
 
     from services.document_canvas import require_canvas_capability
 

@@ -25,6 +25,7 @@ from models.sql.presentation import (
 )
 from models.sql.slide import SlideModel
 from services.database import get_async_session
+from services.presentation_access_service import require_supported_presentation_driver
 from utils.datetime_utils import get_current_utc_datetime
 from utils.get_env import get_app_data_directory_env
 
@@ -156,6 +157,14 @@ async def _increment_shared_presentation_view(
     if presentation is None:
         await sql_session.rollback()
         raise HTTPException(status_code=404, detail="Shared presentation not found")
+    try:
+        # A live link to a deck whose driver was removed (Template V2, or
+        # authored since 2026-11-10) cannot be projected; refuse it like the
+        # owner's own read, without counting the view.
+        require_supported_presentation_driver(presentation)
+    except HTTPException:
+        await sql_session.rollback()
+        raise
     await sql_session.commit()
     return presentation
 
@@ -333,6 +342,8 @@ async def enable_share(
         or presentation.lifecycle_status != PRESENTATION_LIFECYCLE_PUBLISHED
     ):
         raise HTTPException(status_code=404, detail="Presentation not found")
+    # Never mint or rotate a public link the public read would refuse.
+    require_supported_presentation_driver(presentation)
 
     now = get_current_utc_datetime()
     if settings is not None and settings.expires_at is not None:
@@ -446,6 +457,12 @@ async def get_shared_presentation_asset(
         sql_session,
         not_found_detail="Shared asset not found",
     )
+    try:
+        require_supported_presentation_driver(presentation)
+    except HTTPException as error:
+        # No public projection exists for a removed driver, so it references
+        # no asset.
+        raise HTTPException(status_code=404, detail="Shared asset not found") from error
     projection = await _public_presentation_projection(presentation, sql_session)
     allowed_paths = {
         path

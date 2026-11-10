@@ -13,6 +13,7 @@ Two properties are pinned here:
 
 from __future__ import annotations
 
+from tests.support.existing_authored_rows import add_existing_authored_presentation
 import asyncio
 import copy
 import os
@@ -211,7 +212,7 @@ async def _seed(
             mode="authored",
             revision=presentation_revision,
         )
-        session.add(presentation)
+        await add_existing_authored_presentation(session, presentation)
         await session.flush()
         for index, title in enumerate(slide_titles):
             slide_ui = copy.deepcopy(layout)

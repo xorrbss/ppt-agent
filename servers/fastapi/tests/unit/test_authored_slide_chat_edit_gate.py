@@ -12,6 +12,7 @@ it from over-blocking ordinary layout decks.
 
 from __future__ import annotations
 
+from tests.support.existing_authored_rows import add_existing_authored_presentation
 import asyncio
 import uuid
 from pathlib import Path
@@ -58,8 +59,7 @@ async def _database(path: Path):
 async def _seed(maker, *, authored: bool) -> uuid.UUID:
     presentation_id = uuid.uuid4()
     async with maker() as session, session.begin():
-        session.add(
-            PresentationModel(
+        presentation = PresentationModel(
                 id=presentation_id,
                 content="gate fixture",
                 n_slides=3,
@@ -79,7 +79,11 @@ async def _seed(maker, *, authored: bool) -> uuid.UUID:
                 theme={"mode": "authored"} if authored else {"mode": "svg"},
                 version="v1-standard",
             )
-        )
+        if authored:
+            # Authored decks predate the driver removal (2026-11-10).
+            await add_existing_authored_presentation(session, presentation)
+        else:
+            session.add(presentation)
         for index in range(3):
             session.add(
                 SlideModel(

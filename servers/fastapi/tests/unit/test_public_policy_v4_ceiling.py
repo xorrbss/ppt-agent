@@ -249,7 +249,7 @@ async def _seed_operation(maker, owner_id: uuid.UUID, *, key: str) -> uuid.UUID:
             content="ceiling deck",
             n_slides=90,
             language="ko",
-            mode="authored",
+            mode="svg",
             theme={},
         )
         session.add(presentation)

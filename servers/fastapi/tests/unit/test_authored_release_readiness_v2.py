@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from tests.support.existing_authored_rows import add_existing_authored_presentation
 import asyncio
 from datetime import datetime, timedelta, timezone
 from hashlib import sha256
@@ -477,7 +478,7 @@ async def _exercise_readiness(monkeypatch: pytest.MonkeyPatch) -> None:
             identity=identity,
             evidence_digest=canonical_digest(identity),
         )
-        session.add(
+        await add_existing_authored_presentation(session, 
             PresentationModel(
                 id=presentation_id,
                 owner_id=owner_id,

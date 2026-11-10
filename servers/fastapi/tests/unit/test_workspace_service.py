@@ -6,7 +6,7 @@ from pathlib import Path
 import uuid
 
 import pytest
-from sqlalchemy import event, func, select
+from sqlalchemy import event, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlmodel import SQLModel
 
@@ -942,9 +942,10 @@ async def _create_presentation(maker) -> PresentationModel:
             n_slides=1,
             language="en",
             layout={"name": "test"},
-            # Every deck this fork creates is authored; a row with no
-            # identity described a retired React-template format.
-            mode="authored",
+            # Every deck this fork creates is svg since the authored driver
+            # was removed (2026-11-10); an authored row is now an unsupported
+            # pre-existing row, like a Template V2 deck.
+            mode="svg",
         )
         session.add(presentation)
         await session.commit()
@@ -2703,7 +2704,7 @@ async def _terminal_svg_review_retry_admits_child_once_and_preserves_guards(tmp_
             async def source_operation(key, *, svg=True, mode="analyze_only"):
                 async with maker() as session:
                     deck = await session.get(PresentationModel, presentation.id)
-                    deck.mode = "svg" if svg else "authored"
+                    deck.mode = "svg"
                     _, _, source, _ = await bootstrap_workspace(session,
                         presentation_id=deck.id, request=_bootstrap_request(key=key))
                     source.kind = "quality.review"
@@ -2713,6 +2714,13 @@ async def _terminal_svg_review_retry_admits_child_once_and_preserves_guards(tmp_
                     source.version = 4
                     source.request_payload = {**source.request_payload, "context": {
                         "mode": mode, "target": "final_pptx", "scope": "all", "artifact_id": artifact_id}}
+                    if not svg:
+                        # A non-svg deck can only be a pre-existing authored
+                        # row since the authored driver was removed; write
+                        # its identity without the ORM write boundary.
+                        await session.execute(update(PresentationModel).where(
+                            PresentationModel.id == deck.id).values(
+                            mode="authored", theme={"mode": "authored"}, profile_driver_id="authored"))
                     await session.commit()
                     return source
 
@@ -2753,14 +2761,28 @@ async def _terminal_svg_review_retry_admits_child_once_and_preserves_guards(tmp_
                     await apply_workspace_action(session, operation_id=source.id,
                         request=request.model_copy(update={"idempotency_key": "svg-review-second-key"}))
                 assert second.value.code == "operation_state_conflict"
-            # Ordinary non-SVG and non-analyze retries retain their previous path.
-            for key, svg, mode in (("ordinary-review", False, "analyze_only"), ("other-mode", True, "other")):
+            # A non-analyze retry retains its previous path.
+            for key, svg, mode in (("other-mode", True, "other"),):
                 other = await source_operation(key, svg=svg, mode=mode)
                 async with maker() as session:
                     _, child, duplicate = await apply_workspace_action(session, operation_id=other.id,
                         request=request.model_copy(update={"idempotency_key": key + "-retry"}))
                     assert not duplicate and child.retry_of_operation_id == other.id
                     assert await session.scalar(select(func.count()).select_from(PublicOperationAdmission)) == 1
+            # A retry on a pre-existing authored deck (driver removed
+            # 2026-11-10) is refused like any new operation on it.
+            authored_source = await source_operation("ordinary-review", svg=False)
+            async with maker() as session:
+                with pytest.raises(WorkspaceServiceError) as unsupported:
+                    await apply_workspace_action(session, operation_id=authored_source.id,
+                        request=request.model_copy(update={"idempotency_key": "ordinary-review-retry"}))
+                assert unsupported.value.code == "unsupported_presentation_driver"
+                assert unsupported.value.status_code == 422
+            async with maker() as session:
+                await session.execute(update(PresentationModel).where(
+                    PresentationModel.id == presentation.id).values(
+                    mode="svg", theme=None, profile_driver_id="svg-v1"))
+                await session.commit()
             denied_source = await source_operation("denied-review")
             async with maker() as session:
                 current_policy = await session.get(PublicPolicyProfile, policy.version)

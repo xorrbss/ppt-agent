@@ -34,7 +34,7 @@ from services.authored_quality_ocr import get_ocr_readiness
 from models.svg_quality_review import SvgQualityReviewRequest
 from services.svg_quality_review_service import queue_svg_quality_review
 from services.database import get_async_session
-from services.presentation_access_service import require_live_presentation
+from services.presentation_access_service import require_supported_live_presentation
 from services.workspace_legacy_write_gate import require_legacy_presentation_write_path
 from utils.authored_patch_engine import (
     CropAction,
@@ -120,7 +120,7 @@ async def get_authored_canonical_document(
     id: uuid.UUID,
     sql_session: AsyncSession = Depends(get_async_session),
 ):
-    presentation = await require_live_presentation(sql_session, id)
+    presentation = await require_supported_live_presentation(sql_session, id)
     try:
         return await _AUTHORED_CANONICAL_SERVICE.get_or_initialize(
             sql_session, presentation
@@ -135,7 +135,7 @@ async def patch_authored_canonical_document(
     request: AuthoredCanonicalPatchRequest,
     sql_session: AsyncSession = Depends(get_async_session),
 ):
-    presentation = await require_live_presentation(sql_session, id)
+    presentation = await require_supported_live_presentation(sql_session, id)
     try:
         return await _AUTHORED_CANONICAL_SERVICE.apply_patches(
             sql_session,
@@ -157,7 +157,7 @@ async def list_authored_canonical_history(
     id: uuid.UUID,
     sql_session: AsyncSession = Depends(get_async_session),
 ):
-    presentation = await require_live_presentation(sql_session, id)
+    presentation = await require_supported_live_presentation(sql_session, id)
     try:
         return await _AUTHORED_CANONICAL_SERVICE.history(sql_session, presentation)
     except AuthoredCanonicalError as error:
@@ -170,7 +170,7 @@ async def undo_authored_canonical_document(
     request: AuthoredCanonicalCasRequest,
     sql_session: AsyncSession = Depends(get_async_session),
 ):
-    presentation = await require_live_presentation(sql_session, id)
+    presentation = await require_supported_live_presentation(sql_session, id)
     try:
         return await _AUTHORED_CANONICAL_SERVICE.undo(
             sql_session,
@@ -188,7 +188,7 @@ async def redo_authored_canonical_document(
     request: AuthoredCanonicalCasRequest,
     sql_session: AsyncSession = Depends(get_async_session),
 ):
-    presentation = await require_live_presentation(sql_session, id)
+    presentation = await require_supported_live_presentation(sql_session, id)
     try:
         return await _AUTHORED_CANONICAL_SERVICE.redo(
             sql_session,
@@ -207,7 +207,7 @@ async def authored_quality_review_readiness():
 
 @AUTHORED_OPERATIONS_ROUTER.post("/{id}/slides/{slide_index}/remake/preview", response_model=AsyncPresentationGenerationTaskModel)
 async def preview_authored_page_remake(id: uuid.UUID, slide_index: int, request: AuthoredPageRemakePreviewRequest, background_tasks: BackgroundTasks, request_http: Request, sql_session: AsyncSession = Depends(get_async_session)):
-    await require_live_presentation(sql_session, id)
+    await require_supported_live_presentation(sql_session, id)
     from services.workspace_operation_principal import local_development_export_bridge
     try:
         return await queue_authored_page_remake_preview(id, slide_index, request, background_tasks, sql_session,
@@ -218,14 +218,14 @@ async def preview_authored_page_remake(id: uuid.UUID, slide_index: int, request:
 
 @AUTHORED_OPERATIONS_ROUTER.get("/{id}/remake/previews")
 async def list_authored_page_remake_preview_history(id: uuid.UUID, sql_session: AsyncSession = Depends(get_async_session)):
-    await require_live_presentation(sql_session, id)
+    await require_supported_live_presentation(sql_session, id)
     return await list_authored_page_remake_previews(sql_session, id)
 
 
 @AUTHORED_OPERATIONS_ROUTER.post("/{id}/slides/{slide_index}/remake/publish")
 async def publish_authored_page_remake_candidate(id: uuid.UUID, slide_index: int, request: AuthoredPageRemakePublishRequest, sql_session: AsyncSession = Depends(get_async_session)):
     require_legacy_presentation_write_path(id)
-    await require_live_presentation(sql_session, id)
+    await require_supported_live_presentation(sql_session, id)
     try:
         return await publish_authored_page_remake_legacy(session=sql_session, presentation_id=id, slide_index=slide_index, preview_task_id=request.preview_task_id)
     except AuthoredPageRemakeError as error:

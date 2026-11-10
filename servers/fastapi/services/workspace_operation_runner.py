@@ -67,6 +67,11 @@ from models.sql.presentation import (
     PresentationModel,
 )
 from models.sql.public_admission import PublicOperationAdmission
+from services.presentation_access_service import (
+    UNSUPPORTED_DRIVER_PERMITTED_OPERATION_KINDS,
+    UNSUPPORTED_PRESENTATION_DRIVER,
+    has_unsupported_presentation_driver,
+)
 from models.sql.workspace import (
     WorkspaceCleanupJournal,
     WorkspaceOperation,
@@ -2927,6 +2932,31 @@ def _claim_account_generation(claim: WorkspaceOperationClaim) -> int | None:
     return value
 
 
+async def _require_supported_claim_driver(
+    session: AsyncSession,
+    claim: WorkspaceOperationClaim,
+) -> None:
+    """Fail an operation queued before its deck's driver was removed.
+
+    Admission already refuses new work on such a deck (Template V2, or
+    authored since 2026-11-10); this covers operations admitted earlier, so
+    they end with ``unsupported_presentation_driver`` instead of running
+    retired code. Deletion and generation keep their own checks.
+    """
+
+    if claim.kind in UNSUPPORTED_DRIVER_PERMITTED_OPERATION_KINDS:
+        return
+    presentation = (
+        await session.execute(
+            select(PresentationModel).where(
+                PresentationModel.id == claim.presentation_id
+            )
+        )
+    ).scalar_one_or_none()
+    if presentation is not None and has_unsupported_presentation_driver(presentation):
+        raise NonRetryableWorkspaceOperationError(UNSUPPORTED_PRESENTATION_DRIVER)
+
+
 async def _fence_workspace_claim(
     session: AsyncSession,
     claim: WorkspaceOperationClaim,
@@ -4590,6 +4620,7 @@ class WorkspaceOperationRunner:
                 claim,
                 check_revision=True,
             )
+            await _require_supported_claim_driver(session, claim)
             admission = await _public_admission_for_operation(
                 session,
                 claim.operation_id,

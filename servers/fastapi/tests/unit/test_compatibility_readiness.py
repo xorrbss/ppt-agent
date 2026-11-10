@@ -524,7 +524,7 @@ def test_admin_aggregate_backfills_all_owners_and_anonymous_preserving_owner(
                             content="legacy",
                             n_slides=1,
                             language="en",
-                            mode="authored",
+                            mode="svg",
                             generation_mode="standard",
                         )
                         session.add_all([image, presentation])
@@ -603,7 +603,7 @@ def test_admin_aggregate_backfills_all_owners_and_anonymous_preserving_owner(
                         )
                     )
                     assert {row.id for row in presentations} == set(presentation_ids)
-                    assert all(row.profile_driver_id == "authored" for row in presentations)
+                    assert all(row.profile_driver_id == "svg-v1" for row in presentations)
                     report = await compatibility_readiness(
                         session,
                         aggregate_all_owners=True,
@@ -634,7 +634,7 @@ def test_profile_backfill_and_removal_gate_fail_closed_without_deployment_eviden
                             content="smart",
                             n_slides=1,
                             language="en",
-                            mode="authored",
+                            mode="svg",
                             generation_mode="standard",
                         )
                     session.add(presentation)
@@ -655,7 +655,7 @@ def test_profile_backfill_and_removal_gate_fail_closed_without_deployment_eviden
                     result = await backfill_presentation_profiles(session)
                     assert result.backfilled == 1
                     row = (await session.execute(select(PresentationModel))).scalar_one()
-                    assert row.profile_driver_id == "authored"
+                    assert row.profile_driver_id == "svg-v1"
                     report = await compatibility_readiness(session)
                     assert report.presentation_rows_without_canonical_profile == 0
                     assert report.generation_mode_removal_ready is False

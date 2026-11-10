@@ -1,3 +1,4 @@
+from tests.support.existing_authored_rows import add_existing_authored_presentation
 import asyncio
 import uuid
 from functools import wraps
@@ -133,7 +134,7 @@ class _SessionFactory:
 
 async def _seed_preview(session: AsyncSession):
     presentation = _presentation()
-    session.add(presentation)
+    await add_existing_authored_presentation(session, presentation)
     await session.flush()
     slide = _slide(presentation.id)
     task = AsyncPresentationGenerationTaskModel(status="pending")
@@ -337,7 +338,7 @@ async def test_preview_is_detached_and_pins_exact_source(tmp_path, monkeypatch):
     engine = await _engine(tmp_path / "preview.sqlite")
     async with AsyncSession(engine, expire_on_commit=False) as session:
         presentation = _presentation()
-        session.add(presentation)
+        await add_existing_authored_presentation(session, presentation)
         await session.flush()
         slide = _slide(presentation.id)
         task = AsyncPresentationGenerationTaskModel(status="pending")
@@ -429,7 +430,7 @@ async def test_publish_snapshots_cas_updates_and_invalidates_stale_pointer(
                 },
             },
         }
-        session.add(presentation)
+        await add_existing_authored_presentation(session, presentation)
         await session.flush()
         slide = _slide(presentation.id)
         session.add(slide)
@@ -503,6 +504,9 @@ async def test_publish_snapshots_cas_updates_and_invalidates_stale_pointer(
         await session.commit()
         await session.refresh(slide)
         await session.refresh(task)
+        presentation = await session.get(
+            PresentationModel, presentation.id, populate_existing=True
+        )
 
         assert result["status"] == "published"
         assert result["slide_index"] == 0
@@ -534,7 +538,7 @@ async def test_publish_rejects_stale_source_before_snapshot(tmp_path, monkeypatc
     engine = await _engine(tmp_path / "stale.sqlite")
     async with AsyncSession(engine, expire_on_commit=False) as session:
         presentation = _presentation()
-        session.add(presentation)
+        await add_existing_authored_presentation(session, presentation)
         await session.flush()
         slide = _slide(presentation.id)
         session.add(slide)
@@ -741,7 +745,7 @@ async def test_warned_preview_publishes_after_explicit_approval(tmp_path, monkey
     engine = await _engine(tmp_path / "publish-warning.sqlite")
     async with AsyncSession(engine, expire_on_commit=False) as session:
         presentation = _presentation()
-        session.add(presentation)
+        await add_existing_authored_presentation(session, presentation)
         await session.flush()
         slide = _slide(presentation.id)
         session.add(slide)
@@ -802,7 +806,7 @@ async def test_warned_preview_still_rejects_a_stale_source_digest(
     engine = await _engine(tmp_path / "publish-warning-stale.sqlite")
     async with AsyncSession(engine, expire_on_commit=False) as session:
         presentation = _presentation()
-        session.add(presentation)
+        await add_existing_authored_presentation(session, presentation)
         await session.flush()
         slide = _slide(presentation.id)
         session.add(slide)

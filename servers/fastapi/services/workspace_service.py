@@ -51,6 +51,11 @@ from models.sql.workspace import (
     get_workspace_owner_scope,
 )
 from models.workspace_generation_lineage import previous_attempt_from_payload
+from services.presentation_access_service import (
+    UNSUPPORTED_DRIVER_PERMITTED_OPERATION_KINDS,
+    UNSUPPORTED_PRESENTATION_DRIVER,
+    has_unsupported_presentation_driver,
+)
 from models.sql.authored_slide_checkpoint import AuthoredSlideCheckpoint
 from models.sql.presentation_generation_job import PresentationGenerationJob
 from services.workspace_db_adapter import (
@@ -340,6 +345,27 @@ async def _lock_workspace_mutation_admission(
         )
     ).scalar_one()
     return presentation, account_generation
+
+
+def _require_supported_driver_for_kind(
+    presentation: PresentationModel,
+    *,
+    kind: str,
+) -> None:
+    """Refuse work on a deck whose driver was removed, except deletion.
+
+    A Template V2 deck, and an authored deck since the authored driver was
+    removed on 2026-11-10, can only be listed and deleted; every other
+    operation answers ``unsupported_presentation_driver`` at admission rather
+    than reaching retired code.
+    """
+
+    if kind in UNSUPPORTED_DRIVER_PERMITTED_OPERATION_KINDS:
+        return
+    if has_unsupported_presentation_driver(presentation):
+        raise WorkspaceServiceError(
+            UNSUPPORTED_PRESENTATION_DRIVER, status_code=422, retryable=False
+        )
 
 
 async def _conversation_for_presentation(
@@ -730,6 +756,7 @@ async def _bootstrap_workspace_once(
     )
     if presentation.revision != expected_revision:
         raise WorkspaceServiceError("revision_conflict", status_code=409, retryable=True)
+    _require_supported_driver_for_kind(presentation, kind=request.operation_type)
 
     conversation = await _get_or_create_conversation(session, presentation_id)
     message_id = uuid.uuid4()
@@ -965,6 +992,7 @@ async def activate_workspace_operation(
     )
     if presentation.revision != expected_revision:
         raise WorkspaceServiceError("revision_conflict", status_code=409, retryable=True)
+    _require_supported_driver_for_kind(presentation, kind=operation.kind)
     if operation.state != "awaiting_approval":
         raise WorkspaceServiceError("operation_state_conflict", status_code=409)
     expected_version = (
@@ -1730,6 +1758,7 @@ async def _create_workspace_command(
     )
     if presentation.revision != expected_revision:
         raise WorkspaceServiceError("revision_conflict", status_code=409, retryable=True)
+    _require_supported_driver_for_kind(presentation, kind=request.command_type)
     conversation = await _get_or_create_conversation(session, presentation_id)
     reservation = await reserve_conversation_positions(session, conversation.id, 2)
     message_position, operation_position = reservation.positions
@@ -2196,6 +2225,11 @@ async def _apply_workspace_action(
         and presentation.revision != request.expected_revision
     ):
         raise WorkspaceServiceError("revision_conflict", status_code=409, retryable=True)
+    if request.action != "cancel":
+        # Cancelling stays available so a queued operation on a deck whose
+        # driver was removed can still be cleared; approval (deletion only)
+        # and retry are refused like a new command.
+        _require_supported_driver_for_kind(presentation, kind=operation.kind)
 
     allowed_states: tuple[str, ...]
     values: dict[str, Any]

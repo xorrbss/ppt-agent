@@ -63,7 +63,7 @@ def stubbed_stream(monkeypatch):
         return None
 
     monkeypatch.setattr(
-        outlines, "require_live_presentation", _require_live_presentation
+        outlines, "require_supported_live_presentation", _require_live_presentation
     )
     monkeypatch.setattr(
         outlines, "require_outline_bootstrap_write_path", _require_write_path

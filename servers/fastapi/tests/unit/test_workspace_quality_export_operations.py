@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from tests.support.existing_authored_rows import add_existing_authored_presentation
 import asyncio
 import hashlib
 import json
@@ -376,17 +377,21 @@ async def _database(path: Path):
     return engine, async_sessionmaker(engine, expire_on_commit=False)
 
 
-async def _seed_export(maker, *, revision: int = 7):
+async def _seed_export(maker, *, revision: int = 7, mode: str = "authored"):
     async with maker() as session, session.begin():
         presentation = PresentationModel(
             content="export",
             n_slides=1,
             language="ko",
-            mode="authored",
+            mode=mode,
             theme={},
             revision=revision,
         )
-        session.add(presentation)
+        if mode == "authored":
+            # Authored decks predate the driver removal (2026-11-10).
+            await add_existing_authored_presentation(session, presentation)
+        else:
+            session.add(presentation)
         await session.flush()
         conversation = WorkspaceConversation(presentation_id=presentation.id)
         session.add(conversation)
@@ -429,7 +434,7 @@ async def _seed_quality_operation(
             theme={},
             revision=revision,
         )
-        session.add(presentation)
+        await add_existing_authored_presentation(session, presentation)
         await session.flush()
         session.add(SlideModel(
             presentation=presentation.id,
@@ -904,7 +909,7 @@ def test_quality_review_without_fixes_is_revision_neutral_and_detects_change(
                     theme={},
                     revision=11,
                 )
-                session.add(presentation)
+                await add_existing_authored_presentation(session, presentation)
                 await session.flush()
                 presentation_id = presentation.id
 
@@ -1350,7 +1355,7 @@ def test_quality_review_propagates_lease_loss_after_review(
                     theme={},
                     revision=4,
                 )
-                session.add(presentation)
+                await add_existing_authored_presentation(session, presentation)
                 await session.flush()
                 presentation_id = presentation.id
 
@@ -1544,10 +1549,8 @@ def test_svg_export_failures_use_the_shared_public_export_classification(
     async def scenario() -> None:
         engine, maker = await _database(tmp_path / "svg-export-error.db")
         try:
-            presentation_id, operation_id = await _seed_export(maker)
+            presentation_id, operation_id = await _seed_export(maker, mode="svg")
             async with maker() as session, session.begin():
-                presentation = await session.get(PresentationModel, presentation_id)
-                presentation.mode = "svg"
                 operation = await session.get(WorkspaceOperation, operation_id)
 
             async def fail_svg_export(*_args, **_kwargs):

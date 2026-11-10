@@ -6,6 +6,7 @@ These tests isolate the STYLE_REFERENCE persistence behavior that is not covered
 the exact-reconstruction cases.
 """
 
+from tests.support.existing_authored_rows import add_existing_authored_presentation
 import asyncio
 from types import SimpleNamespace
 
@@ -163,7 +164,7 @@ def test_style_reference_mixed_gate_publishes_only_strictly_improved_slide(
 
         async with AsyncSession(engine, expire_on_commit=False) as session:
             original_slides = _slides(presentation.id)
-            session.add(presentation)
+            await add_existing_authored_presentation(session, presentation)
             session.add_all(original_slides)
             session.add(task)
             await session.commit()
@@ -216,7 +217,7 @@ def test_style_reference_zero_accepted_skips_png_writes_and_snapshot(
         async with AsyncSession(engine, expire_on_commit=False) as session:
             originals = _slides(presentation.id)
             original_dumps = [slide.model_dump(mode="json") for slide in originals]
-            session.add(presentation)
+            await add_existing_authored_presentation(session, presentation)
             session.add_all(originals)
             session.add(task)
             await session.commit()
@@ -274,7 +275,7 @@ def test_style_reference_png_write_failure_leaves_live_slides_and_history_untouc
         async with AsyncSession(engine, expire_on_commit=False) as session:
             originals = _slides(presentation.id)
             original_dumps = [slide.model_dump(mode="json") for slide in originals]
-            session.add(presentation)
+            await add_existing_authored_presentation(session, presentation)
             session.add_all(originals)
             session.add(task)
             await session.commit()

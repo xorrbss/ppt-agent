@@ -18,6 +18,7 @@ from models.sql.presentation import (
 from models.sql.slide import SlideModel
 from services.compatibility_migration.archive import build_signed_archive_manifest
 from services.compatibility_migration.census import classify_presentation
+from services.generation_core.admission.strategy import AUTHORED_STRATEGY_REMOVED
 from services.presentation_profile_persistence import stamp_presentation_profile
 from models.presentation_profiles import (
     PresentationProfileError,
@@ -113,6 +114,10 @@ async def upgrade_presentation_fork(
         raise CompatibilityUpgradeError("compatibility_upgrade_source_not_legacy")
     if source.revision != request.expected_source_revision:
         raise CompatibilityUpgradeError("compatibility_source_revision_conflict")
+    # The fork's target is an authored deck, and the authored driver was
+    # removed on 2026-11-10: no target row could be stamped, so refuse with
+    # the P1 code instead of failing inside the profile write boundary.
+    raise CompatibilityUpgradeError(AUTHORED_STRATEGY_REMOVED, status_code=422)
 
     source_snapshot = _source_snapshot(source, source_slides)
     target_id = uuid.uuid4()

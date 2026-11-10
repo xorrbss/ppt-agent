@@ -39,9 +39,9 @@ class _PresentationSession:
             # The stored deck has to resolve a profile; the service reads it
             # before it builds anything, and a deck with no identity is one of
             # the retired React-template formats this fork no longer ships.
-            mode="authored",
+            mode="svg",
             version="v1-standard",
-            theme={"mode": "authored"},
+            theme={"mode": "svg"},
             deck_plan=None,
             community_design_ids=None,
             profile_driver_id=None,

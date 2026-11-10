@@ -58,8 +58,8 @@ def _reference_snapshot(owner):
 
 def _presentation(owner):
     return PresentationModel(
-        content="c", n_slides=1, language="ko", layout=None, mode="authored",
-        theme={"mode": "authored"},
+        content="c", n_slides=1, language="ko", layout=None, mode="svg",
+        theme={"mode": "svg"},
     )
 
 

@@ -1,5 +1,5 @@
+from tests.support.existing_authored_rows import add_existing_authored_presentation
 import asyncio
-import json
 import uuid
 from contextlib import contextmanager
 
@@ -177,10 +177,10 @@ def test_frozen_runtime_is_never_applicable_to_a_live_driver_and_is_owner_scoped
 ):
     """No driver is ever "frozen" any more; every live profile is not_applicable.
 
-    The registry only ever lists live drivers (``authored``, ``svg-v1``), so a
-    profile that resolves at all can never be the retired ``template-v2``
-    identity ``FrozenRuntimeDescriptor`` used to describe. Both live drivers
-    below hit the same ``compatibility_runtime_not_applicable`` outcome.
+    The registry only lists live drivers (``svg-v1``), so a profile that
+    resolves at all hits ``compatibility_runtime_not_applicable``. A row whose
+    driver was removed -- a Template V2 deck, or an authored deck since
+    2026-11-10 -- no longer resolves and is quarantined instead.
     """
 
     async def runner():
@@ -198,19 +198,17 @@ def test_frozen_runtime_is_never_applicable_to_a_live_driver_and_is_owner_scoped
         svg = _non_authored_presentation(owner_id)
         with _owner(owner_id):
             async with maker() as session:
-                session.add_all((authored, svg))
+                await add_existing_authored_presentation(session, authored)
+                session.add_all([svg])
                 await session.commit()
 
-                for presentation in (authored, svg):
-                    with pytest.raises(
-                        FrozenCompatibilityError,
-                        match="compatibility_runtime_not_applicable",
-                    ):
+                for presentation, code in (
+                    (authored, "compatibility_presentation_quarantined"),
+                    (svg, "compatibility_runtime_not_applicable"),
+                ):
+                    with pytest.raises(FrozenCompatibilityError, match=code):
                         await get_frozen_runtime_descriptor(session, presentation.id)
-                    with pytest.raises(
-                        FrozenCompatibilityError,
-                        match="compatibility_runtime_not_applicable",
-                    ):
+                    with pytest.raises(FrozenCompatibilityError, match=code):
                         await authorize_frozen_operation(
                             session, presentation.id, "open"
                         )
@@ -265,7 +263,9 @@ def test_workspace_chat_common_context_rejects_frozen_legacy_before_provider(tmp
     _run(runner())
 
 
-def test_authored_deck_remains_a_valid_mutation_target():
+def test_authored_deck_is_no_longer_a_mutation_target():
+    """The authored driver was removed on 2026-11-10 (option A): an authored
+    deck is quarantined, and an svg deck was never an authored target."""
     presentation = PresentationModel(
         content="authored",
         n_slides=1,
@@ -273,7 +273,15 @@ def test_authored_deck_remains_a_valid_mutation_target():
         mode="authored",
         theme={"mode": "authored"},
     )
-    assert require_authored_mutation_target(presentation).driver_id == "authored"
+    with pytest.raises(
+        FrozenCompatibilityError, match="compatibility_presentation_quarantined"
+    ):
+        require_authored_mutation_target(presentation)
+    svg = PresentationModel(
+        content="svg", n_slides=1, language="en", mode="svg", theme={"mode": "svg"}
+    )
+    with pytest.raises(FrozenCompatibilityError, match="legacy_presentation_frozen"):
+        require_authored_mutation_target(svg)
 
 
 def test_authored_profile_with_legacy_slide_evidence_is_quarantined(tmp_path):
@@ -291,102 +299,14 @@ def test_authored_profile_with_legacy_slide_evidence_is_quarantined(tmp_path):
         legacy_slide = _frozen_slide(owner_id, presentation.id)
         with _owner(owner_id):
             async with maker() as session:
-                session.add_all((presentation, legacy_slide))
+                await add_existing_authored_presentation(session, presentation)
+                session.add_all([legacy_slide])
                 await session.commit()
                 with pytest.raises(
                     FrozenCompatibilityError,
                     match="compatibility_presentation_quarantined",
                 ):
                     await require_authored_mutation_evidence(session, presentation)
-        await engine.dispose()
-
-    _run(runner())
-
-
-def test_upgrade_fork_is_authored_new_id_and_preserves_original(tmp_path):
-    async def runner():
-        engine, maker = await _session_maker(tmp_path / "upgrade.db")
-        owner_id = uuid.uuid4()
-        source = _non_authored_presentation(owner_id)
-        source_slide = SlideModel(
-            owner_id=owner_id,
-            presentation=source.id,
-            layout_group="svg",
-            layout="svg",
-            index=0,
-            content={},
-            svg_content="<svg></svg>",
-        )
-        key = b"archive-signing-key-for-focused-test"
-        with _owner(owner_id):
-            async with maker() as session:
-                session.add(source)
-                session.add(source_slide)
-                await session.commit()
-                # Read the rows back before snapshotting them so the in-memory
-                # snapshot matches what is actually stored, and the comparison
-                # below checks what this test is actually testing: that the
-                # upgrade leaves the source untouched.
-                await session.refresh(source)
-                await session.refresh(source_slide)
-                original_presentation = source.model_dump(
-                    mode="json",
-                    exclude={"created_at", "updated_at", "profile_backfilled_at"},
-                )
-                original_slide = source_slide.model_dump(mode="json", exclude_none=True)
-
-                response = await upgrade_presentation_fork(
-                    session,
-                    source_presentation_id=source.id,
-                    request=UpgradeForkRequest(
-                        expected_source_revision=source.revision,
-                        slides=[
-                            {
-                                "index": 0,
-                                "html_content": "<main>authored fork</main>",
-                                "properties": {"image": "derived.png"},
-                            }
-                        ],
-                    ),
-                    archive_signing_key=key,
-                    archive_signing_key_id="test-key-v1",
-                )
-
-                assert response.presentation_id != source.id
-                target = await session.get(PresentationModel, response.presentation_id)
-                assert target is not None
-                assert target.owner_id == owner_id
-                assert resolve_presentation_profile(target).driver_id == "authored"
-                target_slides = list(
-                    (
-                        await session.scalars(
-                            select(SlideModel).where(
-                                SlideModel.presentation == response.presentation_id
-                            )
-                        )
-                    ).all()
-                )
-                assert len(target_slides) == 1
-                assert target_slides[0].html_content == "<main>authored fork</main>"
-                assert target_slides[0].is_authored()
-
-                await session.refresh(source)
-                await session.refresh(source_slide)
-                assert source.model_dump(
-                    mode="json",
-                    exclude={"created_at", "updated_at", "profile_backfilled_at"},
-                ) == original_presentation
-                assert source_slide.model_dump(
-                    mode="json", exclude_none=True
-                ) == original_slide
-                assert verify_signed_archive_manifest(
-                    response.archive_manifest, signing_key=key
-                )
-                manifest_json = json.dumps(
-                    response.archive_manifest.model_dump(mode="json"), sort_keys=True
-                )
-                assert "private legacy source" not in manifest_json
-                assert "authored fork" not in manifest_json
         await engine.dispose()
 
     _run(runner())
@@ -493,3 +413,66 @@ def test_router_contract_is_mountable_without_touching_shared_router():
         "/compatibility/presentations/{presentation_id}/runtime/{operation}" in paths
     )
     assert "/compatibility/presentations/{presentation_id}/upgrade-fork" in paths
+
+
+def test_upgrade_fork_is_refused_and_preserves_original(tmp_path):
+    """The fork's target is an authored deck. The authored driver was removed
+    on 2026-11-10, so a fork is refused with ``authored_strategy_removed``
+    (422) after the source checks, writing no target and leaving the source
+    untouched."""
+
+    async def runner():
+        engine, maker = await _session_maker(tmp_path / "upgrade.db")
+        owner_id = uuid.uuid4()
+        source = _non_authored_presentation(owner_id)
+        source_slide = SlideModel(
+            owner_id=owner_id,
+            presentation=source.id,
+            layout_group="svg",
+            layout="svg",
+            index=0,
+            content={},
+            svg_content="<svg></svg>",
+        )
+        with _owner(owner_id):
+            async with maker() as session:
+                session.add(source)
+                session.add(source_slide)
+                await session.commit()
+                await session.refresh(source)
+                original_presentation = source.model_dump(
+                    mode="json",
+                    exclude={"created_at", "updated_at", "profile_backfilled_at"},
+                )
+
+                with pytest.raises(CompatibilityUpgradeError) as refused:
+                    await upgrade_presentation_fork(
+                        session,
+                        source_presentation_id=source.id,
+                        request=UpgradeForkRequest(
+                            expected_source_revision=source.revision,
+                            slides=[
+                                {
+                                    "index": 0,
+                                    "html_content": "<main>authored fork</main>",
+                                    "properties": {"image": "derived.png"},
+                                }
+                            ],
+                        ),
+                        archive_signing_key=b"archive-signing-key-for-focused-test",
+                        archive_signing_key_id="test-key-v1",
+                    )
+                assert refused.value.code == "authored_strategy_removed"
+                assert refused.value.status_code == 422
+
+                rows = list((await session.scalars(select(PresentationModel))).all())
+                assert [row.id for row in rows] == [source.id]
+                await session.refresh(source)
+                assert source.model_dump(
+                    mode="json",
+                    exclude={"created_at", "updated_at", "profile_backfilled_at"},
+                ) == original_presentation
+                assert resolve_presentation_profile(source).driver_id == "svg-v1"
+        await engine.dispose()
+
+    _run(runner())
