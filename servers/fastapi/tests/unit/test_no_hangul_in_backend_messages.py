@@ -29,7 +29,6 @@ _HANGUL = re.compile(r"[가-힣]")
 _ALLOWED_HANGUL_MODULES: frozenset[str] = frozenset(
     {
         # --- LLM prompt text and examples (the model reads Korean) ---
-        "constants/presentation.py",
         "services/authored_title_recovery_contract.py",
         "services/authored_vnext/body_grammar.py",
         "services/authored_vnext/generation/retained_reference.py",

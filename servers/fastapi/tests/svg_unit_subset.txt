@@ -68,7 +68,6 @@ tests/unit/test_authored_infographic_fit_sweep.py
 tests/unit/test_authored_infographic_geometry.py
 tests/unit/test_authored_infographic_library.py
 tests/unit/test_authored_infographic_plan.py
-tests/unit/test_authored_live_benchmark.py
 tests/unit/test_authored_local_fit_applies.py
 tests/unit/test_authored_local_fit_image_text.py
 tests/unit/test_authored_master_style_composition_focused.py
