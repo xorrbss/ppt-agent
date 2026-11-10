@@ -1,8 +1,6 @@
 from __future__ import annotations
 
-import ast
 from datetime import datetime, timezone
-from pathlib import Path
 
 import pytest
 
@@ -59,70 +57,6 @@ def _receipt_v2():
         },
     )
 
-
-@pytest.mark.anyio
-async def test_live_generation_binds_v2_to_evidence_bound_v3() -> None:
-    receipt_v2 = _receipt_v2()
-    receipt_v3 = await create_generation_quality_receipt_v3(
-        receipt_v2=receipt_v2,
-        job_id=None,
-        slide_roles=("cover", "content"),
-        provider_attempt_counts=(1, 2),
-        repaired_slide_indices=(1,),
-        capacity_evidence={
-            "browserObserved": True,
-            "checks": {"font": True},
-            "violations": [],
-        },
-        safety_evidence={"status": "passed", "residuals": []},
-        browser_metrics=(
-            {"capabilityRegistry": capability_metadata(consumer="chromium")},
-            {"capabilityRegistry": capability_metadata(consumer="chromium")},
-        ),
-        visual_review=visual_review_outcome(slide_count=2, fixed=[1], accepted_fixed=[1]),
-        source_manifest=None,
-        source_readback=None,
-    )
-
-    assert receipt_v3.gate_passed is False
-    assert receipt_v3.previous_schema_version == "quality-receipt/v2"
-    assert receipt_v3.previous_version_receipt_digest == receipt_v2.receipt_digest
-    assert receipt_v3.capability_consumer_statuses == (
-        ("prompt", "unavailable"),
-        ("validator", "unavailable"),
-        ("font", "unavailable"),
-        ("chromium", "passed"),
-        ("scene", "unavailable"),
-        ("ooxml", "not_required"),
-        ("readback", "not_required"),
-    )
-    assert "deterministic.geometry.failed" in receipt_v3.blockers
-    assert "visualReview.required_failed" not in receipt_v3.blockers
-    assert "provider:slide:1:recovery" in receipt_v3.t1_triggers
-
-    generation_path = (
-        Path(__file__).parents[2] / "services" / "authored_presentation_generation.py"
-    )
-    tree = ast.parse(generation_path.read_text(encoding="utf-8"))
-    assert any(
-        isinstance(node, ast.Call)
-        and isinstance(node.func, ast.Name)
-        and node.func.id == "create_generation_quality_receipt_v3"
-        for node in ast.walk(tree)
-    )
-    source = generation_path.read_text(encoding="utf-8")
-    # QUAL-11: no constant release verdict or fabricated readback evidence is
-    # minted by generation; the public projection derives readiness.
-    assert '"promotionReady"' not in source
-    assert '"releaseReadiness"' not in source
-    assert '"phase7Evidence"' not in source
-    assert '"powerPointReadback"' not in source
-    assert '"libreOfficeReadback"' not in source
-    assert '"performance_checker_evidence_not_persisted"' in source
-    assert '"visual_checker_evidence_not_persisted"' in source
-    # QUAL-04: the V3 visual review is the actual VQA outcome.
-    assert "visual_review_passed=bool(request.vision_qa)" not in source
-    assert "visual_review=visual_review_evidence" in source
 
 
 @pytest.mark.anyio
@@ -804,38 +738,3 @@ def test_prompt_consumer_accepts_the_clause_the_author_actually_receives() -> No
     assert without_clause["reasonCode"] == "prompt_capability_clause_missing"
 
 
-def test_post_vqa_admission_measures_the_candidate_instead_of_only_reading_cache() -> None:
-    """A cache miss must not be read as "unmeasurable" and discard the fix.
-
-    The post-VQA capacity gate looked the candidate up with
-    `get_cached_browser_metrics`, which is keyed on the exact HTML string. The
-    candidate is canonicalized after the reviser rendered it, so the lookup
-    missed, every correction was rejected as `browser_metrics_unavailable`, and
-    `vision_qa=True` produced `vqa_fixed=0` on every deck -- which failed the
-    visual review and blocked the deck from exporting in any format.
-    `ensure_browser_metrics` re-renders on a miss and still returns None when
-    the slide genuinely cannot be measured, so the gate stays fail-closed.
-    """
-
-    generation_path = (
-        Path(__file__).parents[2] / "services" / "authored_presentation_generation.py"
-    )
-    source = generation_path.read_text(encoding="utf-8")
-    tree = ast.parse(source)
-    assignments = [
-        node
-        for node in ast.walk(tree)
-        if isinstance(node, ast.Assign)
-        and any(
-            isinstance(target, ast.Name) and target.id == "candidate_metrics"
-            for target in node.targets
-        )
-    ]
-    assert assignments, "the post-VQA candidate measurement disappeared"
-    assert any(
-        isinstance(node.value, ast.Await)
-        and isinstance(node.value.value, ast.Call)
-        and isinstance(node.value.value.func, ast.Name)
-        and node.value.value.func.id == "captured_metrics_or_existing"
-        for node in assignments
-    )

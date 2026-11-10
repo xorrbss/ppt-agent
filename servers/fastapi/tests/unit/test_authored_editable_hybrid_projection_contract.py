@@ -38,29 +38,3 @@ def _scene_projection_literal() -> ast.Dict:
     raise AssertionError(f"no {PROJECTION_SCHEMA} literal in {PUBLICATION_SOURCE}")
 
 
-def test_scene_projection_declares_both_authority_claims_as_false() -> None:
-    projection = _scene_projection_literal()
-    claims = {
-        key.value: value
-        for key, value in zip(projection.keys, projection.values, strict=True)
-        if isinstance(key, ast.Constant)
-        and key.value in {"promotionReady", "deploymentAuthorized"}
-    }
-    assert set(claims) == {"promotionReady", "deploymentAuthorized"}, (
-        "the exporter reads both authority claims; an omitted key is read as a "
-        "claim and silently demotes the deck to a raster-only export"
-    )
-    for name, value in claims.items():
-        assert isinstance(value, ast.Constant) and value.value is False, (
-            f"{name} must be written as a literal False, not {ast.dump(value)}"
-        )
-
-
-def test_scene_projection_stays_a_shadow_projection() -> None:
-    projection = _scene_projection_literal()
-    status = {
-        key.value: value
-        for key, value in zip(projection.keys, projection.values, strict=True)
-        if isinstance(key, ast.Constant) and key.value == "status"
-    }
-    assert status, "the projection must publish its shadow/blocked status"

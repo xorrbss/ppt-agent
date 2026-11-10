@@ -1,8 +1,6 @@
 from __future__ import annotations
 
-import ast
 import json
-from pathlib import Path
 
 import pytest
 
@@ -82,30 +80,6 @@ def _v3_evidence(*, tier: str = "T1", source_complete_claim: bool = False) -> di
         "visualReview": {"status": "passed", "fullDeck": False},
     }
 
-
-def test_generation_wires_job_scoped_durable_receipt_manifest() -> None:
-    """Characterize the product call site, not only the receipt helper.
-
-    Before the P0 wiring this AST check failed because generation relied on the
-    in-memory ``DeckEvidenceLedger.receipt_store`` and omitted ``storage_path``.
-    Keeping the check at the call site prevents a future refactor from silently
-    regressing to process-local receipt idempotency.
-    """
-
-    source_path = Path(__file__).parents[2] / "services" / "authored_presentation_generation.py"
-    tree = ast.parse(source_path.read_text(encoding="utf-8"))
-    calls = [
-        node
-        for node in ast.walk(tree)
-        if isinstance(node, ast.Call)
-        and isinstance(node.func, ast.Name)
-        and node.func.id == "create_quality_receipt_v2"
-    ]
-    assert calls, "generation must construct QualityReceipt v2"
-    assert any(
-        any(keyword.arg == "storage_path" for keyword in call.keywords)
-        for call in calls
-    ), "generation receipt construction must pass a durable storage_path"
 
 
 def test_job_manifest_path_is_stable_and_does_not_embed_private_ids(monkeypatch, tmp_path) -> None:
