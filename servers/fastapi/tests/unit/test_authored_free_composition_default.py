@@ -21,9 +21,7 @@ from services.authored_composition_policy import (
     capacity_violations,
     reduce_authored_owner_text_capacity,
 )
-from services.authored_deck_plans import _infographic_plan_applies
-from services.generation_core.authoring import author_deck as author_deck_module
-from services.generation_core.authoring.author_slide import EXACT_RECONSTRUCTION, STYLE_REFERENCE
+from services.generation_core.authoring.author_slide import STYLE_REFERENCE
 
 _KNOBS = (
     "AUTHORED_INFOGRAPHIC_PLAN_ENABLED",
@@ -46,29 +44,6 @@ def _clean_knobs(monkeypatch):
 
 def _style(mode: str = STYLE_REFERENCE) -> SimpleNamespace:
     return SimpleNamespace(reference_mode=mode)
-
-
-def test_infographic_plan_is_off_unless_asked(monkeypatch) -> None:
-    assert _infographic_plan_applies(SimpleNamespace(), _style()) is False
-
-    monkeypatch.setenv("AUTHORED_INFOGRAPHIC_PLAN_ENABLED", "true")
-    assert _infographic_plan_applies(SimpleNamespace(), _style()) is True
-    # The pre-existing exclusions still hold once the plan is on.
-    assert _infographic_plan_applies(SimpleNamespace(), _style(EXACT_RECONSTRUCTION)) is False
-    reflow = SimpleNamespace(_source_content_authored_reflow=True)
-    assert _infographic_plan_applies(reflow, _style()) is False
-
-
-def test_visual_story_plan_is_off_unless_asked(monkeypatch) -> None:
-    applies = author_deck_module._visual_story_plan_applies
-
-    assert applies(STYLE_REFERENCE, structured=False) is False
-
-    monkeypatch.setenv("AUTHORED_VISUAL_STORY_PLAN_ENABLED", "true")
-    assert applies(STYLE_REFERENCE, structured=False) is True
-    # The pre-existing exclusions still hold once the plan is on.
-    assert applies(EXACT_RECONSTRUCTION, structured=False) is False
-    assert applies(STYLE_REFERENCE, structured=True) is False
 
 
 def test_ordinary_envelope_is_relaxed_by_default() -> None:
@@ -123,24 +98,3 @@ def test_hand_built_capacity_is_enforced_unless_told_otherwise() -> None:
 
     assert capacity.enforced is True
     assert "never use text below 16px" in capacity.prompt_brief(_ORDINARY)
-
-
-def test_author_prompt_carries_no_server_composition_text_when_relaxed(monkeypatch) -> None:
-    relaxed = build_authored_capacity_plan(("a",), ("PROBLEM",), _ORDINARY)
-    plan = SimpleNamespace(capacity_plan=relaxed, text_plan=None)
-
-    assert author_deck_module._envelope_enforced(relaxed) is False
-    brief = author_deck_module._capacity_brief(plan, 0, relaxed.at(0))
-    # No server-owned budget text: only the GEOMETRY reminder that took its
-    # place (2026-09-05) survives.
-    assert brief is not None and brief.startswith("GEOMETRY:")
-    assert "characters" not in brief and "qids" not in brief
-    assert "SERVER-FROZEN COMPOSITION ENVELOPE" not in brief
-
-    monkeypatch.setenv("AUTHORED_COMPOSITION_ENVELOPE_ENABLED", "true")
-    bound = build_authored_capacity_plan(("a",), ("PROBLEM",), _ORDINARY)
-    plan = SimpleNamespace(capacity_plan=bound, text_plan=None)
-
-    assert author_deck_module._envelope_enforced(bound) is True
-    brief = author_deck_module._capacity_brief(plan, 0, bound.at(0))
-    assert brief is not None and brief.startswith("SERVER-FROZEN COMPOSITION ENVELOPE")

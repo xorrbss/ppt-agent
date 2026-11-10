@@ -108,14 +108,3 @@ def test_requested_floor_round_trips_to_renderer_and_export_policy():
     assert not font_size_allowed(7.5, 7.4, policy_revision=revision)
     assert requested_font_policy_revision("간결하게") == POLICY_REVISION
     assert requested_font_policy_revision("본문 18px") == POLICY_REVISION
-
-
-def test_user_floor_is_frozen_in_deck_capacity():
-    from models.presentation_outline_model import PresentationOutlineModel, SlideOutlineModel
-    from services.generation_core.authoring.author_deck import prepare_authored_deck
-    from services.generation_core.authoring.author_slide import Brand
-
-    outline = PresentationOutlineModel(slides=[SlideOutlineModel(content="개발방법론")])
-    plan = prepare_authored_deck(outline, Brand(topic="제안서"), instructions="본문 10px")
-    assert plan.capacity_plan.at(0).min_font_px == 10
-    assert plan.instructions == "본문 10px"

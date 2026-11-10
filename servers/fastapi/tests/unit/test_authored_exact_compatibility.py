@@ -20,9 +20,8 @@ from services import presentation_version_service as version_service
 from sqlalchemy.ext.asyncio import create_async_engine
 from sqlmodel import SQLModel, select
 from sqlmodel.ext.asyncio.session import AsyncSession
-from utils.authored_styles import AuthoredStyle, load_authored_styles
-from services.generation_core.authoring.author_deck import prepare_authored_deck
-from services.generation_core.authoring.author_slide import EXACT_RECONSTRUCTION, STYLE_REFERENCE, Brand
+from utils.authored_styles import AuthoredStyle
+from services.generation_core.authoring.author_slide import EXACT_RECONSTRUCTION, Brand
 from utils.llm_calls.critique_slide import _image_mime_type
 
 
@@ -81,43 +80,6 @@ def test_public_style_listing_keeps_exact_mapping_and_mode_private(
     assert "reference_mode" not in response[0]
     assert "slide_reference_images" not in response[0]
     assert "reference_images" not in response[0]
-
-
-def test_exact_duplicate_sources_fail_before_authoring_and_style_mode_keeps_fallback(
-    tmp_path,
-):
-    source = tmp_path / "source.png"
-    source.write_bytes(b"source")
-    exact = _style(
-        reference_mode=EXACT_RECONSTRUCTION,
-        slide_reference_images=(source, source),
-    )
-
-    with pytest.raises(ValueError, match="unique source image per slide"):
-        prepare_authored_deck(_outline(), _brand(), exact)
-
-    # Missing role assets remain a recoverable styling concern, not an implicit
-    # switch into exact reconstruction or a generation failure.
-    styles_dir = tmp_path / "styles"
-    styles_dir.mkdir()
-    (styles_dir / "legacy-style.yaml").write_text(
-        """id: legacy-style
-name: Legacy style
-description: Art direction only
-preview:
-  bg: '#FFFFFF'
-  accent: '#000000'
-reference_images:
-  cover:
-    - legacy/missing.png
-brief: legacy brief
-""",
-        encoding="utf-8",
-    )
-    style_only = load_authored_styles(styles_dir)[0]
-    plan = prepare_authored_deck(_outline(), _brand(), style_only)
-    assert plan.reference_mode == STYLE_REFERENCE
-    assert plan.reference_images[0] == ()
 
 
 @pytest.mark.parametrize(

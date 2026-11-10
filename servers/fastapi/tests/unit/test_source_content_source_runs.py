@@ -7,10 +7,6 @@ from services.source_content.browser_readback import (
     deterministic_source_qid,
     verify_browser_source_readback,
 )
-from services.source_content.readback import (
-    SourceContentReadbackError,
-    verify_source_verbatim_readback,
-)
 from services.source_content.source_runs import (
     parse_source_binding_id,
     project_source_runs,
@@ -333,24 +329,6 @@ def test_browser_readback_records_run_order_instead_of_failing_it() -> None:
     assert result.passed
     assert result.binding_deviations == 1
     assert result.as_dict()["bindingDeviations"] == 1
-
-
-def test_html_readback_accepts_projected_runs_in_source_order() -> None:
-    manifest = _manifest()
-    manifest["units"][0]["blocks"].append(
-        {"sourceBlockId": "b3", "kind": "text", "order": 2, "payload": {"text": "영업 → 상담"}}
-    )
-    outline = {"slides": [{"sourceUnitId": "unit-1", "sourceIndex": 0, "readingOrder": ["b1", "b2", "b3"]}]}
-    html = "<h1>원문 제목</h1><ul><li>프로필 사진</li><li>한 줄 소개</li></ul><div>영업</div><div>상담</div>"
-    assert verify_source_verbatim_readback(manifest=manifest, outline=outline, htmls=[html]).passed
-    # Where the template places one block's own items is layout, not lost text.
-    reordered = "<h1>원문 제목</h1><ul><li>한 줄 소개</li><li>프로필 사진</li></ul><div>영업</div><div>상담</div>"
-    assert verify_source_verbatim_readback(manifest=manifest, outline=outline, htmls=[reordered]).passed
-    # Text the deck never rendered still fails.
-    dropped = "<h1>원문 제목</h1><ul><li>프로필 사진</li></ul><div>영업</div><div>상담</div>"
-    with pytest.raises(SourceContentReadbackError) as error:
-        verify_source_verbatim_readback(manifest=manifest, outline=outline, htmls=[dropped])
-    assert error.value.block_ids == ("b2",)
 
 
 def test_a_bullet_before_another_glyph_never_becomes_its_own_run() -> None:

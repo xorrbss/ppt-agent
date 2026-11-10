@@ -172,7 +172,7 @@ def test_remediation_and_review_terms_follow_the_remake_cap() -> None:
     """Both terms are bounded by what the repair rounds are allowed to spend.
 
     ``MAX_TERMINAL_REMAKES_PER_DECK`` (8) and ``MAX_REMAKES_PER_SLIDE`` (2) are
-    read from ``services/authored_terminal_slide_fallback``, so a deck of one
+    read from ``services/remake_caps``, so a deck of one
     slide can only pay for two remakes.
     """
 

@@ -26,7 +26,7 @@ from models.sql.async_presentation_generation_status import (
 )
 from models.sql.presentation import PresentationModel
 from models.sql.slide import SlideModel
-from services.authored_page_remake_service import _run_preview_background
+from services.page_remake_core import _run_preview_background
 from services.database import async_session_maker
 from services.workspace_authored_async_admission import admit_workspace_authored_task
 from services import presentation_version_service as version_service

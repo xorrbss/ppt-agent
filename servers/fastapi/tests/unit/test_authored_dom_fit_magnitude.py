@@ -16,9 +16,6 @@ from services.authored_generation_timing_receipt import (
     create_generation_attempt_timing_receipt_v2,
     load_generation_attempt_timing_receipts,
 )
-from services.authored_presentation_generation import (
-    build_authored_quality_gate_receipt,
-)
 from utils.authored_dom_fit_magnitude import (
     build_element_kind_index,
     element_kind,
@@ -275,42 +272,6 @@ def test_a_report_built_without_measurement_omits_fit_summary_entirely() -> None
 # --------------------------------------------------------------------------
 # 3.4 -- persistence
 # --------------------------------------------------------------------------
-
-
-def test_the_quality_gate_receipt_carries_magnitude_for_an_overflow_issue() -> None:
-    html = '<p data-qid="lead">Revenue grew</p>'
-    report = inspect_authored_dom(
-        html,
-        _metrics(
-            {
-                "qid": "lead",
-                "tag": "p",
-                "bbox": {"x": 40, "y": 40, "width": 400, "height": 60},
-                "clientWidth": 400,
-                "clientHeight": 60,
-                "scrollWidth": 420,
-                "scrollHeight": 60,
-                "rendered_text": "Revenue grew",
-                "has_owned_text": True,
-                "computed_style": {"overflow": "hidden", "position": "static"},
-            }
-        ),
-    )
-    receipt = build_authored_quality_gate_receipt(
-        htmls=[html],
-        profile_id="ordinary",
-        gate_failures=[
-            {
-                "slide_index": 0,
-                "issues": [issue.to_dict() for issue in _issues(report, "overflow")],
-            }
-        ],
-    )
-
-    recorded = receipt["residualIssues"][0]["issues"][0]
-    assert recorded["category"] == "overflow"
-    assert recorded["magnitude"]["ratio_x"] == 1.05
-    assert recorded["magnitude"]["element_kind"] == "text"
 
 
 def test_the_attempt_timing_receipt_round_trips_a_failed_slide_fit_summary(

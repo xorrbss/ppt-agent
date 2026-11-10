@@ -17,7 +17,6 @@ from services.ppt_writing_policy import (
     writing_policy_prompt,
 )
 
-from services import authored_deck_plans
 from models.authored_vnext.capability_registry import (
     CAPABILITY_REGISTRY_DIGEST,
     prompt_capability_clause,
@@ -132,25 +131,6 @@ def test_writing_policy_html_keeps_inline_numeric_semantics_and_skips_hidden_met
     report = assess_visible_nodes(html_text_nodes(html))
     assert report["hard_violation_counts"] == {"middle_dot": 1}
     assert report["protected_symbol_counts"] == {"long_dash": 1}
-
-
-def test_writing_policy_html_candidate_requires_bounded_correction_only_for_hard_symbols():
-    from services.generation_core.authoring.author_deck import (
-        AuthoredWritingPolicyViolation, _admit_html_writing, _classify_author_validation_error,
-    )
-
-    html = "<p>중복·누락을 확인합니다.</p>"
-    receipt = []
-    with pytest.raises(AuthoredWritingPolicyViolation) as error:
-        _admit_html_writing(html, writing_policy=WRITING_POLICY_ID,
-                            source_values=(), source_preserved=False, receipt=receipt)
-    assert _classify_author_validation_error(error.value).category == "writing_policy_visible_symbols"
-    assert receipt[0]["hard_violation_counts"] == {"middle_dot": 1}
-    assert _admit_html_writing(html, writing_policy=None, source_values=(),
-                               source_preserved=False, receipt=None) == html
-    advisory = "<p>핵심은 검토 예정이라는 점입니다.</p>"
-    assert _admit_html_writing(advisory, writing_policy=WRITING_POLICY_ID,
-                               source_values=(), source_preserved=False, receipt=[]) == advisory
 
 
 @pytest.fixture(autouse=True)
@@ -499,42 +479,6 @@ _TEN_SLIDE_ROLES = [
 ]
 #: The six content positions of the deck above, in order.
 _CONTENT_INDICES = [2, 3, 5, 6, 7, 8]
-
-
-def _slots(monkeypatch, share: float) -> tuple[bool, ...]:
-    monkeypatch.setattr(
-        authored_deck_plans, "get_authored_illustration_share", lambda: share
-    )
-    plan = authored_deck_plans.illustration_share_plan(_TEN_SLIDE_ROLES)
-    return tuple(plan.allows(index) for index in range(len(_TEN_SLIDE_ROLES)))
-
-
-def test_a_quarter_share_picks_every_fourth_content_slide_after_the_anchor(monkeypatch):
-    slots = _slots(monkeypatch, 0.25)
-
-    # Content positions 1 and 5 of [2, 3, 5, 6, 7, 8] -> slide indices 3 and 8.
-    assert [index for index, allowed in enumerate(slots) if allowed] == [3, 8]
-    # The first content slide is the deck's style anchor and stays picture-free.
-    assert slots[_CONTENT_INDICES[0]] is False
-
-
-def test_a_zero_share_is_a_decision_that_no_slide_carries_a_picture(monkeypatch):
-    slots = _slots(monkeypatch, 0.0)
-
-    assert slots == (False,) * len(_TEN_SLIDE_ROLES)
-    # An empty plan is a decision; None would restore the per-slide judgement.
-    assert authored_deck_plans.illustration_share_plan(_TEN_SLIDE_ROLES) is not None
-
-
-def test_a_full_share_still_spares_the_anchor_and_the_non_content_roles(monkeypatch):
-    slots = _slots(monkeypatch, 1.0)
-
-    assert [index for index, allowed in enumerate(slots) if allowed] == (
-        _CONTENT_INDICES[1:]
-    )
-    for index, role in enumerate(_TEN_SLIDE_ROLES):
-        if role in {"COVER", "SECTION", "AGENDA", "CLOSING"}:
-            assert slots[index] is False
 
 
 # --- G10: the deck's literal tokens ------------------------------------------

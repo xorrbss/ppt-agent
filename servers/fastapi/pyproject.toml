@@ -133,50 +133,11 @@ select = ["E", "F", "B", "ASYNC"]
 "api/v1/ppt/endpoints/theme.py" = ["B008"]
 "api/v1/ppt/endpoints/workspace.py" = ["B008"]
 "api/v1/webhook/router.py" = ["B008", "F401"]
-"evaluation/hybrid_review/LIVE_BENCHMARK.py" = ["ASYNC109", "E402"]
 "models/sql/ollama_pull_status.py" = ["F401"]
 "models/sql/presentation.py" = ["F401"]
-# Standalone evidence-gathering script: inserts its own sys.path entry and
-# seeds env defaults before importing project modules, same as
-# scripts/warm_fastembed_cache.py below.
-"scripts/authored_checkpoint_repair_probe.py" = ["E402"]
-"scripts/benchmark_authored_hybrid_review.py" = ["B905"]
 # Restored on 2026-09-04 with the modules a 2026-09-01 merge dropped.
 "scripts/public_service_malicious_corpus_evidence.py" = ["ASYNC240"]
-# Synthetic Korean deck-content string literals (labels/captions); wrapping
-"scripts/slidespec_human_labeled_replayer.py" = ["ASYNC240"]
 "scripts/warm_fastembed_cache.py" = ["E402"]
-"services/authored_exact_provenance.py" = ["B905"]
-"services/authored_exact_source_snapshot.py" = ["B905"]
-# Extracted from authored_presentation_pipeline.py in 919071f92 (2026-09-10,
-# "Separate authored structural repair core") with no module-level imports at
-# all: names such as Mapping/Sequence/math are injected via bind_runtime()
-# at the bottom of the file, so F821 is inherent to the split, not a bug.
-# E701 is the same compressed single-line-conditional style already
-# tolerated in services/authored_vnext/semantic/editable_hybrid_libreoffice_readback.py.
-# Same bind_runtime()-injected-globals split as authored_generation_repair.py
-# above.
-"services/authored_presentation_pipeline.py" = ["F403", "F405"]
-# Star-import re-export facade: authored_presentation_pipeline.py does
-# `from services.authored_presentation_pipeline_deps import *` and this
-# module's `__all__` is built dynamically from `globals()`, so ruff cannot
-# see the re-export intent and flags every name as an unused import.
-"services/authored_presentation_pipeline_deps.py" = ["F401"]
-# Host module for the bind_runtime() split: `_call_extracted()` calls
-# `module.bind_runtime(sys.modules[__name__])`, passing this module's own
-# namespace as the injected-globals surface for authored_generation_repair.py
-# and its siblings above. Its "unused" imports are exactly that surface.
-"services/authored_presentation_service.py" = ["ASYNC240"]
-"services/authored_quality_review_service.py" = ["B905"]
-"services/authored_quality_routing.py" = ["B905"]
-"services/authored_quality_telemetry.py" = ["B905"]
-# Pure comparison helpers extracted alongside the structural-repair split
-# above (919071f92, 2026-09-10). B023 on `assign()` is the same
-# immediate-use-recursive-closure false positive already tolerated in
-# services/slidespec_geometry_candidates.py and services/slidespec_repair.py:
-# it is defined and fully consumed within the same loop iteration before
-# `edges`/`matched` are reassigned.
-"services/authored_structural_repair_compare.py" = ["B023"]
 "services/chat/service.py" = ["B904"]
 "services/decompose_job_service.py" = ["ASYNC230"]
 "services/documents_loader.py" = ["B007"]
@@ -188,43 +149,28 @@ select = ["E", "F", "B", "ASYNC"]
 # Moved 2026-09-29 from api/v1/ppt/endpoints/presentation_generate.py with its baseline.
 "services/presentation_generation_pipeline.py" = ["B008", "B904", "F811", "F841"]
 "services/public_export_operation.py" = ["ASYNC240"]
-"services/slidespec_authored_executor.py" = ["B905", "F841"]
-"services/slidespec_authored_importer.py" = ["B905", "F841"]
-"services/slidespec_geometry_candidates.py" = ["B023"]
-"services/slidespec_pipeline_performance.py" = ["B905"]
-"services/slidespec_repair.py" = ["B023"]
 "services/temp_file_service.py" = ["ASYNC230", "ASYNC240"]
 "services/workspace_asset_service.py" = ["ASYNC240"]
 "services/workspace_operation_runner.py" = ["F401"]
 "services/workspace_service.py" = ["B904", "F401"]
-"tests/integration/test_authored_checkpoint_http_flow.py" = ["ASYNC109"]
-"tests/integration/test_authored_checkpoint_process_restart.py" = ["B023"]
 "tests/integration/test_workspace_gate_e_vertical_flow.py" = ["F401"]
 "tests/support/workspace_crash_probe_worker.py" = ["E402"]
 "tests/test_image_generation_openai_compatible.py" = ["ASYNC240", "F401", "F841"]
 "tests/unit/test_auth_bootstrap.py" = ["F401"]
-"tests/unit/test_authored_acceptance_fallback.py" = ["ASYNC109"]
 "tests/unit/test_authored_browser_metrics.py" = ["ASYNC109"]
 "tests/unit/test_authored_checkpoint_service.py" = ["ASYNC221"]
-"tests/unit/test_authored_exact_provenance.py" = ["B905"]
-"tests/unit/test_authored_hybrid_review.py" = ["ASYNC109"]
 "tests/unit/test_authored_page_remake_history.py" = ["F401"]
 "tests/unit/test_authored_pipeline.py" = ["ASYNC109"]
-"tests/unit/test_authored_quality_review.py" = ["F841"]
 "tests/unit/test_authored_render_cache_byte_budget.py" = ["ASYNC109"]
 "tests/unit/test_authored_render_policy.py" = ["ASYNC109"]
 "tests/unit/test_bounded_chrome_runtime.py" = ["ASYNC109"]
 "tests/unit/test_chat_first_generation_integration.py" = ["ASYNC240"]
 "tests/unit/test_decompose_job_service.py" = ["ASYNC109", "ASYNC240"]
-"tests/unit/test_evidence_lattice_active_bundle.py" = ["F841"]
 "tests/unit/test_lightweight_document_service.py" = ["F401"]
 "tests/unit/test_llm_utils_disconnect.py" = ["ASYNC110"]
 "tests/unit/test_presentation_export_attempt_service.py" = ["ASYNC240"]
 "tests/unit/test_presentation_version_service.py" = ["F401"]
 "tests/unit/test_public_export_identity_contract.py" = ["ASYNC240"]
-"tests/unit/test_slidespec_authored_importer.py" = ["F401"]
-"tests/unit/test_slidespec_core.py" = ["F401"]
-"tests/unit/test_slidespec_pipeline_performance.py" = ["B905"]
 # Pre-existing unreachable legacy test tail references its former pytest fixtures;
 # keep the exception local until that test is deliberately reconstructed.
 "tests/unit/test_trusted_executor_windows_transport.py" = ["ASYNC240"]
@@ -241,15 +187,6 @@ select = ["E", "F", "B", "ASYNC"]
 # without an explicit __all__.
 "utils/get_env.py" = ["F401"]
 "services/generation_core/authoring/author_slide.py" = ["B904"]
-# `runtime: Any` parameter variant of the bind_runtime pattern above:
-# StructuralRepairBudget is only ever bound from `runtime.StructuralRepairBudget`
-# inside the function body, and the annotation referencing it is never
-# evaluated eagerly because of `from __future__ import annotations`.
-"services/generation_core/authoring/author_structural_repair_loop.py" = ["F821"]
-# This module is passed whole as the `runtime` namespace object to
-# revise_structural_candidates() (`runtime=sys.modules[__name__]`); these
-# imports are its injected-globals export surface, not dead code.
-"services/generation_core/authoring/author_vision_qa.py" = ["ASYNC240", "F401"]
 "utils/llm_calls/critique_slide.py" = ["B904"]
 "utils/llm_calls/edit_slide.py" = ["B904"]
 "utils/llm_calls/edit_slide_html.py" = ["B904"]
@@ -269,7 +206,6 @@ select = ["E", "F", "B", "ASYNC"]
 # an asyncio.wait_for anti-pattern; same rationale as the existing ASYNC109
 # tolerance on utils/slide_capture.py above.
 "utils/slide_capture_local_fit.py" = ["ASYNC109"]
-"utils/slidespec_solver.py" = ["F401"]
 "utils/upload_limits.py" = ["ASYNC230", "ASYNC240"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]

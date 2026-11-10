@@ -118,8 +118,6 @@ _ALLOWED_LITERAL_FILES = {
     "services/authored_canvas.py": "canonical preset table",
     # An upper bound on a style sample's canvas edge, not a canvas branch.
     "utils/authored_style_samples.py": "sample canvas upper bound",
-    # An upper bound on a decorative panel's CSS height, not a canvas branch.
-    "services/authored_decoration_panel_sheen.py": "panel height upper bound",
     # An upper bound on native-object margins in points.
     "services/generation_core/native_objects/payload.py": "margin upper bound",
     # Pixel bounds of the vision-QA contact sheet (an image budget, not a deck canvas).

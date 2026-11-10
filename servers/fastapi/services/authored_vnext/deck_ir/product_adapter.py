@@ -44,7 +44,7 @@ from services.authored_vnext.slide_quality_acceptance import (
     SCHEMA_VERSION as SLIDE_QUALITY_SCHEMA_VERSION,
     validate_slide_quality_acceptance_receipt,
 )
-from services.authored_presentation_artifacts import _save_slide_pngs
+from services.slide_image_sets import _save_slide_pngs
 from services.authored_vnext.deck_ir.director import ProductionStructuredDeckDirector
 from services.authored_vnext.deck_ir.integration import (
     ConstraintCompilerDeckIrExecutionAdapter,

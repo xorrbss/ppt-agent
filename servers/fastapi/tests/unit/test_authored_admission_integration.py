@@ -15,7 +15,6 @@ import pytest
 from services import authored_admission as gate
 from services.authored_admission_checkpoint import prepare_checkpoint_write
 from services.authored_admission_producers import author_html, illustrate_html, source_candidate
-from services.authored_admission_publication import final_readback
 from services.authored_admission_session import (
     AdmissionSession,
     _SESSION,
@@ -127,65 +126,6 @@ def test_publication_reader_ignores_evidence_and_stale_receipts(session):
 
 
 @sync_async
-@pytest.mark.parametrize("flagged", [False, True])
-async def test_final_publication_is_strict_except_already_flagged_visibility(session, flagged):
-    session.contexts = (replace(context(), terminal_fallback_eligible=True),)
-    html = author_html(HTML, index=0)
-    request = SimpleNamespace(_source_document_outline=OUTLINE, _source_content_manifest=MANIFEST)
-    kwargs = dict(
-        pngs=[b"png"],
-        generation_job=None,
-        request=request,
-        htmls=[html],
-        source_reflow=True,
-        composition_profile=SimpleNamespace(text_mode="verbatim"),
-        terminal_fallback_enabled=True,
-        evidence_ledger=object(),
-        final_browser_metrics=[metrics(html, cssVisible=False)],
-        flagged_slides=[{"index": 0, "reason": "source_readback:visibility"}] if flagged else [],
-        _merge_flagged_slide_entries=lambda entries: list(entries),
-    )
-    if not flagged:
-        with pytest.raises(Exception, match="visibility"):
-            await final_readback(**kwargs)
-    else:
-        _, payload, _ = await final_readback(**kwargs)
-        assert payload["integrityVerified"] and payload["flaggedVisibilityFailures"] == ["b1"]
-
-
-@sync_async
-@pytest.mark.parametrize("mode", ["shadow", "enforce"])
-async def test_a_deck_missing_a_source_page_cannot_publish(session, mode):
-    """B2: the deck-level cardinality assertion holds in shadow and in enforce.
-
-    Each surviving slide validates against its own one-unit manifest, so only a
-    whole-deck predicate can see that a source page was dropped. It runs before
-    any per-slide work, on the same implementation the slide inspector uses.
-    """
-
-    session.mode = mode
-    html = author_html(HTML, index=0)
-    two_units = {"units": [*MANIFEST["units"], {**MANIFEST["units"][0], "sourceUnitId": "u2", "sourceIndex": 1}]}
-    two_slides = {"slides": [*OUTLINE["slides"], {**OUTLINE["slides"][0], "sourceUnitId": "u2", "sourceIndex": 1}]}
-    kwargs = dict(
-        pngs=[b"png"],
-        generation_job=None,
-        request=SimpleNamespace(_source_document_outline=two_slides, _source_content_manifest=two_units),
-        htmls=[html],
-        source_reflow=True,
-        composition_profile=SimpleNamespace(text_mode="verbatim"),
-        terminal_fallback_enabled=False,
-        evidence_ledger=object(),
-        final_browser_metrics=[metrics(html)],
-        flagged_slides=[],
-        _merge_flagged_slide_entries=lambda entries: list(entries),
-    )
-    with pytest.raises(Exception, match="cardinality") as raised:
-        await final_readback(**kwargs)
-    assert raised.value.code == "source_content_browser_readback_failed"
-
-
-@sync_async
 async def test_a_session_less_producer_is_admitted_at_the_writer(monkeypatch):
     """B1: enforce must not turn "no admission session" into a missing receipt.
 
@@ -229,37 +169,6 @@ async def test_a_session_less_producer_is_admitted_at_the_writer(monkeypatch):
     assert receipt["htmlDigest"] == digest_html(result.author_html)
     assert receipt["attemptToken"] == "attempt-1" and receipt["fencedRevision"] == 4
     database.commit.assert_awaited_once()
-
-
-@sync_async
-async def test_rescue_cannot_mint_a_new_flag_in_enforce(session):
-    from services.authored_author_stage_rescue import source_reflow_rescue_readback
-
-    html = author_html(HTML, index=0)
-    result = source_reflow_rescue_readback(
-        index=0,
-        html=html,
-        metrics=metrics(html, cssVisible=False),
-        bindings=context().bindings,
-        profile=SimpleNamespace(strict_dom_gate=True),
-        reference_mode="source_content_restyle",
-    )
-    assert result is None
-    assert any(item.verdict == "rejected" for item in session.admissions.values())
-
-
-@sync_async
-async def test_vqa_producer_uses_same_rejection_and_label(session):
-    from services.authored_vqa_source_integrity import source_vqa_candidate_integrity_passes
-
-    html = author_html(HTML, index=0)
-
-    async def validator(index, value, sample):
-        source_candidate(
-            value, index=index, metrics=sample, manifest=MANIFEST, outline=OUTLINE, bindings=context().bindings
-        )
-
-    assert not await source_vqa_candidate_integrity_passes(0, html, metrics(html, renderedText="changed"), validator)
 
 
 def _configure_source_reflow_deck(profile):
@@ -435,30 +344,6 @@ def test_shadow_report_scopes_to_one_operation_and_names_the_predicate():
     assert "| producer | existing verdict |" in table and "| blocks | gate error | count |" in table
 
 
-@sync_async
-async def test_vqa_correction_reuses_captured_evidence(session, monkeypatch):
-    from unittest.mock import AsyncMock
-    from services.generation_core.authoring import author_vision_qa as vqa
-    from utils.slide_capture_result import RenderCapture
-    from services.authored_admission_context import digest_html
-
-    html = author_html(HTML, index=0, producer="vqa_repair")
-    capture = AsyncMock(
-        return_value=RenderCapture.from_payload(
-            html_digest=digest_html(html),
-            png=b"png",
-            browser_metrics=metrics(html),
-            runtime_counters={},
-        )
-    )
-    monkeypatch.setattr(vqa, "render_html_to_png_with_metrics", capture)
-    first = await vqa._render_correction_html(html, index=0)
-    second = await vqa._render_correction_html(html, index=0)
-    assert first == (html, b"png")
-    assert second == first
-    assert capture.await_count == 1
-
-
 def test_enforce_removes_the_legacy_deck_seal_check(session):
     from unittest.mock import Mock
     from services.authored_admission_producers import require_bound_source_html
@@ -487,97 +372,3 @@ def test_provider_output_marker_never_reinterprets_inserted_tokens(session, monk
     # A new model response is token even when its bytes match an old expansion.
     provider_raw_html(expanded, index=0)
     assert states[-1] == "token"
-
-
-def test_batch_provider_raw_diagnostics_precede_legacy_rewrites(session, monkeypatch):
-    from unittest.mock import Mock
-    from services.generation_core.authoring import author_batch as batch
-
-    rewrite = Mock(side_effect=AssertionError("rewrote malformed raw HTML"))
-    monkeypatch.setattr(batch, "_strip_nonvisual_pointer_events", rewrite)
-    request = batch.AuthoredBatchSlideRequest(index=0, content="", role="body")
-    prepared = SimpleNamespace(request=request, source_slot_candidates={})
-    with pytest.raises(gate.BrowserSourceReadbackError):
-        batch._postprocess_slide(prepared, HTML.replace("<h1>", '<h1 id="a" id="b">'), brand=None)
-    rewrite.assert_not_called()
-
-
-@sync_async
-@pytest.mark.parametrize("mode", ["shadow", "enforce"])
-async def test_publication_admits_the_evidence_ledger_s_frozen_metrics(session, mode):
-    """G4, live series 2026-09-12: the publication gate's only observed regression.
-
-    ``final_readback`` is the one gate call site fed the deck evidence ledger's
-    *retained* metrics, and that ledger freezes them into nested
-    ``MappingProxyType``.  Every other producer hands the gate Chromium's plain
-    ``dict``, so the deck whose 35 slides had each been admitted at their render
-    checkpoint raised an uncoded ``TypeError`` at publication: recorded in
-    shadow as ``unobserved -> error``/``authored_admission_internal_error`` and,
-    under enforce, a deck-level failure of a deck that published.
-    """
-
-    from services.authored_evidence_ledger import _freeze
-
-    session.mode = mode
-    session.contexts = (replace(context(), terminal_fallback_eligible=True),)
-    html = author_html(HTML, index=0)
-    kwargs = dict(
-        pngs=[b"png"],
-        generation_job=None,
-        request=SimpleNamespace(_source_document_outline=OUTLINE, _source_content_manifest=MANIFEST),
-        htmls=[html],
-        source_reflow=True,
-        composition_profile=SimpleNamespace(text_mode="verbatim"),
-        terminal_fallback_enabled=True,
-        evidence_ledger=object(),
-        final_browser_metrics=[_freeze(metrics(html))],
-        flagged_slides=[],
-        _merge_flagged_slide_entries=lambda entries: list(entries),
-    )
-    _, payload, _ = await final_readback(**kwargs)
-    assert payload["verified"] is True
-    rows = session.shadow.as_dict()["rows"]
-    assert not [row for row in rows if row["gateVerdict"] == "error"]
-    # Both modes record the publication verdict, so the deck-level row exists
-    # on the enforce side of the comparison too.
-    published = [row for row in rows if row["producer"] in {"publication", "terminal_flag_only"}]
-    assert [row["existingVerdict"] for row in published] == [
-        "unobserved" if mode == "enforce" else "admitted"
-    ]
-
-
-@sync_async
-async def test_a_gate_error_at_publication_still_names_its_exception(session, monkeypatch):
-    """The fail-closed re-raise stays; shadow records what escaped, bounded."""
-
-    from services.authored_admission_session import AdmissionSession
-
-    session.mode = "shadow"
-    html = author_html(HTML, index=0)
-    kwargs = dict(
-        pngs=[b"png"],
-        generation_job=None,
-        request=SimpleNamespace(_source_document_outline=OUTLINE, _source_content_manifest=MANIFEST),
-        htmls=[html],
-        source_reflow=True,
-        composition_profile=SimpleNamespace(text_mode="verbatim"),
-        terminal_fallback_enabled=False,
-        evidence_ledger=object(),
-        final_browser_metrics=[metrics(html)],
-        flagged_slides=[],
-        _merge_flagged_slide_entries=lambda entries: list(entries),
-    )
-
-    def explode(self, context, value, *, metrics=None, png=None):
-        raise RuntimeError("instrumentation defect")
-
-    monkeypatch.setattr(AdmissionSession, "admit", explode)
-    _, payload, _ = await final_readback(**kwargs)
-    assert payload["verified"] is True
-    row = next(row for row in session.shadow.as_dict()["rows"] if row["gateVerdict"] == "error")
-    assert row["gateCode"] == "authored_admission_internal_error"
-    assert row["gateError"] == "RuntimeError" and len(row["gateErrorDigest"]) == 16
-
-    session.mode = "enforce"
-    with pytest.raises(RuntimeError, match="instrumentation defect"):
-        await final_readback(**kwargs)

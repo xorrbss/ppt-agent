@@ -3,8 +3,6 @@ import base64
 from pathlib import Path
 from types import SimpleNamespace
 
-from services import authored_illustrations as illustrations_mod
-from services.authored_illustrations import apply_authored_illustration
 from utils.authored_styles import load_authored_styles
 from services.generation_core.authoring.author_slide import Brand, build_design_system
 
@@ -43,20 +41,6 @@ _SLOT_HTML = (
 )
 
 
-def test_disabled_generation_drops_slot_without_calling_provider():
-    service = _Service(RuntimeError("disabled provider must not be called"))
-    out = _run(
-        apply_authored_illustration(
-            _SLOT_HTML,
-            _style(),
-            service,
-            generate_fallback=False,
-        )
-    )
-    assert "<img" not in out
-    assert service.prompts == []
-
-
 def test_design_system_gains_slot_rules_only_for_illustration_styles():
     brand = Brand(topic="주제")
     without = build_design_system(
@@ -90,36 +74,3 @@ def test_loader_parses_illustration_style_prompt(tmp_path: Path):
 
     assert styles["iso"].illustration_prompt == "isometric 3d"
     assert styles["flat"].illustration_prompt is None
-
-
-def test_generated_slot_image_records_its_review_once(tmp_path, monkeypatch):
-    """The write point: the review sees the inlined URI and the prompt's own label decision."""
-    from PIL import Image
-
-    from services import authored_illustration_reviews as reviews
-    from services.generation_core.assets.illustration_prompt import NO_TEXT_SUFFIX
-
-    picture = tmp_path / "slot.png"
-    Image.new("RGB", (8, 8), (10, 20, 30)).save(picture)
-    service = _Service(SimpleNamespace(path=str(picture)))
-    seen = []
-
-    async def fake_review(data_uri, **kwargs):
-        seen.append((data_uri, kwargs))
-        return None
-
-    monkeypatch.setattr(reviews, "review_illustration", fake_review)
-    monkeypatch.delenv("IMAGE_PROVIDER", raising=False)  # default-deny: no labels
-
-    data_uri = _run(illustrations_mod._generate_slot_image(
-        "isometric pipeline", "clean isometric", service, 0, False, "## 제목\n- 라벨 후보",
-    ))
-
-    assert data_uri and data_uri.startswith("data:image/")
-    assert len(seen) == 1
-    recorded_uri, kwargs = seen[0]
-    assert recorded_uri == data_uri
-    assert kwargs["labels_requested"] is False
-    assert service.prompts[0].prompt.endswith(NO_TEXT_SUFFIX)
-    assert kwargs["prompt"] == service.prompts[0].prompt
-    assert "라벨" in " ".join(kwargs["forbidden"]) or "후보" in " ".join(kwargs["forbidden"])

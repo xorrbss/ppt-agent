@@ -10,12 +10,6 @@ overflow so the remake brief's two evidence slots quoted counts, not qids.
 
 from __future__ import annotations
 
-from services.authored_measured_gates import (
-    FRAGMENTATION_REMAKE_HINT,
-    measured_gate_issues,
-    remake_density_hint,
-)
-from services.authored_repair_round_order import gate_defects_by_slide
 from utils.authored_dom_footer_zone import _looks_like_page_number
 from utils.authored_fragmentation_gate import inspect_fragmentation, page_number_max_font_px
 from utils.slide_capture_fit import in_render_fit_probe_prelude
@@ -65,60 +59,3 @@ def test_fitter_probe_carries_the_raised_threshold(monkeypatch):
     prelude = in_render_fit_probe_prelude()
     assert '"page_number_max_font_px": 15.0' in prelude
     assert '"font_floor_px": 15.0' in prelude
-
-
-def test_gate_issues_carry_the_merge_instruction_into_the_remake_brief(monkeypatch):
-    _clear(monkeypatch)
-    monkeypatch.setenv(GATE, "true")
-    elements = [
-        {"qid": f"q{i}", "bbox": {"x": 0, "y": 0, "width": 10, "height": 10},
-         "rendered_text": f"label {i}", "has_owned_text": True, "font_size": 18.0}
-        for i in range(60)
-    ]
-    metrics = {"viewport": {"width": 1280, "height": 720}, "elements": elements}
-    issues = measured_gate_issues(browser_metrics=metrics, fit_report=None, role="body")
-    assert [issue["message"] for issue in issues] == ["text_owners:60>50"]
-    assert issues[0]["detail"].startswith("BODY has 60 text-owning elements (limit 50). Merge")
-    defects = gate_defects_by_slide([{"slide_index": 3, "issues": issues}])[3]
-    assert defects[0].detail == issues[0]["detail"]
-
-
-def test_fragmentation_only_remakes_get_the_merge_hint_not_fewer_bullets():
-    class Defect:
-        def __init__(self, category):
-            self.category = category
-
-    default = "lower density"
-    assert remake_density_hint([Defect("fragmentation")], default=default) == FRAGMENTATION_REMAKE_HINT
-    assert remake_density_hint([Defect("fragmentation"), Defect("overflow")], default=default) == default
-    assert remake_density_hint([], default=default) == default
-
-
-def test_gate_issues_come_after_dom_defects(monkeypatch):
-    """The remake brief quotes ``defects[:2]``; overflow qids must outrank counts."""
-
-    import services.authored_presentation_pipeline as pipeline
-    import services.authored_measured_gates as gates
-
-    class Dom:
-        category = "overflow"
-
-        def to_dict(self):
-            return {"category": "overflow", "severity": "high", "message": "overflow", "qids": ["q1"]}
-
-    class Report:
-        telemetry_status = "available"
-
-    class Profile:
-        strict_dom_gate = True
-        profile_id = "ordinary"
-
-    monkeypatch.setattr(pipeline, "inspect_authored_dom", lambda *a, **k: Report())
-    monkeypatch.setattr(pipeline, "blocking_safety_issues", lambda report: [Dom()])
-    monkeypatch.setattr(gates, "fragmentation_violations", lambda *a, **k: ("text_owners:60>50",))
-    monkeypatch.setattr(pipeline, "measured_gate_issues", gates.measured_gate_issues)
-    _report, failure = pipeline._evaluate_slide_quality(
-        index=0, html="<html></html>", browser_metrics={"elements": []}, capacity_plan=None,
-        composition_profile=Profile(), reference_mode="ordinary", fit_report=None,
-    )
-    assert [issue["category"] for issue in failure["issues"]] == ["overflow", "fragmentation"]

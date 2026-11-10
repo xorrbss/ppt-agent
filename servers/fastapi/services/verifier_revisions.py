@@ -844,6 +844,12 @@ PARTIAL_RECOVERY_CODE_LEDGER = VerifierRevisionLedger(
         # renderer called, and reworded the module docstring and two comments that
         # pointed at it. svg capture code is unchanged; no behaviour or output changed.
         "9984d1d1df34225eaf8a0e25e9322e9adcb0a4ae5925874b3c85bd4c5e629bed": "svg-partial-recovery-code/1",
+        # 2026-11-10 B4b: authored removal P3 B4b deleted the authored generation
+        # branch of services/presentation_generation_pipeline.py (the authored
+        # presentation service import and its dispatch); AUTHORED_TEMPLATE now comes
+        # from the strategy module. The svg dispatch is unchanged; no behaviour or
+        # output changed.
+        "03a2a45f842e4a67b85560f4332841f93a29e628856cfc50d5d3ea6daed6e131": "svg-partial-recovery-code/1",
     }),
 )
 
@@ -1042,6 +1048,12 @@ PAGE_RENDER_CODE_LEDGER = VerifierRevisionLedger(
         # renderer called, and reworded the module docstring and two comments that
         # pointed at it. svg capture code is unchanged; no behaviour or output changed.
         "e4b027f672267be865cf00b84eb98711bd2f703365f8dbbacf78c3b76d3a4850": "svg-page-render-code/1",
+        # 2026-11-10 B4b: authored removal P3 B4b deleted the authored generation
+        # branch of services/presentation_generation_pipeline.py (the authored
+        # presentation service import and its dispatch); AUTHORED_TEMPLATE now comes
+        # from the strategy module. The svg dispatch is unchanged; no behaviour or
+        # output changed.
+        "0a02e9150024780fc033caadd54308f7969a2fdb6379038581ae61979c1de1ec": "svg-page-render-code/1",
     }),
 )
 

@@ -20,7 +20,6 @@ import re
 from pathlib import Path
 
 
-
 BACKEND_ROOT = Path(__file__).resolve().parents[2]
 SCANNED_TREES = ("services", "api", "utils", "models", "constants")
 _HANGUL = re.compile(r"[가-힣]")
@@ -41,8 +40,6 @@ _ALLOWED_HANGUL_MODULES: frozenset[str] = frozenset(
         "models/authored_illustration_plan.py",
         "utils/authored_infographic/icons.py",
         "utils/authored_style_converter.py",
-        "utils/llm_calls/author_chapter_plan.py",
-        "services/generation_core/authoring/author_deck.py",
         "utils/llm_calls/author_header_prompt_clauses.py",
         "utils/llm_calls/author_infographic_plan.py",
         "utils/llm_calls/author_slide_brief.py",
@@ -67,7 +64,6 @@ _ALLOWED_HANGUL_MODULES: frozenset[str] = frozenset(
         "services/generation_core/style/build.py",
         "services/source_content/raster_structure_emit.py",
         "utils/authored_font_policy.py",
-        "services/authored_semantic_role_repair.py",
         "utils/ocr_language.py",
         # --- Catalog data records with an explicit locale field ---
         "constants/provider_registry_generated.py",

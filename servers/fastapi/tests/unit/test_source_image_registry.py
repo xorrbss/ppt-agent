@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-import base64
 import hashlib
 import uuid
 from functools import wraps
@@ -19,19 +18,12 @@ from services.source_images.extract import ExtractedSourceImage
 from services.source_images.models import (
     FURNITURE_REPEAT_THRESHOLD,
     MIN_SOURCE_IMAGE_EDGE_PX,
-    SourceImageCandidate,
 )
 from services.source_images.registry import (
     ManifestImageOccurrence,
     register_manifest_image_occurrences,
     register_source_images,
 )
-from services.authored_illustrations import (
-    enforce_strict_source_image_size_floor,
-    validate_bound_source_images,
-    validate_visible_source_images,
-)
-from utils.slide_capture import ensure_browser_metrics, render_html_to_png
 
 
 def async_test(fn):
@@ -494,15 +486,6 @@ async def test_manifest_occurrences_keep_repeated_bytes_as_distinct_required_slo
     assert len(candidates) == 2
     assert candidates[0].asset_id != candidates[1].asset_id
     assert candidates[0].path == candidates[1].path
-    data_uri = "data:image/png;base64," + base64.b64encode(payload).decode()
-    html = f'<html><body><img src="{data_uri}"><img src="{data_uri}"></body></html>'
-    offered = {candidate.asset_id: candidate for candidate in candidates}
-    assert validate_bound_source_images(html, offered) == html
-    with pytest.raises(ValueError, match="authored_source_image_binding_mismatch"):
-        validate_bound_source_images(
-            f'<html><body><img src="{data_uri}"></body></html>',
-            offered,
-        )
     original_rows = {row.id: (row.path, deepcopy(row.extras), row.owner_id) for row in session.added}
     original_bytes = candidates[0].path.read_bytes()
     inherited = SimpleNamespace(
@@ -548,187 +531,6 @@ async def test_manifest_occurrences_keep_repeated_bytes_as_distinct_required_slo
         first.extras = deepcopy(original_rows[first_id][1])
         await asyncio.to_thread(Path(first.path).write_bytes, original_bytes)
         session._by_id[first_id] = first
-
-
-def test_strict_source_visibility_rejects_hidden_tiny_offcanvas_and_strip(
-    tmp_path: Path,
-) -> None:
-    payload = _image_bytes(320, 240)
-    digest = hashlib.sha256(payload).hexdigest()
-    path = tmp_path / "source.png"
-    path.write_bytes(payload)
-    candidate = SourceImageCandidate(
-        asset_id="occurrence-1",
-        path=path,
-        mime_type="image/png",
-        width=320,
-        height=240,
-        digest=digest,
-        source_slide_index=0,
-    )
-    data_uri = "data:image/png;base64," + base64.b64encode(payload).decode()
-    html = f'<html><body><img data-qid="source.image" src="{data_uri}"></body></html>'
-
-    def metrics(*, bbox, style=None, image=None):
-        return {
-            "width": 1280,
-            "height": 720,
-            "elements": [
-                {
-                    "qid": "source.image",
-                    "tag": "img",
-                    "bbox": bbox,
-                    "computed_style": {
-                        "display": "block",
-                        "visibility": "visible",
-                        "opacity": "1",
-                        **(style or {}),
-                    },
-                    "occluded_fraction": 0,
-                    "image": {
-                        "src": data_uri,
-                        "complete": True,
-                        "naturalWidth": 320,
-                        "naturalHeight": 240,
-                        "cssVisible": True,
-                        "effectiveOpacity": 1,
-                        "viewportIntersectionRatio": 1,
-                        **(image or {}),
-                    },
-                }
-            ],
-        }
-
-    offered = {candidate.asset_id: candidate}
-    visible = metrics(bbox={"x": 80, "y": 80, "width": 320, "height": 240})
-    assert validate_visible_source_images(html, offered, visible) == html
-
-    hidden_cases = [
-        metrics(
-            bbox={"x": 80, "y": 80, "width": 320, "height": 240},
-            style={"display": "none"},
-            image={"cssVisible": False},
-        ),
-        metrics(
-            bbox={"x": 80, "y": 80, "width": 320, "height": 240},
-            image={"effectiveOpacity": 0.001},
-        ),
-        metrics(bbox={"x": 80, "y": 80, "width": 1, "height": 1}),
-        metrics(
-            bbox={"x": -9999, "y": 80, "width": 320, "height": 240},
-            image={"viewportIntersectionRatio": 0},
-        ),
-        metrics(bbox={"x": 40, "y": 80, "width": 1100, "height": 24}),
-    ]
-    for hidden in hidden_cases:
-        with pytest.raises(ValueError, match="authored_source_image_visibility_mismatch"):
-            validate_visible_source_images(html, offered, hidden)
-
-
-def test_large_source_evidence_requires_material_rendered_size(tmp_path: Path) -> None:
-    payload = _image_bytes(1600, 900)
-    digest = hashlib.sha256(payload).hexdigest()
-    path = tmp_path / "screenshot.png"
-    path.write_bytes(payload)
-    candidate = SourceImageCandidate(
-        asset_id="screenshot-occurrence",
-        path=path,
-        mime_type="image/png",
-        width=1600,
-        height=900,
-        digest=digest,
-        source_slide_index=24,
-    )
-    data_uri = "data:image/png;base64," + base64.b64encode(payload).decode()
-    html = f'<html><body><img data-qid="source.screenshot" src="{data_uri}"></body></html>'
-    offered = {candidate.asset_id: candidate}
-
-    def metrics(width: float, height: float):
-        return {
-            "width": 1280,
-            "height": 720,
-            "elements": [
-                {
-                    "qid": "source.screenshot",
-                    "tag": "img",
-                    "bbox": {"x": 40, "y": 40, "width": width, "height": height},
-                    "computed_style": {
-                        "display": "block",
-                        "visibility": "visible",
-                        "opacity": "1",
-                    },
-                    "occluded_fraction": 0,
-                    "image": {
-                        "src": data_uri,
-                        "complete": True,
-                        "naturalWidth": 1600,
-                        "naturalHeight": 900,
-                        "cssVisible": True,
-                        "effectiveOpacity": 1,
-                        "viewportIntersectionRatio": 1,
-                    },
-                }
-            ],
-        }
-
-    # s22-like evidence is large enough to read; s25's 68x38 thumbnails are not.
-    assert validate_visible_source_images(html, offered, metrics(154, 86)) == html
-    with pytest.raises(ValueError, match="authored_source_image_visibility_mismatch"):
-        validate_visible_source_images(html, offered, metrics(68, 38))
-
-
-@async_test
-async def test_dense_source_gallery_enforces_evidence_floor_before_render(
-    tmp_path: Path,
-) -> None:
-    specs = [
-        (1600, 900, "red", "shot-1", "shot"),
-        (1600, 900, "green", "shot-2", "shot"),
-        (1600, 900, "blue", "shot-3", "shot"),
-        (256, 256, "orange", "icon-1", "icon"),
-        (256, 256, "purple", "icon-2", "icon"),
-        (256, 256, "yellow", "icon-3", "icon"),
-    ]
-    offered: dict[str, SourceImageCandidate] = {}
-    tags: list[str] = []
-    for width, height, color, asset_id, kind in specs:
-        payload = _image_bytes(width, height, color=color)
-        path = tmp_path / f"{asset_id}.png"
-        path.write_bytes(payload)
-        candidate = SourceImageCandidate(
-            asset_id=asset_id,
-            path=path,
-            mime_type="image/png",
-            width=width,
-            height=height,
-            digest=hashlib.sha256(payload).hexdigest(),
-            source_slide_index=25,
-        )
-        offered[asset_id] = candidate
-        data_uri = "data:image/png;base64," + base64.b64encode(payload).decode()
-        tags.append(
-            f'<img class="{kind}" data-qid="source.{asset_id}" src="{data_uri}">'
-        )
-    html = (
-        "<!doctype html><html><head><style>"
-        "html,body{margin:0;width:1280px;height:720px;overflow:hidden}"
-        ".gallery{display:flex;gap:12px;padding:40px}"
-        ".shot{width:113px;height:71px;object-fit:contain}"
-        ".icon{width:26px;height:26px;object-fit:contain}"
-        "</style></head><body><div class=\"gallery\" data-qid=\"gallery\">"
-        + "".join(tags)
-        + "</div></body></html>"
-    )
-
-    sealed = enforce_strict_source_image_size_floor(html, offered)
-    assert sealed == enforce_strict_source_image_size_floor(sealed, offered)
-    assert sealed.count('id="authored-source-visibility-floor"') == 1
-    assert sealed.count("min-width:144px;min-height:64px") == 3
-    assert "source.icon-1\"]{min-width" not in sealed
-
-    await render_html_to_png(sealed)
-    metrics = await ensure_browser_metrics(sealed)
-    assert validate_visible_source_images(sealed, offered, metrics) == sealed
 
 
 @async_test

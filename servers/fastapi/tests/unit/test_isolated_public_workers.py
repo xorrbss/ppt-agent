@@ -839,48 +839,6 @@ def test_hybrid_recovery_evidence_is_bounded_and_content_free() -> None:
     assert "assemblyMillis" not in evidence["timing"]
 
 
-def test_hybrid_recovery_fragment_readback_binds_crop_bytes_and_placement() -> None:
-    from services.authored_local_fit_export_evidence import validate_raster_fragments
-    image = Image.new("RGBA", (22, 2), (80, 40, 20, 127))
-    stream = io.BytesIO()
-    image.save(stream, format="PNG")
-    payload = stream.getvalue()
-    digest = "sha256:" + hashlib.sha256(payload).hexdigest()
-    placement = {"x": 0.375, "y": 0.375, "widthPt": 8.25, "heightPt": 0.75}
-    fragment = {"id": "f0", "order": 0, "rect": {"x": 1, "y": 1, "width": 22, "height": 2},
-                "pngDigest": digest, "sizeBytes": len(payload), "placement": placement}
-    evidence = {"raster": [{"schemaVersion": "authored-raster-band/v2", "sourceDigest": "sha256:" + "a" * 64,
-                            "pngDigest": "sha256:" + "a" * 64, "captureWidthPx": 2560, "captureHeightPx": 1440,
-                            "fragments": [fragment]}]}
-    kwargs = dict(evidence=evidence, runs=[], manifest={"width_pt": 960, "height_pt": 540}, enforce_font_policy=False)
-    assert validate_raster_fragments([(digest, placement, payload)], **kwargs) == {0}
-    # Actual assembler edge rounding: round(23 / 2560 * 12192000)
-    # minus round(1 / 2560 * 12192000) produces a 104774 EMU extent.
-    rounded = {"x": 4763 / 12700, "y": 4763 / 12700,
-               "widthPt": 104774 / 12700, "heightPt": 9525 / 12700}
-    assert abs(rounded["widthPt"] - placement["widthPt"]) > 1 / 12700
-    assert validate_raster_fragments([(digest, rounded, payload)], **kwargs) == {0}
-    with pytest.raises(ValueError, match="raster_fragment_placement_mismatch"):
-        validate_raster_fragments([(digest, {**rounded, "widthPt": 104773 / 12700}, payload)], **kwargs)
-    with pytest.raises(ValueError, match="raster_fragment_placement_mismatch") as shifted:
-        validate_raster_fragments([(digest, {**placement, "x": 0}, payload)], **kwargs)
-    assert shifted.value.diagnostics["digestMatchCount"] == 1
-    assert shifted.value.diagnostics["placementMatchCount"] == 0
-    assert shifted.value.diagnostics["expectedDigest"] == digest
-    assert shifted.value.diagnostics["candidates"][0]["placementPt"]["x"] == 0
-    with pytest.raises(ValueError, match="raster_fragment_digest_mismatch") as changed:
-        validate_raster_fragments([("sha256:" + "b" * 64, placement, payload)] * 8, **kwargs)
-    assert len(changed.value.diagnostics["candidates"]) == 4
-    with pytest.raises(ValueError, match="raster_fragment_missing") as missing:
-        validate_raster_fragments([], **kwargs)
-    assert missing.value.diagnostics["packagedImageCount"] == 0
-    fragment["sizeBytes"] += 1
-    with pytest.raises(ValueError, match="raster_fragment_bytes_mismatch"):
-        validate_raster_fragments([(digest, placement, payload)], **kwargs)
-
-
-
-
 def test_next_export_route_admits_without_executing_it() -> None:
     """The route only admits; the isolated worker is the only executor.
 

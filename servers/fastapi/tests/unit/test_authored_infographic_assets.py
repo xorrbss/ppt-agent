@@ -18,12 +18,11 @@ import pytest
 from PIL import Image, ImageDraw
 
 from models.authored_infographic_plan import coerce_infographic_plan
-from services import authored_illustration_stage as stage_mod
-from services import authored_infographic_assets as assets_mod
+from services.generation_core.assets import infographic_assets as assets_mod
 from services.authored_icon_pack.service import IconResolution, ResolvedIcon
 from services.authored_icon_pack.sheet import encode_png
 from services.authored_icon_pack.store import concept_key
-from services.authored_infographic_assets import (
+from services.generation_core.assets.infographic_assets import (
     InfographicAssetContext,
     build_infographic_asset_context,
     fill_scene_cutout,
@@ -35,7 +34,6 @@ from utils.authored_infographic import (
     library_css,
     render_skeleton,
 )
-from services.generation_core.authoring import author_vision_qa as vqa_mod
 from services.generation_core.authoring.author_slide import Brand, validate_authored_slide_html
 
 _CONTENT = (
@@ -286,94 +284,4 @@ class _RefusingImageService:
         raise TimeoutError("ordinary illustration provider unavailable")
 
 
-def _illustrate(html, slide, context, service):
-    return _run(
-        stage_mod.illustrate_slide(
-            html=html,
-            checkpoint=None,
-            index=2,
-            style=_style(),
-            image_service=service,
-            slide_content=_CONTENT,
-            illustration_allowed=True,
-            generation_job=None,
-            attempt_token=None,
-            infographic=slide,
-            infographic_assets=context,
-        )
-    )
-
-
-def test_the_stage_takes_the_cutout_first_and_then_the_icons(tmp_path):
-    slide = _slide("scene", 4)
-    service = _RefusingImageService()
-    finalized, _checkpoint, _work = _illustrate(_doc(slide), slide, _context(tmp_path), service)
-    assert service.calls == 0
-    assert "data-illust-prompt" not in finalized
-    assert 'data-qid="ig.s3.art.img"' in finalized
-    assert "data:image/png;base64," in finalized
-
-
-def test_the_stage_falls_back_to_the_ordinary_rule_when_the_cutout_fails(tmp_path):
-    slide = _slide("scene", 4)
-    service = _RefusingImageService()
-    failing = _context(tmp_path, FakeProvider(error=RuntimeError("no alpha today")))
-    finalized, _checkpoint, _work = _illustrate(_doc(slide), slide, failing, service)
-    assert service.calls == 1
-    assert "data-illust-prompt" not in finalized
-    assert 'data-qid="ig.s3.art.img"' not in finalized
-    assert 'class="ig-art"' in finalized
-
-
-def test_the_stage_places_icons_on_a_figure_without_a_picture(tmp_path):
-    slide = _slide("layers", 4)
-    provider = FakeProvider()
-    finalized, _checkpoint, _work = _illustrate(
-        _doc(slide), slide, _context(tmp_path, provider), _RefusingImageService()
-    )
-    assert finalized.count('<img src="data:image/png;base64,') == 4
-    assert provider.calls[0]["slot"].startswith("image.icon_sheet.")
-    untouched, _checkpoint, _work = _illustrate(_doc(slide), slide, None, _RefusingImageService())
-    assert "<img" not in untouched
-
-
 # --- the re-author path ---------------------------------------------------------
-
-
-def test_a_reauthored_figure_gets_its_pack_icons_again(tmp_path, monkeypatch):
-    slide = _slide("process", 4)
-    reauthored = _doc(slide)
-
-    async def fake_critique(pngs, contexts=None, **_kwargs):
-        return [vqa_mod.SlideCritique(needs_fix=True)]
-
-    async def fake_author(*args, **kwargs):
-        assert kwargs["infographic"] is slide
-        return reauthored
-
-    async def fake_render(html, **_options):
-        return b"revised-png"
-
-    monkeypatch.setattr(vqa_mod, "critique_authored", fake_critique)
-    monkeypatch.setattr(vqa_mod, "author_slide_html", fake_author)
-    monkeypatch.setattr(vqa_mod, "render_html_to_png", fake_render)
-    provider = FakeProvider()
-    htmls, pngs, fixed = _run(
-        vqa_mod.revise_authored_deck(
-            [reauthored],
-            [b"original-png"],
-            [_CONTENT],
-            ["CONTENT"],
-            _brand(),
-            "SELECTED DESIGN SYSTEM",
-            style=_style(),
-            slide_indices=[2],
-            total_slides=3,
-            illustration_slots=[False],
-            infographic_briefs=[slide],
-            infographic_assets=_context(tmp_path, provider),
-        )
-    )
-    assert fixed == [0] and pngs == [b"revised-png"]
-    assert htmls[0].count('<img src="data:image/png;base64,') == 4
-    assert provider.calls[0]["slot"].startswith("image.icon_sheet.")

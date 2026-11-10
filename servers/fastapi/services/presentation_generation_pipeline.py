@@ -79,10 +79,6 @@ from services.authored_checkpoint_errors import AuthoredStageError
 from services.authored_generation_observability import (
     log_authored_generation_observation,
 )
-from services.authored_presentation_service import (
-    AUTHORED_TEMPLATE,
-    generate_authored_presentation,
-)
 from services.authored_vnext.generation.errors import (
     GenerationNotFoundError as AuthoredVNextGenerationNotFoundError,
     GenerationPipelineError as AuthoredVNextGenerationPipelineError,
@@ -116,6 +112,7 @@ from services.source_content.pipeline import (
 from services.database import async_session_maker, get_async_session
 from services.documents_loader import DocumentsLoader
 from services.generation_core.admission.strategy import (
+    AUTHORED_TEMPLATE,
     require_generation_strategy_admission,
     resolve_generation_strategy,
     recorded_generation_strategy,
@@ -1337,12 +1334,12 @@ async def generate_presentation_handler(
                 "outline_post", (time.monotonic() - outline_post_started) * 1000
             )
 
-        # Authored mode (opt-in via template="authored"): the model AUTHORS bespoke
-        # HTML per slide instead of filling a React archetype. Self-contained pipeline
-        # (author -> render -> optional vision-QA -> image PPTX/PDF -> persist) that
-        # bypasses the compose/structure/content/export path. Default path untouched.
-        # svg (the only strategy new requests can take) dispatches whatever the
-        # template field says; admission normalizes it to "authored" anyway.
+        # svg is the only generation pipeline; it dispatches whatever the
+        # template field says (admission normalizes it to "authored" anyway).
+        # Authored generation is removed: a request that still resolves to it
+        # fails with authored_strategy_removed, never starts authored work.
+        if resolve_generation_strategy(request) != "svg":
+            require_generation_strategy_admission(request)
         if request.template == AUTHORED_TEMPLATE or resolve_generation_strategy(request) == "svg":
             if async_status:
                 async_status.message = "Authoring bespoke slides"
@@ -1350,12 +1347,9 @@ async def generate_presentation_handler(
                 sql_session.add(async_status)
                 await sql_session.commit()
             resolved_strategy, strategy_reason = recorded_generation_strategy(request)
-            generate_document = generate_authored_presentation
-            if resolved_strategy == "svg":
-                from services.svg_presentation_service import generate_svg_presentation
+            from services.svg_presentation_service import generate_svg_presentation
 
-                generate_document = generate_svg_presentation
-            response = await generate_document(
+            response = await generate_svg_presentation(
                 request,
                 presentation_id,
                 presentation_outlines,

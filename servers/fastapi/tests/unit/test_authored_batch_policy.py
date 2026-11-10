@@ -12,8 +12,6 @@ from services.authored_batch_policy import (
     plan_authored_recovery_batches,
 )
 from services.authored_provider_rate_profile import AuthoredRateProfile
-from services.generation_core.authoring import author_batch as author_batch_mod
-from services.generation_core.authoring.author_batch import AuthoredBatchSlideRequest, author_slides_html
 from services.generation_core.authoring.author_slide import Brand
 
 
@@ -57,28 +55,6 @@ def _html(index: int) -> str:
 
 def _wrapped(index: int) -> str:
     return f'<authored-slide index="{index}">{_html(index)}</authored-slide>'
-
-
-def _capture_batch_provider(monkeypatch, response: str):
-    calls = []
-
-    class FakeClient:
-        def generate(self, **kwargs):
-            calls.append(kwargs)
-            return SimpleNamespace(content=response)
-
-    async def no_rate_limit():
-        return None
-
-    monkeypatch.setattr(author_batch_mod, "get_client", lambda **_kwargs: FakeClient())
-    monkeypatch.setattr(author_batch_mod, "get_llm_config", lambda: {})
-    monkeypatch.setattr(author_batch_mod, "get_model", lambda: "fake-model")
-    monkeypatch.setattr(author_batch_mod, "get_llm_provider", lambda: SimpleNamespace(value="fake"))
-    monkeypatch.setattr(author_batch_mod, "get_generate_kwargs", lambda **kwargs: kwargs)
-    monkeypatch.setattr(author_batch_mod, "_authoring_extra_body", lambda *_args, **_kwargs: None)
-    monkeypatch.setattr(author_batch_mod, "enforce_llm_egress_policy", lambda: None)
-    monkeypatch.setattr(author_batch_mod, "_wait_for_author_rate_slot", no_rate_limit)
-    return calls
 
 
 def _shapes(wave) -> list[tuple[int, ...]]:
@@ -356,84 +332,3 @@ def test_recovery_batches_contain_only_failed_indices_and_cap_at_profile_size() 
 def test_recovery_rejects_an_already_successful_slide() -> None:
     with pytest.raises(ValueError, match="must not include successful"):
         plan_authored_recovery_batches([1, 2], successful_slide_indices=[2], profile=TOKEN)
-
-
-def test_batch_author_returns_three_slides_from_one_provider_call(monkeypatch) -> None:
-    calls = _capture_batch_provider(
-        monkeypatch,
-        "\n".join(_wrapped(index) for index in (0, 1, 2)),
-    )
-
-    result = _run(
-        author_slides_html(
-            [
-                AuthoredBatchSlideRequest(index=0, content="cover", role="COVER"),
-                AuthoredBatchSlideRequest(index=1, content="section", role="SECTION"),
-                AuthoredBatchSlideRequest(index=2, content="closing", role="CLOSING"),
-            ],
-            design_system="DESIGN",
-            brand=_brand(),
-            slide_count=3,
-        )
-    )
-
-    assert len(calls) == 1
-    assert sorted(result.htmls) == [0, 1, 2]
-    assert result.errors == {}
-    # G9/D18: the fast roles carry the full 16k budget each, and the batch cap
-    # is AUTHOR_MAX_TOKENS x MAX_BATCH_SLIDES, so the two meet at 48k.
-    assert calls[0]["max_tokens"] == 48_000
-    request_parts = calls[0]["messages"][1].content
-    assert sum(
-        1
-        for part in request_parts
-        if getattr(part, "text", "").startswith("\n\nBEGIN REQUEST FOR SLIDE INDEX")
-    ) == 3
-
-
-def test_batch_author_records_void_end_tag_normalization(monkeypatch) -> None:
-    candidate = _html(0).replace("</body>", "<img data-qid='hero'></img></body>")
-    _capture_batch_provider(
-        monkeypatch,
-        f'<authored-slide index="0">{candidate}</authored-slide>',
-    )
-    receipts = {0: []}
-
-    result = _run(
-        author_slides_html(
-            [AuthoredBatchSlideRequest(index=0, content="cover", role="COVER")],
-            design_system="DESIGN",
-            brand=_brand(),
-            slide_count=1,
-            normalization_receipts_by_index=receipts,
-        )
-    )
-
-    assert "</img>" not in result.htmls[0].lower()
-    assert receipts[0] == [
-        {"rule": "html_void_end_tag_dropped", "detail": "img", "count": 1}
-    ]
-
-
-def test_batch_author_preserves_successes_when_one_slide_is_missing(monkeypatch) -> None:
-    _capture_batch_provider(
-        monkeypatch,
-        "\n".join((_wrapped(0), _wrapped(2))),
-    )
-
-    result = _run(
-        author_slides_html(
-            [
-                AuthoredBatchSlideRequest(index=0, content="zero", role="COVER"),
-                AuthoredBatchSlideRequest(index=1, content="one", role="SECTION"),
-                AuthoredBatchSlideRequest(index=2, content="two", role="CLOSING"),
-            ],
-            design_system="DESIGN",
-            brand=_brand(),
-            slide_count=3,
-        )
-    )
-
-    assert sorted(result.htmls) == [0, 2]
-    assert sorted(result.errors) == [1]
-    assert str(result.errors[1]) == "authored_batch_slide_missing"

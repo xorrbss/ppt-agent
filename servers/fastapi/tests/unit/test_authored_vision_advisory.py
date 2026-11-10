@@ -15,7 +15,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from services import authored_vision_advisory as advisory_mod
+from services.generation_core.quality import vision_advisory as advisory_mod
 from services import authored_vision_advisory_prompt as prompt_mod
 from services import authored_vision_contact_sheet as sheet_mod
 

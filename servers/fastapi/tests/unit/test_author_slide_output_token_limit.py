@@ -11,40 +11,19 @@ ends with ``response.incomplete`` arrives with ``usage=None``, exactly the
 from __future__ import annotations
 
 import asyncio
-import logging
 from types import SimpleNamespace
 
 import pytest
 
-from services import authored_author_stage_rescue as rescue_mod
-from services.authored_batch_policy import new_authored_batch_policy_state
-from services.authored_wave_scheduler import AuthoredWaveSchedule
-from services.authored_author_stage_deferral import (
-    AUTHOR_BUDGET_EXHAUSTED_CODE,
-    author_failure_is_rescuable,
-    author_failure_retryable,
-    author_stage_failure,
-    defer_rescuable_author_failures,
-)
-from services.authored_generation_timing_receipt_e4 import flagged_slide_entries
 from services.provider_usage_instrumentation import response_usage
-from services.generation_core.authoring import author_deck as author_deck_mod
-from services.generation_core.authoring.author_deck import (
-    AuthoredBatchFailure,
-    AuthoredProviderBudgetExhausted,
-)
 from services.generation_core.authoring.author_slide import Brand
 from services.generation_core.authoring.author_slide_fallback import (
     reraise_author_call_error,
     text_only_fallback_applies,
 )
 from services.generation_core.authoring.author_slide_stream import (
-    OUTPUT_TOKEN_LIMIT_BUDGET_EXHAUSTED_CODE,
-    OUTPUT_TOKEN_LIMIT_CORRECTION_HINT,
-    OUTPUT_TOKEN_LIMIT_GUIDANCE,
     OUTPUT_TOKEN_LIMIT_REASON,
     AuthoredStreamAborted,
-    output_token_limit_in_cause_chain,
     raise_if_output_token_limited,
     stream_author_call,
 )
@@ -219,85 +198,11 @@ def test_the_abort_survives_the_author_call_boundary_untouched():
     assert text_only_fallback_applies(abort) is False
 
 
-def test_the_attempt_loop_classifies_the_abort_as_a_size_correction():
-    abort = AuthoredStreamAborted(OUTPUT_TOKEN_LIMIT_REASON, chars=60_000)
-
-    correction = author_deck_mod._classify_author_validation_error(abort)
-
-    assert correction.category == "output_token_limit"
-    assert correction.hint == OUTPUT_TOKEN_LIMIT_CORRECTION_HINT
-    assert "</html>" in correction.hint
-    assert author_deck_mod._author_retry_correction(abort) == correction.hint
-
-
-def test_the_cause_chain_walk_recognises_the_abort_and_its_budget_code():
-    abort = AuthoredStreamAborted(OUTPUT_TOKEN_LIMIT_REASON)
-    exhausted = AuthoredProviderBudgetExhausted(
-        OUTPUT_TOKEN_LIMIT_BUDGET_EXHAUSTED_CODE, abort
-    )
-    wrapped = RuntimeError("stage")
-    wrapped.__cause__ = abort
-
-    assert output_token_limit_in_cause_chain(abort) is True
-    assert output_token_limit_in_cause_chain(exhausted) is True
-    assert output_token_limit_in_cause_chain(wrapped) is True
-    assert output_token_limit_in_cause_chain(
-        AuthoredStreamAborted("output_budget_exceeded")
-    ) is False
-    assert output_token_limit_in_cause_chain(RuntimeError("other")) is False
-    assert output_token_limit_in_cause_chain("not an error") is False
-
-
 # --- the batch lane hands it to the rescue ------------------------------------
 
 
 def _profile():
     return SimpleNamespace(strict_dom_gate=True, allow_summarization=True)
-
-
-def test_the_batch_lane_defers_the_abort_to_the_rescue(monkeypatch):
-    abort = AuthoredStreamAborted(OUTPUT_TOKEN_LIMIT_REASON, chars=60_000)
-    failure = AuthoredBatchFailure(error=abort, correction_hint="compact")
-
-    assert author_failure_is_rescuable(failure) is True
-    assert author_failure_retryable(abort) is False
-
-    monkeypatch.setattr(
-        "services.authored_author_stage_deferral.terminal_fallback_active",
-        lambda **_kwargs: True,
-    )
-    deferred = defer_rescuable_author_failures(
-        1,
-        successful={},
-        failures={0: failure},
-        attempt_counts={0: 2},
-        profile=_profile(),
-        reference_mode="style",
-        source_reflow=False,
-    )
-
-    assert deferred[0].code == OUTPUT_TOKEN_LIMIT_BUDGET_EXHAUSTED_CODE
-    assert deferred[0].code != AUTHOR_BUDGET_EXHAUSTED_CODE
-    assert output_token_limit_in_cause_chain(deferred[0]) is True
-
-
-def test_the_failure_envelope_tells_the_operator_what_to_change():
-    abort = AuthoredStreamAborted(OUTPUT_TOKEN_LIMIT_REASON, chars=60_000)
-    exhausted = AuthoredProviderBudgetExhausted(
-        OUTPUT_TOKEN_LIMIT_BUDGET_EXHAUSTED_CODE, abort
-    )
-
-    envelope = author_stage_failure(3, exhausted, provider_attempt_count=2)
-
-    assert envelope.code == "authored_slide_author_failed"
-    assert envelope.retryable is False
-    assert envelope.safe_message == OUTPUT_TOKEN_LIMIT_GUIDANCE
-    assert "output-token ceiling" in envelope.as_safe_dict()["message"]
-    # An ordinary spent budget keeps today's message.
-    ordinary = author_stage_failure(
-        3, AuthoredProviderBudgetExhausted("authored_invalid_html_budget_exhausted", "x")
-    )
-    assert "output-token ceiling" not in ordinary.safe_message
 
 
 # --- the guarded (non-streaming) chatgpt path names the ceiling too -----------
@@ -335,29 +240,6 @@ def test_the_guard_verdict_becomes_the_ceiling_abort_only_for_a_length_outcome()
     ) is None
 
 
-def test_the_ceiling_abort_outranks_the_guard_code_it_wraps():
-    """Chained from the guard's error, the abort must still be the rescue's."""
-    from services.authored_author_stage_deferral import author_failure_is_rescuable
-
-    guard_error = _guard_incomplete_error()
-    abort = AuthoredStreamAborted(OUTPUT_TOKEN_LIMIT_REASON)
-    abort.__cause__ = guard_error
-
-    assert output_token_limit_in_cause_chain(abort)
-    assert author_failure_retryable(abort) is False
-    failure = SimpleNamespace(error=abort, rejected_html=None, correction_hint=None)
-    assert author_failure_is_rescuable(failure) is True
-
-    envelope = author_stage_failure(0, abort, provider_attempt_count=1)
-    assert envelope.code == "authored_slide_author_failed"
-    assert envelope.safe_message == OUTPUT_TOKEN_LIMIT_GUIDANCE
-
-    # The bare guard verdict, with no ceiling behind it, stays terminal.
-    bare = SimpleNamespace(error=guard_error, rejected_html=None, correction_hint=None)
-    assert author_failure_is_rescuable(bare) is False
-    assert author_stage_failure(0, guard_error).code == "public_provider_response_incomplete"
-
-
 # --- the author-stage rescue flags it by name ---------------------------------
 
 
@@ -368,96 +250,6 @@ def _plan():
         brand=Brand(topic="주제", language="Korean", primary="#2563EB", fonts="Noto Sans KR"),
         header_contract_at=lambda _index: None,
     )
-
-
-def _rescue(monkeypatch, error, *, third_call):
-    monkeypatch.setattr(rescue_mod, "terminal_fallback_active", lambda **_kwargs: True)
-    monkeypatch.setattr(rescue_mod, "author_planned_slide", third_call)
-    return _run(
-        rescue_mod.rescue_author_stage(
-            _plan(),
-            0,
-            error,
-            author_kwargs={},
-            profile=_profile(),
-            reference_mode="style",
-            source_reflow=False,
-            schedule=AuthoredWaveSchedule(new_authored_batch_policy_state()),
-        )
-    )
-
-
-def test_the_rescue_flags_the_exhausted_token_limit_by_name(monkeypatch, caplog):
-    exhausted = AuthoredProviderBudgetExhausted(
-        OUTPUT_TOKEN_LIMIT_BUDGET_EXHAUSTED_CODE,
-        AuthoredStreamAborted(OUTPUT_TOKEN_LIMIT_REASON, chars=60_000),
-    )
-
-    async def third_call_also_truncated(_plan, _index, **_kwargs):
-        raise AuthoredProviderBudgetExhausted(
-            OUTPUT_TOKEN_LIMIT_BUDGET_EXHAUSTED_CODE, "still truncated"
-        )
-
-    with caplog.at_level(logging.WARNING, logger=rescue_mod.LOGGER.name):
-        rescue = _rescue(monkeypatch, exhausted, third_call=third_call_also_truncated)
-
-    assert rescue is not None
-    assert rescue.flagged_entry == {
-        "index": 0,
-        "reason": rescue_mod.AUTHOR_OUTPUT_TOKEN_LIMIT_REASON,
-        "remakeAttempted": True,
-        "remakeOutcome": "author_rescue_budget_exhausted",
-    }
-    assert rescue.flagged_entry["reason"] == "author:output_token_limit"
-    assert flagged_slide_entries([rescue.flagged_entry]) == (rescue.flagged_entry,)
-    assert "AUTHOR_MAX_TOKENS" in caplog.text
-    assert "reasoning effort" in caplog.text
-
-
-def test_the_rescue_flags_a_token_limit_hit_only_on_the_third_call(monkeypatch):
-    ordinary = AuthoredProviderBudgetExhausted(
-        "authored_header_contract_budget_exhausted", "header contract violated"
-    )
-
-    async def third_call_truncated(_plan, _index, **_kwargs):
-        raise AuthoredProviderBudgetExhausted(
-            OUTPUT_TOKEN_LIMIT_BUDGET_EXHAUSTED_CODE,
-            AuthoredStreamAborted(OUTPUT_TOKEN_LIMIT_REASON),
-        )
-
-    rescue = _rescue(monkeypatch, ordinary, third_call=third_call_truncated)
-
-    assert rescue.flagged_entry["reason"] == rescue_mod.AUTHOR_OUTPUT_TOKEN_LIMIT_REASON
-
-
-def test_an_ordinary_exhausted_budget_keeps_todays_flag(monkeypatch):
-    ordinary = AuthoredProviderBudgetExhausted(
-        "authored_header_contract_budget_exhausted", "header contract violated"
-    )
-
-    async def third_call_rejected(_plan, _index, **_kwargs):
-        raise AuthoredProviderBudgetExhausted(
-            "authored_header_contract_budget_exhausted", "still violated"
-        )
-
-    rescue = _rescue(monkeypatch, ordinary, third_call=third_call_rejected)
-
-    assert rescue.flagged_entry["reason"] == rescue_mod.AUTHOR_ATTEMPTS_EXHAUSTED_REASON
-
-
-def test_a_rescued_token_limited_slide_publishes_unflagged(monkeypatch):
-    exhausted = AuthoredProviderBudgetExhausted(
-        OUTPUT_TOKEN_LIMIT_BUDGET_EXHAUSTED_CODE,
-        AuthoredStreamAborted(OUTPUT_TOKEN_LIMIT_REASON),
-    )
-
-    async def plainer_third_call(_plan, _index, **_kwargs):
-        return _DOCUMENT
-
-    rescue = _rescue(monkeypatch, exhausted, third_call=plainer_third_call)
-
-    assert rescue.html == _DOCUMENT
-    assert rescue.flagged_entry is None
 
 
 def test_terminal_usage_stands_in_for_a_missing_usage_everywhere_it_is_read():

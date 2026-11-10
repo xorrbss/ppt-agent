@@ -20,9 +20,9 @@ from models.sql.async_presentation_generation_status import (
     AsyncPresentationGenerationTaskModel,
 )
 from services.authored_page_remake_history import list_authored_page_remake_previews
-from services.authored_page_remake_service import publish_authored_page_remake_legacy
 from services.page_remake_core import (
     AuthoredPageRemakeError,
+    publish_authored_page_remake_legacy,
     queue_authored_page_remake_preview,
     remake_http_error,
 )

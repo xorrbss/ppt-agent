@@ -449,7 +449,7 @@ async def publish_svg_candidate(session, presentation, slides, index, task, *, s
     from services.page_remake_core import (
         AuthoredPageRemakeError, PREVIEW_KIND, authored_page_source_digest,
     )
-    from services.slidespec_artifact_store import _json_cas_predicate
+    from services.json_cas_predicate import _json_cas_predicate
     target = slides[index]
     from services.svg_templates.selection_material import ensure_snapshot_material
     await ensure_snapshot_material(session, (presentation.theme.get("svg", {}) or {}).get("styleSnapshot"))

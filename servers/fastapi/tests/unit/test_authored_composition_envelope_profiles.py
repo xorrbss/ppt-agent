@@ -33,7 +33,6 @@ from services.authored_composition_policy import (
     capacity_violations,
     resolve_composition_profile,
 )
-from services.authored_deck_plans import _infographic_plan_applies
 from utils.get_env_programme import get_authored_composition_envelope_profile
 from services.generation_core.authoring.author_slide import STYLE_REFERENCE
 
@@ -117,13 +116,6 @@ def test_current_keeps_the_bound_envelope_reachable(monkeypatch) -> None:
     assert (slide.max_visible_text_chars, slide.max_qids) == (460, 40)
 
 
-def test_current_keeps_the_figure_plan_reachable(monkeypatch) -> None:
-    assert _infographic_plan_applies(SimpleNamespace(), _style()) is False
-
-    monkeypatch.setenv("AUTHORED_INFOGRAPHIC_PLAN_ENABLED", "true")
-    assert _infographic_plan_applies(SimpleNamespace(), _style()) is True
-
-
 def test_role_budgets_are_unchanged_by_the_extraction() -> None:
     # The table moved modules; not one number moved with it.
     assert role_budget("PROBLEM") == (64, 380, 460, 40)
@@ -143,17 +135,6 @@ def test_august_resolves_to_the_august_profile(monkeypatch) -> None:
     monkeypatch.setenv(_PROFILE_KNOB, "august")
 
     assert resolve_envelope_profile() is AUGUST_ENVELOPE_PROFILE
-
-
-def test_august_overrides_the_per_rule_knobs(monkeypatch) -> None:
-    monkeypatch.setenv(_PROFILE_KNOB, "august")
-    monkeypatch.setenv("AUTHORED_COMPOSITION_ENVELOPE_ENABLED", "true")
-    monkeypatch.setenv("AUTHORED_INFOGRAPHIC_PLAN_ENABLED", "true")
-
-    envelope = resolve_envelope_profile()
-    assert ordinary_envelope_enforced(envelope) is False
-    assert ordinary_infographic_plan_enabled(envelope) is False
-    assert _infographic_plan_applies(SimpleNamespace(), _style()) is False
 
 
 def test_august_yields_the_august_limits(monkeypatch) -> None:
@@ -218,24 +199,3 @@ def test_a_profile_name_off_the_registry_path_is_still_refused() -> None:
 def test_a_resolved_profile_cannot_be_mutated() -> None:
     with pytest.raises(dataclasses.FrozenInstanceError):
         CURRENT_ENVELOPE_PROFILE.ordinary_strict_dom_gate = False  # type: ignore[misc]
-
-
-def test_an_explicit_envelope_overrides_the_ambient_one(monkeypatch) -> None:
-    # The generation resolves the profile once and passes the object down; the
-    # ambient environment must not be able to contradict it mid-operation.
-    monkeypatch.setenv(_PROFILE_KNOB, "august")
-
-    profile = resolve_composition_profile(
-        SimpleNamespace(), envelope=CURRENT_ENVELOPE_PROFILE
-    )
-    assert profile.strict_dom_gate is True
-
-    monkeypatch.setenv(_PROFILE_KNOB, "current")
-    monkeypatch.setenv("AUTHORED_COMPOSITION_ENVELOPE_ENABLED", "true")
-    slide = build_authored_capacity_plan(
-        ("a",), ("PROBLEM",), _ORDINARY, envelope=AUGUST_ENVELOPE_PROFILE
-    ).at(0)
-    assert slide.enforced is False
-    assert _infographic_plan_applies(
-        SimpleNamespace(), _style(), AUGUST_ENVELOPE_PROFILE
-    ) is False

@@ -21,7 +21,7 @@ from services.authored_quality_receipt_v2 import (
     validate_current_quality_receipt_payload,
     validate_quality_receipt_v3_payload,
 )
-from services.authored_quality_telemetry import style_comparison_observation_metadata
+from services.release_review_policy_metadata import style_comparison_observation_metadata
 from services.database import async_session_maker
 from services.workspace_operation_handler_registry import (
     NonRetryableWorkspaceOperationError,

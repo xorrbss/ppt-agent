@@ -6,9 +6,9 @@ behind - made "페이지 다시 만들기" fail with
 ``authored_page_remake_unsupported_presentation`` on all pages, including the
 fourteen healthy ones.
 
-The requirement belongs to the page being remade.  These tests pin both halves:
-an authored page stays remakeable next to a blank sibling, and the blank page
-itself is still refused.
+The requirement belongs to the page being remade. Authored HTML remake was
+removed with the authored pipeline, so an authored page is now refused too;
+these tests pin the refusals (authored page, blank page, non-svg deck).
 """
 
 from __future__ import annotations
@@ -25,14 +25,12 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlmodel import SQLModel
 
 from models.presentation_from_template import AuthoredPageRemakePreviewRequest
-from constants.user_messages import message_fields
 from models.sql.async_presentation_generation_status import (
     AsyncPresentationGenerationTaskModel,
 )
 from models.sql.presentation import PresentationModel
 from models.sql.slide import SlideModel
-import services.page_remake_core as remake_service
-from services.authored_page_remake_service import (
+from services.page_remake_core import (
     AuthoredPageRemakeError,
     queue_authored_page_remake_preview,
 )
@@ -101,52 +99,28 @@ async def _seed_deck_with_one_blank(maker) -> uuid.UUID:
     return presentation_id
 
 
-@pytest.mark.parametrize("bridge", [None, True])
-def test_an_authored_page_is_remakeable_beside_a_blank_sibling(
-    tmp_path: Path, monkeypatch, bridge
-):
-    asyncio.run(
-        _an_authored_page_is_remakeable_beside_a_blank_sibling(
-            tmp_path, monkeypatch, bridge
-        )
-    )
+def test_an_authored_html_page_is_refused(tmp_path: Path):
+    asyncio.run(_an_authored_html_page_is_refused(tmp_path))
 
 
-async def _an_authored_page_is_remakeable_beside_a_blank_sibling(
-    tmp_path: Path, monkeypatch, bridge
-):
-    engine, maker = await _database(tmp_path / "remake-scope.db")
+async def _an_authored_html_page_is_refused(tmp_path: Path):
+    """Authored HTML remake was removed with the authored pipeline."""
+
+    engine, maker = await _database(tmp_path / "remake-authored.db")
     try:
         presentation_id = await _seed_deck_with_one_blank(maker)
         async with maker() as session:
-            background_tasks = BackgroundTasks()
-
-            async def admit(target_session, **values):
-                assert values["operation_kind"] == "slide.regenerate.preview"
-                assert values["allow_local_development"] is (bridge is True)
-                task = AsyncPresentationGenerationTaskModel(
-                    id=f"workspace-page-preview-{uuid.uuid4()}",
-                    status="pending",
-                    **message_fields(values["pending_message"]),
+            with pytest.raises(AuthoredPageRemakeError) as raised:
+                await queue_authored_page_remake_preview(
+                    presentation_id,
+                    0,
+                    AuthoredPageRemakePreviewRequest(),
+                    BackgroundTasks(),
+                    session,
                 )
-                target_session.add(task)
-                await target_session.commit()
-                return task
 
-            monkeypatch.setattr(
-                remake_service, "admit_workspace_authored_task", admit
-            )
-            task = await queue_authored_page_remake_preview(
-                presentation_id,
-                0,
-                AuthoredPageRemakePreviewRequest(),
-                background_tasks,
-                session,
-                **({"allow_local_development": True} if bridge else {}),
-            )
-
-        assert task.status == "pending"
-        assert background_tasks.tasks == []
+        assert raised.value.code == "authored_page_remake_unsupported_presentation"
+        assert raised.value.stage == "source_validation"
     finally:
         await engine.dispose()
 

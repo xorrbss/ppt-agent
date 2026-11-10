@@ -17,8 +17,8 @@ from sqlalchemy import select
 
 from models.sql.presentation import PresentationModel
 from models.sql.slide import SlideModel
-from services.authored_quality_review_service import _ANALYZE_AND_FIX_LOCKS
-from services.authored_page_remake_service import (
+from services.page_remake_core import (
+    _ANALYZE_AND_FIX_LOCKS,
     AuthoredPageRemakeError,
     publish_authored_page_remake,
 )
