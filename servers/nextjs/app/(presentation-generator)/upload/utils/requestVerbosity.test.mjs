@@ -88,7 +88,7 @@ test("saving a picked standard verbosity records it even when it matches the sto
 });
 
 test("draft polling accepts only the current template operation and ignores superseded responses", async () => {
-  const source = await readFile(path.join(testDirectory, "../components/SvgTemplatePicker.tsx"), "utf8");
+  const source = (await readFile(path.join(testDirectory, "../components/SvgTemplatePicker.tsx"), "utf8")).replace(/\r\n/g, "\n");
   const start = source.indexOf("  useEffect(() => {", source.indexOf("  const analyzingTemplateId ="));
   const end = source.indexOf("\n  const prepare =", start);
   assert.ok(start >= 0 && end > start);
@@ -123,7 +123,7 @@ test("draft polling accepts only the current template operation and ignores supe
 
 
 test("publish responses update only their current draft and leave superseding work untouched", async () => {
-  const source = await readFile(path.join(testDirectory, "../components/SvgTemplatePicker.tsx"), "utf8");
+  const source = (await readFile(path.join(testDirectory, "../components/SvgTemplatePicker.tsx"), "utf8")).replace(/\r\n/g, "\n");
   const start = source.indexOf("  const publish = async ");
   const end = source.indexOf("\n\n  if (ownerInvalidated)", start);
   assert.ok(start >= 0 && end > start);

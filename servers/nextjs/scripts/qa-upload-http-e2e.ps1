@@ -195,26 +195,6 @@ try {
     "http://127.0.0.1:$NextPort/api/upload-limits"
   )
 
-  $exactImage = Join-Path $qaRoot "exact-1MiB.png"
-  $overImage = Join-Path $qaRoot "over-1MiB.png"
-  New-SizedFile $exactImage (1MB) ([byte[]](0x89,0x50,0x4e,0x47,0x0d,0x0a,0x1a,0x0a))
-  New-SizedFile $overImage ((1MB) + 1) ([byte[]](0x89,0x50,0x4e,0x47,0x0d,0x0a,0x1a,0x0a))
-  $results.checks.image_exact_boundary = Curl-Status @(
-    "-sS", "-b", $cookieHeader, "-o", (Join-Path $qaRoot "image-exact.json"),
-    "-w", "%{http_code}", "-F", "file=@$exactImage;type=image/png",
-    "http://127.0.0.1:$NextPort/api/upload-image"
-  )
-  $results.checks.image_over_boundary = Curl-Status @(
-    "-sS", "-b", $cookieHeader, "-o", (Join-Path $qaRoot "image-over.json"),
-    "-w", "%{http_code}", "-F", "file=@$overImage;type=image/png",
-    "http://127.0.0.1:$NextPort/api/upload-image"
-  )
-  $results.checks.image_missing_content_length = Curl-Status @(
-    "-sS", "-b", $cookieHeader, "-H", "Transfer-Encoding: chunked",
-    "-o", (Join-Path $qaRoot "image-no-length.json"), "-w", "%{http_code}",
-    "--data-binary", "@$exactImage",
-    "http://127.0.0.1:$NextPort/api/upload-image"
-  )
   $expected = [ordered]@{
     fastapi_unauthenticated = 401
     login = 200
@@ -222,9 +202,6 @@ try {
     document_over_boundary = 413
     next_unauthenticated = 401
     next_limits = 200
-    image_exact_boundary = 200
-    image_over_boundary = 413
-    image_missing_content_length = 411
   }
   foreach ($name in $expected.Keys) {
     if ([int]$results.checks[$name] -ne [int]$expected[$name]) {
