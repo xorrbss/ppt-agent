@@ -8,11 +8,10 @@ import pytest
 
 from models.authored_vnext.master.contract import DeckMasterContract
 from models.authored_vnext.master.operations import MasterRevisionResponse
-from services.authored_vnext.generation import (
-    OutlineItem,
+from services.authored_vnext.generation.outline import OutlineItem, plan_outline
+from services.authored_vnext.generation.title_fit import (
     TitleFitPlanningError,
     fit_and_promote_title,
-    plan_outline,
     resolve_windows_font,
 )
 from services.authored_vnext.master.digests import seal_master_contract

@@ -240,6 +240,36 @@ The full pytest suite and `npm run test:next-ci` run before each PR merges.
   reviewed keys for all four svg code identities (common header, whole page,
   partial recovery, page render); no new module joined their file lists, since
   none took code out of a listed file.
+  **B1b-3 done 2026-11-10.** (a) The `__init__` files of
+  `services/authored_vnext/{generation,master,ooxml,integration}` are
+  docstrings only; nothing in production imported their re-exports, and
+  `test_authored_vnext_generation_planning.py` imports `generation.outline`
+  and `generation.title_fit` directly. Importing one submodule (svg reads
+  `generation.effective_style`/`errors`/`legacy_pin` and `master.digests`/`assets`)
+  no longer loads the generation pipeline, the master service, the OOXML adapter
+  or the SQL repository. (b) `services/page_remake_core.py` holds the
+  format-neutral half of `authored_page_remake_service`, names and payloads
+  unchanged and re-exported: `PREVIEW_KIND`, `AuthoredPageRemakeError`,
+  `_canonical_digest`, `authored_page_source_digest`, `_set_task`, `_load_deck`,
+  `_failed_preview_breadcrumb`, `_run_preview_background`,
+  `queue_authored_page_remake_preview`, `remake_http_error`, and the two
+  dispatchers `run_authored_page_remake_preview`/`publish_authored_page_remake`,
+  which load the deck, send svg pages to `svg_page_remake` and authored pages
+  to the HTML halves left in the authored service (`_preview_authored_html`,
+  `_publish_authored_html`, imported where needed). `svg_page_remake`, the
+  preview and publish workspace handlers, the authored operations endpoint and
+  the remake history import the core; `svg_page_remake` takes `version_service`
+  and `_json_cas_predicate` from their own modules. Module-level closure of the
+  core plus `svg_page_remake`: 310 modules, 54 authored-named, against 737/303
+  for the authored remake service. The workspace remake handlers still import
+  the authored service (legacy bridge, candidate body validation) until the
+  authored branch is deleted. Svg closure: top 393/46 (unchanged), all
+  1250/420 → 1243/408. Tests retargeted: the three `_set_task` patches in
+  `test_svg_page_remake.py`, the `async_session_maker` patches around
+  `_run_preview_background` in `test_authored_page_remake.py` and the warning
+  contract regression test, the background-failure test, and the admission
+  patch in `test_authored_page_remake_target_scope.py`. No verifier identity
+  changed.
 - **B2 frontend (parallel with B1).** Delete the authored-vnext generation and
   workbench UI, `components/authored-vnext`, `lib/authored-vnext/{flow,workbench}`,
   the element editor, template changer, header actions and the ExportMenu

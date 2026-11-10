@@ -183,7 +183,7 @@ def _install_preview_stubs(
         remake, "publish_reviewed_png", lambda *_a, **_k: CANDIDATE_IMAGE
     )
     monkeypatch.setattr(remake.version_service, "snapshot_slides", fake_snapshot)
-    monkeypatch.setattr(remake, "async_session_maker", _BoundSessionMaker(session))
+    monkeypatch.setattr("services.page_remake_core.async_session_maker", _BoundSessionMaker(session))
     return snapshots
 
 

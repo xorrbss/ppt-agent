@@ -31,7 +31,7 @@ from models.sql.async_presentation_generation_status import (
 )
 from models.sql.presentation import PresentationModel
 from models.sql.slide import SlideModel
-import services.authored_page_remake_service as remake_service
+import services.page_remake_core as remake_service
 from services.authored_page_remake_service import (
     AuthoredPageRemakeError,
     queue_authored_page_remake_preview,

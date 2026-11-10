@@ -145,7 +145,7 @@ def _native_candidate(svg, authored_svg, declarations):
 
 
 def _candidate_digest(svg, image, native=None, *, mode="author", source_binding=None):
-    from services.authored_page_remake_service import _canonical_digest
+    from services.page_remake_core import _canonical_digest
     payload = {"svg": svg, "image": image, **({"native": native} if native is not None else {})}
     if mode in {"remeasure_source", "local_svg"}:
         payload.update(mode=mode, source_binding=source_binding)
@@ -196,7 +196,7 @@ def _apply_v5_rendered_native_quality(quality, svg, native, metadata, source, re
 
 
 async def preview_svg(presentation, slides, index, request, task, session):
-    from services.authored_page_remake_service import (
+    from services.page_remake_core import (
         AuthoredPageRemakeError, PREVIEW_KIND, _set_task, authored_page_source_digest,
     )
     target = slides[index]
@@ -445,10 +445,11 @@ async def preview_svg(presentation, slides, index, request, task, session):
 
 async def publish_svg_candidate(session, presentation, slides, index, task, *, snapshot=True,
                                 operation_id=None, attempt_token=None, expected_revision=None):
-    from services.authored_page_remake_service import (
+    from services import presentation_version_service as version_service
+    from services.page_remake_core import (
         AuthoredPageRemakeError, PREVIEW_KIND, authored_page_source_digest,
-        _json_cas_predicate, version_service,
     )
+    from services.slidespec_artifact_store import _json_cas_predicate
     target = slides[index]
     from services.svg_templates.selection_material import ensure_snapshot_material
     await ensure_snapshot_material(session, (presentation.theme.get("svg", {}) or {}).get("styleSnapshot"))

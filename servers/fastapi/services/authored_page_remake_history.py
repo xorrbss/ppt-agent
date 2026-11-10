@@ -19,7 +19,7 @@ from models.sql.async_presentation_generation_status import (
 )
 from models.sql.presentation import PresentationModel
 from models.sql.slide import SlideModel
-from services.authored_page_remake_service import (
+from services.page_remake_core import (
     PREVIEW_KIND,
     authored_page_source_digest,
 )
