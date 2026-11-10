@@ -107,6 +107,9 @@ The full pytest suite and `npm run test:next-ci` run before each PR merges.
 - **B0 baseline (no code change).** Fix the measurement tool (`__init__` edges,
   all importers), save the closure and the static-check output, record the
   svg-subset and full-pytest failure baseline, and adopt the keep set above.
+  Done 2026-11-10 except the full-pytest baseline:
+  `servers/fastapi/scripts/authored_removal_imports.py` (`closure`, `check`)
+  and `docs/session-results/authored-removal-p3-b0-20261110/`.
 - **B1a move only.** Move `_AUTHORED_JOB_SEMAPHORE` to a shared module (env name
   `AUTHORED_JOB_CONCURRENCY` unchanged). Move `_save_slide_pngs` out of
   `authored_presentation_artifacts` (it depends only on hashing, atomic writes

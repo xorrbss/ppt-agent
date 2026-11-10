@@ -150,6 +150,7 @@ tests/unit/test_authored_release_ci_evidence_v3.py
 tests/unit/test_authored_release_readiness_v2.py
 tests/unit/test_authored_release_readiness_v3_router.py
 tests/unit/test_authored_remake_schedule.py
+tests/unit/test_authored_removal_imports.py
 tests/unit/test_authored_render_cache_byte_budget.py
 tests/unit/test_authored_render_policy.py
 tests/unit/test_authored_renderer_deployment_contract.py
