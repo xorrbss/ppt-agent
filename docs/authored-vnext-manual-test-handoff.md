@@ -2,6 +2,11 @@
 
 Updated: 2026-08-14 KST
 
+> Historical (2026-11-11): the authored generation strategy, the
+> `dev:authored-vnext:windows` launcher and `start-authored-vnext-dev.ps1` were
+> removed (`docs/authored-removal-execution-20261109.md`). Use
+> `scripts/start-local-stack.ps1`. Kept only as an archive.
+
 This is a local opt-in test runbook. It does not authorize a production
 rollout.
 

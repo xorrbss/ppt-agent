@@ -6,8 +6,8 @@
     This is the single supported way to run the local stack. Before it existed,
     the daily stack was assembled by hand from two other launchers: the owned
     PostgreSQL topology of `start-public-v2-rc.ps1` on the ports of
-    `start-authored-vnext-dev.ps1`, with each process's environment living only
-    in the shell that started it. That combination belonged to neither script,
+    `start-authored-vnext-dev.ps1` (since deleted with the authored removal),
+    with each process's environment living only in the shell that started it. That combination belonged to neither script,
     so it could not be restarted without reading a running process's PEB, had no
     stop command, and let the code and the database drift apart in silence.
 

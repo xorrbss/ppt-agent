@@ -15,7 +15,8 @@ does not ship or support an Electron desktop shell. It generates presentations
 from prompts or documents and exports editable PPTX and PDF files.
 
 This fork adds Korean UI defaults, Windows-native development fixes, offline
-Korean OCR assets, and an authored high-quality slide mode. Preserve API values,
+Korean OCR assets, and an svg slide generation pipeline (the authored HTML mode
+was removed 2026-11-09). Preserve API values,
 provider/model IDs, and other logic literals in English unless a task explicitly
 requires changing them.
 
@@ -161,7 +162,8 @@ Next.js build output is `.next-build`, not `.next`.
 - PPTX/PDF export runs in isolated `export.pptx`/`export.pdf` workspace operations; there is no separate export runtime to sync.
 - Rendering requires Chrome/Chromium; `CHROME_PATH` or
   `PUPPETEER_EXECUTABLE_PATH` can override auto-detection.
-- Authored mode produces image-per-slide output and has different editing/export
-  behavior from adaptive/template mode. Do not conflate the two pipelines.
+- svg is the only generation strategy; authored decks are listed as unsupported
+  and can only be deleted. See `CLAUDE.md` and
+  `docs/authored-removal-execution-20261109.md`.
 - `USER_CONFIG_PATH` must be present in the Next.js process as well as FastAPI;
   omitting it can cause configuration checks and route redirects to fail.
