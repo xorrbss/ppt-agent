@@ -1,5 +1,6 @@
 """Read-only public sharing: token lifecycle + that the public view is reachable
 only by a live token and never leaks the token or other decks."""
+from tests.support.existing_authored_rows import add_existing_authored_presentation
 import asyncio
 from datetime import datetime, timedelta, timezone
 import uuid
@@ -46,21 +47,23 @@ async def _make_engine(db_path):
 
 
 async def _seed_deck(
-    session, *, content=None, html_content=None, owner_id=None
+    session, *, content=None, html_content=None, owner_id=None, authored=False
 ) -> uuid.UUID:
     pid = uuid.uuid4()
-    session.add(
-        PresentationModel(
-            id=pid,
-            owner_id=owner_id,
-            content="deck",
-            n_slides=1,
-            language="ko",
-            # Every deck this fork creates is authored; a row with no
-            # identity described a retired React-template format.
-            mode="authored",
-        )
+    presentation = PresentationModel(
+        id=pid,
+        owner_id=owner_id,
+        content="deck",
+        n_slides=1,
+        language="ko",
+        # Every deck this fork creates is svg since the authored driver was
+        # removed (2026-11-10); ``authored=True`` writes a pre-existing row.
+        mode="svg",
     )
+    if authored:
+        await add_existing_authored_presentation(session, presentation)
+    else:
+        session.add(presentation)
     session.add(
         SlideModel(
             presentation=pid, layout_group="korean-biz",
@@ -415,6 +418,51 @@ def test_disabling_share_revokes_public_asset_route(tmp_path, monkeypatch):
                     sql_session=session,
                 )
             assert exc.value.status_code == 404
+        await engine.dispose()
+
+    _run(runner())
+
+
+def test_pre_existing_authored_deck_cannot_be_shared_or_viewed_publicly(tmp_path):
+    """The authored driver was removed on 2026-11-10 (option A): an existing
+    authored deck answers ``unsupported_presentation_driver`` like its own
+    read. No new link is minted, a link minted before the removal is refused
+    without counting the view, its assets are not served, and the owner can
+    still inspect and revoke the old link."""
+
+    async def runner():
+        engine = await _make_engine(tmp_path / "authored.db")
+        async with AsyncSession(engine, expire_on_commit=False) as session:
+            pid = await _seed_deck(session, authored=True)
+
+            with pytest.raises(HTTPException) as refused:
+                await share.enable_share(id=pid, sql_session=session)
+            assert refused.value.status_code == 422
+            assert refused.value.detail == "unsupported_presentation_driver"
+            assert (await share.get_share_status(id=pid, sql_session=session)).shared is False
+
+            token = "t" * 43
+            await session.execute(
+                PresentationModel.__table__.update()
+                .where(PresentationModel.__table__.c.id == pid)
+                .values(share_token=token)
+            )
+            await session.commit()
+
+            with pytest.raises(HTTPException) as public:
+                await share.get_shared_presentation(share_token=token, sql_session=session)
+            assert public.value.status_code == 422
+            assert public.value.detail == "unsupported_presentation_driver"
+            with pytest.raises(HTTPException) as asset:
+                await share.get_shared_presentation_asset(
+                    share_token=token, asset_id="a" * 64, sql_session=session
+                )
+            assert asset.value.status_code == 404
+
+            status = await share.get_share_status(id=pid, sql_session=session)
+            assert status.shared is True and status.view_count == 0
+            revoked = await share.disable_share(id=pid, sql_session=session)
+            assert revoked.shared is False
         await engine.dispose()
 
     _run(runner())

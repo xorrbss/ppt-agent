@@ -45,6 +45,7 @@ tests/unit/test_authored_dom_fit_magnitude.py
 tests/unit/test_authored_dom_quality.py
 tests/unit/test_authored_dom_text_escape.py
 tests/unit/test_authored_dom_trigger_routing.py
+tests/unit/test_authored_driver_removal.py
 tests/unit/test_authored_editable_hybrid_projection_contract.py
 tests/unit/test_authored_empty_media.py
 tests/unit/test_authored_evidence_completion_v3.py
@@ -259,6 +260,7 @@ tests/unit/test_internal_auth_headers.py
 tests/unit/test_osb_retained_native_scene.py
 tests/unit/test_outline_canvas_budget.py
 tests/unit/test_outline_canvas_budget_wiring.py
+tests/unit/test_outline_count_retry_call_identity.py
 tests/unit/test_presentation_generation_operation_handler.py
 tests/unit/test_presentation_profile_write_boundary.py
 tests/unit/test_provider_runtime_job_registration.py

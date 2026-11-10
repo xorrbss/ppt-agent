@@ -1,6 +1,7 @@
 """Rendered remake candidates remain reviewable despite DOM findings.
 Generation, render, and integrity failures remain fatal."""
 
+from tests.support.existing_authored_rows import add_existing_authored_presentation
 import asyncio
 import json
 import uuid
@@ -9,7 +10,8 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
-from fastapi import BackgroundTasks
+from fastapi import BackgroundTasks, HTTPException
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlmodel import SQLModel
 
@@ -122,7 +124,7 @@ class _BoundSessionMaker:
 
 async def _seed(session: AsyncSession, slide_count: int = 1):
     presentation = _presentation(slide_count)
-    session.add(presentation)
+    await add_existing_authored_presentation(session, presentation)
     await session.flush()
     slides = [_slide(presentation.id, index) for index in range(slide_count)]
     task = AsyncPresentationGenerationTaskModel(status="pending")
@@ -556,31 +558,25 @@ async def test_error_payload_never_carries_candidate_html(tmp_path, monkeypatch)
 
 
 @async_test
-async def test_preview_page_number_is_one_based(tmp_path, monkeypatch):
+async def test_preview_of_a_pre_existing_authored_deck_is_refused(tmp_path, monkeypatch):
+    """The authored driver was removed on 2026-11-10 (option A): a page
+    remake preview of an existing authored deck is refused at workspace
+    admission with ``unsupported_presentation_driver`` and queues nothing."""
     engine = await _engine(tmp_path / "index.sqlite")
     async with AsyncSession(engine, expire_on_commit=False) as session:
-        presentation, slides, task = await _seed(session, slide_count=3)
+        presentation, _slides, _task = await _seed(session, slide_count=3)
         _install_preview_stubs(
             monkeypatch, session, reports=(_report(), _report()), slide_count=3
         )
 
-        background = BackgroundTasks()
-        request = AuthoredPageRemakePreviewRequest()
-        queued = await remake.queue_authored_page_remake_preview(
-            presentation.id, 2, request, background, session
-        )
-        assert queued.message_key == "remake.page.queued"
-        assert queued.message_params == {"page": 3}
-        operation = await session.get(WorkspaceOperation, uuid.UUID(queued.id.removeprefix("workspace-page-preview-")))
-        assert operation.request_payload["context"]["slide_index"] == 2
-
-        await _run_preview(session, presentation, task, slide_index=2)
-
-        assert task.status == "completed", task.error
-        assert task.data["slide_index"] == 2
-        assert task.data["slide_id"] == str(slides[2].id)
-        assert task.message_key == "remake.page.ready"
-        assert task.message_params == {"page": 3}
+        with pytest.raises(HTTPException) as refused:
+            await remake.queue_authored_page_remake_preview(
+                presentation.id, 2, AuthoredPageRemakePreviewRequest(), BackgroundTasks(), session
+            )
+        assert refused.value.status_code == 422
+        assert refused.value.detail == {"code": "unsupported_presentation_driver"}
+        await session.rollback()
+        assert (await session.execute(select(WorkspaceOperation))).first() is None
     await engine.dispose()
 
 

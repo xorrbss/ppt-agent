@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from tests.support.existing_authored_rows import add_existing_authored_presentation
 import asyncio
 from pathlib import Path
 
@@ -13,6 +14,8 @@ from sqlmodel import SQLModel
 
 import migrations
 from models.sql.presentation import PresentationModel
+from models.sql.slide import SlideModel
+from tests.support.minimal_svg_deck import minimal_svg_theme
 from models.sql.presentation_export_attempt import PresentationExportAttempt
 from models.sql.user import User
 from models.sql.workspace import (
@@ -47,6 +50,7 @@ from services.workspace_runtime_profile import (
 WORKSPACE_TABLES = [
     User.__table__,
     PresentationModel.__table__,
+    SlideModel.__table__,
     WorkspaceConversation.__table__,
     WorkspaceMessage.__table__,
     WorkspaceAsset.__table__,
@@ -84,9 +88,10 @@ def _presentation() -> PresentationModel:
         n_slides=1,
         language="en",
         layout={"name": "test"},
-        # Every deck this fork creates is authored; a row with no
-        # identity described a retired React-template format.
-        mode="authored",
+        # Every deck this fork creates is svg since the authored driver was
+        # removed (2026-11-10).
+        mode="svg",
+        theme=minimal_svg_theme(),
     )
 
 
@@ -200,9 +205,11 @@ async def _publication_revision_compare_and_swap(tmp_path: Path):
     engine, maker = await _database(tmp_path / "revision.db")
     try:
         async with maker() as session, session.begin():
+            # The compare-and-swap is driver-neutral; an existing authored row
+            # publishes without the svg page re-stamp, which would itself
+            # write the row before the fence and contend on SQLite.
             presentation = _presentation()
-            session.add(presentation)
-            await session.flush()
+            await add_existing_authored_presentation(session, presentation)
             presentation_id = presentation.id
 
         async def publish() -> str:

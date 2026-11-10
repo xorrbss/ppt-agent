@@ -16,7 +16,7 @@ def test_timeline_preserves_workspace_failure_class(monkeypatch, failure_class):
     conversation_id = uuid.uuid4()
     presentation = PresentationModel(
         id=uuid.uuid4(), content="Failure contract", n_slides=2, language="en",
-        layout=None, mode="authored", theme={"mode": "authored"}, generation_mode="standard", revision=4,
+        layout=None, mode="svg", theme={"mode": "svg"}, generation_mode="standard", revision=4,
     )
     operation_id = uuid.uuid4()
     monkeypatch.setattr(service, "_conversation_and_presentation", AsyncMock(return_value=(

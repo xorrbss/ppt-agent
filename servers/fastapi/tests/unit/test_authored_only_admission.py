@@ -14,7 +14,7 @@ from services.compatibility_migration.admission import (
 from services.compatibility_migration.feature_manifest import (
     build_authored_only_capability_manifest,
 )
-from models.presentation_profiles import resolve_presentation_profile
+from models.presentation_profiles import PresentationProfileError, resolve_presentation_profile
 
 
 def test_malformed_flag_fails_closed(monkeypatch):
@@ -48,14 +48,17 @@ def test_internal_canary_only_admits_allowlisted_owner(monkeypatch):
         require_legacy_creation_closed(operation="blank")
 
 
-def test_new_shell_is_canonical_authored(monkeypatch):
+def test_new_authored_shell_no_longer_resolves(monkeypatch):
     monkeypatch.setenv("AUTHORED_ONLY_NEW_PRESENTATION_ADMISSION", "true")
     monkeypatch.setenv("AUTHORED_ONLY_CANARY_STAGE", "100")
     presentation = PresentationModel(content="x", n_slides=0, language="")
     stamp_new_authored_presentation(presentation)
     assert presentation.theme == {"mode": "authored"}
     assert presentation.profile_driver_id == "authored"
-    assert resolve_presentation_profile(presentation).driver_id == "authored"
+    # The authored driver was removed on 2026-11-10: the stamped shell no
+    # longer resolves, so the write boundary refuses to persist it.
+    with pytest.raises(PresentationProfileError, match="unsupported_presentation_driver"):
+        resolve_presentation_profile(presentation)
 
 
 def test_ui_manifest_hides_legacy_creation(monkeypatch):

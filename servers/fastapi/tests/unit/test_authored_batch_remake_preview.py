@@ -1,3 +1,4 @@
+from tests.support.existing_authored_rows import add_existing_authored_presentation
 import asyncio
 import uuid
 from functools import wraps
@@ -84,7 +85,7 @@ async def _seed_deck(session: AsyncSession, slide_count: int) -> PresentationMod
         outlines=outline.model_dump(mode="json"),
         theme={"style": "default"},
     )
-    session.add(presentation)
+    await add_existing_authored_presentation(session, presentation)
     await session.flush()
     session.add_all(
         [

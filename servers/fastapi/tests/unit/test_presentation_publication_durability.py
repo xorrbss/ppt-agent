@@ -12,6 +12,8 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlmodel import SQLModel
 
 from models.sql.presentation import PresentationModel
+from models.sql.slide import SlideModel
+from tests.support.minimal_svg_deck import minimal_svg_slide, minimal_svg_theme
 from models.sql.public_admission import PublicOperationAdmission
 from models.sql.user import User
 from models.sql.workspace import (
@@ -35,6 +37,7 @@ from services.workspace_operation_runner import (
 TABLES = [
     User.__table__,
     PresentationModel.__table__,
+    SlideModel.__table__,
     # Recovery joins the admission journal to tell a legacy publication apart
     # from a fenced one, so the scan reads this table on every startup.
     PublicOperationAdmission.__table__,
@@ -72,11 +75,14 @@ async def _seed_running_operation(maker, *, kind: str):
             language="en",
             layout={"name": "test"},
             revision=3,
-            # Every deck this fork creates is authored; a row with no
-            # identity described a retired React-template format.
-            mode="authored",
+            # Every deck this fork creates is svg since the authored driver
+            # was removed (2026-11-10).
+            mode="svg",
+            theme=minimal_svg_theme(),
         )
         session.add(presentation)
+        await session.flush()
+        session.add(minimal_svg_slide(presentation.id))
         await session.flush()
         conversation = WorkspaceConversation(presentation_id=presentation.id)
         session.add(conversation)

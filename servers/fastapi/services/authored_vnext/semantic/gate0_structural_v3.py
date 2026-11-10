@@ -387,6 +387,10 @@ async def execute_gate0_structural_case_v3(
         if existing.request_digest == request_digest:
             return existing.http_status, dict(existing.payload)
         raise SemanticContractError("authored_gate0_structural_case_replay_conflict")
+    # Each case writes a fresh authored subject deck. The authored driver was
+    # removed on 2026-11-10, so the write boundary refuses that row; refuse
+    # the case up front (a replay of an existing trace above still answers).
+    raise SemanticContractError("authored_strategy_removed")
 
     now = datetime.now(timezone.utc).replace(microsecond=0)
     # Request-scoped writes are stamped with the authenticated owner during

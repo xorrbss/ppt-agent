@@ -14,16 +14,17 @@ from models.presentation_profiles import (
 @pytest.mark.parametrize(
     ("identity", "driver_id", "content_model", "strategy", "style_source"),
     [
+        # svg-v1 decks keep the persisted ``style_source="authored"`` literal.
         (
             {
                 "generation_mode": "standard",
-                "mode": "authored",
+                "mode": "svg",
                 "version": "v1-standard",
-                "theme": {"mode": "authored"},
+                "theme": {"mode": "svg"},
             },
-            "authored",
-            "authored",
-            "authored",
+            "svg-v1",
+            "svg",
+            "svg",
             "authored",
         ),
     ],
@@ -43,17 +44,18 @@ def test_supported_profiles_and_drivers(
 
 
 def test_registry_is_complete_immutable_and_exposes_supported_adapters():
-    assert tuple(PRESENTATION_DRIVER_REGISTRY) == ("authored", "svg-v1")
+    # The authored driver was removed on 2026-11-10 (authored-removal P2).
+    assert tuple(PRESENTATION_DRIVER_REGISTRY) == ("svg-v1",)
     assert {
         driver.capabilities.renderer_adapter_id
         for driver in PRESENTATION_DRIVER_REGISTRY.values()
-    } == {"authored", "svg-v1"}
+    } == {"svg-v1"}
     with pytest.raises(TypeError):
         PRESENTATION_DRIVER_REGISTRY["future"] = PRESENTATION_DRIVER_REGISTRY[  # type: ignore[index]
-            "authored"
+            "svg-v1"
         ]
     with pytest.raises(FrozenInstanceError):
-        PRESENTATION_DRIVER_REGISTRY["authored"].capabilities.export_adapter_id = (  # type: ignore[misc]
+        PRESENTATION_DRIVER_REGISTRY["svg-v1"].capabilities.export_adapter_id = (  # type: ignore[misc]
             "other"
         )
 
@@ -103,6 +105,34 @@ def test_registry_is_complete_immutable_and_exposes_supported_adapters():
             },
             "unsupported_presentation_driver",
         ),
+        # The authored driver was removed on 2026-11-10 (option A): a
+        # pre-existing authored row -- by mode, by theme mode, or already
+        # stamped -- fails closed exactly like a Template V2 row. Its literals
+        # stay known, so it is this code and not an earlier, different one.
+        (
+            {
+                "generation_mode": "standard",
+                "mode": "authored",
+                "version": "v1-standard",
+                "theme": {"mode": "authored"},
+            },
+            "unsupported_presentation_driver",
+        ),
+        (
+            {"generation_mode": "standard", "mode": None, "theme": {"mode": "authored"}},
+            "unsupported_presentation_driver",
+        ),
+        (
+            {
+                "generation_mode": "standard",
+                "mode": "authored",
+                "version": "v1-standard",
+                "theme": {"mode": "authored"},
+                "profile_driver_id": "authored",
+                "profile_schema_version": 1,
+            },
+            "unsupported_presentation_driver",
+        ),
     ],
 )
 def test_removed_and_conflicting_identity_fails_closed(identity, code):
@@ -114,15 +144,15 @@ def test_removed_and_conflicting_identity_fails_closed(identity, code):
 def test_client_profile_and_capability_spoofs_are_never_read():
     persisted = {
         "generation_mode": "standard",
-        "mode": "authored",
+        "mode": "svg",
         "version": "v1-standard",
-        "profile": {"driver_id": "template-v2"},
-        "capabilities": {"export_adapter_id": "template-v2-general"},
-        "driver_id": "template-v2",
+        "profile": {"driver_id": "authored"},
+        "capabilities": {"export_adapter_id": "authored-hybrid"},
+        "driver_id": "authored",
     }
 
     profile, capabilities, _ = resolve_presentation_driver(persisted)
 
-    assert profile.driver_id == "authored"
-    assert capabilities.export_adapter_id == "authored-hybrid"
+    assert profile.driver_id == "svg-v1"
+    assert capabilities.export_adapter_id == "svg-v1"
     assert GENERATION_MODE_COMPATIBILITY.encode_profile(profile) == "standard"

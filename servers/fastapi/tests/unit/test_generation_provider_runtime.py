@@ -11,7 +11,7 @@ from services.generation_provider_admission import (
     generation_provider_capabilities,
     server_generation_profile_identity,
 )
-from models.presentation_profiles import resolve_presentation_profile
+from models.presentation_profiles import PresentationProfileError, resolve_presentation_profile
 from utils import llm_provider
 from utils.generation_model import generation_model_settings
 from utils.llm_provider import (
@@ -65,7 +65,7 @@ def test_upload_generation_preset_pins_codex_model_and_effort(
 @pytest.mark.parametrize(
     ("strategy", "template", "driver_id", "required"),
     [
-        ("authored", "general", "authored", ("structuredOutput", "thinking")),
+        ("svg", "general", "svg-v1", ("structuredOutput", "thinking")),
     ],
 )
 def test_generation_profiles_admit_supported_provider(
@@ -102,7 +102,7 @@ def test_client_cannot_select_a_presentation_driver() -> None:
     request = GeneratePresentationRequest.model_validate(
         {
             "content": "server owned profile",
-            "strategy": "authored",
+            "strategy": "svg",
             "profile_driver_id": "authored",
         }
     )
@@ -110,20 +110,31 @@ def test_client_cannot_select_a_presentation_driver() -> None:
     identity = server_generation_profile_identity(request, None)
 
     assert isinstance(identity, Mapping)
-    assert resolve_presentation_profile(identity).driver_id == "authored"
+    assert resolve_presentation_profile(identity).driver_id == "svg-v1"
+
+
+def test_authored_generation_identity_no_longer_resolves() -> None:
+    """The authored driver was removed on 2026-11-10: an authored request
+    identity fails closed at profile resolution, before any provider."""
+    request = GeneratePresentationRequest(content="removed driver", strategy="authored")
+
+    identity = server_generation_profile_identity(request, None)
+
+    with pytest.raises(PresentationProfileError) as error:
+        resolve_presentation_profile(identity)
+    assert error.value.code == "unsupported_presentation_driver"
 
 
 def test_generation_driver_mismatch_fails_before_invocation() -> None:
     # Cerebras supports no presentation driver, so requesting the only
-    # currently-registered non-svg driver (authored) against it is a driver
-    # mismatch. Template-v2 identity is not exercised here any more: it no
-    # longer resolves to a driver at all, so it cannot reach this mismatch
-    # check -- it fails earlier, at profile resolution.
+    # registered driver (svg-v1) against it is a driver mismatch. Removed
+    # drivers (Template V2, authored) are not exercised here: they no longer
+    # resolve at all and fail earlier, at profile resolution.
     identity = {
         "generation_mode": "standard",
-        "mode": "authored",
+        "mode": "svg",
         "version": "v1-standard",
-        "theme": {"mode": "authored"},
+        "theme": {"mode": "svg"},
     }
     invoked = False
 
@@ -139,13 +150,13 @@ def test_generation_driver_mismatch_fails_before_invocation() -> None:
     assert invoked is False
 
 
-def test_authored_capability_mismatch_fails_before_invocation() -> None:
+def test_svg_capability_mismatch_fails_before_invocation() -> None:
     invoked = False
     with pytest.raises(ProviderResolutionError) as error:
         with generation_provider_admission(
             {
                 "generation_mode": "standard",
-                "mode": "authored",
+                "mode": "svg",
                 "version": "v1-standard",
                 "theme": {},
             },
@@ -173,7 +184,7 @@ def test_runtime_policy_rejects_a_capability_mismatch_at_the_provider_boundary()
     with generation_provider_policy(
         {
             "generation_mode": "standard",
-            "mode": "authored",
+            "mode": "svg",
             "version": "v1-standard",
             "theme": {},
         },
@@ -197,7 +208,7 @@ def test_disabled_provider_is_rejected_at_the_provider_boundary(
     with generation_provider_policy(
         {
             "generation_mode": "standard",
-            "mode": "authored",
+            "mode": "svg",
             "version": "v1-standard",
             "theme": {},
         },
@@ -223,7 +234,7 @@ def test_unknown_runtime_provider_fails_closed_without_exposing_settings(
         resolve_generation_provider(
             {
                 "generation_mode": "standard",
-                "mode": "authored",
+                "mode": "svg",
                 "version": "v1-standard",
                 "theme": {},
             },

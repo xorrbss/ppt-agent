@@ -1,3 +1,4 @@
+from tests.support.existing_authored_rows import add_existing_authored_presentation
 import asyncio
 from copy import deepcopy
 from pathlib import Path
@@ -133,7 +134,7 @@ async def _confirm_refuses_authored_regeneration(tmp_path: Path):
     try:
         async with maker() as session:
             source = _source()
-            session.add(source)
+            await add_existing_authored_presentation(session, source)
             await session.commit()
             source_id = source.id
 
@@ -411,7 +412,7 @@ async def _confirm_rejects_stale_source_revision_and_key_conflict(tmp_path: Path
     try:
         async with maker() as session:
             source = _source()
-            session.add(source)
+            await add_existing_authored_presentation(session, source)
             await session.commit()
             source_id = source.id
 

@@ -9,41 +9,31 @@ gate-stage flags do.
 """
 
 import asyncio
-import uuid
 from types import SimpleNamespace
 
 import pytest
-from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+from sqlalchemy.ext.asyncio import create_async_engine
 from sqlmodel import SQLModel
 
 from models.authored_header_contract import default_header_contract
-from models.generate_presentation_request import GeneratePresentationRequest
 from models.presentation_outline_model import (
     PresentationOutlineModel,
     SlideOutlineModel,
 )
-from models.sql.presentation import PresentationModel
 from services import authored_author_stage_rescue as rescue_mod
 from services import authored_presentation_pipeline as pipeline_mod
-from services import authored_presentation_service as authored_service
-from services import authored_terminal_slide_fallback as terminal_mod
-from services.authored_admission_capture import canonical_capture_html
 from services.authored_composition_policy import CompositionProfile
 from services.authored_generation_observability import (
     log_authored_slide_failure_observation,
 )
 from services.authored_generation_timing_receipt_e4 import flagged_slide_entries
 from services.authored_local_fit_policy import POLICY_REVISION, html_digest
-from services.authored_presentation_contracts import (
-    AuthoredGenerationPipelineResult,
-)
 from services.source_content.browser_readback import (
     BrowserSourceReadbackResult,
 )
 from utils.authored_header_validation import validate_header_contract
 from services.authored_semantic_role_repair import canonicalize_authored_roles
 from services.generation_core.authoring.author_deck import (
-    AuthoredDeckResult,
     AuthoredProviderBudgetExhausted,
 )
 from services.generation_core.authoring.author_slide import (
@@ -51,9 +41,7 @@ from services.generation_core.authoring.author_slide import (
     is_fallback_slide_html,
     validate_authored_slide_html,
 )
-from utils.owner_context import reset_current_owner_id, set_current_owner_id
 from utils.provider_idempotency import ProviderOutcomeError
-from tests.unit.test_authored_terminal_slide_fallback import _pop_slide_ids
 
 _ORDINARY = CompositionProfile("ordinary", "authored", True, True, 1)
 _STYLE = SimpleNamespace(id="default", illustration_prompt=None)
@@ -684,117 +672,3 @@ async def _sqlite_engine(tmp_path):
         await connection.run_sync(SQLModel.metadata.create_all)
     return engine
 
-
-def test_the_author_flag_reaches_the_published_quality_gate(monkeypatch, tmp_path):
-    """The one place the two flag sources merge into the deck's one list."""
-
-    monkeypatch.setenv("APP_DATA_DIRECTORY", str(tmp_path / "app_data"))
-    flag = {
-        "index": 0,
-        "reason": "author:attempts_exhausted",
-        "remakeAttempted": True,
-        "remakeOutcome": "author_rescue_budget_exhausted",
-    }
-
-    async def fake_pipeline(
-        outline,
-        brand,
-        style,
-        header_contract=None,
-        page_number_mode="none",
-        chapter_plan=None,
-        illustration_plan=None,
-        instructions=None,
-    ):
-        prepared_html = canonical_capture_html(_RESCUED_HTML, index=0)
-        return AuthoredGenerationPipelineResult(
-            deck=AuthoredDeckResult([prepared_html], "DESIGN SYSTEM"),
-            pngs=[b"png"],
-            elapsed=0.1,
-            author_work=0.1,
-            illustration_work=0.0,
-            render_work=0.1,
-            author_flagged_slides=(flag,),
-            local_fit_receipts=_fit_receipts([prepared_html]),
-        )
-
-    async def fake_header_contract(
-        outline, brand, style=None, instructions=None, chapter_breadcrumb=False,
-        **canvas,
-    ):
-        return default_header_contract(primary=brand.primary, **canvas)
-
-    async def fake_metrics(_html):
-        return {"telemetry": "available"}
-
-    from services import authored_presentation_generation as generation_mod
-    from utils import llm_provider
-
-    monkeypatch.setattr(
-        authored_service,
-        "resolve_authored_style",
-        lambda style_id: SimpleNamespace(
-            id="editorial", brief="- Editorial", illustration_prompt=None
-        ),
-    )
-    monkeypatch.setattr(
-        authored_service, "_author_illustrate_render_pipeline", fake_pipeline
-    )
-    monkeypatch.setattr(
-        authored_service, "resolve_header_contract", fake_header_contract
-    )
-    monkeypatch.setattr(authored_service, "find_chrome", lambda: True)
-    monkeypatch.setattr(
-        authored_service,
-        "_save_slide_pngs",
-        lambda presentation_id, pngs, *args, **kwargs: ["slide-0.png"],
-    )
-    monkeypatch.setattr(
-        authored_service,
-        "_build_authored_export",
-        lambda request, presentation_id, pngs, title, **kwargs: "deck.pptx",
-    )
-    monkeypatch.setattr(
-        llm_provider, "get_llm_provider", lambda: SimpleNamespace(value="stub")
-    )
-    monkeypatch.setattr(llm_provider, "get_model", lambda: "stub-model")
-    for module in (generation_mod, terminal_mod):
-        monkeypatch.setattr(
-            module,
-            "inspect_authored_dom",
-            lambda *args, **kwargs: SimpleNamespace(
-                telemetry_status="available", issues=[], fit_summary=None
-            ),
-        )
-        monkeypatch.setattr(module, "blocking_safety_issues", lambda _report: ())
-        monkeypatch.setattr(module, "capacity_violations", lambda *a, **k: ())
-    monkeypatch.setattr(generation_mod, "ensure_browser_metrics", fake_metrics)
-    monkeypatch.setattr(
-        terminal_mod, "get_cached_browser_metrics", lambda _html: {"telemetry": "ok"}
-    )
-
-    request = GeneratePresentationRequest(
-        content="topic", template="authored", authored_style="editorial"
-    )
-    presentation_id = uuid.uuid4()
-    owner_token = set_current_owner_id(uuid.uuid4())
-
-    async def scenario():
-        engine = await _sqlite_engine(tmp_path)
-        try:
-            async with AsyncSession(engine, expire_on_commit=False) as session:
-                await authored_service.generate_authored_presentation(
-                    request, presentation_id, _outline(1), "Korean", session
-                )
-                return await session.get(PresentationModel, presentation_id)
-        finally:
-            await engine.dispose()
-
-    try:
-        presentation = _run(scenario())
-    finally:
-        reset_current_owner_id(owner_token)
-
-    assert _pop_slide_ids(
-        presentation.theme["authoredQualityGate"]["flaggedSlides"]
-    ) == [flag]

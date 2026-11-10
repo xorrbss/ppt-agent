@@ -128,8 +128,8 @@ async def _seed(maker, *, owner_id: uuid.UUID, operations: int) -> list[uuid.UUI
                 content="bounded public export",
                 n_slides=3,
                 language="ko",
-                mode="authored",
-                theme={"mode": "authored"},
+                mode="svg",
+                theme={"mode": "svg"},
             )
             session.add(presentation)
             await session.flush()

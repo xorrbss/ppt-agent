@@ -153,7 +153,7 @@ async def _retention_is_bounded_scoped_and_preserves_history(tmp_path: Path):
                 layout={"name": "test"},
                 # Every deck this fork creates is authored; a row with no
                 # identity described a retired React-template format.
-                mode="authored",
+                mode="svg",
             )
             presentation_b = PresentationModel(
                 owner_id=owner_b,
@@ -163,7 +163,7 @@ async def _retention_is_bounded_scoped_and_preserves_history(tmp_path: Path):
                 layout={"name": "test"},
                 # Every deck this fork creates is authored; a row with no
                 # identity described a retired React-template format.
-                mode="authored",
+                mode="svg",
             )
             session.add_all([presentation_a, presentation_b])
             await session.flush()

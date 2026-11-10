@@ -43,7 +43,7 @@ from services.workspace_service import (
     workspace_timeline,
 )
 from services.workspace_api_contract import allowed_workspace_actions
-from models.presentation_profiles import resolve_presentation_driver
+from models.presentation_profiles import PresentationProfileError, resolve_presentation_driver
 from utils.owner_context import get_current_owner_id
 from models.sql.workspace import get_workspace_owner_scope
 
@@ -58,7 +58,14 @@ def derive_presentation_capability(
 ) -> PresentationCapability:
     """Derive runtime/tool capability exclusively from persisted presentation data."""
 
-    profile, capabilities, _ = resolve_presentation_driver(presentation)
+    try:
+        profile, capabilities, _ = resolve_presentation_driver(presentation)
+    except PresentationProfileError as error:
+        # A deck whose driver was removed (Template V2, or authored since
+        # 2026-11-10) has no conversation surface; answer like its read.
+        raise WorkspaceServiceError(
+            error.code, status_code=422, retryable=False
+        ) from error
     if profile.driver_id == "svg-v1":
         presentation_mode = "svg"
     elif profile.driver_id == "authored":
@@ -143,6 +150,8 @@ async def create_conversation(
     presentation = await _presentation_or_404(session, presentation_id)
     if presentation.lifecycle_status == PRESENTATION_LIFECYCLE_DELETED:
         raise WorkspaceServiceError("presentation_deleted", status_code=409)
+    # Fail closed before writing a conversation for a deck no driver claims.
+    derive_presentation_capability(presentation)
     conversation = await _conversation_for_presentation(session, presentation_id)
     if conversation is None:
         try:

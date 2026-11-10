@@ -1,3 +1,4 @@
+from tests.support.existing_authored_rows import add_existing_authored_presentation
 import asyncio
 import warnings
 from types import SimpleNamespace
@@ -116,7 +117,7 @@ def test_unimportable_fixture_stops_before_legacy_vqa_candidate_path(
         presentation = _presentation()
         task = AsyncPresentationGenerationTaskModel(status="pending", message="queued")
         async with AsyncSession(engine, expire_on_commit=False) as session:
-            session.add(presentation)
+            await add_existing_authored_presentation(session, presentation)
             session.add_all(_slides(presentation.id))
             session.add(task)
             await session.commit()

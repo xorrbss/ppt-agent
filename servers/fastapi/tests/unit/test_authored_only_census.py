@@ -76,7 +76,7 @@ def test_canonical_census_assigns_every_required_classification_once():
     presentations = [
         _presentation("template", mode="template", version="v2-standard"),
         _presentation("authored", mode="authored", theme={"mode": "authored"}),
-        _presentation("mixed", mode="authored", theme={"mode": "authored"}),
+        _presentation("mixed", mode="svg", theme={"mode": "svg"}),
         _presentation("retired"),
         _presentation("invalid", generation_mode="mystery"),
     ]
@@ -102,16 +102,18 @@ def test_canonical_census_assigns_every_required_classification_once():
         for presentation in presentations
     ]
 
+    # The authored driver was removed on 2026-11-10 (option A): an authored
+    # deck is reported and quarantined exactly like a Template V2 deck.
     assert [entry.classification for entry in result] == [
         "invalid",
-        "authored",
+        "invalid",
         "mixed",
         "invalid",
         "invalid",
     ]
     assert len(result) == len(presentations)
-    assert result[1].quarantine is False
-    assert all(entry.quarantine for entry in (result[0], *result[2:]))
+    assert all(entry.quarantine for entry in result)
+    assert result[1].quarantine_reason == "unsupported_presentation_driver"
     assert [entry.quarantine_reason for entry in result[-2:]] == [
         "unsupported_presentation_driver",
         "unsupported_generation_mode",
@@ -120,13 +122,13 @@ def test_canonical_census_assigns_every_required_classification_once():
 
 
 def test_malformed_slide_is_invalid_and_profile_evidence_conflict_is_mixed():
-    authored = _presentation("authored", mode="authored")
+    svg = _presentation("svg", mode="svg", theme={"mode": "svg"})
 
     malformed = classify_presentation(
-        authored,
-        [_slide("authored", html_content=42)],
+        svg,
+        [_slide("svg", html_content=42)],
     )
-    mixed = classify_presentation(authored, [_slide("authored")])
+    mixed = classify_presentation(svg, [_slide("svg")])
 
     assert malformed.classification == "invalid"
     assert malformed.quarantine_reason == "slide_html_invalid"

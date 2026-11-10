@@ -1,3 +1,4 @@
+from tests.support.existing_authored_rows import add_existing_authored_presentation
 import asyncio
 import uuid
 from functools import wraps
@@ -111,7 +112,7 @@ async def _seed_deck(session: AsyncSession, slide_count: int, *, theme=None):
         theme=theme if theme is not None else {"style": "default"},
         revision=3,
     )
-    session.add(presentation)
+    await add_existing_authored_presentation(session, presentation)
     await session.flush()
     session.add_all(
         [
@@ -402,7 +403,11 @@ async def test_stale_expected_revision_is_reported_without_publishing(
     async with AsyncSession(engine, expire_on_commit=False) as session:
         presentation = await _seed_deck(session, 1)
         presentation.revision = 9
-        session.add(presentation)
+        await session.execute(
+            PresentationModel.__table__.update()
+            .where(PresentationModel.__table__.c.id == presentation.id)
+            .values(revision=9)
+        )
         await session.commit()
         revision_calls = _install_publishers(
             monkeypatch, session, failing_indexes=frozenset()

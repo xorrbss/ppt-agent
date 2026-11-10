@@ -51,7 +51,7 @@ def test_generation_info_returns_basename_only_and_saved_settings(tmp_path):
                     include_table_of_contents=True,
                     include_title_slide=True,
                     web_search=False,
-                    mode="authored",
+                    mode="svg",
                     version=LEGACY_PRESENTATION_VERSION,
                 )
             )
@@ -75,7 +75,7 @@ def test_generation_info_returns_basename_only_and_saved_settings(tmp_path):
             assert info.settings.include_table_of_contents is True
             assert info.settings.include_title_slide is True
             assert info.settings.web_search is False
-            assert info.settings.mode == "authored"
+            assert info.settings.mode == "svg"
             assert info.settings.version == LEGACY_PRESENTATION_VERSION
 
         await engine.dispose()
@@ -97,7 +97,7 @@ def test_generation_info_returns_empty_attachments_and_legacy_default(tmp_path):
                     language="en",
                     # Every deck this fork creates is authored; a row with no
                     # identity described a retired React-template format.
-                    mode="authored",
+                    mode="svg",
                 )
             )
             await session.commit()
@@ -131,7 +131,7 @@ def test_generation_info_prefers_the_original_workspace_generation_prompt(tmp_pa
                 language="ko",
                 # Every deck this fork creates is authored; a row with no
                 # identity described a retired React-template format.
-                mode="authored",
+                mode="svg",
             )
             conversation = WorkspaceConversation(presentation_id=presentation_id)
             session.add_all([presentation, conversation])
@@ -177,7 +177,7 @@ def test_generation_info_does_not_report_the_attachment_fallback_as_user_prompt(
                 language="ko",
                 # Every deck this fork creates is authored; a row with no
                 # identity described a retired React-template format.
-                mode="authored",
+                mode="svg",
             )
             conversation = WorkspaceConversation(presentation_id=presentation_id)
             session.add_all([presentation, conversation])
@@ -237,7 +237,7 @@ async def _seed_generation_attempt(session, *, state="failed", owner_id=None, de
         content="original request",
         n_slides=3,
         language="ko",
-        mode="authored",
+        mode="svg",
         owner_id=owner_id,
         lifecycle_status="deleted" if deleted else "staging",
     )

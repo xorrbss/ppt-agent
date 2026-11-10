@@ -60,7 +60,9 @@ from services.compatibility_migration.admission import (
     stamp_new_authored_presentation,
 )
 from services.presentation_deletion_service import PresentationDeletionService as PresentationDeletionService
-from services.presentation_access_service import require_live_presentation
+from services.presentation_access_service import (
+    require_supported_live_presentation,
+)
 from models.presentation_profiles import PresentationProfileError, resolve_presentation_driver
 from services.presentation_export_projection import (
     PRESENTATION_EXPORT_PROJECTION,
@@ -299,7 +301,7 @@ async def get_presentation_export_projection(
 async def get_presentation_generation_info(
     id: uuid.UUID, sql_session: AsyncSession = Depends(get_async_session)
 ):
-    presentation = await require_live_presentation(sql_session, id)
+    presentation = await require_supported_live_presentation(sql_session, id)
 
     prompt = presentation.content
     generation_operation = await sql_session.scalar(

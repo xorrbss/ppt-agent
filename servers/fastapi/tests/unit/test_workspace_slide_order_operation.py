@@ -6,6 +6,7 @@ against a real (SQLite) database, the same path every other mutation uses.
 """
 from __future__ import annotations
 
+from tests.support.existing_authored_rows import add_existing_authored_presentation
 import asyncio
 import uuid
 from datetime import datetime, timezone
@@ -58,19 +59,40 @@ async def _drain_once(runner: WorkspaceOperationRunner) -> int:
     return dispatched
 
 
-async def _seed_presentation(maker, *, n_slides: int, mode: str = "authored", theme: dict | None = None):
+_STYLE_SNAPSHOT = {"tokens": {"body_font": "Noto Sans KR", "primary": "#2563EB"}}
+_CANONICAL_SVG = (
+    '<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720" viewBox="0 0 1280 720">'
+    '<text x="10" y="20" font-family="Noto Sans KR" font-size="16" fill="#000000">body</text></svg>'
+)
+
+
+async def _seed_presentation(
+    maker, *, n_slides: int, mode: str = "svg", theme: dict | None = None, svg_pages: bool = False,
+):
+    """Seed a deck. Every deck this fork creates is svg since the authored
+    driver was removed (2026-11-10); ``mode="authored"`` writes a pre-existing
+    authored row instead, without the ORM write boundary that now refuses it."""
     async with maker() as session, session.begin():
         presentation = PresentationModel(
             content="source", n_slides=n_slides, language="en", title="title",
             mode=mode, version="v1-standard", lifecycle_status="published",
-            revision=1, theme=theme or {"mode": mode},
+            revision=1, theme=theme or (
+                {"mode": "svg", "style": "test", "svg": {"styleSnapshot": _STYLE_SNAPSHOT}}
+                if mode == "svg" else {"mode": mode}),
         )
-        session.add(presentation)
+        if mode == "authored":
+            await add_existing_authored_presentation(session, presentation)
+        else:
+            session.add(presentation)
         await session.flush()
         slide_ids = []
         for index in range(n_slides):
             slide = SlideModel(presentation=presentation.id, layout_group="custom",
                                layout="content", index=index, content={"title": f"slide-{index}"})
+            if mode == "svg" and (svg_pages or theme is None):
+                set_svg_page(slide, svg_content=_CANONICAL_SVG, content=slide.content,
+                             quality={"source_digest": source_digest(_CANONICAL_SVG)})
+                slide.source_format = "svg"
             session.add(slide)
             await session.flush()
             slide_ids.append(slide.id)
@@ -119,7 +141,9 @@ async def _submit_and_run(maker, registry, runner, *, presentation_id, slide_ids
 
 
 @pytest.fixture
-async def harness(tmp_path):
+async def harness(tmp_path, monkeypatch):
+    # Publishing an svg deck re-stamps its page numbers and stores page images.
+    monkeypatch.setattr("utils.asset_directory_utils.get_app_data_directory_env", lambda: str(tmp_path))
     engine, maker = await _database(tmp_path / "slide-order.db")
     async with maker() as session, session.begin():
         session.add(User(id=OWNER_ID, username="reorder-owner", hashed_password="test-only"))
@@ -253,3 +277,25 @@ async def test_reorder_of_an_svg_deck_renumbers_page_footers(harness, monkeypatc
         # finalize_svg stamps a 1-based, zero-padded page number per slide.index.
         assert '>01<' in slides[0].svg_content
         assert '>02<' in slides[1].svg_content
+
+
+@pytest.mark.anyio
+async def test_reorder_of_a_pre_existing_authored_deck_is_refused_at_admission(harness):
+    """The authored driver was removed on 2026-11-10: an existing authored deck
+    can only be listed and deleted, so a reorder is refused before any
+    operation row exists, with the same code its read answers."""
+    maker, _registry, _runner = harness
+    presentation_id, slide_ids = await _seed_presentation(maker, n_slides=2, mode="authored")
+    command = WorkspaceCommandRequest(
+        command="Reorder slides", command_type=OPERATION_KIND,
+        idempotency_key="reorder-authored", expected_revision=1,
+        context={"slide_ids": [str(x) for x in reversed(slide_ids)]},
+    )
+    async with maker() as session:
+        with pytest.raises(WorkspaceServiceError) as excinfo:
+            await create_workspace_command(session, presentation_id=presentation_id, request=command)
+    assert excinfo.value.code == "unsupported_presentation_driver"
+    assert excinfo.value.status_code == 422
+    async with maker() as session:
+        presentation = await session.get(PresentationModel, presentation_id)
+        assert presentation.revision == 1

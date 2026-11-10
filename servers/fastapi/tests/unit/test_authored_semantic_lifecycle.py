@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from tests.support.existing_authored_rows import add_existing_authored_presentation
 import asyncio
 import uuid
 
@@ -128,7 +129,7 @@ async def _exercise_lifecycle() -> None:
             )
             for index, html in enumerate(initial_htmls)
         ]
-        session.add(presentation)
+        await add_existing_authored_presentation(session, presentation)
         session.add_all(slides)
         await session.flush()
         first = await publish_authored_semantic_bundle_graph(
@@ -146,7 +147,11 @@ async def _exercise_lifecycle() -> None:
         )
         presentation.revision = 1
         slides[0].html_content = initial_htmls[0].replace("</div>", "changed</div>")
-        session.add(presentation)
+        await session.execute(
+            PresentationModel.__table__.update()
+            .where(PresentationModel.__table__.c.id == presentation_id)
+            .values(revision=1)
+        )
         session.add(slides[0])
         await session.commit()
 

@@ -14,7 +14,7 @@ from services.authored_batch_remake_service import (
     queue_authored_batch_remake_preview,
 )
 from services.database import get_async_session
-from services.presentation_access_service import require_live_presentation
+from services.presentation_access_service import require_supported_live_presentation
 
 AUTHORED_BATCH_REMAKE_ROUTER = APIRouter(prefix="/presentation", tags=["Presentation"])
 
@@ -36,7 +36,7 @@ async def preview_authored_batch_remake(
     not apply here; publication is a separate, approved workspace command.
     """
 
-    await require_live_presentation(sql_session, id)
+    await require_supported_live_presentation(sql_session, id)
     return await queue_authored_batch_remake_preview(
         id, request, background_tasks, sql_session
     )

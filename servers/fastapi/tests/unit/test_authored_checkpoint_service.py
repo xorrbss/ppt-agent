@@ -147,7 +147,7 @@ async def _linked_operation(
                 n_slides=1,
                 language="en",
                 layout={"name": "test"},
-                mode="authored",
+                mode="svg",
             )
         )
         await session.flush()

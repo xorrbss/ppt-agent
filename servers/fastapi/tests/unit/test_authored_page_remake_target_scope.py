@@ -13,6 +13,7 @@ itself is still refused.
 
 from __future__ import annotations
 
+from tests.support.existing_authored_rows import add_existing_authored_presentation
 import asyncio
 import uuid
 from pathlib import Path
@@ -71,7 +72,7 @@ async def _seed_deck_with_one_blank(maker) -> uuid.UUID:
 
     presentation_id = uuid.uuid4()
     async with maker() as session, session.begin():
-        session.add(
+        await add_existing_authored_presentation(session, 
             PresentationModel(
                 id=presentation_id,
                 content="remake scope fixture",
@@ -187,7 +188,7 @@ async def _a_deck_that_is_not_authored_at_all_is_still_refused(tmp_path: Path):
     try:
         presentation_id = uuid.uuid4()
         async with maker() as session, session.begin():
-            session.add(
+            await add_existing_authored_presentation(session, 
                 PresentationModel(
                     id=presentation_id,
                     content="layout deck",

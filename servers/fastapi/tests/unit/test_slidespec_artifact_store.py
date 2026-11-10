@@ -1,3 +1,4 @@
+from tests.support.existing_authored_rows import add_existing_authored_presentation
 import asyncio
 from copy import deepcopy
 from types import SimpleNamespace
@@ -99,7 +100,7 @@ async def _artifact_bundle_publish_cas_and_readback_are_self_verifying(tmp_path)
     presentation_id = uuid.uuid4()
     slide_id = uuid.uuid4()
     async with sessions() as session:
-        session.add(
+        await add_existing_authored_presentation(session, 
             PresentationModel(
                 id=presentation_id,
                 content="artifact test",

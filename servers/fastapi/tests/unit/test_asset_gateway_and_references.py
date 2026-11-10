@@ -150,7 +150,7 @@ async def _seed_conversation(maker, owner_id: uuid.UUID) -> WorkspaceConversatio
                 layout={"name": "test"},
                 # Every deck this fork creates is authored; a row with no
                 # identity described a retired React-template format.
-                mode="authored",
+                mode="svg",
             )
             session.add(presentation)
             await session.flush()
