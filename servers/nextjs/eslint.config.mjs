@@ -34,7 +34,6 @@ const eslintConfig = defineConfig([
   {
     // Authored is frozen; preserve its existing render contract until that flow can be revised.
     files: [
-      "app/(presentation-generator)/authored-vnext/AuthoredVnextFlowClient.tsx",
       "app/(presentation-generator)/authored-vnext/master-setup/MasterCatalogDialog.tsx",
     ],
     rules: { "react-hooks/refs": "off" },

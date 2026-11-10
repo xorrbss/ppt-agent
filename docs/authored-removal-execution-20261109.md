@@ -277,6 +277,37 @@ The full pytest suite and `npm run test:next-ci` run before each PR merges.
   stay). **Do not** touch `public-hybrid-export-worker.mjs`, `scripts/lib` or
   `lib/authored-hybrid` here. Verify with lint, `test:next-ci`, the i18n gate
   and a webpack build.
+  Done (2026-11-10): deleted the vNext flow and workbench pages (only
+  `authored-vnext/master-setup` remains under that route), `components/authored-vnext`,
+  `lib/authored-vnext/{flow,workbench}`, `lib/authored-editor`, the element
+  editor, the template changer, `AuthoredHeaderActions`, the emission capability
+  status, `MasterLayoutBadge`, the Hybrid coverage/history dialogs and the
+  never-opened `ExportQualityDialog`, with their API clients
+  (`authored-emission-capability`, `hybrid-export-history`) and tests. The
+  header, export menu and More menu lost their `isAuthoredDeck` branches: the
+  export menu offers PDF and one PPTX button, and every export command carries
+  only `format` (svg decks never had a master pin in that context, so the
+  commands svg decks send are unchanged). `masterPresentation.ts` keeps the pin
+  readers the svg remake uses and drops the Workbench bridge, the quality
+  advisory and the friendly-name helpers. The vNext e2e pieces went too:
+  `cypress/e2e/authoredVnextLiveRoute.cy.ts`, the local happy-path script and
+  config, `test:authored-vnext-local-e2e`, and the authored leg of
+  `run-workspace-e2e.mjs` (its `run-authored-live-e2e.mjs` and the vNext env it
+  added to the child processes). Messages: removed the namespaces only deleted
+  screens used and every `authoredVnext` key except `master`, plus the export
+  menu fidelity/hybrid and More-menu workbench keys. `PresentationHeader.cy.tsx`
+  now mounts svg and template decks. Kept for later batches:
+  `scripts/start-authored-vnext-dev.ps1` (it also launches master setup and
+  export validation, and `test_isolated_public_workers.py` reads its worker
+  limits; B5), `lib/ooxml-vnext`, `/api/internal/ooxml-vnext`,
+  `lib/presentation-export-quality` and `public-export-admission`'s `pptx_mode`
+  (B3), and the authored notice in `PresentationPage.tsx`. Checks on Windows:
+  tsc, the i18n gate, structural layering, webpack build and the header
+  component spec pass; `eslint .` reports the 12 existing `react-hooks/refs`
+  errors in `WorkspacePartialRecovery.tsx`; the Next node suite fails only the
+  CRLF-sensitive `requestVerbosity` source test, and `test:next-ci` stops at the
+  Windows-only SBOM difference and the CRLF `uv.lock` match, none of them in
+  touched files.
 - **B3 backend endpoints and export.** `authored_operations.py`, retemplate, the
   four router modules (+ `test_feature_module_registry`), `/export-projection`,
   the authored branch of `public_export_worker`, `workers/public_export_hybrid*.py`,

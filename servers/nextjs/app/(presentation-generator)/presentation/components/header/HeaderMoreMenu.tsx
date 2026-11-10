@@ -13,22 +13,17 @@ import {
 
 import AuthoredPageRemake from "../AuthoredPageRemake";
 import VersionHistoryPopover from "../VersionHistoryPopover";
-import type { EditableHybridWorkbenchProjection } from "../../utils/masterPresentation";
 import type {
   WorkspaceCommandDispatcher,
   WorkspacePageRemakeRequester,
   WorkspaceQualityReviewRequester,
 } from "../../workspace";
-import AuthoredEmissionCapabilityStatusView, {
-  type AuthoredEmissionCapabilityStatus,
-} from "./AuthoredEmissionCapabilityStatus";
 
 const menuButtonClass =
   "h-9 w-full justify-start rounded-lg px-3 text-sm font-medium shadow-none";
 
 interface HeaderMoreMenuProps {
   presentationId: string;
-  isAuthoredDeck: boolean;
   isSvgDeck?: boolean;
   canRemakePage?: boolean;
   currentSlide?: number;
@@ -42,14 +37,10 @@ interface HeaderMoreMenuProps {
   onWorkspacePageRemakeRequest?: WorkspacePageRemakeRequester;
   onQualityReview: () => void;
   onRegenerate: () => void;
-  editableHybridWorkbench: EditableHybridWorkbenchProjection | null;
-  authoredCapabilityStatus: AuthoredEmissionCapabilityStatus;
-  expectedRevision?: number;
 }
 
 const HeaderMoreMenu = ({
   presentationId,
-  isAuthoredDeck,
   isSvgDeck = false,
   canRemakePage = false,
   currentSlide,
@@ -63,12 +54,8 @@ const HeaderMoreMenu = ({
   onWorkspacePageRemakeRequest,
   onQualityReview,
   onRegenerate,
-  editableHybridWorkbench,
-  authoredCapabilityStatus,
-  expectedRevision,
 }: HeaderMoreMenuProps) => {
   const t = useTranslations("presentationHeader");
-  const tCapability = useTranslations("presentationCapability");
   const [open, setOpen] = useState(false);
   const closeThen = (action: () => void) => {
     setOpen(false);
@@ -98,7 +85,7 @@ const HeaderMoreMenu = ({
           {t("actions")}
         </p>
         <div className="space-y-1">
-          {isAuthoredDeck || canRemakePage ? (
+          {canRemakePage ? (
             <div
               className="[&>button]:h-9 [&>button]:w-full [&>button]:justify-start [&>button]:rounded-lg [&>button]:border-0 [&>button]:px-3 [&>button]:text-sm [&>button]:font-medium [&>button]:shadow-none"
             >
@@ -115,7 +102,7 @@ const HeaderMoreMenu = ({
               />
             </div>
           ) : null}
-          {isAuthoredDeck || isSvgDeck ? (
+          {isSvgDeck ? (
             <Button
               type="button"
               variant="ghost"
@@ -155,56 +142,6 @@ const HeaderMoreMenu = ({
             triggerLabel={t("versionHistory")}
           />
         </div>
-
-        {isAuthoredDeck ? (
-          <div className="mt-3 border-t border-slate-100 pt-3">
-            <p className="px-3 pb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
-              {t("advanced")}
-            </p>
-            {editableHybridWorkbench ? (
-              <div
-                className="mb-3 rounded-xl border border-violet-200 bg-violet-50/60 px-3 py-2.5 text-xs text-violet-950"
-                data-testid="editable-hybrid-workbench-bridge"
-              >
-                <p className="font-semibold">{t("editableHybridTitle")}</p>
-                <p className="mt-0.5 text-violet-800">
-                  {editableHybridWorkbench.status === "ready"
-                    ? t("workbenchReady")
-                    : editableHybridWorkbench.status === "shadow"
-                      ? t("workbenchShadow")
-                      : t("workbenchBlocked")}
-                </p>
-                {editableHybridWorkbench.status === "blocked" ? (
-                  <p className="mt-1 break-all text-violet-700">
-                    {editableHybridWorkbench.reasonCode ??
-                      t("workbenchBlockedFallback")}
-                  </p>
-                ) : (
-                  <a
-                    className="mt-2 inline-flex items-center gap-1 font-semibold underline underline-offset-2"
-                    data-testid="editable-hybrid-workbench-link"
-                    href={`/authored-vnext/workbench?authoredDeckId=${encodeURIComponent(editableHybridWorkbench.deckId)}`}
-                  >
-                    {t("openWorkbench")}
-                  </a>
-                )}
-              </div>
-            ) : null}
-            <section
-              className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5"
-              aria-label={t("exportReadiness")}
-            >
-              <p className="mb-1.5 text-xs font-semibold text-slate-700">
-                {t("exportReadiness")}
-              </p>
-              <AuthoredEmissionCapabilityStatusView
-                status={authoredCapabilityStatus}
-                expectedRevision={expectedRevision}
-                t={(key, values) => tCapability(key, values)}
-              />
-            </section>
-          </div>
-        ) : null}
       </PopoverContent>
     </Popover>
   );

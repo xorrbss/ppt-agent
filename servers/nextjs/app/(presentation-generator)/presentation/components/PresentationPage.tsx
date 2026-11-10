@@ -643,7 +643,6 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
           isPresentationSaving={isSaving}
           isPresentationSaveFailed={saveFailed}
           currentSlide={selectedSlide}
-          isAuthoredDeck={isAuthoredDeck}
           mutationsEnabled={INLINE_MUTATIONS_ENABLED}
           workspaceCommandsEnabled={
             workspaceReady &&
@@ -662,7 +661,6 @@ const PresentationPage: React.FC<PresentationPageProps> = ({
           activeExportOperation={activeExportOperation}
           onCanonicalSaved={handlePresentationChanged}
           headerFeatures={{
-            showAuthoredActions: presentationFeatureView.authored,
             exportActions: presentationFeatureView.slots.exportActions,
           }}
         />
