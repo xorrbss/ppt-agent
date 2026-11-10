@@ -1663,6 +1663,12 @@
       "retryable": false
     },
     {
+      "code": "authored_page_remake_unsupported_presentation",
+      "status_code": 422,
+      "safe_message": "This presentation uses a format that is no longer supported. It can only be deleted.",
+      "retryable": false
+    },
+    {
       "code": "unsupported_presentation_driver",
       "status_code": 422,
       "safe_message": "This presentation uses a format that is no longer supported. It can only be deleted.",
