@@ -213,6 +213,33 @@ The full pytest suite and `npm run test:next-ci` run before each PR merges.
   and dispatcher patches, the shared checkpoint database helper (it also
   redirects the rows module), the attempt-timing v1 support module. New
   reviewed keys for the partial-recovery and page-render code identities.
+  **B1b-2 done 2026-11-10**, the same move-and-re-export pattern:
+  `utils/render_fit_floor.py` (`fit_font_floor_px`, `page_number_max_font_px`,
+  from the fragmentation gate), `utils/slide_capture_fit_class.py` (`FIT_CLASS`,
+  from the in-render fit script), `services/generation_core/assets/style_primary.py`
+  (`resolve_style_primary`, from `author_slide_design_system`),
+  `services/generation_core/authoring/reference_images.py` (`reference_parts` and
+  the two image byte caps, from `author_slide_images`) and
+  `utils/llm_calls/author_model_pin.py` (`authoring_model` and the profile
+  context variable `author_prompt_profile` now shares). `slide_capture`, the
+  pixel and glyph probes take `ensure_authored_qids` from
+  `authored_qid_namespace`; `slide_capture_fit` imports the two fitter scripts
+  and `authored_fit_edits` only where a fit is requested; the svg author, the
+  source/raster svg layouts, the timeout repurchase modules and the asset offer
+  import the new modules. Deviation from the design: `resolve_author_prompt_profile`
+  stays in `author_prompt_profile` (its profile carries the prompt sections);
+  the pin module makes the same two settings reads, so an invalid profile name
+  is still refused. Svg module-level closure: 54 → 46 authored-named modules
+  (412 → 393; `authored_dom_quality`, the fragmentation gate, `authored_fit_edits`,
+  `authored_local_fit_policy` and the DOM escape/category/magnitude/empty-media
+  modules are gone from it; the vision advisory pair stays until its own cut).
+  The function-local closure is still 1250/420: the strategy branch and the vNext
+  packages reach the whole authored pipeline until B1b-3 and later batches. Tests
+  retargeted: the `authoring_model` patches in
+  `test_svg_timeout_repurchase_incident.py` and `test_workspace_service.py`. New
+  reviewed keys for all four svg code identities (common header, whole page,
+  partial recovery, page render); no new module joined their file lists, since
+  none took code out of a listed file.
 - **B2 frontend (parallel with B1).** Delete the authored-vnext generation and
   workbench UI, `components/authored-vnext`, `lib/authored-vnext/{flow,workbench}`,
   the element editor, template changer, header actions and the ExportMenu

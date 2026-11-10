@@ -42,14 +42,14 @@ from services.svg_authoring_profile import (
 from utils.anthropic_structured_output import with_cached_system_prompt
 from utils.hashing import canonical_json_digest, sha256_prefixed
 from utils.llm_calls.author_prompt_cache_key import apply_prompt_cache_key
-from utils.llm_calls.author_prompt_profile import authoring_model
+from utils.llm_calls.author_model_pin import authoring_model
 from utils.llm_calls.author_prompt_split import BLOCK_SEPARATOR, author_messages
 from utils.llm_calls.author_slide_effort import svg_author_call_timeout_seconds
 from services.generation_core.authoring.author_call_runtime import (
     _AUTHOR_EXECUTOR, _apply_anthropic_authoring_reasoning, _authoring_extra_body,
     _authoring_output_profile, _wait_for_author_rate_slot,
 )
-from services.generation_core.authoring.author_slide_images import REFERENCE_IMAGE_MAX_BYTES, reference_parts
+from services.generation_core.authoring.reference_images import REFERENCE_IMAGE_MAX_BYTES, reference_parts
 from utils.llm_config import enforce_llm_egress_policy, get_client, get_llm_config
 from utils.llm_provider import get_llm_provider, get_model
 from utils.llm_utils import extract_text, get_generate_kwargs

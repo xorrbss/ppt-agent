@@ -23,7 +23,7 @@ from services.svg_contract import source_digest
 from services.provider_usage_instrumentation import (
     ProviderCallTimer, current_provider_idempotency_key, provider_call_admission, record_provider_call,
 )
-from utils.llm_calls.author_prompt_profile import authoring_model
+from utils.llm_calls.author_model_pin import authoring_model
 from utils.llm_calls.author_prompt_split import author_messages
 from utils.llm_calls.author_slide_effort import svg_author_call_timeout_seconds
 from utils.llm_config import enforce_llm_egress_policy, get_client, get_llm_config

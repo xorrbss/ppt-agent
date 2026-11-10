@@ -38,7 +38,7 @@ from models.authored_vnext.capability_registry import (
     CAPABILITY_REGISTRY_DIGEST,
     capability_metadata,
 )
-from utils.authored_dom_quality import ensure_authored_qids
+from utils.authored_qid_namespace import ensure_authored_qids
 from utils.get_env import env_bool, env_int
 from utils.hashing import sha256_hex, sha256_prefixed
 from utils.process_kill_on_parent_death import bind_to_parent_lifetime

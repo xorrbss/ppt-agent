@@ -80,9 +80,9 @@ def _looks_like_page_number(
     ``s2-page``, ``s4.page``, ``s7-page``, ``s18-page``, ``s06.page``).
     """
     if max_font_px is None:
-        # Lazy: the gate module imports this one. The clamp raises the 12px
+        # Lazy: the floor module imports this one. The clamp raises the 12px
         # page number to the gate floor, so the threshold must follow it.
-        from utils.authored_fragmentation_gate import page_number_max_font_px
+        from utils.render_fit_floor import page_number_max_font_px
 
         max_font_px = page_number_max_font_px()
     edges = _edges(item.get("bbox"))

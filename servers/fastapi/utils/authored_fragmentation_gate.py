@@ -27,8 +27,7 @@ from collections.abc import Mapping, Sequence
 from dataclasses import asdict, dataclass
 from typing import Any
 
-from models.authored_vnext.capability_registry import AUTHORED_FONT_FLOOR_PX
-from utils.authored_dom_footer_zone import _PAGE_NUMBER_MAX_FONT_PX, _looks_like_page_number
+from utils.authored_dom_footer_zone import _looks_like_page_number
 from utils.authored_dom_quality import normalize_browser_metrics
 from utils.get_env_programme import (
     get_authored_fragmentation_max_text_owners,
@@ -36,6 +35,9 @@ from utils.get_env_programme import (
     is_authored_fragmentation_gate_enabled,
 )
 from utils.runtime_settings import RuntimeSettings
+# Re-exported: both moved to the shared capture path's own module.
+from utils.render_fit_floor import fit_font_floor_px as fit_font_floor_px
+from utils.render_fit_floor import page_number_max_font_px as page_number_max_font_px
 from models.canvas_defaults import DEFAULT_CANVAS_HEIGHT_PX, DEFAULT_CANVAS_WIDTH_PX
 
 #: Issue category the gate reports under; routed like ``capacity`` failures.
@@ -251,25 +253,6 @@ def fragmentation_prompt_clause(settings: RuntimeSettings | None = None) -> str:
         f"slide; no text below {floor}px, labels and chips included; when copy does not "
         "fit, merge boxes rather than shrinking type."
     )
-
-
-def page_number_max_font_px(settings: RuntimeSettings | None = None) -> float:
-    """The largest type a page-number box may carry and still be furniture.
-
-    The clamp raises the 12px page number to the gate floor, so detection in
-    the footer gate, the fitter and this gate must accept that size too.
-    """
-
-    return max(_PAGE_NUMBER_MAX_FONT_PX, fit_font_floor_px(settings))
-
-
-def fit_font_floor_px(settings: RuntimeSettings | None = None) -> float:
-    """The floor the in-render fitter shrinks to: the gate floor when the gate
-    is on, the registry's ``AUTHORED_FONT_FLOOR_PX`` otherwise."""
-
-    if is_authored_fragmentation_gate_enabled(settings):
-        return float(get_authored_type_floor_px(settings))
-    return float(AUTHORED_FONT_FLOOR_PX)
 
 
 __all__ = [

@@ -19,9 +19,8 @@ from utils.authored_dom_footer_zone import (  # the deck's footer safe lines
 from utils.authored_dom_text_escape import (  # the card predicate and its tolerance
     _PAINTED_TAGS, _TRANSPARENT, ESCAPE_TOLERANCE_PX)
 
-#: Opt-in class on ``<html>``: a global attribute needs no markup-allowlist change, and
-#: the model cannot know the name, so no authored stylesheet can target it.
-FIT_CLASS = "codex-fit-v1"
+#: Re-exported: the opt-in class lives with the request check that reads it.
+from utils.slide_capture_fit_class import FIT_CLASS as FIT_CLASS
 FIT_VERSION = "authored-in-render-fit/v1"
 #: The fit targets this many pixels *inside* the card's inner edge, not the detector's
 #: tolerance, so it survives another Chromium with another Korean fallback font.

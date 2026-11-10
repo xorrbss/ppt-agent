@@ -42,6 +42,9 @@ from utils.get_env_programme import (
     get_authored_author_prompt_profile,
 )
 from utils.llm_calls import author_slide_rules
+from utils.llm_calls.author_model_pin import _PROFILE as _MODEL_PIN_PROFILE
+# Re-exported: svg authors read the model pin from its own module.
+from utils.llm_calls.author_model_pin import authoring_model as authoring_model
 from utils.llm_calls.author_slide_brief import PRE_BUNDLE_TYPE_SCALES
 from utils.llm_calls.author_slide_brief_august import (
     AUGUST_DEFAULT_STYLE_BRIEF,
@@ -173,9 +176,8 @@ def resolve_author_prompt_profile() -> AuthorPromptProfile:
     )
 
 
-_PROFILE: ContextVar[AuthorPromptProfile | None] = ContextVar(
-    "authored_author_prompt_profile", default=None
-)
+#: Shared with ``author_model_pin``, which reads the pinned model from it.
+_PROFILE: ContextVar[AuthorPromptProfile | None] = _MODEL_PIN_PROFILE
 
 
 def pinned_author_prompt_profile() -> AuthorPromptProfile | None:
@@ -207,11 +209,6 @@ def author_prompt_profile_scope(profile: AuthorPromptProfile):
 def current_prompt_sections() -> PromptSections:
     """Shorthand for the text half of the current profile."""
     return current_author_prompt_profile().sections
-
-
-def authoring_model(default: object) -> object:
-    """The profile's pinned authoring model, or the caller's own selection."""
-    return current_author_prompt_profile().model or default
 
 
 def assemble_author_prompt(

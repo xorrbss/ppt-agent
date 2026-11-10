@@ -12,7 +12,6 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Mapping, Sequence
-from pathlib import Path
 
 from llmai.shared import ImageContentPart
 
@@ -22,15 +21,15 @@ from services.source_images.models import (
 )
 from utils.llm_calls import author_slide_rules
 
+# Re-exported: the reference attachment and the byte caps moved to their own
+# module so the svg author does not import this one.
+from services.generation_core.authoring.reference_images import (
+    REFERENCE_IMAGE_MAX_BYTES as REFERENCE_IMAGE_MAX_BYTES,
+    SOURCE_IMAGE_PREVIEW_TOTAL_MAX_BYTES as SOURCE_IMAGE_PREVIEW_TOTAL_MAX_BYTES,
+    reference_parts as reference_parts,
+)
+
 logger = logging.getLogger(__name__)
-
-#: An attachment larger than this is dropped rather than sent: the provider
-#: rejects oversized parts, and one unreadable picture must not fail a slide.
-REFERENCE_IMAGE_MAX_BYTES = 8 * 1024 * 1024
-# Aggregate provider preview budget. This is a byte/resource guard, not a
-# semantic image-count limit; any number of smaller source slots may be attached.
-SOURCE_IMAGE_PREVIEW_TOTAL_MAX_BYTES = 32 * 1024 * 1024
-
 
 # The slot rules themselves live in ``author_slide_rules`` with the rest of the
 # design-system prose; re-exported here because this module owns the two-kinds-of-
@@ -58,29 +57,6 @@ _LISTED_ASSETS_ALLOWED = (
 ILLUSTRATION_SLOT_RULES_WITH_SOURCE_IMAGES = ILLUSTRATION_SLOT_RULES.replace(
     _NO_OTHER_IMAGE, _LISTED_ASSETS_ALLOWED
 )
-
-
-def reference_parts(reference_images: Sequence[Path]) -> list[ImageContentPart]:
-    parts: list[ImageContentPart] = []
-    mime_by_suffix = {
-        ".png": "image/png",
-        ".jpg": "image/jpeg",
-        ".jpeg": "image/jpeg",
-        ".webp": "image/webp",
-    }
-    for path in reference_images:
-        try:
-            if path.stat().st_size > REFERENCE_IMAGE_MAX_BYTES:
-                # References may come from a private exact preset. Never expose
-                # their local filesystem identity in operational logs.
-                logger.warning("Skipping oversized authored reference image")
-                continue
-            mime = mime_by_suffix.get(path.suffix.lower())
-            if mime:
-                parts.append(ImageContentPart(data=path.read_bytes(), mime_type=mime))
-        except OSError:
-            logger.warning("Unable to read authored reference image")
-    return parts
 
 
 def source_image_parts(

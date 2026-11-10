@@ -252,7 +252,7 @@ The returned hash is the approval contract. It is not permission to retry;
     if job.total_slides != registry['total_slides'] or len(completed) != layout['completed'] or len(returned) != layout['returned'] or (len(unknown) != layout['unknown']) or (len(unstarted) != layout['unstarted']) or (len(calls) != batch['logical_calls']) or (admission.initial_request_count != batch['initial_request_count']) or (admission.retry_request_count != batch['retry_request_count']):
         _reject()
     from utils.llm_provider import get_llm_provider, get_model
-    from utils.llm_calls.author_prompt_profile import authoring_model
+    from utils.llm_calls.author_model_pin import authoring_model
     manifest = {'recovery_revision': recovery_revision, 'operation_id': str(operation.id), 'operation_version': operation.version, 'operation_fence': operation.fencing_token, 'operation_attempt': operation.attempt_number, 'operation_attempt_token_digest': _digest(operation.attempt_token), 'operation_request_digest': _digest(operation.request_payload), 'operation_error_digest': _digest(operation.error_detail), 'presentation_id': str(operation.presentation_id), 'presentation_revision': presentation_revision, **({'owner_id': str(operation.owner_id), 'tenant_id': admission.tenant_id} if mixed_recovery else {}), 'job_id': str(job.id), 'job_attempt': job.attempt_number, 'job_attempt_token_digest': _digest(job.attempt_token), 'frozen_request_digest': _digest(job.request_payload), 'admitted_request_digest': job.request_sha256, 'frozen_style_digest': _digest(job.svg_style_snapshot), 'frozen_profile': job.svg_style_snapshot.get('authoring_profile'), 'completed_checkpoints': completed, 'unknown_checkpoints': unknown, 'old_admission': admission.model_dump(mode='json'), 'old_logical_calls': [call.model_dump(mode='json') for call in calls], 'old_resource_leases': [lease.model_dump(mode='json') for lease in leases], 'old_runtime_budgets': [row.model_dump(mode='json') for row in budgets], 'old_runtime_reservations': [row.model_dump(mode='json') for row in reservations], 'retry_max_attempts': operation.max_attempts, 'max_additional_author_calls': len(unknown), 'author_attempt_budget_per_page': 2, **({'max_additional_vqa_calls': 1, 'additional_purchase_budget_per_target': 1, 'previous_attempts_remain_consumed': True} if mixed_recovery else {}), 'new_author_provider': get_llm_provider().value, 'new_author_model': authoring_model(get_model()), 'deck_vqa_uses_existing_admission_budget': True, 'remote_termination_confirmed': False, 'duplicate_billing_possible': True, 'old_ledger_writes_permitted': False}
     manifest.update(returned_checkpoints=returned, unstarted_checkpoints=unstarted, **batch['terms'])
     if not _pinned_author(registry, manifest['new_author_provider'], manifest['new_author_model']):
@@ -266,7 +266,7 @@ async def _build_bounded_overload_manifest(session, operation, *, presentation_r
     from models.sql.provider_usage_receipt import ProviderUsageReceipt
     from services.svg_presentation_checkpoint import _read_png
     from utils.llm_provider import get_llm_provider, get_model
-    from utils.llm_calls.author_prompt_profile import authoring_model
+    from utils.llm_calls.author_model_pin import authoring_model
 
     registry = incident_registry()
     stage = registry['stages']['bounded_overload']
@@ -603,7 +603,7 @@ async def _build_bounded_continuation_manifest(session, operation, *, presentati
     from models.sql.provider_usage_receipt import ProviderUsageReceipt
     from services.svg_presentation_checkpoint import _read_png
     from utils.llm_provider import get_llm_provider, get_model
-    from utils.llm_calls.author_prompt_profile import authoring_model
+    from utils.llm_calls.author_model_pin import authoring_model
 
     def locked(statement):
         return statement.with_for_update() if lock else statement
@@ -764,7 +764,7 @@ async def _build_bounded_completion_manifest(session, operation, *, presentation
     from models.sql.provider_usage_receipt import ProviderUsageReceipt
     from services.svg_presentation_checkpoint import _read_png
     from utils.llm_provider import get_llm_provider, get_model
-    from utils.llm_calls.author_prompt_profile import authoring_model
+    from utils.llm_calls.author_model_pin import authoring_model
 
     def locked(statement):
         return statement.with_for_update() if lock else statement
