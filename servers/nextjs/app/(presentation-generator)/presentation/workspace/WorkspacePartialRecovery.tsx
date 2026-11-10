@@ -24,6 +24,8 @@ export function WorkspacePartialRecovery({ operationId, operationVersion, curren
   const [budgetPercent, setBudgetPercent] = useState(25);
   const [error, setError] = useState<string>();
   const [started, setStarted] = useState(false);
+  // Render-visible mirror of attempt.current: the ref stays the synchronous guard for handlers.
+  const [attemptPending, setAttemptPending] = useState(false);
   const attempt = useRef<WorkspaceOperationActionOptions | undefined>(undefined);
   const controller = useRef<AbortController | undefined>(undefined);
   const identity = useId();
@@ -63,18 +65,22 @@ export function WorkspacePartialRecovery({ operationId, operationVersion, curren
     if (!plan || disabled || submitting || !budgetAcknowledged || (plan.unknownIndices.length > 0 && !unknownAcknowledged)) return;
     const additionalBudgetMicrounits = Math.min(plan.additionalBudgetLimitMicrounits,
       Math.max(1, Math.floor(plan.additionalBudgetLimitMicrounits / 100 * budgetPercent)));
-    if (!attempt.current) attempt.current = {
-      idempotencyKey: globalThis.crypto?.randomUUID?.() ?? `partial-${Date.now()}-${Math.random().toString(36).slice(2)}`,
-      expectedRevision: plan.presentationRevision, expectedOperationVersion: plan.operationVersion,
-      recoveryRevision: plan.recoveryRevision,
-      recoveryDecision: { manifestHash: plan.manifestHash, nonce: plan.nonce,
-        acknowledgedUnknownIndices: plan.unknownIndices.slice(), additionalBudgetMicrounits },
-    };
+    if (!attempt.current) {
+      setAttemptPending(true);
+      attempt.current = {
+        idempotencyKey: globalThis.crypto?.randomUUID?.() ?? `partial-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+        expectedRevision: plan.presentationRevision, expectedOperationVersion: plan.operationVersion,
+        recoveryRevision: plan.recoveryRevision,
+        recoveryDecision: { manifestHash: plan.manifestHash, nonce: plan.nonce,
+          acknowledgedUnknownIndices: plan.unknownIndices.slice(), additionalBudgetMicrounits },
+      };
+    }
     setSubmitting(true);
     setError(undefined);
     try {
       await onAction(operationId, "retry", attempt.current);
       attempt.current = undefined;
+      setAttemptPending(false);
       setPlan(undefined);
       setStarted(true);
     } catch (reason) {
@@ -82,6 +88,7 @@ export function WorkspacePartialRecovery({ operationId, operationVersion, curren
         && ![408, 429].includes(reason.status);
       if (rejected) {
         attempt.current = undefined;
+        setAttemptPending(false);
         setPlan(undefined);
         setBudgetAcknowledged(false);
         setUnknownAcknowledged(false);
@@ -108,13 +115,13 @@ export function WorkspacePartialRecovery({ operationId, operationVersion, curren
       </ul>
       {plan.unknownIndices.length > 0 && <label className="flex items-start gap-2 text-xs leading-5" htmlFor={`${identity}-unknown`}>
         <input id={`${identity}-unknown`} type="checkbox" className="mt-1" checked={unknownAcknowledged}
-          disabled={disabled || submitting || !!attempt.current} onChange={(event) => setUnknownAcknowledged(event.target.checked)} />
+          disabled={disabled || submitting || attemptPending} onChange={(event) => setUnknownAcknowledged(event.target.checked)} />
         <span>{t("ackUnknown", { pages: plan.unknownIndices.map((index) => index + 1).join(", ") })}</span>
       </label>}
       {plan.historicalActualCostUnbounded && <p className="text-xs leading-5 text-amber-800">{t("historicalUnbounded")}</p>}
       <label className="flex items-center justify-between gap-3 text-xs" htmlFor={`${identity}-budget`}>
         <span>{t("budgetLabel")}</span>
-        <select id={`${identity}-budget`} value={budgetPercent} disabled={disabled || submitting || !!attempt.current}
+        <select id={`${identity}-budget`} value={budgetPercent} disabled={disabled || submitting || attemptPending}
           onChange={(event) => { setBudgetPercent(Number(event.target.value)); setBudgetAcknowledged(false); }}
           className="rounded-md border border-slate-300 bg-white px-2 py-1">
           {[25, 50, 100].map((percent) => <option key={percent} value={percent}>{t("budgetOption", { percent })}</option>)}
@@ -124,7 +131,7 @@ export function WorkspacePartialRecovery({ operationId, operationVersion, curren
         authorCount: plan.prospectiveAuthorRequestCount, retryLimit: plan.prospectiveRetryRequestLimit })}</p>
       <label className="flex items-start gap-2 text-xs leading-5" htmlFor={`${identity}-budget-ack`}>
         <input id={`${identity}-budget-ack`} type="checkbox" className="mt-1" checked={budgetAcknowledged}
-          disabled={disabled || submitting || !!attempt.current} onChange={(event) => setBudgetAcknowledged(event.target.checked)} />
+          disabled={disabled || submitting || attemptPending} onChange={(event) => setBudgetAcknowledged(event.target.checked)} />
         <span>{t("ackBudget", { percent: budgetPercent })}</span>
       </label>
       <p className="text-xs text-slate-600">{t("afterNote")}</p>
@@ -132,9 +139,9 @@ export function WorkspacePartialRecovery({ operationId, operationVersion, curren
         <button type="button" onClick={() => void confirm()}
           disabled={disabled || submitting || !budgetAcknowledged || (plan.unknownIndices.length > 0 && !unknownAcknowledged)}
           className="rounded-lg bg-slate-900 px-3 py-1.5 text-xs font-medium text-white disabled:opacity-50">
-          {submitting ? t("confirming") : attempt.current ? t("confirmAgain") : t("confirm")}
+          {submitting ? t("confirming") : attemptPending ? t("confirmAgain") : t("confirm")}
         </button>
-        {!attempt.current && <button type="button" disabled={submitting} onClick={() => setPlan(undefined)}
+        {!attemptPending && <button type="button" disabled={submitting} onClick={() => setPlan(undefined)}
           className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs">{t("close")}</button>}
       </div>
     </section>}
