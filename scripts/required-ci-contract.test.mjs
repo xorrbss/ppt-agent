@@ -16,8 +16,12 @@ import path from "node:path";
 import { PassThrough } from "node:stream";
 import { test } from "node:test";
 
+// Contracts match on LF text; a Windows checkout with core.autocrlf yields CRLF.
 const read = (filePath) =>
-  readFileSync(new URL(`../${filePath}`, import.meta.url), "utf8");
+  readFileSync(new URL(`../${filePath}`, import.meta.url), "utf8").replace(
+    /\r\n/gu,
+    "\n",
+  );
 const readJson = (filePath) => JSON.parse(read(filePath));
 
 test("importing the workspace runner does not install process signal handlers", () => {

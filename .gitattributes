@@ -36,3 +36,7 @@ servers/fastapi/vendor/slide_master/svg_to_pptx/native_objects/chart_data.py -te
 servers/fastapi/vendor/slide_master/svg_to_pptx/native_objects/chart_xml.py -text
 servers/fastapi/vendor/slide_master/MANIFEST.json -text
 servers/fastapi/workers/public_svg_pptx_convert.py -text
+
+# Digest-pinned vendored icon families (manifests record SHA-256 and byte
+# lengths of these files), so every OS must check out the Git blob bytes.
+servers/fastapi/assets/icon_families/** -text
