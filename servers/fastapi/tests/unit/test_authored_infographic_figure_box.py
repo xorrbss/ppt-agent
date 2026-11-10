@@ -22,7 +22,6 @@ from utils.authored_infographic.contracts import (
     content_bottom_px,
     slot_contract,
 )
-from utils.llm_calls.author_infographic_marker import infographic_marker
 from utils.llm_calls.author_slide_rules import PAGE_NUMBER_RULES_BY_MODE
 
 _NODES = (
@@ -89,20 +88,6 @@ def test_a_hero_page_is_still_told_the_figure_is_the_page() -> None:
     assert "bottom edge lands ON y=688px" in standard
 
 
-def test_the_standard_weight_no_longer_invites_a_band_under_the_figure() -> None:
-    marker = infographic_marker(_slide(), page_number_mode="none")
-    assert "never as a band under it" in marker
-    assert "reaches the bottom content line" in marker
-    assert "sits beside or below it" not in marker
-
-
-def test_the_marker_passes_the_deck_mode_through_to_the_contract() -> None:
-    numbered = infographic_marker(_slide(), page_number_mode="template")
-    unnumbered = infographic_marker(_slide(), page_number_mode="none")
-    assert "y=648px" in numbered and "y=688px" not in numbered
-    assert "y=688px" in unnumbered and "y=648px" not in unnumbered
-
-
 def test_low_height_archetypes_are_pinned() -> None:
     # A regression that quietly dropped an archetype from this table would
     # reintroduce the exact blank-band defect this module fixes, just moved
@@ -118,39 +103,3 @@ def test_low_height_archetypes_are_pinned() -> None:
     }
 
 
-def test_a_low_height_archetype_states_its_ceiling_not_the_bottom_line() -> None:
-    # kpi (a row of large numbers) cannot honestly stretch to 430px+: reaching
-    # the bottom line would pad each tile with blank interior space instead of
-    # removing the band, which is the same defect the 430px floor exists to
-    # remove for every other archetype.
-    contract = slot_contract(_slide(archetype="kpi"), page_number_mode="template")
-    assert "height of exactly 240px" in contract
-    assert "honest maximum a kpi figure reaches" in contract
-    assert "bottom edge lands ON" not in contract
-    assert "Never make the box shorter than 430px" not in contract
-    # It still names the bottom line the rest of the content area may use.
-    assert "y=648px" in contract
-    assert "text column of its own BESIDE the figure" in contract
-    assert "centre the figure vertically" in contract
-
-    marker = infographic_marker(_slide(archetype="kpi"), page_number_mode="template")
-    assert "intrinsic height ceiling" in marker
-    assert "two-column layout" in marker
-    assert "still reaches the bottom content line" not in marker
-
-
-def test_a_tall_archetype_still_reaches_the_bottom_line() -> None:
-    # hierarchy (a root with children under it) can honestly fill the box the
-    # library's own fitting rules give it, so it keeps the original rule: the
-    # bottom edge of the figure box lands ON the content line, not short of it.
-    assert "hierarchy" not in LOW_HEIGHT_MAX_PX
-    contract = slot_contract(_slide(archetype="hierarchy"), page_number_mode="template")
-    assert "bottom edge lands ON y=648px" in contract
-    assert "blank band across the foot of the slide" in contract
-    assert "defect rather than restraint" in contract
-    assert "430px" in contract
-
-    marker = infographic_marker(_slide(archetype="hierarchy"), page_number_mode="template")
-    assert "never as a band under it" in marker
-    assert "reaches the bottom content line" in marker
-    assert "intrinsic height ceiling" not in marker

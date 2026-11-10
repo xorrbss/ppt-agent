@@ -9,7 +9,6 @@ never lose their envelope.
 
 from __future__ import annotations
 
-from types import SimpleNamespace
 
 import pytest
 
@@ -21,7 +20,6 @@ from services.authored_composition_policy import (
     capacity_violations,
     reduce_authored_owner_text_capacity,
 )
-from services.generation_core.authoring.author_slide import STYLE_REFERENCE
 
 _KNOBS = (
     "AUTHORED_INFOGRAPHIC_PLAN_ENABLED",
@@ -40,10 +38,6 @@ _DENSE_HTML = "<section>" + "".join(
 def _clean_knobs(monkeypatch):
     for key in _KNOBS:
         monkeypatch.delenv(key, raising=False)
-
-
-def _style(mode: str = STYLE_REFERENCE) -> SimpleNamespace:
-    return SimpleNamespace(reference_mode=mode)
 
 
 def test_ordinary_envelope_is_relaxed_by_default() -> None:

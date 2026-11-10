@@ -1,10 +1,8 @@
 from __future__ import annotations
 
-import asyncio
 import importlib.util
 from pathlib import Path
 
-import pytest
 
 MODULE_PATH = (
     Path(__file__).resolve().parents[2]
@@ -22,38 +20,6 @@ def test_observed_percentile_uses_actual_nearest_rank_sample() -> None:
     assert benchmark.observed_percentile([50, 10, 30, 20, 40], 0.50) == 30
     assert benchmark.observed_percentile([50, 10, 30, 20, 40], 0.95) == 50
     assert benchmark.observed_percentile([], 0.95) is None
-
-
-def test_budget_counts_structured_and_raw_author_requests(monkeypatch) -> None:
-    from utils import llm_utils
-    from services.generation_core.authoring import author_slide
-
-    async def fake_structured(*args, **kwargs):
-        return "structured"
-
-    class FakeClient:
-        def generate(self, *args, **kwargs):
-            return "author"
-
-    monkeypatch.setattr(llm_utils, "_generate_structured_content", fake_structured)
-    monkeypatch.setattr(
-        author_slide, "get_client", lambda *args, **kwargs: FakeClient()
-    )
-
-    async def exercise() -> None:
-        async with benchmark.bounded_provider_requests(2) as budget:
-            assert await llm_utils._generate_structured_content() == "structured"
-            assert author_slide.get_client().generate() == "author"
-            assert budget.snapshot() == {
-                "total": 2,
-                "structured": 1,
-                "full_author": 1,
-            }
-            with pytest.raises(benchmark.ProviderRequestBudgetExceeded):
-                await llm_utils._generate_structured_content()
-
-    asyncio.run(exercise())
-    assert llm_utils._generate_structured_content is fake_structured
 
 
 def test_safe_error_never_serializes_exception_message() -> None:

@@ -20,21 +20,6 @@ from models.authored_vnext.capability_registry import (
     capability_metadata,
     prompt_capability_clause,
 )
-from models.authored_vnext.deck import (
-    SceneEditability,
-    SceneOwnerDecision,
-    SceneTextElement,
-    SlideHybridExportPlan,
-    seal_deck_scene,
-    seal_slide_scene,
-)
-from models.authored_vnext.master.contract import Rect
-from models.authored_vnext.capability_registry import (
-    EDITABLE_HYBRID_PROFILE_ID,
-    scene_capabilities,
-)
-from services.authored_vnext.integration.export_service import _assert_worker_readback
-from services.authored_vnext.ooxml.native_scene import materialize_scene_pptx
 
 
 def _receipt_v2():
@@ -56,7 +41,6 @@ def _receipt_v2():
             "sourceReadback": {"required": False, "status": "not_applicable"},
         },
     )
-
 
 
 @pytest.mark.anyio
@@ -620,90 +604,6 @@ async def test_persisted_quality_gate_projects_only_verified_internal_receipts(t
             "operation_id": uuid.UUID(successors[0]["operationId"])})
         assert child_without_completed_root["baseEvidenceRecord"] is None
     await engine.dispose()
-
-
-def test_export_adapter_accepts_registry_bound_hybrid_readback() -> None:
-    element = SceneTextElement(
-        kind="text",
-        element_id="title.main",
-        z_order=1,
-        bounds=Rect(x=40, y=40, width=600, height=80),
-        semantic_role="title",
-        editability=SceneEditability(text=True, geometry=True, style=True),
-        text="Registry-bound export",
-    )
-    scene = seal_deck_scene(
-        deck_id="deck:registry-export",
-        revision=1,
-        composition_digest="sha256:" + "5" * 64,
-        source_digest="sha256:" + "6" * 64,
-        hybrid_profile_id=EDITABLE_HYBRID_PROFILE_ID,
-        slides=[
-            seal_slide_scene(
-                slide_id="slide:registry-export",
-                revision=1,
-                elements=[element],
-                hybrid_export=SlideHybridExportPlan(
-                    owner_decisions=[
-                        SceneOwnerDecision(
-                            owner_id=element.element_id,
-                            decision="nativeEditable",
-                            capability_id="editable.text.ko-en.v1",
-                        )
-                    ]
-                ),
-            )
-        ],
-        capabilities=scene_capabilities(),
-    )
-    scene_payload = scene.model_dump(mode="json", by_alias=True)
-    master_payload = {
-        "slideSizePx": {"width": 960, "height": 540},
-        "tokens": {"color.background": "#F7F9FC"},
-        "furniture": [],
-        "fontManifest": {"files": []},
-    }
-    _content, native_receipt = materialize_scene_pptx(
-        scene_payload,
-        [],
-        master_payload,
-    )
-    receipt = {
-        **native_receipt,
-        "validation": "candidate-reopened",
-        "candidateDigestVerified": True,
-        "package": {
-            "macroDetected": False,
-            "quarantineReasons": [],
-            "slideCount": 1,
-        },
-        "preservation": {
-            "silentLossCount": 0,
-            "missingParts": [],
-            "unexpectedChangedParts": [],
-        },
-        "master": {
-            "furnitureCount": 0,
-            "logoCount": 0,
-            "pageNumberCount": 0,
-            "fontFileCount": 0,
-            "duplicateFurnitureCount": 0,
-            "fontFilesMode": "REFERENCE_METADATA_VERIFIED",
-        },
-        "slides": [
-            {
-                "slideId": scene_payload["slides"][0]["slideId"],
-                "slideDigest": scene_payload["slides"][0]["slideDigest"],
-                "elementIds": ["title.main"],
-                "rasterIslandIds": [],
-                "rasterOwnerIds": [],
-            }
-        ],
-    }
-    _assert_worker_readback(
-        receipt,
-        {"master": master_payload, "slides": [{}], "scene": scene_payload},
-    )
 
 
 def test_prompt_consumer_accepts_the_clause_the_author_actually_receives() -> None:

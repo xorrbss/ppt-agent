@@ -1,6 +1,5 @@
 {
   "utils_import_services": [
-    "servers/fastapi/utils/authored_html_normalize.py",
     "servers/fastapi/utils/authored_renderer_worker.py",
     "servers/fastapi/utils/authored_style_catalogue.py",
     "servers/fastapi/utils/document_path_security.py",

@@ -32,7 +32,8 @@ from services.svg_export_visual_review import slide_page_digests, split_page_adv
 from services.svg_contract import source_digest
 from services.workspace_operation_handler_registry import NonRetryableWorkspaceOperationError
 from test_svg_export_quality import evidence_fixture
-from services.generation_core.authoring.author_slide import EXACT_RECONSTRUCTION, STYLE_REFERENCE
+from utils.llm_calls.author_slide_effort import EXACT_RECONSTRUCTION
+from utils.llm_calls.author_slide_options import STYLE_REFERENCE
 
 # --------------------------------------------------------------------------
 # page_outcome.classify_page_outcomes / deck_quality_summary

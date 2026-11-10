@@ -7,7 +7,6 @@ from sqlalchemy.exc import SQLAlchemyError
 from constants.provider_registry import ProviderResolutionError
 from models.api_error_model import APIErrorModel
 from services.assets.contracts import AssetGatewayError
-from services.authored_vnext.deck_ir.director import DeckDirectorError
 from services.authored_vnext.integration.worker import WorkerError
 from services.document_conversion_service import DocumentConversionError
 from services.workspace_service import WorkspaceServiceError
@@ -49,7 +48,6 @@ def test_test_module_exception_counts_as_application_owned_inside_source_root():
 
 @pytest.mark.parametrize("error", [
     AssetGatewayError("asset_not_ready"),
-    DeckDirectorError("deck_director_transient_failure"),
     WorkerError("WORKER_UNAVAILABLE"),
     DocumentConversionError("private subprocess output"),
     WorkspaceServiceError("revision_conflict"),

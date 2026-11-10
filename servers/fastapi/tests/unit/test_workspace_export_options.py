@@ -5,10 +5,7 @@ import pytest
 from services.workspace_operation_handler_registry import (
     NonRetryableWorkspaceOperationError,
 )
-from services.workspace_quality_export_operation_handlers import (
-    _resolve_workspace_export_options,
-    _validate_authored_vnext_export_request,
-)
+from services.workspace_quality_export_operation_handlers import (_resolve_workspace_export_options)
 
 
 def test_workspace_export_defaults_to_fidelity() -> None:
@@ -88,62 +85,3 @@ def test_authored_font_embedding_still_requires_hybrid_mode_when_is_svg_is_false
     assert caught.value.code == "workspace_export_font_embedding_requires_hybrid"
 
 
-def test_native_master_export_requires_exact_sealed_pin_and_fidelity_mode() -> None:
-    digest = f"sha256:{'a' * 64}"
-    layout_digest = f"sha256:{'b' * 64}"
-    font_digest = f"sha256:{'c' * 64}"
-    projection = {
-        "masterPin": {
-            "masterId": "master:company",
-            "masterRevision": 7,
-            "masterDigest": digest,
-            "layoutRegistryDigest": layout_digest,
-            "fontManifestDigest": font_digest,
-        }
-    }
-    request_pin = {
-        "master_id": "master:company",
-        "revision": 7,
-        "digest": digest,
-        "layout_registry_digest": layout_digest,
-        "font_manifest_digest": font_digest,
-    }
-
-    _validate_authored_vnext_export_request(
-        {"context": {"master_pin": request_pin}},
-        projection=projection,
-        export_format="pptx",
-        pptx_mode="fidelity",
-        font_embedding=False,
-    )
-
-    with pytest.raises(
-        NonRetryableWorkspaceOperationError,
-        match="authored_vnext_export_master_changed",
-    ):
-        _validate_authored_vnext_export_request(
-            {
-                "context": {
-                    "master_pin": {
-                        **request_pin,
-                        "font_manifest_digest": f"sha256:{'d' * 64}",
-                    }
-                }
-            },
-            projection=projection,
-            export_format="pptx",
-            pptx_mode="fidelity",
-            font_embedding=False,
-        )
-
-    with pytest.raises(
-        NonRetryableWorkspaceOperationError,
-        match="authored_vnext_native_export_mode_required",
-    ):
-        _validate_authored_vnext_export_request(
-            {},
-            projection=projection,
-            export_format="pptx",
-            pptx_mode="hybrid",
-            font_embedding=False,
-        )

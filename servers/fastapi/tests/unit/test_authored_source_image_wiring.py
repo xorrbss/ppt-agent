@@ -19,7 +19,6 @@ from services import authored_source_images as seam
 from services.source_images.models import SourceImageCandidate
 from utils.get_env import is_authored_source_images_enabled
 from utils.authored_image_slots import source_slot_id_for_asset
-from services.generation_core.authoring.author_slide import Brand
 from models.presentation_outline_model import (
     PresentationOutlineModel,
     SlideOutlineModel,
@@ -69,12 +68,6 @@ def _candidate(asset_id: str, heading: str, slide_index: int = 0):
 def _outline(n):
     return PresentationOutlineModel(
         slides=[SlideOutlineModel(content=f"슬라이드 {i} 내용") for i in range(n)]
-    )
-
-
-def _brand():
-    return Brand(
-        topic="주제", language="Korean", primary="#2563EB", fonts="Noto Sans KR"
     )
 
 

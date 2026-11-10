@@ -59,7 +59,6 @@ _ALLOWED_HANGUL_MODULES: frozenset[str] = frozenset(
         "services/svg_templates/frame_fonts.py",  # Hangul sample glyphs for font metrics
         "services/authored_quality_ocr.py",
         "services/authored_source_images.py",
-        "services/authored_vnext/deck_ir/product_adapter.py",
         "services/generation_core/drivers/svg/native_chart.py",
         "services/generation_core/style/build.py",
         "services/source_content/raster_structure_emit.py",

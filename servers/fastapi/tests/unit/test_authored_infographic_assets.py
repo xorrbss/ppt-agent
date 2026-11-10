@@ -29,12 +29,11 @@ from services.generation_core.assets.infographic_assets import (
     substitute_figure_icons,
 )
 from utils.authored_infographic import (
-    check_infographic_contract,
     inject_library_css,
     library_css,
     render_skeleton,
 )
-from services.generation_core.authoring.author_slide import Brand, validate_authored_slide_html
+from services.generation_core.style.brand import Brand
 
 _CONTENT = (
     "## 프레스 3호 라인 센서 배치\n- 주 모터: 진동 센서\n- 크랭크 베어링: 온도 센서\n"
@@ -183,23 +182,6 @@ def test_the_context_is_withheld_when_the_deck_may_not_spend_a_transparent_png(m
 
 
 # --- icons ----------------------------------------------------------------------
-
-
-def test_pack_icons_replace_the_built_in_svg_and_keep_the_slot_qids(tmp_path):
-    slide = _slide("icon_list", 4)
-    assert check_infographic_contract(_bare_doc(slide), slide) == []
-    html = _doc(slide)
-    provider = FakeProvider()
-    replaced = _run(substitute_figure_icons(html, slide=slide, context=_context(tmp_path, provider)))
-    assert replaced.count('<img src="data:image/png;base64,') == 4
-    assert "<svg" not in replaced.split("ig-icon-list", 1)[1]
-    for position in range(4):
-        assert f'data-qid="ig.s3.n{position + 1}.ic"><img' in replaced
-    assert provider.calls and provider.calls[0]["slot"].startswith("image.icon_sheet.")
-    validate_authored_slide_html(replaced, finalized=True)
-    # A second slide of the same deck reads the pack rather than generating.
-    again = _run(substitute_figure_icons(html, slide=slide, context=_context(tmp_path, provider)))
-    assert again == replaced and len(provider.calls) == 1
 
 
 def test_a_missing_icon_keeps_the_library_svg(tmp_path, monkeypatch):

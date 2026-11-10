@@ -119,10 +119,6 @@ def test_api_wire_manifest_is_camel_case_feature_gated_and_complete() -> None:
             "GET",
             "/authored-vnext/master/masters/{master_id}/revisions/{revision}",
         ),
-        (
-            "POST",
-            "/authored-vnext/master/presentations/{presentation_id}/apply",
-        ),
         ("POST", "/authored-vnext/master/drafts"),
         ("POST", "/authored-vnext/master/drafts/{master_id}/validate"),
         ("POST", "/authored-vnext/master/drafts/{master_id}/publish"),

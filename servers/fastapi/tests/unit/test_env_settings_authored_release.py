@@ -123,28 +123,6 @@ def test_kill_switch_parsing():
     assert parse_kill_switches("x.export, a.b,x.export") == ("a.b", "x.export")
 
 
-def test_release_projection_reads_through_accessor(monkeypatch):
-    from services.authored_vnext.semantic.readiness import (
-        release_authority_target_from_environment,
-    )
-
-    target = release_authority_target_from_environment()
-    assert target.configured is False
-    assert target.environment.os_build == "unconfigured"
-    assert target.environment.renderer_image_digest == ZERO_DIGEST
-    monkeypatch.setenv("AUTHORED_RELEASE_DEPLOYMENT_ENVIRONMENT", "production")
-    monkeypatch.setenv("AUTHORED_RELEASE_OS_BUILD", "os-1")
-    monkeypatch.setenv("AUTHORED_RELEASE_OFFICE_BUILD", "office-1")
-    monkeypatch.setenv("AUTHORED_RELEASE_RENDERER_IMAGE_DIGEST", "sha256:" + "1" * 64)
-    monkeypatch.setenv("AUTHORED_RELEASE_FONT_INVENTORY_DIGEST", "sha256:" + "2" * 64)
-    monkeypatch.setenv("AUTHORED_RELEASE_BACKEND_BUILD_DIGEST", "sha256:" + "3" * 64)
-    target = release_authority_target_from_environment()
-    assert target.configured is True
-    assert target.environment.deployment_environment == "production"
-    assert target.environment.os_build == "os-1"
-    assert target.environment.font_inventory_digest == "sha256:" + "2" * 64
-
-
 def test_module_layering_and_no_import_time_reads():
     source = Path(authored_release.__file__).read_text(encoding="utf-8")
     tree = ast.parse(source)

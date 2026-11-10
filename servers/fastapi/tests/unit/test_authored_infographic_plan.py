@@ -8,13 +8,11 @@ boundaries of the model call and the service.
 """
 
 import asyncio
-from types import SimpleNamespace
 
 import pytest
 
 from models.authored_illustration_plan import (
     AuthoredIllustrationPlan,
-    illustrations_are_prohibited,
 )
 from models.authored_infographic_plan import (
     ARCHETYPES,
@@ -29,20 +27,15 @@ from models.presentation_outline_model import (
     PresentationOutlineModel,
     SlideOutlineModel,
 )
-from services.generation_core.assets import infographic_plan as plan_service
-from services.generation_core.assets import infographic_assets as assets_mod
 from services.generation_core.assets.infographic_plan import (
     derive_illustration_plan,
     load_infographic_plan,
-    resolve_infographic_plan,
 )
 from utils.llm_calls import author_infographic_plan as plan_call
-from utils.llm_calls.author_infographic_marker import infographic_marker
 from utils.llm_calls.author_infographic_plan import (
     build_infographic_plan_messages,
     generate_infographic_plan,
 )
-from services.generation_core.authoring.author_slide import Brand
 
 _CYCLE = (
     "## 예지보전 순환\n- 감지: 센서 이상 패턴 포착\n- 예측: 고장 확률 72시간 전 산출\n"
@@ -199,27 +192,6 @@ def test_a_takeaway_far_over_budget_is_dropped_rather_than_clipped():
     assert plan.slides[0].takeaway is None
 
 
-def test_a_before_after_pair_is_kept_and_an_arrow_figure_is_unpacked_into_one():
-    content = "## 현행 vs 도입 후\n- 불량률: 4.6% → 2.2%\n- 재고 오차: 9% → 1.5%\n- 납기 준수율: 87% → 96%"
-    nodes = [
-        {"label": "불량률", "before": "4.6%", "after": "2.2%", "figure": "-2.4%p"},
-        {"label": "재고 오차", "figure": "9% → 1.5%"},
-        {"label": "납기 준수율", "before": "   ", "after": " 96% "},
-    ]
-    plan = coerce_infographic_plan(
-        {"slides": [_entry(0, archetype="before_after", nodes=nodes)]},
-        slide_contents=[content],
-        roles=["CONTENT"],
-    )
-    kept = plan.slides[0].nodes
-    assert (kept[0].before, kept[0].after, kept[0].figure) == ("4.6%", "2.2%", "-2.4%p")
-    assert (kept[1].before, kept[1].after, kept[1].figure) == ("9%", "1.5%", None)
-    assert kept[2].before is None and kept[2].after == "96%"
-    marker = infographic_marker(plan.slides[0])
-    assert 'before="4.6%" after="2.2%"' in marker
-    assert 'before="" after="96%"' in marker
-
-
 def test_scenes_past_the_ceiling_are_demoted_keeping_the_weighted_ones():
     entries = [
         _entry(i, archetype="scene", weight="hero" if i == 3 else "standard")
@@ -291,20 +263,6 @@ def test_the_prompt_carries_full_content_roles_and_the_quoted_request():
     assert "COPIED VERBATIM" in text
 
 
-def test_the_slide_marker_lists_nodes_verbatim_and_names_the_archetype():
-    plan = coerce_infographic_plan(
-        {"slides": [_entry(0, emphasis=1, density="high")]},
-        slide_contents=[_CYCLE],
-        roles=["CONTENT"],
-    )
-    marker = infographic_marker(plan.at(0))
-    assert "archetype: cycle" in marker
-    assert 'label="예측"' in marker and "(EMPHASIS)" in marker
-    assert 'figure="72시간 전"' in marker
-    assert "QUIET" in infographic_marker(AuthoredSlideInfographic(index=3))
-    assert infographic_marker(None) == ""
-
-
 # --- the model call -------------------------------------------------------------
 
 
@@ -351,114 +309,11 @@ def test_a_usable_payload_survives_the_call(monkeypatch):
 # --- the service ----------------------------------------------------------------
 
 
-def _brand():
-    return Brand(topic="주제", language="Korean", primary="#2563EB", fonts="Noto")
-
-
 def _scene_plan(count):
     return coerce_infographic_plan(
         {"slides": [_entry(i, archetype="scene") for i in range(count)]},
         slide_contents=[_CYCLE] * count,
         roles=["CONTENT"] * count,
-    )
-
-
-def test_the_service_plans_every_style_and_any_length(monkeypatch):
-    received = {}
-
-    async def fake_plan(**options):
-        received.update(options)
-        return _scene_plan(1)
-
-    monkeypatch.setattr(plan_service, "generate_infographic_plan", fake_plan)
-    plan = asyncio.run(
-        resolve_infographic_plan(
-            _outline(1),
-            _brand(),
-            SimpleNamespace(brief=" 톤 ", illustration_prompt="art"),
-            roles=["CONTENT"],
-            instructions="요청",
-        )
-    )
-    assert received["roles"] == ["CONTENT"]
-    assert received["style_brief"] == "톤"
-    assert received["instructions"] == "요청"
-    assert plan.scene_indices() == (0,)
-
-
-def test_a_deck_with_no_picture_source_keeps_the_figure_but_loses_the_scene(
-    monkeypatch,
-):
-    async def fake_plan(**_options):
-        return _scene_plan(1)
-
-    monkeypatch.setattr(plan_service, "generate_infographic_plan", fake_plan)
-    monkeypatch.setattr(assets_mod, "transparent_model_for", lambda _settings=None: None)
-    plan = asyncio.run(
-        resolve_infographic_plan(
-            _outline(1), _brand(), SimpleNamespace(illustration_prompt=None),
-            roles=["CONTENT"],
-        )
-    )
-    assert plan.slides[0].archetype == "icon_list"
-
-
-def test_a_transparent_capable_provider_keeps_the_scene_without_a_style_prompt(
-    monkeypatch,
-):
-    """The cutout comes from the transparent provider; no style prompt is needed."""
-
-    async def fake_plan(**_options):
-        return _scene_plan(1)
-
-    monkeypatch.setattr(plan_service, "generate_infographic_plan", fake_plan)
-    monkeypatch.setattr(
-        assets_mod, "transparent_model_for", lambda _settings=None: "gpt-image-2"
-    )
-    plan = asyncio.run(
-        resolve_infographic_plan(
-            _outline(1), _brand(), SimpleNamespace(illustration_prompt=None),
-            roles=["CONTENT"],
-        )
-    )
-    assert plan.scene_indices() == (0,)
-    refused = asyncio.run(
-        resolve_infographic_plan(
-            _outline(1), _brand(), SimpleNamespace(illustration_prompt=None),
-            roles=["CONTENT"], instructions="이미지는 넣지 말고",
-        )
-    )
-    assert refused.scene_indices() == ()
-
-
-def test_a_refusal_of_pictures_loses_the_scene_too(monkeypatch):
-    async def fake_plan(**_options):
-        return _scene_plan(1)
-
-    monkeypatch.setattr(plan_service, "generate_infographic_plan", fake_plan)
-    plan = asyncio.run(
-        resolve_infographic_plan(
-            _outline(1), _brand(), SimpleNamespace(illustration_prompt="art"),
-            roles=["CONTENT"], instructions="이미지는 넣지 말고",
-        )
-    )
-    assert plan.scene_indices() == ()
-    assert illustrations_are_prohibited("이미지는 넣지 말고")
-    assert not illustrations_are_prohibited("표는 넣지 말고")
-
-
-def test_a_failed_plan_call_leaves_the_deck_with_no_plan(monkeypatch):
-    async def fake_plan(**_options):
-        return None
-
-    monkeypatch.setattr(plan_service, "generate_infographic_plan", fake_plan)
-    assert (
-        asyncio.run(
-            resolve_infographic_plan(
-                _outline(2), _brand(), SimpleNamespace(), roles=["CONTENT"] * 2
-            )
-        )
-        is None
     )
 
 

@@ -4,14 +4,11 @@ import hashlib
 
 import pytest
 
-from utils.authored_html_normalize import normalize_authored_html
 from utils.authored_html_tree import RawAuthoredHtmlViolation, normalize_authored_html_tree
 from utils.authored_html_tree.parser_adapter import HTML5LIB_VERSION, parse_authored_html
 from utils.authored_html_tree.receipts import MAX_RECEIPT_DETAIL_CHARS, ReceiptCollector
 from utils.authored_html_tree.serializer import serialize_authored_html
-from utils.get_env_programme import get_authored_html_normalization
 from utils.renderer_isolation import admit_authored_html
-from utils.runtime_settings import RuntimeSettings
 
 
 def _digest(value: str) -> str:
@@ -133,18 +130,6 @@ def test_already_canonical_document_has_stable_digest_and_is_idempotent() -> Non
     assert second == first
     assert _digest(second) == _digest(first)
     assert first_receipts == second_receipts == []
-
-
-def test_switch_defaults_legacy_and_both_paths_are_callable() -> None:
-    settings = RuntimeSettings.from_sources(environ={}, user_config={})
-    assert get_authored_html_normalization(settings) == "legacy"
-    source = '<main class="x">safe</main>'
-
-    legacy = normalize_authored_html(source, mode="legacy")
-    tree = normalize_authored_html(source, mode="tree", profile="fragment")
-
-    assert legacy.html == source
-    assert tree.html == source
 
 
 def test_receipt_detail_is_bounded() -> None:

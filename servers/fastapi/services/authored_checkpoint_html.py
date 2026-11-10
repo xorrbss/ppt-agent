@@ -31,41 +31,18 @@ def _text(value: Any) -> str | None:
     return value if isinstance(value, str) and value else None
 
 
-def checkpoint_stage_html(checkpoint: Any, *, stage: str = "render", publishable: bool = False) -> str | None:
+def checkpoint_stage_html(checkpoint: Any, *, stage: str = "render") -> str | None:
     """The HTML ``stage`` published for this slide, or ``None``.
 
     ``stage`` names the checkpoint stage whose completion makes the collapsed
     ``author_html`` fallback meaningful: ``illustrate`` for the illustration
-    resume path, ``render`` for everything downstream of it.
+    resume path, ``render`` for everything downstream of it. (The
+    ``publishable`` admission-receipt check went with the authored admission
+    chain, P3 B4c; no caller asked for it any more.)
     """
 
     if checkpoint is None:
         return None
-    if publishable:
-        from services.authored_admission_checkpoint import enforce_receipts
-        from services.authored_admission_context import digest_html
-        from services.authored_admission_receipt import COMPLETE_IDENTITY
-        from services.authored_rollout_profile import matches_policy_revision
-
-        if enforce_receipts():
-            receipt = (getattr(checkpoint, "error", None) or {}).get("admission", {})
-            html = checkpoint_stage_html(checkpoint, stage=stage)
-            # A receipt minted at a writer that had no admission session asserts
-            # an identity it never observed -- empty presentation/operation/unit
-            # ids, no manifest, and the ordinary-authored column.  It is enough
-            # to admit that write and never enough to publish it.  Receipts
-            # written before the field existed carry the identity they were
-            # minted under, which was always a session's.
-            # The revision names the admission policy *and* the rollout switches
-            # the bytes were produced under.  A checkpoint written under another
-            # one is another run's evidence: it is not published here, it is
-            # re-produced under this attempt's pinned profile.
-            if (not receipt.get("publishable")
-                    or receipt.get("identity", COMPLETE_IDENTITY) != COMPLETE_IDENTITY
-                    or not matches_policy_revision(receipt.get("policyRevision"))
-                    or html is None or receipt.get("htmlDigest") != digest_html(html)
-                    or receipt.get("attemptToken") != getattr(checkpoint, "attempt_token", None)):
-                return None
     stored = _text(getattr(checkpoint, "illustrated_html", None))
     if stored is not None:
         return stored

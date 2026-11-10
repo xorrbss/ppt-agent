@@ -11,9 +11,6 @@ from functools import wraps
 
 import pytest
 
-from services import authored_admission as gate
-from services.authored_admission_context import context_from_source
-from services.authored_rollout_profile import RolloutProfile, current_rollout_profile
 from utils.get_env_programme import (
     get_authored_verbatim_repair_loop_model_calls,
 )
@@ -60,43 +57,6 @@ MANIFEST = {
     ]
 }
 OUTLINE = {"slides": [{"sourceUnitId": "u1", "sourceIndex": 0, "readingOrder": ["b1"]}]}
-
-
-def token_context():
-    return context_from_source(
-        manifest=MANIFEST,
-        projection=OUTLINE,
-        presentation_id="p1",
-        operation_id="op1",
-        slide_index=0,
-        source_unit_id="u1",
-        policy_revision=current_rollout_profile().policy_revision,
-        fenced_revision=1,
-        attempt_token="attempt-1",
-        reference_mode="source_content_restyle",
-        source_reflow=True,
-        terminal_fallback_eligible=False,
-        bindings=(("b1", "원문 제목"),),
-        html_repr="token",
-    )
-
-
-def test_a_candidate_that_retypes_source_text_is_rejected_by_the_gate(monkeypatch):
-    """The loop cannot emit source text: the gate's static checks refuse it."""
-
-    from services.source_content.placeholder import text_step
-
-    placeholder = RolloutProfile(placeholder_authoring=True)
-    monkeypatch.setattr(gate, "current_rollout_profile", lambda: placeholder)
-    monkeypatch.setattr(text_step, "current_rollout_profile", lambda: placeholder)
-    retyped = gate.admit_slide_html(token_context(), ORIGINAL)
-    assert retyped.verdict == "rejected"
-    assert retyped.code == "source_placeholder_missing"
-    tokenized = gate.admit_slide_html(
-        token_context(), "<!doctype html><html><body><h1>{{q:b1}}</h1></body></html>"
-    )
-    assert tokenized.verdict == "admitted"
-    assert "원문 제목" in tokenized.html
 
 
 # --- B9: evidence-only VQA receipts attribute outcomes to the right stage --

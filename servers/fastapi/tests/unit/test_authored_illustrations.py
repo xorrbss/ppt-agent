@@ -4,7 +4,6 @@ from pathlib import Path
 from types import SimpleNamespace
 
 from utils.authored_styles import load_authored_styles
-from services.generation_core.authoring.author_slide import Brand, build_design_system
 
 _PNG_BYTES = base64.b64decode(
     "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNgYAAAAAMAASsJTYQAAAAASUVORK5CYII="
@@ -39,23 +38,6 @@ _SLOT_HTML = (
     'style="width:640px;height:480px">'
     "<p>라벨은 HTML</p></body></html>"
 )
-
-
-def test_design_system_gains_slot_rules_only_for_illustration_styles():
-    brand = Brand(topic="주제")
-    without = build_design_system(
-        brand, SimpleNamespace(id="editorial", brief="- Editorial")
-    )
-    with_slot = build_design_system(
-        brand,
-        SimpleNamespace(
-            id="iso", brief="- Iso", illustration_prompt="isometric style"
-        ),
-    )
-
-    assert "ILLUSTRATION SLOT" not in without
-    assert "ILLUSTRATION SLOT" in with_slot
-    assert "data-illust-prompt" in with_slot
 
 
 def test_loader_parses_illustration_style_prompt(tmp_path: Path):

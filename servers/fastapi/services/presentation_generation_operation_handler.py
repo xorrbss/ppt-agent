@@ -225,7 +225,10 @@ class PresentationGenerationOperationHandler:
                 context.claim.fencing_token,
             )
             request = _request_from_durable_payload(job.request_payload)
-            from services.generation_core.admission.strategy import removed_generation_strategy_code
+            from services.generation_core.admission.strategy import (
+                AUTHORED_STRATEGY_REMOVED,
+                removed_generation_strategy_code,
+            )
 
             removed_strategy = removed_generation_strategy_code(request)
             if removed_strategy is not None:
@@ -279,16 +282,10 @@ class PresentationGenerationOperationHandler:
                 raise NonRetryableWorkspaceOperationError("source_native_generation_removed")
             strategy_receipt = operation_payload.get("generation_strategy")
             if isinstance(strategy_receipt, Mapping):
-                from services.authored_vnext.deck_ir.integration import (
-                    DeckIrIntegrationError,
-                    ensure_product_deck_ir_execution_adapter,
-                    run_deck_ir_generation,
-                )
                 from services.authored_vnext.deck_ir.strategy import (
                     GenerationStrategyCapabilityError,
                     validate_sealed_generation_strategy,
                 )
-                from services.authored_vnext.deck_ir.grammar import DeckIrGrammarError
 
                 try:
                     selected_strategy = validate_sealed_generation_strategy(
@@ -300,131 +297,9 @@ class PresentationGenerationOperationHandler:
                 if selected_strategy == "reject":
                     raise NonRetryableWorkspaceOperationError("generation_strategy_capability_missing")
                 if selected_strategy == "deck-ir":
-                    status_error = _snapshot_status_error(status)
-                    with provider_operation_usage_scope() as provider_usage:
-                        try:
-                            from services.generation_provider_admission import (
-                                generation_provider_capabilities,
-                                server_generation_profile_identity,
-                            )
-                            from models.presentation_profiles import (
-                                resolve_presentation_profile,
-                            )
-                            from services.provider_usage_instrumentation import (
-                                public_operation_scope,
-                            )
-                            from utils.llm_provider import generation_provider_policy
-
-                            # Workers can run in a different process than public
-                            # admission; install the same no-I/O composition root
-                            # before resolving the sealed operation strategy.
-                            ensure_product_deck_ir_execution_adapter(explicit=True)
-                            persisted = await session.get(PresentationModel, context.claim.presentation_id)
-                            identity = server_generation_profile_identity(request, persisted)
-                            profile = resolve_presentation_profile(identity)
-                            required_capabilities = generation_provider_capabilities(request, profile.driver_id)
-                            with public_operation_scope(
-                                context.claim.operation_id,
-                                attempt_token=context.claim.attempt_token,
-                                fencing_token=context.claim.fencing_token,
-                            ):
-                                with generation_provider_policy(
-                                    identity,
-                                    required_capabilities=required_capabilities,
-                                ):
-                                    deck_result = await run_deck_ir_generation(
-                                        request=request,
-                                        generation_job=job,
-                                        context=context,
-                                        strategy_receipt=strategy_receipt,
-                                    )
-                        except BaseException as error:
-                            status_error = _snapshot_status_error(status, status_error)
-                            try:
-                                receipt_payload = await _persist_failed_attempt_timing(
-                                    request=request,
-                                    job_id=job_id,
-                                    status_error=status_error,
-                                    context=context,
-                                    error=error,
-                                    recorder=timing_recorder,
-                                    provider_usage=provider_usage,
-                                    queue_wait_ms=operation_queue_wait_ms,
-                                )
-                                if receipt_payload is not None:
-                                    await session.rollback()
-                                    await _project_failed_attempt_timing(
-                                        session=session,
-                                        context=context,
-                                        receipt_payload=receipt_payload,
-                                    )
-                            except Exception:
-                                await session.rollback()
-                                logger.warning(
-                                    "Failed to record Deck IR attempt timing for job %s",
-                                    job_id,
-                                    exc_info=True,
-                                )
-                            if isinstance(
-                                error,
-                                (
-                                    DeckIrIntegrationError,
-                                    GenerationStrategyCapabilityError,
-                                    DeckIrGrammarError,
-                                ),
-                            ):
-                                raise NonRetryableWorkspaceOperationError(error.code) from error
-                            raise
-                    publication = deck_result.get("publication")
-                    if not isinstance(publication, Mapping):
-                        raise NonRetryableWorkspaceOperationError("authored_manifest_publication_failed")
-                    await require_public_generation_publication(
-                        session=session,
-                        context=context,
-                    )
-                    success_receipt_payload = await _persist_terminal_attempt_timing(
-                        job_id=job_id,
-                        context=context,
-                        recorder=timing_recorder,
-                        provider_usage=provider_usage,
-                        queue_wait_ms=operation_queue_wait_ms,
-                        outcome="succeeded",
-                        retry_reason=("workspace_retry" if context.claim.attempt_number > 1 else None),
-                        terminal_error=None,
-                        request=request,
-                    )
-                    if success_receipt_payload is None:
-                        raise NonRetryableWorkspaceOperationError("generation_timing_receipt_persistence_failed")
-                    success_timing_projection = generation_timing_result_projection(success_receipt_payload)
-                    if not success_timing_projection:
-                        raise NonRetryableWorkspaceOperationError("generation_timing_receipt_projection_invalid")
-                    # The injected publisher has already performed the fenced
-                    # immutable manifest CAS.  This compatibility task row is
-                    # updated only after that success and never becomes the
-                    # publication authority.
-                    status.status = "completed"
-                    status.message = "Deck IR generation completed"
-                    status.data = {
-                        **dict(deck_result),
-                        **success_timing_projection,
-                    }
-                    session.add(status)
-                    await session.commit()
-                    raw_revision = publication.get("revision")
-                    return WorkspaceOperationResult(
-                        payload={
-                            "status": "completed",
-                            "task_id": task_id,
-                            "job_id": str(job_id),
-                            **dict(deck_result),
-                            **success_timing_projection,
-                        },
-                        result_revision=(
-                            raw_revision
-                            if isinstance(raw_revision, int) and not isinstance(raw_revision, bool)
-                            else None
-                        ),
-                    )
+                    # The Deck IR engine was authored generation, removed with
+                    # it (P3 B4c); an operation sealed for it cannot run.
+                    raise NonRetryableWorkspaceOperationError(AUTHORED_STRATEGY_REMOVED)
             status_error = _snapshot_status_error(status)
             with provider_operation_usage_scope() as provider_usage:
                 try:

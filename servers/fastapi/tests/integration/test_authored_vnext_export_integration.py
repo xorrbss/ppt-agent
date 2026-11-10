@@ -7,7 +7,6 @@ it never invokes a provider, browser, or PowerPoint process.
 from __future__ import annotations
 
 import asyncio
-import base64
 from collections import deque
 from copy import deepcopy
 from hashlib import sha256
@@ -20,14 +19,11 @@ import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.orm import Session
-from fastapi import FastAPI
-from fastapi.testclient import TestClient
 
 from services.authored_vnext.integration.artifact_store import (
     ArtifactStoreError,
     BufferedArtifactStore,
 )
-from services.authored_vnext.integration.worker import WorkerError
 from services.authored_vnext.integration.export_payload import (
     build_worker_request,
     canonical_json,
@@ -36,13 +32,11 @@ from services.authored_vnext.integration.export_payload import (
 from services.authored_vnext.integration.export_service import (
     AuthoredVNextExportService,
     CreateJobCommand,
-    ExportServiceError,
 )
 from tests.support.authored_vnext_master_memory_repository import (
     InMemoryAuthoredVNextMasterRepository,
 )
 from services.authored_vnext.master.service import AuthoredVNextMasterService
-from services.authored_vnext.master.assets import OwnerMasterAssetStore
 from services.authored_vnext.integration.sql_repository import (
     AuthoredVNextSqlRepository,
     ExportArtifactInput,
@@ -66,11 +60,6 @@ from models.authored_vnext.master.operations import (
 from tests.support.authored_vnext_master_fixture import (
     long_title_slide_payload,
     master_contract_payload,
-    master_contract_with_logo_payload,
-)
-from api.v1.ppt.endpoints.authored_vnext.export.router import (
-    AUTHORED_VNEXT_EXPORT_ROUTER,
-    get_authored_vnext_export_service,
 )
 from services.account_deletion_service import (
     cancel_authored_vnext_exports_for_account,
@@ -230,113 +219,6 @@ def test_worker_canonical_json_normalizes_integral_numbers_and_unicode_nfc() -> 
     assert canonical_json({"text": "e\u0301", "value": 76.0}) == '{"text":"é","value":76}'
 
 
-def _worker_success(
-    payload: dict[str, Any],
-    artifact: bytes,
-    *,
-    artifact_digest: str | None = None,
-    package_digest: str | None = None,
-    fencing_token: str | None = None,
-) -> dict[str, Any]:
-    """Return the exact unwrapped JSON envelope emitted by the Next worker."""
-
-    digest = artifact_digest or _digest(artifact)
-    master = payload.get("master", {})
-    furniture = master.get("furniture", [])
-    font_files = master.get("fontManifest", {}).get("files", [])
-    master_digest = f"sha256:{payload.get('digests', {}).get('masterSha256', '0' * 64)}"
-    scene_receipt = {}
-    if payload.get("scene"):
-        from services.authored_vnext.ooxml.native_scene import materialize_scene_pptx
-
-        # This transport still simulates buffering/fencing failures. Its Scene
-        # receipt comes from the real native converter rather than bypassing the
-        # newly required Scene/readback contract with a legacy title/body stub.
-        _, readback = materialize_scene_pptx(payload["scene"], payload.get("assets", []), master)
-        scene_receipt = {
-            key: readback[key]
-            for key in (
-                "scene",
-                "capabilities",
-                "nativeObjectCounts",
-                "hybridOwnership",
-            )
-        }
-    return {
-        "schemaVersion": "authored-vnext-ooxml-worker/v1",
-        "operation": "EXPORT_PPTX",
-        "operationId": payload["operationId"],
-        "fencingToken": fencing_token or payload["fencingToken"],
-        "status": "SUCCEEDED",
-        "artifact": {
-            "mediaType": PPTX_MEDIA_TYPE,
-            "filenameExtension": ".pptx",
-            "byteLength": len(artifact),
-            "sha256": digest.removeprefix("sha256:"),
-            "contentBase64": base64.b64encode(artifact).decode("ascii"),
-        },
-        "receipt": {
-            **scene_receipt,
-            "adapterRevision": 1,
-            "validation": "candidate-reopened",
-            "candidateDigestVerified": True,
-            "package": {
-                "packageDigest": (package_digest or digest).removeprefix("sha256:"),
-                "relationshipDigest": "1" * 64,
-                "closureDigest": "2" * 64,
-                "slideCount": len(payload["slides"]),
-                "masterCount": 1,
-                "layoutCount": 1,
-                "macroDetected": False,
-                "quarantineReasons": [],
-            },
-            "preservation": {
-                "silentLossCount": 0,
-                "missingParts": [],
-                "unexpectedChangedParts": [],
-            },
-            "master": {
-                "contractDigest": master_digest,
-                "semanticDigest": master_digest,
-                "furnitureCount": len(furniture),
-                "logoCount": sum(item.get("kind") == "logo" for item in furniture),
-                "pageNumberCount": sum(item.get("kind") == "pageNumber" for item in furniture),
-                "fontFileCount": len(font_files),
-                "duplicateFurnitureCount": 0,
-                "fontFilesMode": "REFERENCE_METADATA_VERIFIED",
-            },
-            "slides": [
-                {
-                    "partName": f"ppt/slides/slide{index}.xml",
-                    "slideId": slide["slideId"],
-                    "layoutId": slide["layoutId"],
-                    "masterDigest": master_digest,
-                    **(
-                        {
-                            "slideDigest": readback["scene"]["slides"][index - 1]["slideDigest"],
-                            "elementIds": [
-                                item["elementId"] for item in readback["scene"]["slides"][index - 1]["elements"]
-                            ],
-                            "rasterIslandIds": [
-                                item["islandId"]
-                                for item in readback["scene"]["slides"][index - 1].get("rasterIslands", [])
-                            ],
-                            "rasterOwnerIds": sorted(
-                                owner
-                                for item in readback["scene"]["slides"][index - 1].get("rasterIslands", [])
-                                for owner in item["sourceOwnerIds"]
-                            ),
-                        }
-                        if payload.get("scene")
-                        else {}
-                    ),
-                }
-                for index, slide in enumerate(payload["slides"], start=1)
-            ],
-        },
-    }
-
-
 class DeterministicWorkerTransport:
     """Scriptable fake for retry, timeout, corruption, and fencing tests."""
 
@@ -406,27 +288,6 @@ def test_buffered_artifact_store_fails_closed_without_publishing_partial_file(
 
     assert not list(root.rglob("*.pptx"))
     assert not list(root.rglob("*.candidate"))
-
-
-def test_deterministic_worker_transport_preserves_timeout_and_retry_order() -> None:
-    artifact = b"PK\x03\x04retry-success"
-    payload = {
-        "operationId": "job:test",
-        "fencingToken": "1",
-        "slides": [{"slideId": "slide:1", "layoutId": "layout:1", "values": {}}],
-    }
-    transport = DeterministicWorkerTransport(
-        WorkerError("authored_vnext_worker_timeout", retryable=True),
-        lambda request: _worker_success(request, artifact),
-    )
-
-    with pytest.raises(WorkerError) as failure:
-        asyncio.run(transport.execute(payload, 1_000))
-    receipt = asyncio.run(transport.execute(payload, 2_000))
-
-    assert failure.value.retryable is True
-    assert receipt["artifact"]["sha256"] == _digest(artifact).removeprefix("sha256:")
-    assert [timeout for _payload, timeout in transport.calls] == [1_000, 2_000]
 
 
 def test_published_master_and_deck_build_exact_versioned_worker_digest_envelope() -> None:
@@ -882,199 +743,6 @@ def _create_service_job(
     )
 
 
-def test_export_service_runs_worker_buffer_readback_and_atomic_publication(
-    tmp_path: Path,
-) -> None:
-    engine, repository = _sql_repository(tmp_path)
-    try:
-        _master, deck, digests = _published_sql_deck(repository, "deck:service-success")
-        artifact = b"PK\x03\x04service-worker-success"
-        worker = DeterministicWorkerTransport(lambda payload: _worker_success(payload, artifact))
-        store = BufferedArtifactStore(tmp_path / "service-artifacts")
-        service = AuthoredVNextExportService(repository, worker, store)
-        created = _create_service_job(service, deck=deck, digests=digests, key="service-success")
-
-        completed = asyncio.run(service.run_job(created.id))
-        pointer, receipt = repository.get_active_artifact(deck.deck_id)
-        downloaded = store.open_verified(receipt.storage_key, receipt.artifact_digest, receipt.size_bytes).read_bytes()
-
-        assert completed.state == "succeeded"
-        assert pointer.digest == _digest(artifact)
-        assert receipt.readback_verified is True
-        assert downloaded == artifact
-        assert len(worker.calls) == 1
-        worker_payload, timeout_ms = worker.calls[0]
-        assert timeout_ms == 1_000
-        assert worker_payload["operationId"] == str(created.id)
-        assert worker_payload["fencingToken"] == completed.fence_token
-    finally:
-        engine.dispose()
-
-
-def test_export_service_resolves_owner_logo_bytes_into_verified_worker_asset(
-    tmp_path: Path,
-) -> None:
-    engine, repository = _sql_repository(tmp_path)
-    try:
-        logo_bytes = (Path(__file__).resolve().parents[3] / "nextjs" / "public" / "Logo.png").read_bytes()
-        asset_store = OwnerMasterAssetStore(tmp_path / "master-assets" / "owner-a")
-        receipt = asset_store.publish_png(logo_bytes)
-        contract_payload = master_contract_with_logo_payload()
-        contract_payload["brandAssets"]["logo"]["assetId"] = receipt["assetId"]
-        contract_payload["brandAssets"]["logo"]["digest"] = receipt["digest"]
-        contract_payload["furniture"]["logo"]["assetId"] = receipt["assetId"]
-        worker_asset = {
-            "assetId": receipt["assetId"],
-            "mediaType": "image/png",
-            "sha256": str(receipt["digest"]).removeprefix("sha256:"),
-            "sizeBytes": len(logo_bytes),
-            "bytesBase64": base64.b64encode(logo_bytes).decode("ascii"),
-        }
-        _master, deck, digests = _published_sql_deck(
-            repository,
-            "deck:service-logo",
-            master_payload=contract_payload,
-            assets=[worker_asset],
-        )
-        artifact = b"PK\x03\x04service-worker-logo-success"
-        worker = DeterministicWorkerTransport(lambda payload: _worker_success(payload, artifact))
-        service = AuthoredVNextExportService(
-            repository,
-            worker,
-            BufferedArtifactStore(tmp_path / "service-artifacts"),
-            asset_store,
-        )
-        created = _create_service_job(
-            service,
-            deck=deck,
-            digests=digests,
-            key="service-logo",
-            asset_digests=[str(receipt["digest"])],
-        )
-        asyncio.run(service.run_job(created.id))
-        sent = worker.calls[0][0]
-        assert sent["assets"] == [worker_asset]
-        assert sent["master"]["furniture"][0]["assetSha256"] == worker_asset["sha256"]
-        assert repository.get_active_artifact(deck.deck_id) is not None
-    finally:
-        engine.dispose()
-
-
-def test_export_job_accepts_distinct_scene_assets_with_one_digest_pin(
-    tmp_path: Path,
-) -> None:
-    from models.authored_vnext.deck.scene import (
-        SceneAssetManifestEntry,
-        SceneEditability,
-        SceneImageElement,
-        seal_deck_scene,
-        seal_slide_scene,
-    )
-    from models.authored_vnext.master.contract import Rect
-
-    engine, repository = _sql_repository(tmp_path)
-    try:
-        _master, deck, _digests = _published_sql_deck(repository, "deck:duplicate-scene-image-bytes")
-        image_bytes = (Path(__file__).resolve().parents[3] / "nextjs" / "public" / "Logo.png").read_bytes()
-        digest = f"sha256:{sha256(image_bytes).hexdigest()}"
-        encoded = base64.b64encode(image_bytes).decode("ascii")
-        asset_ids = ("asset:scene-image-one", "asset:scene-image-two")
-        slide = deck.scene.slides[0]
-        images = [
-            SceneImageElement(
-                kind="image",
-                element_id=f"{slide.slide_id}:image-{index}",
-                z_order=2 + index,
-                bounds=Rect(x=100 + index * 220, y=500, width=180, height=100),
-                semantic_role="illustration",
-                editability=SceneEditability(asset=True),
-                asset_id=asset_id,
-                asset_digest=digest,
-                alt_text=f"Fixture image {index}",
-            )
-            for index, asset_id in enumerate(asset_ids, start=1)
-        ]
-        updated_slide = seal_slide_scene(
-            slide_id=slide.slide_id,
-            revision=slide.revision,
-            elements=[*slide.elements, *images],
-        )
-        manifest = [
-            SceneAssetManifestEntry(
-                asset_id=asset_id,
-                asset_digest=digest,
-                media_type="image/png",
-                storage_reference=f"data:image/png;base64,{encoded}",
-                size_bytes=len(image_bytes),
-            )
-            for asset_id in asset_ids
-        ]
-        updated_scene = seal_deck_scene(
-            deck_id=deck.deck_id,
-            revision=deck.revision + 1,
-            composition_digest=deck.scene.composition_digest,
-            source_digest=deck.source_digest,
-            slides=[updated_slide],
-            asset_manifest=manifest,
-            capabilities=list(deck.scene.capabilities),
-        )
-        updated_slide_spec = deck.slides[0].model_copy(
-            update={
-                "scene": updated_slide,
-                "checkpoint": deck.slides[0].checkpoint.model_copy(update={"scene_digest": updated_slide.slide_digest}),
-            }
-        )
-        updated_deck = _SceneSnapshot.model_validate(
-            {
-                **deck.model_dump(mode="json", by_alias=True),
-                "revision": deck.revision + 1,
-                "parentRevisionDigest": deck.digest,
-                "scene": updated_scene.model_dump(mode="json", by_alias=True),
-                "slides": [updated_slide_spec.model_dump(mode="json", by_alias=True)],
-            }
-        )
-        updated_deck = updated_deck.model_copy(
-            update={
-                "digest":
-                    f"sha256:{raw_sha256(updated_deck.model_dump(mode='json', by_alias=True, exclude={'digest'}))}"
-            }
-        )
-        repository.append_deck(
-            updated_deck,
-            expected_revision=deck.revision,
-            expected_digest=deck.digest,
-        )
-        service = AuthoredVNextExportService(
-            repository,
-            DeterministicWorkerTransport(lambda payload: _worker_success(payload, b"PK\x03\x04fixture")),
-            BufferedArtifactStore(tmp_path / "duplicate-scene-artifacts"),
-        )
-        assets = service._worker_assets(
-            repository.get_master(updated_deck.master_id, updated_deck.master_revision).contract,
-            updated_deck,
-        )
-        assert {asset["assetId"] for asset in assets} == set(asset_ids)
-        assert {asset["sha256"] for asset in assets} == {digest.removeprefix("sha256:")}
-        _, digests = build_worker_request(
-            operation_id="job:duplicate-scene",
-            fence_token=1,
-            master=repository.get_master(updated_deck.master_id, updated_deck.master_revision).contract,
-            deck=updated_deck,
-            expected_package_digest=None,
-            assets=assets,
-        )
-        job = _create_service_job(
-            service,
-            deck=updated_deck,
-            digests=digests,
-            key="duplicate-scene-image-bytes",
-            asset_digests=[digest],
-        )
-        assert job.state == "queued"
-    finally:
-        engine.dispose()
-
-
 def test_account_deletion_cancels_active_export_and_fences_late_publication(
     tmp_path: Path,
 ) -> None:
@@ -1139,68 +807,6 @@ def test_account_deletion_cancels_active_export_and_fences_late_publication(
         engine.dispose()
 
 
-@pytest.mark.parametrize(
-    "failure",
-    [
-        WorkerError("authored_vnext_worker_timeout", retryable=True),
-        WorkerError("authored_vnext_worker_unavailable", retryable=True),
-    ],
-)
-def test_worker_failure_preserves_downloadable_last_known_good(
-    tmp_path: Path,
-    failure: WorkerError,
-) -> None:
-    engine, repository = _sql_repository(tmp_path)
-    try:
-        _master, deck, digests = _published_sql_deck(repository, "deck:last-known-good")
-        store = BufferedArtifactStore(tmp_path / "service-artifacts")
-        good_bytes = b"PK\x03\x04active-before-failure"
-        first_service = AuthoredVNextExportService(
-            repository,
-            DeterministicWorkerTransport(lambda payload: _worker_success(payload, good_bytes)),
-            store,
-        )
-        first = _create_service_job(first_service, deck=deck, digests=digests, key="last-known-good")
-        assert asyncio.run(first_service.run_job(first.id)).state == "succeeded"
-        pointer_before, receipt_before = repository.get_active_artifact(deck.deck_id)
-
-        failing_service = AuthoredVNextExportService(repository, DeterministicWorkerTransport(failure), store)
-        second = _create_service_job(
-            failing_service,
-            deck=deck,
-            digests=digests,
-            key=f"failure-{failure.code}",
-            active_revision=pointer_before.revision,
-            active_digest=pointer_before.digest,
-        )
-        failed = asyncio.run(failing_service.run_job(second.id))
-        pointer_after, receipt_after = repository.get_active_artifact(deck.deck_id)
-
-        assert failed.state == "failed"
-        assert failed.failure_code == failure.code
-        assert (
-            pointer_after.revision,
-            pointer_after.generation,
-            pointer_after.digest,
-            receipt_after.id,
-        ) == (
-            pointer_before.revision,
-            pointer_before.generation,
-            pointer_before.digest,
-            receipt_before.id,
-        )
-        assert (
-            store.open_verified(
-                receipt_after.storage_key,
-                receipt_after.artifact_digest,
-                receipt_after.size_bytes,
-            ).read_bytes()
-            == good_bytes
-        )
-    finally:
-        engine.dispose()
-
-
 def test_unexpected_worker_failure_is_durably_failed_and_retryable(
     tmp_path: Path,
 ) -> None:
@@ -1233,208 +839,3 @@ def test_unexpected_worker_failure_is_durably_failed_and_retryable(
         engine.dispose()
 
 
-def test_font_asset_and_worker_artifact_digest_mismatch_fail_closed(
-    tmp_path: Path,
-) -> None:
-    engine, repository = _sql_repository(tmp_path)
-    try:
-        _master, deck, digests = _published_sql_deck(repository, "deck:digest-fail-closed")
-        store = BufferedArtifactStore(tmp_path / "service-artifacts")
-        service = AuthoredVNextExportService(
-            repository,
-            DeterministicWorkerTransport(
-                lambda payload: _worker_success(
-                    payload,
-                    b"PK\x03\x04actual-bytes",
-                    artifact_digest=_digest(b"PK\x03\x04claimed-other-bytes"),
-                )
-            ),
-            store,
-        )
-        with pytest.raises(ExportServiceError, match="font_digest_mismatch"):
-            service.create_job(
-                CreateJobCommand(
-                    deck_id=deck.deck_id,
-                    expected_deck_revision=deck.revision,
-                    expected_deck_digest=deck.digest,
-                    expected_master_revision=deck.master_revision,
-                    expected_master_digest=deck.master_digest,
-                    expected_active_artifact_revision=0,
-                    expected_active_artifact_digest=None,
-                    expected_source_package_digest=None,
-                    expected_asset_digests=[],
-                    expected_font_digest=_digest(b"wrong-font"),
-                    idempotency_key="wrong-font",
-                    timeout_ms=1_000,
-                    max_attempts=1,
-                    request_payload={"case": "wrong-font"},
-                )
-            )
-        with pytest.raises(ExportServiceError, match="asset_digest_mismatch"):
-            service.create_job(
-                CreateJobCommand(
-                    deck_id=deck.deck_id,
-                    expected_deck_revision=deck.revision,
-                    expected_deck_digest=deck.digest,
-                    expected_master_revision=deck.master_revision,
-                    expected_master_digest=deck.master_digest,
-                    expected_active_artifact_revision=0,
-                    expected_active_artifact_digest=None,
-                    expected_source_package_digest=None,
-                    expected_asset_digests=[_digest(b"unsupported-asset")],
-                    expected_font_digest=_master.contract.font_manifest.digest,
-                    idempotency_key="unsupported-asset",
-                    timeout_ms=1_000,
-                    max_attempts=1,
-                    request_payload={"case": "unsupported-asset"},
-                )
-            )
-
-        created = _create_service_job(service, deck=deck, digests=digests, key="worker-digest-mismatch")
-        failed = asyncio.run(service.run_job(created.id))
-        assert failed.state == "failed"
-        assert failed.failure_code == "authored_vnext_worker_artifact_digest_mismatch"
-        assert repository.get_active_artifact(deck.deck_id) is None
-        assert not list((tmp_path / "service-artifacts").rglob("*.pptx"))
-    finally:
-        engine.dispose()
-
-
-def test_http_master_to_export_job_to_downloadable_pptx_and_duplicate_is_stable(
-    monkeypatch,
-    tmp_path: Path,
-) -> None:
-    monkeypatch.setenv("AUTHORED_VNEXT_EXPORT_ENABLED", "true")
-    engine, repository = _sql_repository(tmp_path)
-    try:
-        _master, deck, digests = _published_sql_deck(repository, "deck:http-download")
-        artifact = b"PK\x03\x04http-downloadable-pptx"
-        worker = DeterministicWorkerTransport(lambda payload: _worker_success(payload, artifact))
-        service = AuthoredVNextExportService(
-            repository,
-            worker,
-            BufferedArtifactStore(tmp_path / "http-artifacts"),
-        )
-        app = FastAPI()
-        app.include_router(AUTHORED_VNEXT_EXPORT_ROUTER, prefix="/api/v1/ppt")
-        app.dependency_overrides[get_authored_vnext_export_service] = lambda: service
-        request = {
-            "deckId": deck.deck_id,
-            "expectedDeckRevision": deck.revision,
-            "expectedDeckDigest": deck.digest,
-            "expectedMasterRevision": deck.master_revision,
-            "expectedMasterDigest": deck.master_digest,
-            "expectedActiveArtifactRevision": 0,
-            "expectedActiveArtifactDigest": None,
-            "expectedSourcePackageDigest": None,
-            "expectedAssetDigests": [],
-            "expectedFontDigest": _master.contract.font_manifest.digest,
-            "idempotencyKey": "http-download",
-            "timeoutMs": 1_000,
-            "maxAttempts": 3,
-        }
-
-        with TestClient(app) as client:
-            created = client.post("/api/v1/ppt/authored-vnext/export/jobs", json=request)
-            assert created.status_code == 202, created.text
-            job = created.json()
-            assert job["state"] == "queued"
-
-            duplicate = client.post("/api/v1/ppt/authored-vnext/export/jobs", json=request)
-            assert duplicate.status_code == 202
-            assert duplicate.json()["jobId"] == job["jobId"]
-
-            completed = client.post(f"/api/v1/ppt/authored-vnext/export/jobs/{job['jobId']}/run")
-            assert completed.status_code == 200, completed.text
-            assert completed.json()["state"] == "succeeded"
-            assert completed.json()["artifact"]["digest"] == _digest(artifact)
-
-            status_response = client.get(f"/api/v1/ppt/authored-vnext/export/jobs/{job['jobId']}")
-            assert status_response.status_code == 200
-            assert status_response.json() == completed.json()
-
-            download = client.get(f"/api/v1/ppt/authored-vnext/export/decks/{deck.deck_id}/artifact")
-            assert download.status_code == 200, download.text
-            assert download.content == artifact
-            assert download.headers["content-type"] == PPTX_MEDIA_TYPE
-            assert download.headers["etag"] == f'"{_digest(artifact)}"'
-            assert "attachment" in download.headers["content-disposition"]
-
-        assert len(worker.calls) == 1
-    finally:
-        engine.dispose()
-
-
-def test_http_rollback_rejects_corrupt_target_and_preserves_lkg(
-    monkeypatch,
-    tmp_path: Path,
-) -> None:
-    monkeypatch.setenv("AUTHORED_VNEXT_EXPORT_ENABLED", "true")
-    engine, repository = _sql_repository(tmp_path)
-    try:
-        _master, deck, digests = _published_sql_deck(repository, "deck:rollback-readback")
-        first_bytes = b"PK\x03\x04rollback-target"
-        second_bytes = b"PK\x03\x04last-known-good"
-        worker = DeterministicWorkerTransport(
-            lambda payload: _worker_success(payload, first_bytes),
-            lambda payload: _worker_success(payload, second_bytes),
-        )
-        service = AuthoredVNextExportService(
-            repository,
-            worker,
-            BufferedArtifactStore(tmp_path / "rollback-artifacts"),
-        )
-        app = FastAPI()
-        app.include_router(AUTHORED_VNEXT_EXPORT_ROUTER, prefix="/api/v1/ppt")
-        app.dependency_overrides[get_authored_vnext_export_service] = lambda: service
-
-        base_request = {
-            "deckId": deck.deck_id,
-            "expectedDeckRevision": deck.revision,
-            "expectedDeckDigest": deck.digest,
-            "expectedMasterRevision": deck.master_revision,
-            "expectedMasterDigest": deck.master_digest,
-            "expectedSourcePackageDigest": None,
-            "expectedAssetDigests": [],
-            "expectedFontDigest": _master.contract.font_manifest.digest,
-            "timeoutMs": 1_000,
-            "maxAttempts": 3,
-        }
-        with TestClient(app) as client:
-            first_request = {
-                **base_request,
-                "expectedActiveArtifactRevision": 0,
-                "expectedActiveArtifactDigest": None,
-                "idempotencyKey": "rollback-target",
-            }
-            first_job = client.post("/api/v1/ppt/authored-vnext/export/jobs", json=first_request).json()
-            first = client.post(f"/api/v1/ppt/authored-vnext/export/jobs/{first_job['jobId']}/run").json()["artifact"]
-
-            second_request = {
-                **base_request,
-                "expectedActiveArtifactRevision": first["publicationRevision"],
-                "expectedActiveArtifactDigest": first["digest"],
-                "idempotencyKey": "last-known-good",
-            }
-            second_job = client.post("/api/v1/ppt/authored-vnext/export/jobs", json=second_request).json()
-            second = client.post(f"/api/v1/ppt/authored-vnext/export/jobs/{second_job['jobId']}/run").json()["artifact"]
-
-            target = repository.get_artifact_receipt(
-                deck_id=deck.deck_id,
-                artifact_id=uuid.UUID(first["artifactId"]),
-            )
-            Path(target.storage_key).write_bytes(b"corrupt")
-            rollback = client.post(
-                f"/api/v1/ppt/authored-vnext/export/decks/{deck.deck_id}/artifacts/{first['artifactId']}/rollback",
-                json={
-                    "expectedPublicationRevision": second["publicationRevision"],
-                    "expectedArtifactDigest": second["digest"],
-                },
-            )
-            assert rollback.status_code == 422
-            active = repository.get_active_artifact(deck.deck_id)
-            assert active is not None
-            assert str(active[1].id) == second["artifactId"]
-            assert active[1].artifact_digest == second["digest"]
-    finally:
-        engine.dispose()

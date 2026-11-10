@@ -10,11 +10,7 @@ import pytest
 from models.authored_infographic_plan import ARCHETYPES, coerce_infographic_plan
 from utils.authored_infographic import (
     check_infographic_contract,
-    finalize_infographic_slide_html,
-    has_library,
-    inject_library_css,
     library_classes,
-    library_css,
     render_skeleton,
     slot_contract,
     tokens_for_brand,
@@ -22,9 +18,6 @@ from utils.authored_infographic import (
 from utils.authored_dom_quality import ensure_authored_qids
 from utils.authored_infographic.library import LIBRARY_TEMPLATE
 from utils.authored_infographic.skeleton import density_class, node_count, split_figure
-from utils.llm_calls.author_infographic_marker import infographic_marker
-from services.generation_core.authoring.author_slide import Brand, validate_authored_slide_html
-from services.generation_core.authoring.author_slide_prompt import author_prompt
 
 _CONTENT = (
     "## 예지보전 순환\n- 감지: 센서 이상 패턴 포착\n- 예측: 고장 확률 72% 산출\n"
@@ -63,10 +56,6 @@ def _slide(archetype="cycle", count=4, density="high", emphasis=1):
     return slide
 
 
-def _brand(primary="#1E5EFF"):
-    return Brand(topic="스마트팩토리", primary=primary, fonts="Noto Sans KR")
-
-
 def _doc(body, head=""):
     return (
         "<!DOCTYPE html><html lang=\"ko\"><head><meta charset=\"utf-8\">"
@@ -75,17 +64,6 @@ def _doc(body, head=""):
 
 
 # --- tokens and CSS -------------------------------------------------------------
-
-
-def test_tokens_come_from_the_brand_and_stay_literal():
-    tokens = tokens_for_brand(_brand("#1E5EFF"))
-    assert tokens.primary == "#1E5EFF"
-    assert tokens.primary_tint != tokens.primary and tokens.primary_deep != tokens.primary
-    assert "Malgun Gothic" in tokens.font
-    css = library_css(_brand("#1E5EFF"))
-    assert "#1E5EFF" in css and "$" not in css and "--" not in css
-    assert "::before" not in LIBRARY_TEMPLATE and "::after" not in LIBRARY_TEMPLATE
-    assert not re.search(r"[;{]\s*content:", LIBRARY_TEMPLATE)
 
 
 def test_a_bad_primary_falls_back_rather_than_failing():
@@ -102,19 +80,6 @@ def test_the_library_covers_every_archetype_root_and_density():
 
 
 # --- skeletons ------------------------------------------------------------------
-
-
-@pytest.mark.parametrize("archetype", [a for a in ARCHETYPES if a != "none"])
-@pytest.mark.parametrize("count", [3, 4, 5, 6])
-def test_every_skeleton_satisfies_its_own_contract_and_renderer_admission(archetype, count):
-    slide = _slide(archetype, count)
-    skeleton = render_skeleton(slide)
-    assert check_infographic_contract(_doc(skeleton), slide) == []
-    admitted = validate_authored_slide_html(
-        inject_library_css(_doc(skeleton), library_css(_brand())),
-        allow_illustration_slots=True,
-    )
-    assert has_library(admitted)
 
 
 def test_the_skeleton_carries_the_planned_text_and_stable_qids():
@@ -225,20 +190,6 @@ def _pair_slide(archetype, density="high"):
     return plan.at(0)
 
 
-def test_before_after_fills_both_value_cells_and_a_delta_column_from_the_plan():
-    slide = _pair_slide("before_after")
-    skeleton = render_skeleton(slide)
-    assert '<td class="ig-td-before" data-qid-ignore="">4.6%</td>' in skeleton
-    assert '<td class="ig-td-after" data-qid-ignore="">2.2%</td>' in skeleton
-    assert '<td class="ig-td-delta" data-qid-ignore="">-2.4%p</td>' in skeleton
-    assert skeleton.count("ig-th-delta") == 1
-    assert check_infographic_contract(_doc(skeleton), slide) == []
-    validate_authored_slide_html(_doc(skeleton, f"<style>{library_css(_brand())}</style>"))
-    # Without a stated delta the table keeps its four columns.
-    lean = render_skeleton(_pair_slide("before_after", density="medium"))
-    assert "ig-td-delta" not in lean and '>9%</td>' in lean and '>1.5%</td>' in lean
-
-
 def test_comparison_with_two_stated_values_gets_a_before_and_an_after_row():
     slide = _pair_slide("comparison")
     skeleton = render_skeleton(slide)
@@ -264,27 +215,6 @@ def test_roadmap_bars_always_end_inside_the_track(count):
     # The library clips any bar the model lengthens past the track.
     assert ".ig-roadmap .ig-track{" in LIBRARY_TEMPLATE
     assert "overflow:hidden" in LIBRARY_TEMPLATE.split(".ig-roadmap .ig-track{", 1)[1].split("}", 1)[0]
-
-
-@pytest.mark.parametrize("count", [3, 4, 5, 6])
-def test_cycle_draws_one_arrowhead_per_segment_and_a_filled_key_plate(count):
-    slide = _slide("cycle", count, density="medium", emphasis=1)
-    skeleton = render_skeleton(slide)
-    assert skeleton.count('class="ig-ring-head h') == count
-    assert all(f'ig-ring-head h{i + 1}"' in skeleton for i in range(count))
-    assert '<div class="ig-node p2 is-key"' in skeleton
-    css = library_css(_brand())
-    # Every arrowhead is placed by coordinates and turned in place: a pure
-    # rotation is what the exporter keeps as a native shape.
-    for i in range(count):
-        rule = f".ig-cycle.n{count} .ig-ring-head.h{i + 1}{{"
-        assert rule in css
-        declarations = css.split(rule, 1)[1].split("}", 1)[0]
-        assert "left:" in declarations and "top:" in declarations
-        assert re.fullmatch(r"rotate\(\d+deg\)", declarations.split("transform:")[1])
-    assert ".ig-node.is-key .ig-node-bg{background:#1E5EFF" in css
-    assert ".ig-cycle .ig-node.is-key{width:220px" in css
-    assert check_infographic_contract(_doc(skeleton), slide) == []
 
 
 # --- the checker ----------------------------------------------------------------
@@ -319,32 +249,6 @@ def test_matrix_nodes_may_move_between_quadrants():
     assert check_infographic_contract(_doc(swapped), slide) == []
 
 
-def test_a_quiet_page_has_no_contract():
-    quiet = coerce_infographic_plan(
-        {"slides": [{"index": 0}]}, slide_contents=["표지"], roles=["COVER"]
-    ).at(0)
-    assert check_infographic_contract("<html><body>x</body></html>", quiet) == []
-    untouched = "<html><body>x</body></html>"
-    assert finalize_infographic_slide_html(untouched, brand=_brand(), slide=quiet) == untouched
-
-
 # --- injection and egress -------------------------------------------------------
 
 
-def test_injection_is_idempotent_and_lands_after_the_models_styles():
-    css = library_css(_brand())
-    html = _doc("<p>x</p>", head="<style>p{color:red}</style>")
-    once = inject_library_css(html, css)
-    assert once.index("p{color:red}") < once.index(".ig-lib-v1")
-    assert inject_library_css(once, css) == once
-
-
-def test_the_prompt_carries_the_contract_and_the_skeleton():
-    slide = _slide("cycle", 4)
-    marker = infographic_marker(slide)
-    assert "FIGURE CONTRACT" in marker and render_skeleton(slide) in marker
-    assert "ICON MENU" in marker and "ARCHETYPE NOTE (cycle)" in marker
-    prompt = author_prompt(
-        _CONTENT, "DESIGN", _brand(), "CONTENT", 2, 10, infographic=slide
-    )
-    assert slot_contract(slide) in prompt

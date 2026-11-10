@@ -512,93 +512,12 @@ def _generation_reference_claim_ids(
     return [*reference_ids, design_snapshot_id]
 
 
-def _checkpoint_content_graph_authority(
-    operation: WorkspaceOperation,
-) -> dict[str, str | None]:
-    request_payload = (
-        operation.request_payload
-        if isinstance(operation.request_payload, Mapping)
-        else {}
-    )
-    preserve_checkpoint = request_payload.get(
-        "preserve_source_checkpoint"
-    ) or request_payload.get("preserveSourceCheckpoint")
-    checkpoint = preserve_checkpoint or request_payload.get(
-        "narrative_checkpoint"
-    ) or request_payload.get("narrativeCheckpoint")
-    if not isinstance(checkpoint, Mapping):
-        raise ValueError("content_integrity_checkpoint_missing")
-    checkpoint_operation_id = checkpoint.get("operationId") or checkpoint.get(
-        "operation_id"
-    )
-    if str(checkpoint_operation_id or "") != str(operation.id):
-        raise ValueError("content_integrity_checkpoint_operation_mismatch")
-    if preserve_checkpoint is not None:
-        preserve_input = checkpoint.get("preserveSourceInput")
-        content_graph = (
-            preserve_input.get("contentGraph")
-            if isinstance(preserve_input, Mapping)
-            else None
-        )
-        content_graph_digest = (
-            content_graph.get("contentGraphDigest")
-            if isinstance(content_graph, Mapping)
-            else None
-        )
-        generation_lane = "preserve-source"
-        attempt_binding_digest = checkpoint.get("attemptBindingDigest")
-        preserve_source_input_digest = (
-            preserve_input.get("inputDigest")
-            if isinstance(preserve_input, Mapping)
-            else None
-        )
-        narrative_digest = None
-    else:
-        narrative = checkpoint.get("narrative")
-        if not isinstance(narrative, Mapping):
-            raise ValueError("content_integrity_checkpoint_narrative_missing")
-        content_graph_digest = narrative.get("contentGraphDigest") or narrative.get(
-            "content_graph_digest"
-        )
-        generation_lane = "new-authoring"
-        from services.authored_vnext.narrative_ir.validation import canonical_digest
-
-        attempt_binding_digest = canonical_digest(
-            {
-                "operationId": str(checkpoint_operation_id),
-                "jobId": str(checkpoint.get("jobId") or ""),
-                "attemptId": str(checkpoint.get("attemptId") or ""),
-                "fencingToken": checkpoint.get("fencingToken"),
-            }
-        )
-        narrative_digest = narrative.get("narrativeDigest")
-        preserve_source_input_digest = None
-    if not isinstance(content_graph_digest, str) or not content_graph_digest:
-        raise ValueError("content_integrity_checkpoint_graph_missing")
-    provider_call_budget = checkpoint.get("providerCallBudget")
-    if not isinstance(provider_call_budget, Mapping):
-        raise ValueError("content_integrity_provider_budget_missing")
-    from services.authored_vnext.narrative_ir.validation import canonical_digest
-
-    provider_call_budget_digest = canonical_digest(dict(provider_call_budget))
-    if not isinstance(attempt_binding_digest, str) or not attempt_binding_digest:
-        raise ValueError("content_integrity_attempt_binding_missing")
-    return {
-        "generationLane": generation_lane,
-        "contentGraphDigest": content_graph_digest,
-        "attemptBindingDigest": attempt_binding_digest,
-        "narrativeDigest": narrative_digest,
-        "preserveSourceInputDigest": preserve_source_input_digest,
-        "providerCallBudgetDigest": provider_call_budget_digest,
-    }
-
-
 def require_generation_content_integrity_for_export(
     operation: WorkspaceOperation,
     *,
     source_revision: int,
 ) -> None:
-    """Fail closed when a registered-template revision lacks its integrity seal."""
+    """Fail closed for a registered-template (source-native) revision."""
 
     request_payload = (
         operation.request_payload
@@ -613,40 +532,10 @@ def require_generation_content_integrity_for_export(
     )
     if selected_route != "source-native":
         return
-    if (
-        operation.state != "succeeded"
-        or operation.result_revision != source_revision
-        or not isinstance(operation.result, Mapping)
-    ):
-        raise _public_error(409, "content_integrity_receipt_required")
-    try:
-        from services.authored_vnext.narrative_ir.content_graph import (
-            validate_content_integrity_receipt_binding,
-        )
-
-        route_receipt = GenerationRouteReceiptV1.model_validate(route)
-        raw_receipt = operation.result.get("contentIntegrityReceipt")
-        authority = _checkpoint_content_graph_authority(operation)
-        if (
-            operation.expected_revision is None
-            or operation.result_revision is None
-        ):
-            raise ValueError("content_integrity_binding_unavailable")
-        validate_content_integrity_receipt_binding(
-            raw_receipt,
-            operation_id=operation.id,
-            source_revision=int(operation.expected_revision),
-            result_revision=int(operation.result_revision),
-            generation_lane=str(authority["generationLane"]),
-            content_graph_digest=str(authority["contentGraphDigest"]),
-            route_strategy_receipt_digest=route_receipt.receipt_digest,
-            attempt_binding_digest=str(authority["attemptBindingDigest"]),
-            narrative_digest=authority["narrativeDigest"],
-            preserve_source_input_digest=authority["preserveSourceInputDigest"],
-            provider_call_budget_digest=str(authority["providerCallBudgetDigest"]),
-        )
-    except Exception as error:
-        raise _public_error(409, "content_integrity_receipt_required") from error
+    # A source-native revision was an authored deck. Its content-integrity
+    # seal was validated by the narrative IR package, removed with authored
+    # generation (P3 B4c), and its deck can no longer be exported.
+    raise _public_error(409, "content_integrity_receipt_required")
 
 
 def _translate_admission(error: PublicAdmissionRejected) -> PublicV2OrchestrationError:
@@ -894,25 +783,11 @@ class SqlPublicV2Orchestrator:
                 seal_generation_strategy_decision,
                 server_owned_requirement_graph,
             )
-            from services.authored_vnext.deck_ir.integration import (
-                deck_ir_execution_adapter_configured,
-                ensure_product_deck_ir_execution_adapter,
-            )
-
-            ensure_product_deck_ir_execution_adapter(
-                explicit=effective_generation_engine == "deck-ir"
-            )
+            # The Deck IR execution adapter was removed with authored
+            # generation (P3 B4c), so no engine capability is available.
             strategy_preflight = capability_preflight(
                 request=internal_request,
-                available_capabilities=(
-                    (
-                        "structured-deck-ir",
-                        "constraint-compiler",
-                        "fidelity-html-semantic",
-                    )
-                    if deck_ir_execution_adapter_configured()
-                    else ()
-                ),
+                available_capabilities=(),
             )
             pin_source_restyle_authoring(internal_request)
             if resolve_generation_strategy(internal_request) == "svg" and internal_request.source_mode in {
@@ -2230,47 +2105,6 @@ class SqlPublicV2Orchestrator:
                     )
                     or None
                 )
-                raw_content_integrity = operation.result.get(
-                    "contentIntegrityReceipt"
-                )
-                if isinstance(raw_content_integrity, Mapping):
-                    try:
-                        from services.authored_vnext.narrative_ir.content_graph import (
-                            validate_content_integrity_receipt_binding,
-                        )
-
-                        if (
-                            generation_route_receipt is None
-                            or generation_route_receipt.selected_route != "source-native"
-                            or operation.expected_revision is None
-                            or operation.result_revision is None
-                        ):
-                            raise ValueError("content_integrity_binding_unavailable")
-                        authority = _checkpoint_content_graph_authority(operation)
-                        validate_content_integrity_receipt_binding(
-                            raw_content_integrity,
-                            operation_id=operation.id,
-                            source_revision=int(operation.expected_revision),
-                            result_revision=int(operation.result_revision),
-                            generation_lane=str(authority["generationLane"]),
-                            content_graph_digest=str(authority["contentGraphDigest"]),
-                            route_strategy_receipt_digest=(
-                                generation_route_receipt.receipt_digest
-                            ),
-                            attempt_binding_digest=str(
-                                authority["attemptBindingDigest"]
-                            ),
-                            narrative_digest=authority["narrativeDigest"],
-                            preserve_source_input_digest=authority[
-                                "preserveSourceInputDigest"
-                            ],
-                            provider_call_budget_digest=str(
-                                authority["providerCallBudgetDigest"]
-                            ),
-                        )
-                        content_integrity_receipt = dict(raw_content_integrity)
-                    except Exception:
-                        content_integrity_receipt = None
             raw_quality = operation.result.get("quality_receipt") or operation.result.get(
                 "qualityReceipt"
             )

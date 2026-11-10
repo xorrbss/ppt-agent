@@ -13,7 +13,7 @@ from models.sql.async_presentation_generation_status import (
     AsyncPresentationGenerationTaskModel,
 )
 from models.sql.presentation_generation_job import PresentationGenerationJob
-from services import authored_checkpoint_service as checkpoints
+from services import authored_checkpoint_artifacts as checkpoints
 from services import checkpoint_artifact_sweep
 from services import presentation_generation_job_service as jobs
 
@@ -339,11 +339,11 @@ def test_periodic_sweep_is_interval_gated(monkeypatch):
         )
         monkeypatch.setenv("AUTHORED_CHECKPOINT_SWEEP_INTERVAL_SECONDS", "100")
 
-        assert await checkpoints.maybe_sweep_expired_checkpoint_artifacts() == {
+        assert await checkpoint_artifact_sweep.maybe_sweep_expired_checkpoint_artifacts() == {
             "deleted_terminal": 1
         }
-        assert await checkpoints.maybe_sweep_expired_checkpoint_artifacts() is None
-        assert await checkpoints.maybe_sweep_expired_checkpoint_artifacts() == {
+        assert await checkpoint_artifact_sweep.maybe_sweep_expired_checkpoint_artifacts() is None
+        assert await checkpoint_artifact_sweep.maybe_sweep_expired_checkpoint_artifacts() == {
             "deleted_terminal": 2
         }
 
@@ -380,10 +380,10 @@ def test_orphan_evidence_is_retained_until_explicit_seal(tmp_path, monkeypatch):
     (orphan / "slide-0.png").write_bytes(b"png")
     (orphan / ".slide-0.png.evidence.json").write_text("{}", encoding="utf-8")
 
-    assert checkpoints._artifacts._has_unsealed_evidence(orphan)
+    assert checkpoints._has_unsealed_evidence(orphan)
     checkpoints.mark_checkpoint_artifacts_sealed(uuid.UUID(orphan.name))
     assert (orphan / ".sealed").read_text(encoding="utf-8").startswith("authored-checkpoint-sealed")
-    assert not checkpoints._artifacts._has_unsealed_evidence(orphan)
+    assert not checkpoints._has_unsealed_evidence(orphan)
 
 
 def test_dispatch_continues_when_artifact_sweep_fails(tmp_path, monkeypatch):

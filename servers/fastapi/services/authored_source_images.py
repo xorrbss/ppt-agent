@@ -31,8 +31,8 @@ from services.source_images.registry import (
 from services.source_images.selection import assign_source_image_groups, select_source_images
 from utils.authored_image_slots import source_slot_id_for_asset
 from utils.get_env import is_authored_source_images_enabled
-from services.generation_core.authoring.author_slide import (
-    EXACT_RECONSTRUCTION,
+from utils.llm_calls.author_slide_effort import EXACT_RECONSTRUCTION
+from utils.llm_calls.author_slide_options import (
     STYLE_REFERENCE,
     normalize_reference_mode,
 )

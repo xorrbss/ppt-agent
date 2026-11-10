@@ -1,12 +1,9 @@
 from __future__ import annotations
 
-from tests.support.existing_authored_rows import add_existing_authored_presentation
-import asyncio
 import uuid
 
 import pytest
 from pydantic import ValidationError
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from models.authored_vnext.semantic.contracts import (
     ArtifactPointerV1,
@@ -19,14 +16,6 @@ from models.authored_vnext.semantic.contracts import (
     ShapePayloadV1,
     TablePayloadV1,
 )
-from models.sql.authored_semantic_bundle import (
-    AuthoredDeckEmissionActivePointer,
-    AuthoredDeckEmissionManifestRecord,
-    AuthoredEmissionBundleRecord,
-    AuthoredSemanticArtifact,
-)
-from models.sql.presentation import PresentationModel
-from models.sql.slide import SlideModel
 from services.authored_vnext.semantic.canonical import (
     SemanticContractError,
     bytes_digest,
@@ -35,13 +24,6 @@ from services.authored_vnext.semantic.canonical import (
     seal_font_manifest,
     seal_identity_registry,
     validate_and_seal_candidate,
-)
-from services.authored_vnext.semantic.publication import (
-    publish_authored_semantic_bundle_graph,
-)
-from services.authored_vnext.semantic.query import (
-    get_active_authored_emission,
-    get_workbench_capability_projection,
 )
 
 
@@ -170,157 +152,3 @@ def test_native_table_seed_contract_is_first_class_and_strict() -> None:
     assert legacy_source.elements[0].source_ref == _digest("legacy-table")
 
 
-def test_atomic_degraded_graph_publish_and_legacy_compatible_read() -> None:
-    asyncio.run(_exercise_atomic_degraded_graph_publish())
-
-
-async def _exercise_atomic_degraded_graph_publish() -> None:
-    engine = create_async_engine("sqlite+aiosqlite:///:memory:")
-    tables = [
-        PresentationModel.__table__,
-        AuthoredSemanticArtifact.__table__,
-        AuthoredEmissionBundleRecord.__table__,
-        AuthoredDeckEmissionManifestRecord.__table__,
-        AuthoredDeckEmissionActivePointer.__table__,
-    ]
-    async with engine.begin() as connection:
-        for table in tables:
-            await connection.run_sync(table.create)
-    sessions = async_sessionmaker(engine, expire_on_commit=False)
-    owner_id = uuid.uuid4()
-    presentation_id = uuid.uuid4()
-    async with sessions() as session:
-        await add_existing_authored_presentation(session, 
-            PresentationModel(
-                id=presentation_id,
-                owner_id=owner_id,
-                content="semantic contract",
-                n_slides=1,
-                language="ko",
-                mode="authored",
-            )
-        )
-        await session.commit()
-        legacy = await get_active_authored_emission(
-            session, presentation_id=presentation_id, owner_id=owner_id
-        )
-        assert legacy.canonical_mode == "legacyHtml"
-        assert legacy.manifest is None
-
-        slide = SlideModel(
-            id=uuid.uuid4(),
-            owner_id=owner_id,
-            presentation=presentation_id,
-            layout_group="authored",
-            layout="authored:content",
-            index=0,
-            content={"__authored__": True},
-            html_content='<div data-qid="shape.one"></div>',
-        )
-        operation_id = uuid.uuid4()
-        manifest = await publish_authored_semantic_bundle_graph(
-            session,
-            presentation_id=presentation_id,
-            owner_id=owner_id,
-            expected_presentation_revision=0,
-            operation_id=operation_id,
-            generation_attempt_id=uuid.uuid4(),
-            slides=[slide],
-            htmls=[slide.html_content or ""],
-            semantic_drafts=[
-                {
-                    "semanticUnavailableReceipt": {
-                        "htmlDigest": bytes_digest((slide.html_content or "").encode()),
-                        "failureCode": "authored_semantic_retry_exhausted",
-                    }
-                }
-            ],
-            master_contract_digest=_digest("master"),
-            composition_digest=_digest("composition"),
-        )
-        await session.commit()
-        assert manifest.presentation_revision == 1
-        active = await get_active_authored_emission(
-            session, presentation_id=presentation_id, owner_id=owner_id
-        )
-        assert active.canonical_mode == "bundleGraph"
-        assert active.canonical_digest == manifest.canonical_digest
-        assert len(active.bundles) == 1
-        projection = await get_workbench_capability_projection(
-            session, presentation_id=presentation_id, owner_id=owner_id
-        )
-        assert projection.degraded_fidelity_only is True
-        assert projection.fidelity.state == "ready"
-        assert projection.hybrid.text.state == "disabled"
-        assert projection.readiness.promotion_ready is False
-
-        declared_presentation_id = uuid.uuid4()
-        await add_existing_authored_presentation(session, 
-            PresentationModel(
-                id=declared_presentation_id,
-                owner_id=owner_id,
-                content="declared shape",
-                n_slides=1,
-                language="ko",
-                mode="authored",
-            )
-        )
-        await session.commit()
-        declared_slide = SlideModel(
-            id=uuid.uuid4(),
-            owner_id=owner_id,
-            presentation=declared_presentation_id,
-            layout_group="authored",
-            layout="authored:content",
-            index=0,
-            content={"__authored__": True},
-            html_content='<div data-qid="shape.one"></div>',
-        )
-        declared_html_digest = bytes_digest((declared_slide.html_content or "").encode())
-        await publish_authored_semantic_bundle_graph(
-            session,
-            presentation_id=declared_presentation_id,
-            owner_id=owner_id,
-            expected_presentation_revision=0,
-            operation_id=uuid.uuid4(),
-            generation_attempt_id=uuid.uuid4(),
-            slides=[declared_slide],
-            htmls=[declared_slide.html_content or ""],
-            semantic_drafts=[
-                {
-                    "semanticSource": {
-                        "htmlDigest": declared_html_digest,
-                        "elements": [
-                            {
-                                "kind": "shape",
-                                "elementId": "shape.one",
-                                "semanticRole": "decoration",
-                                "childIds": [],
-                                "intendedOrder": 0,
-                                "requiredFeatures": [],
-                                "payload": {
-                                    "preset": "rectangle",
-                                    "fill": "#001122",
-                                },
-                            }
-                        ],
-                        "elementIdentityRegistry": {
-                            "schemaVersion": "authored-element-identity-registry/v1",
-                            "activeQids": ["shape.one"],
-                            "retiredQids": [],
-                        },
-                    }
-                }
-            ],
-            master_contract_digest=_digest("master"),
-            composition_digest=_digest("composition"),
-        )
-        await session.commit()
-        declared_projection = await get_workbench_capability_projection(
-            session, presentation_id=declared_presentation_id, owner_id=owner_id
-        )
-        assert declared_projection.hybrid.shape.state == "ready"
-        assert declared_projection.hybrid.text.state == "shadow"
-        assert declared_projection.elements[0].editable_fields == ["fill", "stroke"]
-        assert declared_projection.readiness.promotion_ready is False
-    await engine.dispose()

@@ -1,10 +1,10 @@
 """Generation checkpoint rows that every generation driver writes.
 
 ``initialize_checkpoints``, ``fail_stage`` and ``progress_for_task`` touch only
-the checkpoint and job rows. They moved here unchanged from
-``authored_checkpoint_state`` so svg generation records page failures and
-reads progress without importing the authored HTML admission chain;
-``authored_checkpoint_state`` re-exports every name for its historical callers.
+the checkpoint and job rows. They moved here unchanged from the former
+``authored_checkpoint_state`` (removed with authored generation) so svg
+generation records page failures and reads progress without importing the
+authored HTML admission chain.
 """
 
 from __future__ import annotations

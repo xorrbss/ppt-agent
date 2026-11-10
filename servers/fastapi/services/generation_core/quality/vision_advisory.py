@@ -110,7 +110,7 @@ def _design_input_sizes(messages, schema):
 
 
 def _design_input_limits(client=None):
-    from services.generation_core.authoring.author_slide_images import (
+    from services.generation_core.authoring.reference_images import (
         REFERENCE_IMAGE_MAX_BYTES, SOURCE_IMAGE_PREVIEW_TOTAL_MAX_BYTES)
     limits = dict(maxImageBytes=REFERENCE_IMAGE_MAX_BYTES,
         maxEncodedImageBytes=SOURCE_IMAGE_PREVIEW_TOTAL_MAX_BYTES,

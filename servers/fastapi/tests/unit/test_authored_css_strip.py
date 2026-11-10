@@ -281,29 +281,6 @@ def test_empty_content_document_admits_after_stripping():
     assert admit_authored_html(stripped).source_digest.startswith("sha256:")
 
 
-def test_default_author_normalization_path_strips_empty_content(monkeypatch):
-    from services.generation_core.authoring.author_slide import validate_authored_slide_html
-
-    monkeypatch.delenv("AUTHORED_HTML_NORMALIZE_ENABLED", raising=False)
-    hostile = SAFE_HTML.replace(
-        ".card{position:absolute",
-        '.card::before{content:"";display:block}.card{position:absolute',
-    )
-    receipt = []
-
-    admitted = validate_authored_slide_html(hostile, normalization_receipt=receipt)
-
-    assert "content:" not in admitted
-    assert receipt == [
-        {
-            "rule": "css_property_stripped",
-            "property": "content",
-            "value_class": "empty",
-            "count": 1,
-        }
-    ]
-
-
 def test_admits_after_stripping_a_document_that_previously_failed_admission():
     hostile = SAFE_HTML.replace(
         "background:#2563eb;color:white;padding:12px}",

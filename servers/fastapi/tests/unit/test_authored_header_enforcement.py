@@ -16,12 +16,9 @@ from models.authored_header_contract import (
     HeaderRightSlotSpec,
     HeaderSublineSpec,
     HeaderTickSpec,
-    HeaderTitleSpec,
     default_header_contract,
 )
-from utils.authored_header_prompt import render_header_contract
 from utils.authored_header_validation import validate_header_contract
-from services.generation_core.authoring.author_slide_prompt import requirement_marker
 from utils.renderer_isolation import admit_authored_html
 
 
@@ -423,62 +420,6 @@ def _summary_contract() -> AuthoredHeaderContract:
     )
 
 
-def test_the_brief_states_the_band_derivation():
-    """The band is arithmetic the model performs, so the brief must show every term.
-
-    These are also the numbers the slides in this file are built on: a term that
-    silently changed here would leave the tests agreeing with themselves and with
-    nothing the model was ever told.
-    """
-    text = render_header_contract(_numbered_contract())
-
-    assert (
-        "Left block = the eyebrow row (18px) + 12px + (number of title lines "
-        "this slide actually renders x 45px)." in text
-    )
-    assert (
-        "Right block = the requirement chip row (rendered chip rows x 22px, "
-        "plus 6px between rows)." in text
-    )
-    assert "Band height = 32px + max(left block, right block) + 28px" in text
-    assert "clamped to 96-280px" in text
-    assert "SHORTEN THE TITLE" in text
-
-
-def test_the_brief_makes_the_slide_declare_its_band_and_mark_its_body():
-    text = render_header_contract(_numbered_contract())
-
-    assert 'data-header-band="N"' in text
-    assert 'data-header-part="body"' in text
-    assert "margin-top:20px" in text
-
-
-def test_the_brief_asks_for_one_line_whenever_the_title_fits():
-    """The line budget reads as a target unless the brief says it is a ceiling.
-
-    Observed live on a 100-slide deck: 54 of 99 headers carried a hand-written
-    line break, and 52 of those titles measured under half the title column.
-    Nothing told the model that the band it derives is charged to the slide's
-    own content, so the second line looked free.
-    """
-    text = render_header_contract(_numbered_contract())
-
-    assert "The line budget is a ceiling, never a target." in text
-    assert "is written on ONE line" in text
-    assert "never insert a manual line break" in text
-
-
-def test_a_single_line_budget_leaves_the_preference_unsaid():
-    """One allowed line already forbids the second; repeating it is noise."""
-    contract = _numbered_contract().model_copy(
-        update={"title": HeaderTitleSpec(max_lines=1)}
-    )
-    text = render_header_contract(contract)
-
-    assert "at most 1 line(s)" in text
-    assert "The line budget is a ceiling" not in text
-
-
 def test_a_one_line_title_reclaims_a_whole_title_line_from_the_band():
     contract = _numbered_contract()
     one_line = _band_px(contract, title_lines=1)
@@ -492,27 +433,6 @@ def test_a_one_line_title_reclaims_a_whole_title_line_from_the_band():
         _conforming_slide(contract, title_lines=2),
     ):
         assert validate_header_contract(html, contract, role="PILLARS") == ()
-
-
-def test_a_right_slot_taller_than_the_left_block_sizes_the_band():
-    contract = _summary_contract()
-    # Chip row + the gap the stack reuses + three note rows.
-    right_block = 22 + contract.subline_gap_px + 3 * 18
-    assert right_block > _left_block_px(contract, title_lines=1)
-
-    band = _band_px(contract, title_lines=1, right_block_px=right_block)
-    assert band == contract.header_top_px + right_block + contract.title_gap_px == 144
-    assert (
-        "+ 8px + (rendered note lines x 18px)" in render_header_contract(contract)
-    )
-    assert (
-        validate_header_contract(
-            _conforming_slide(contract, title_lines=1, right_block_px=right_block),
-            contract,
-            role="PILLARS",
-        )
-        == ()
-    )
 
 
 def test_the_floor_keeps_a_short_slide_from_collapsing_the_deck_chrome():
@@ -625,7 +545,6 @@ def test_a_slide_that_marks_no_body_root_is_reported():
     )
 
 
-
 # --- identifiers must come from the slide's own text --------------------------
 
 
@@ -687,7 +606,3 @@ def test_grounding_is_skipped_when_no_slide_text_is_supplied():
     )
 
 
-def test_the_marker_forbids_borrowing_an_identifier_from_elsewhere():
-    marker = requirement_marker(requirements_enabled=True)
-    assert "ONLY place you may take an identifier from" in marker
-    assert "Not the deck topic" in marker

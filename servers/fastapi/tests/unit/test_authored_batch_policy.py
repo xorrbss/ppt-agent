@@ -12,7 +12,6 @@ from services.authored_batch_policy import (
     plan_authored_recovery_batches,
 )
 from services.authored_provider_rate_profile import AuthoredRateProfile
-from services.generation_core.authoring.author_slide import Brand
 
 
 TOKEN = AuthoredRateProfile(
@@ -39,10 +38,6 @@ def _run(coro):
     import asyncio
 
     return asyncio.run(coro)
-
-
-def _brand() -> Brand:
-    return Brand(topic="batch", language="Korean")
 
 
 def _html(index: int) -> str:

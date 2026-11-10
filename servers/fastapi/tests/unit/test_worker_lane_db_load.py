@@ -13,18 +13,12 @@ import asyncio
 import uuid
 
 import pytest
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
-from sqlmodel import SQLModel
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from models.sql.async_presentation_generation_status import (
     AsyncPresentationGenerationTaskModel,
 )
-from models.sql.authored_slide_checkpoint import AuthoredSlideCheckpoint
 from models.sql.presentation_generation_job import PresentationGenerationJob
-from models.sql.public_admission import PublicOperationAdmission
-from models.sql.workspace import WorkspaceOperation
-from services import authored_checkpoint_service as checkpoints
 from services.authored_checkpoint_html import (
     checkpoint_stage_html,
     collapses_to_author_html,
@@ -241,37 +235,6 @@ class _CountingSession(AsyncSession):
         await super().commit()
 
 
-async def _checkpoint_database(tmp_path, monkeypatch, stats):
-    tmp_path.mkdir(parents=True, exist_ok=True)
-    engine = create_async_engine(
-        f"sqlite+aiosqlite:///{tmp_path / 'worker-lane.db'}"
-    )
-    async with engine.begin() as connection:
-        await connection.run_sync(
-            SQLModel.metadata.create_all,
-            tables=[
-                AsyncPresentationGenerationTaskModel.__table__,
-                PresentationGenerationJob.__table__,
-                AuthoredSlideCheckpoint.__table__,
-                WorkspaceOperation.__table__,
-                PublicOperationAdmission.__table__,
-            ],
-        )
-    maker = async_sessionmaker(
-        engine, class_=_CountingSession, expire_on_commit=False
-    )
-
-    def counting_maker(*args, **kwargs):
-        stats["sessions"] = stats.get("sessions", 0) + 1
-        return maker(*args, **kwargs)
-
-    monkeypatch.setattr(checkpoints, "async_session_maker", counting_maker)
-    monkeypatch.setenv(
-        "AUTHORED_CHECKPOINT_DIRECTORY", str(tmp_path / "render-artifacts")
-    )
-    return engine, maker
-
-
 async def _running_job(maker):
     status = AsyncPresentationGenerationTaskModel(
         status="running", message="generating"
@@ -291,94 +254,6 @@ async def _running_job(maker):
         session.add(job)
         await session.commit()
     return job
-
-
-async def _run_one_slide(job, *, batched: bool) -> None:
-    if batched:
-        await checkpoints.begin_author_stage(
-            job_id=job.id, slide_index=0, attempt_token="attempt", ordinal=1
-        )
-    else:
-        await checkpoints.start_stage(
-            job_id=job.id, slide_index=0, stage="author", attempt_token="attempt"
-        )
-        await checkpoints.reserve_provider_attempt(
-            job_id=job.id, slide_index=0, attempt_token="attempt", ordinal=1
-        )
-    html = "<section>slide</section>"
-    await checkpoints.complete_stage(
-        job_id=job.id,
-        slide_index=0,
-        stage="author",
-        attempt_token="attempt",
-        html=html,
-    )
-    await checkpoints.start_stage(
-        job_id=job.id, slide_index=0, stage="render", attempt_token="attempt"
-    )
-    await checkpoints.complete_stage(
-        job_id=job.id,
-        slide_index=0,
-        stage="render",
-        attempt_token="attempt",
-        html=html,
-        png=b"render-bytes",
-        browser_metrics={"visible": True},
-    )
-    await checkpoints.start_stage(
-        job_id=job.id, slide_index=0, stage="persist", attempt_token="attempt"
-    )
-    await checkpoints.complete_stage(
-        job_id=job.id, slide_index=0, stage="persist", attempt_token="attempt"
-    )
-
-
-async def _measure_slide(tmp_path, monkeypatch, *, batched: bool) -> dict[str, int]:
-    stats: dict[str, int] = {}
-    _CountingSession.stats = stats
-    _set_knob(
-        monkeypatch,
-        "AUTHORED_CHECKPOINT_BATCHING_ENABLED",
-        "true" if batched else "false",
-    )
-    engine, maker = await _checkpoint_database(tmp_path, monkeypatch, stats)
-    try:
-        job = await _running_job(maker)
-        await checkpoints.initialize_checkpoints(
-            job_id=job.id, attempt_token="attempt", roles=["content"]
-        )
-        stats["sessions"] = 0
-        stats["commits"] = 0
-        await _run_one_slide(job, batched=batched)
-        async with maker() as session:
-            checkpoint = (
-                await session.execute(
-                    select(AuthoredSlideCheckpoint).where(
-                        AuthoredSlideCheckpoint.job_id == job.id,
-                        AuthoredSlideCheckpoint.slide_index == 0,
-                    )
-                )
-            ).scalar_one()
-            assert checkpoint.render_status == "completed"
-            assert checkpoint.persist_status == "completed"
-            assert checkpoint.render_path is not None
-    finally:
-        await engine.dispose()
-    return dict(stats)
-
-
-def test_batching_reduces_commits_and_sessions_for_one_slide(tmp_path, monkeypatch):
-    unbatched = asyncio.run(
-        _measure_slide(tmp_path / "unbatched", monkeypatch, batched=False)
-    )
-    batched = asyncio.run(
-        _measure_slide(tmp_path / "batched", monkeypatch, batched=True)
-    )
-    assert batched["commits"] < unbatched["commits"]
-    assert batched["sessions"] < unbatched["sessions"]
-    # Recorded so a regression shows the direction, not just the inequality.
-    assert unbatched["commits"] == 7 and batched["commits"] == 6
-    assert unbatched["sessions"] == 9 and batched["sessions"] == 6
 
 
 # --------------------------------------------------------------------------
@@ -436,32 +311,3 @@ def test_runner_claims_on_the_next_tick_once_a_row_is_waiting():
 # --------------------------------------------------------------------------
 
 
-async def _ordinal_fence(tmp_path, monkeypatch):
-    stats: dict[str, int] = {}
-    _CountingSession.stats = stats
-    _set_knob(monkeypatch, "AUTHORED_CHECKPOINT_BATCHING_ENABLED", "true")
-    engine, maker = await _checkpoint_database(tmp_path, monkeypatch, stats)
-    try:
-        job = await _running_job(maker)
-        await checkpoints.initialize_checkpoints(
-            job_id=job.id, attempt_token="attempt", roles=["content"]
-        )
-        await checkpoints.begin_author_stage(
-            job_id=job.id, slide_index=0, attempt_token="attempt", ordinal=1
-        )
-        # Replaying the same ordinal is free; skipping one fails closed.
-        await checkpoints.begin_author_stage(
-            job_id=job.id, slide_index=0, attempt_token="attempt", ordinal=1
-        )
-        with pytest.raises(checkpoints.AuthoredStageError) as skipped:
-            await checkpoints.begin_author_stage(
-                job_id=job.id, slide_index=0, attempt_token="attempt", ordinal=3
-            )
-        return skipped.value.code
-    finally:
-        await engine.dispose()
-
-
-def test_begin_author_stage_keeps_the_provider_ordinal_fence(tmp_path, monkeypatch):
-    code = asyncio.run(_ordinal_fence(tmp_path / "ordinals", monkeypatch))
-    assert code == "authored_provider_attempt_checkpoint_conflict"

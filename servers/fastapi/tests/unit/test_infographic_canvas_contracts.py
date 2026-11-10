@@ -21,11 +21,9 @@ from models.authored_infographic_plan import (
     InfographicNode,
 )
 from utils.authored_infographic.contracts import (
-    LOW_HEIGHT_MAX_PX,
     content_bottom_px,
     slot_contract,
 )
-from utils.llm_calls.author_infographic_marker import infographic_marker
 
 BASELINE_DIR = Path(__file__).resolve().parents[1] / "fixtures" / "infographic_16x9_baseline"
 FIGURE_ARCHETYPES = tuple(a for a in ARCHETYPES if a != "none")
@@ -91,28 +89,6 @@ def _digests() -> dict[str, dict[str, str]]:
     return json.loads((BASELINE_DIR / "digests.json").read_text(encoding="utf-8"))
 
 
-@pytest.mark.parametrize("archetype", FIGURE_ARCHETYPES)
-@pytest.mark.parametrize("mode", FULL_TEXT_MODES)
-def test_16x9_marker_is_byte_identical_to_the_captured_text(archetype: str, mode: str) -> None:
-    expected = (BASELINE_DIR / full_text_name(archetype, mode)).read_bytes().decode("utf-8")
-    slide = slide_for(archetype, "hero", "rich")
-    assert infographic_marker(slide, page_number_mode=mode) == expected
-    assert (
-        infographic_marker(slide, page_number_mode=mode, canvas_height_px=720) == expected
-    )
-
-
-def test_every_16x9_marker_and_contract_matches_its_captured_digest() -> None:
-    captured = _digests()
-    cases = list(baseline_cases())
-    assert set(captured) == {key for key, *_ in cases}
-    for key, archetype, mode, weight, variant in cases:
-        slide = slide_for(archetype, weight, variant)
-        for canvas in ({}, {"canvas_height_px": 720}):
-            assert digest(infographic_marker(slide, page_number_mode=mode, **canvas)) == captured[key]["marker"], key
-            assert digest(slot_contract(slide, page_number_mode=mode, **canvas)) == captured[key]["slot_contract"], key
-
-
 @pytest.mark.parametrize(("width", "height"), OTHER_SIZES)
 def test_the_bottom_line_is_the_canvas_height_minus_the_footer_band(width: int, height: int) -> None:
     assert content_bottom_px("template", canvas_height_px=height) == height - 72
@@ -124,31 +100,6 @@ def test_the_bottom_line_is_the_canvas_height_minus_the_footer_band(width: int, 
 def test_720_high_lines_are_the_measured_ones() -> None:
     assert content_bottom_px("template") == 648
     assert content_bottom_px("none") == 688
-
-
-@pytest.mark.parametrize(("width", "height"), [s for s in OTHER_SIZES if s[1] != 720])
-@pytest.mark.parametrize("archetype", ("process", "hierarchy", "kpi", "gauge", "scene"))
-@pytest.mark.parametrize("mode", ("template", "none"))
-def test_a_non_720_contract_moves_only_the_bottom_line(
-    width: int, height: int, archetype: str, mode: str
-) -> None:
-    slide = slide_for(archetype, "standard", "plain")
-    contract = slot_contract(slide, page_number_mode=mode, canvas_height_px=height)
-    marker = infographic_marker(slide, page_number_mode=mode, canvas_height_px=height)
-    bottom = content_bottom_px(mode, canvas_height_px=height)
-    for text in (contract, marker):
-        for stale in ("y=648px", "y=688px", "is 648 minus", "is 688 minus"):
-            assert stale not in text
-        assert f"y={bottom}px" in text
-    ceiling = LOW_HEIGHT_MAX_PX.get(archetype)
-    if ceiling is None:
-        assert f"height is {bottom} minus the container's own top" in contract
-        assert "shorter than 430px" in contract
-        assert "stopped 76px above the line" in contract
-        assert "lowest text 108px above it" in contract
-    else:
-        assert f"height of exactly {ceiling}px" in contract
-        assert "the 430px floor" in contract
 
 
 @pytest.mark.parametrize(("width", "height"), [s for s in OTHER_SIZES if s[1] != 720])

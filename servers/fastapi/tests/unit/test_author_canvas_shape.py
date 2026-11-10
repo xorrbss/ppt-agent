@@ -8,28 +8,13 @@ from types import SimpleNamespace
 
 import pytest
 
-from models.authored_header_contract import default_header_contract
-from models.authored_vnext.capability_registry import prompt_capability_clause
 from services.document_canvas_generation import generation_font_floor
 from services.generation_core.drivers.svg.canvas_brief import reference_caveat
-from utils.authored_fragmentation_gate import fragmentation_prompt_clause
-from utils.authored_style_exemplars import exemplar_block
 from utils.authored_styles import resolve_authored_style
 from utils.llm_calls.author_canvas_shape import (
-    BASELINE_TOKENS,
     aspect_ratio_label,
     classify_canvas_shape,
-    composition_clause,
 )
-from utils.llm_calls.author_deck_tokens import deck_tokens_block
-from utils.llm_calls.author_prompt_profile import (
-    AUGUST,
-    CURRENT,
-    PROFILE_NAMES,
-    AuthorPromptProfile,
-    author_prompt_profile_scope,
-)
-from services.generation_core.authoring.author_slide import Brand, build_design_system
 from services.generation_core.authoring.author_slide_svg import free_composition_canvas_clause, svg_author_rules
 
 BASELINE_DIR = Path(__file__).resolve().parents[1] / "fixtures" / "prompt_16x9_baseline"
@@ -73,38 +58,13 @@ def _pinned_knobs(monkeypatch):
             monkeypatch.delenv(key, raising=False)
 
 
-def _brand() -> Brand:
-    return Brand(topic="2026 디지털 전환 전략", language="Korean", primary="#2563EB", fonts="Noto Sans KR")
-
-
 def _style(name: str):
     return None if name == "default" else resolve_authored_style(name)
-
-
-def _design(profile, style="default", mode="template", header=False, size=(1280, 720)) -> str:
-    with author_prompt_profile_scope(AuthorPromptProfile(name=profile)):
-        return build_design_system(
-            _brand(),
-            _style(style),
-            page_number_mode=mode,
-            header_contract=default_header_contract() if header else None,
-            canvas_width_px=size[0],
-            canvas_height_px=size[1],
-        )
 
 
 def _fixture(name: str) -> str:
     # Git may check .txt files out with CRLF on Windows; the prompts carry none.
     return (BASELINE_DIR / name).read_bytes().decode("utf-8").replace("\r\n", "\n")
-
-
-DESIGN_CASES = [
-    (profile, style, mode, header)
-    for profile in PROFILE_NAMES
-    for style in ("default", "cobalt-editorial")
-    for mode in MODES
-    for header in (False, True)
-]
 
 
 def _case_name(profile, style, mode, header) -> str:
@@ -142,31 +102,8 @@ def test_aspect_ratio_label(size, label):
 
 # --- 2. token coverage ------------------------------------------------------
 
-#: Which rewrite sources each profile's 16:9 text carries. ``august-0819``
-#: predates the width/overflow paragraphs, so it only carries the first five.
-EXPECTED_TOKENS = {
-    CURRENT: set(BASELINE_TOKENS),
-    AUGUST: {"single 16:9 slide", "1280x720px", "1280x720", "y=648px", "y=688px"},
-}
-
-
-def test_every_rewrite_token_is_present_in_the_profile_rules():
-    assert set(EXPECTED_TOKENS) == set(PROFILE_NAMES)
-    covered = set()
-    for profile in PROFILE_NAMES:
-        text = "".join(_design(profile, mode=mode) for mode in MODES)
-        present = {token for token in BASELINE_TOKENS if token in text}
-        assert present == EXPECTED_TOKENS[profile], profile
-        covered |= present
-    assert covered == set(BASELINE_TOKENS)
-
 
 # --- 3. 16:9 byte identity --------------------------------------------------
-
-
-@pytest.mark.parametrize(("profile", "style", "mode", "header"), DESIGN_CASES)
-def test_16x9_design_system_is_byte_identical(profile, style, mode, header):
-    assert _design(profile, style, mode, header) == _fixture(_case_name(profile, style, mode, header))
 
 
 @pytest.mark.parametrize("snapshot", [{}, {"canvas": {"width": 1280, "height": 720}}])
@@ -175,58 +112,10 @@ def test_16x9_svg_rules_are_byte_identical(snapshot):
     assert svg_author_rules(snapshot, floor) == _fixture("svg_rules.txt")
 
 
-def test_every_baseline_fixture_is_exercised():
-    names = {_case_name(*case) for case in DESIGN_CASES} | {"svg_rules.txt"}
-    assert {path.name for path in BASELINE_DIR.iterdir()} == names
-
-
 # --- 4. other canvases ------------------------------------------------------
 
 
-@pytest.mark.parametrize("size", OTHER_SIZES)
-@pytest.mark.parametrize("profile", PROFILE_NAMES)
-@pytest.mark.parametrize("header", [False, True])
-def test_non_baseline_design_system_names_only_its_canvas(size, profile, header):
-    w, h = size
-    for mode in MODES:
-        text = _design(profile, "default", mode, header, size)
-        assert "1280x720" not in text
-        # 720x1280 legitimately names its own height as 1280px in these two places.
-        own = text.replace(f"{w}x{h}px", "").replace(f"on a {h}px canvas", "")
-        assert "1280px" not in own
-        assert "1136px" not in text
-        assert f"{w}x{h}px" in text
-        bottom_line = {"template": f"y={h - 72}px", "none": f"y={h - 32}px"}.get(mode)
-        assert bottom_line is None or bottom_line in text
-        assert text.count(COMPOSITION_MARKER) == 1
-        assert composition_clause(w, h) in text
-        assert f"- {classify_canvas_shape(w, h).upper()}{COMPOSITION_MARKER}" in text
-
-
 # --- 5. portrait regression against the old table ---------------------------
-
-
-def _tail(profile) -> str:
-    if profile == AUGUST:
-        return ""
-    return (prompt_capability_clause() + fragmentation_prompt_clause()
-            + deck_tokens_block(None, _brand()) + exemplar_block(None))
-
-
-@pytest.mark.parametrize("h", [1280, 1040])
-@pytest.mark.parametrize(("profile", "mode", "header"),
-                         [(p, m, hd) for p in PROFILE_NAMES for m in MODES for hd in (False, True)])
-def test_portrait_output_matches_the_old_table_except_the_two_fixed_misses(h, profile, mode, header):
-    baseline = _fixture(_case_name(profile, "default", mode, header))
-    tail = _tail(profile)
-    assert baseline.endswith(tail)
-    old_rules = baseline[: len(baseline) - len(tail)]
-    for old, new in _old_portrait_replacements(h):
-        old_rules = old_rules.replace(old, new)
-    expected = (old_rules + _old_portrait_clause(h) + tail).replace(
-        "on a 720px canvas", f"on a {h}px canvas"
-    ).replace("1136px", "576px")
-    assert _design(profile, "default", mode, header, (720, h)) == expected
 
 
 # --- 6. svg rules -----------------------------------------------------------

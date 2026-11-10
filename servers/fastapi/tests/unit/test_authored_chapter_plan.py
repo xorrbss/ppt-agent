@@ -18,13 +18,7 @@ from models.presentation_outline_model import (
     PresentationOutlineModel,
     SlideOutlineModel,
 )
-from utils.authored_header_prompt import render_header_contract
 from utils.llm_calls.author_header_contract import coerce_header_contract
-from services.generation_core.authoring.author_slide_prompt import (
-    author_prompt,
-    chapter_marker,
-)
-from services.generation_core.authoring.author_slide import Brand
 
 
 def _outline(count: int) -> PresentationOutlineModel:
@@ -71,47 +65,7 @@ def test_the_fallback_contract_honours_the_form_the_deck_already_decided():
     )
 
 
-def test_the_deck_brief_states_the_breadcrumb_rule_only_for_a_breadcrumb_deck():
-    plain = render_header_contract(default_header_contract())
-    assert "prefix supplied" not in plain
-    breadcrumb = render_header_contract(
-        default_header_contract(chapter_breadcrumb=True)
-    )
-    assert "prefix supplied" in breadcrumb
-    assert "Copy the supplied prefix" in breadcrumb
-
-
 # --- what one slide is handed ---------------------------------------------------
-
-
-def test_a_slide_is_handed_its_prefix_verbatim():
-    marker = chapter_marker(chapter_breadcrumb=True, chapter_prefix="Ⅱ. 제안개요 > ")
-    assert '"Ⅱ. 제안개요 > "' in marker
-    assert "Never renumber it" in marker
-
-
-def test_a_front_matter_slide_is_told_it_has_no_prefix():
-    marker = chapter_marker(chapter_breadcrumb=True, chapter_prefix=None)
-    assert "none" in marker
-    assert "no chapter number" in marker
-
-
-def test_an_unchaptered_deck_reads_the_prompt_it_always_read():
-    assert chapter_marker(chapter_breadcrumb=False, chapter_prefix="Ⅱ. 개요 > ") == ""
-    brand = Brand(topic="주제", language="Korean")
-    plain = author_prompt("CONTENT", "DESIGN", brand, "PILLARS", 2, 9)
-    assert "HEADER EYEBROW PREFIX" not in plain
-    chaptered = author_prompt(
-        "CONTENT",
-        "DESIGN",
-        brand,
-        "PILLARS",
-        2,
-        9,
-        chapter_breadcrumb=True,
-        chapter_prefix="Ⅱ. 제안개요 > ",
-    )
-    assert "Ⅱ. 제안개요 > " in chaptered
 
 
 # --- reference images for the two new roles -------------------------------------
