@@ -16,7 +16,6 @@ from models.sql.async_presentation_generation_status import (
     AsyncPresentationGenerationTaskModel,
 )
 from models.sql.authored_slide_editor_event import AuthoredSlideEditorEvent
-from models.sql.authored_canonical_revision import AuthoredCanonicalRevision
 from models.sql.chat_history_message import ChatHistoryMessageModel
 from models.sql.image_asset import ImageAsset
 from models.sql.presentation_layout_code import PresentationLayoutCodeModel
@@ -81,7 +80,6 @@ _STRICT_OWNER_MODELS = (
     ReferenceSnapshot,
     AssetGatewayIdempotencyReceipt,
     PresentationExportAttempt,
-    AuthoredCanonicalRevision,
     AuthoredSlideEditorEvent,
     PublicOperationAdmission,
     PublicArtifact,
