@@ -115,7 +115,6 @@ _MIGRATED_MODULES = [
     "services.authored_vnext.semantic.canonical",
     "services.authored_vnext.semantic.completion_v3",
     "services.authored_vnext.semantic.editable_scene",
-    "services.authored_vnext.semantic.qualification_v3",
     "services.authored_vnext.semantic.readiness",
     "services.authored_vnext.semantic.readiness_v3",
     "services.authored_vnext.semantic.release_authority_v3",

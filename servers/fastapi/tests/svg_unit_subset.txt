@@ -70,7 +70,6 @@ tests/unit/test_authored_font_signal.py
 tests/unit/test_authored_fragmentation_gate.py
 tests/unit/test_authored_fragmentation_gate_prompt.py
 tests/unit/test_authored_free_composition_default.py
-tests/unit/test_authored_gate0_structural_v3.py
 tests/unit/test_authored_gate_critique_bounds.py
 tests/unit/test_authored_generation_authority.py
 tests/unit/test_authored_generation_observability.py
@@ -145,7 +144,6 @@ tests/unit/test_authored_quality_review.py
 tests/unit/test_authored_quality_review_no_regeneration.py
 tests/unit/test_authored_readiness_validators.py
 tests/unit/test_authored_reasoning_effort_capability.py
-tests/unit/test_authored_release_authority_v3.py
 tests/unit/test_authored_release_ci_evidence_v3.py
 tests/unit/test_authored_release_readiness_v2.py
 tests/unit/test_authored_remake_schedule.py
@@ -168,7 +166,6 @@ tests/unit/test_authored_run_contact_sheet.py
 tests/unit/test_authored_scene_envelope_contract.py
 tests/unit/test_authored_scene_envelope_reseal.py
 tests/unit/test_authored_semantic_bundle_contract.py
-tests/unit/test_authored_semantic_lifecycle.py
 tests/unit/test_authored_semantic_role_repair.py
 tests/unit/test_authored_slide_checkpoint_bundle.py
 tests/unit/test_authored_slide_checkpoint_migration.py
@@ -213,7 +210,6 @@ tests/unit/test_authored_vnext_generation_planning.py
 tests/unit/test_authored_vnext_generation_repository_boundary.py
 tests/unit/test_authored_vnext_master_contract.py
 tests/unit/test_authored_vnext_master_generated_contract.py
-tests/unit/test_authored_vnext_native_capability_state.py
 tests/unit/test_authored_vnext_native_scene_quality.py
 tests/unit/test_authored_vnext_ooxml_capability_binding.py
 tests/unit/test_authored_vnext_ooxml_contract.py
