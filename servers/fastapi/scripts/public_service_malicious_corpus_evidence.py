@@ -62,6 +62,11 @@ from services.isolated_worker_process import (
     worker_environment,
 )
 from services.public_worker_profiles import (
+    PUBLIC_WORKER_DISABLED_SECCOMP_PROFILES,
+    PUBLIC_WORKER_ISOLATION_REQUIREMENTS,
+    PUBLIC_WORKER_POSITIVE_LIMITS,
+    PUBLIC_WORKER_SECCOMP_PROFILE_KEY,
+    PublicWorkerProfile,
     get_public_worker_profile,
     validate_public_worker_environment,
 )
@@ -107,6 +112,7 @@ RENDERER_SECURITY_PRODUCER_FILES = (
 SECURITY_SOURCE_FILES = (
     "servers/fastapi/services/isolated_worker_contracts.py",
     "servers/fastapi/services/isolated_worker_process.py",
+    "servers/fastapi/services/public_worker_profiles.py",
     "servers/fastapi/services/artifact_store.py",
     "servers/fastapi/workers/public_worker_runtime.py",
     "servers/fastapi/workers/public_render_worker.py",
@@ -856,7 +862,7 @@ def _capability_checks(signing_key: bytes) -> list[dict[str, Any]]:
     return observations
 
 
-def _worker_boundary_checks(source_environment: dict[str, str]) -> dict[str, bool]:
+def _worker_boundary_checks(source_environment: dict[str, str]) -> dict[str, Any]:
     filtered = worker_environment("render", source_environment)
     forbidden_markers = (
         "API_KEY",
@@ -877,26 +883,91 @@ def _worker_boundary_checks(source_environment: dict[str, str]) -> dict[str, boo
     except IsolatedWorkerProcessError:
         missing_attestation_rejected = True
     profile = get_public_worker_profile("render")
-    isolated_environment = {
-        "PPT_WORKER_NETWORK_MODE": "none",
-        "PPT_WORKER_ROOT_FILESYSTEM": "read-only",
-        "PPT_WORKER_SCRATCH": "tmpfs",
-        "PPT_WORKER_RUN_AS_NON_ROOT": "true",
-        "PPT_WORKER_MEMORY_LIMIT_BYTES": "1073741824",
-        "PPT_WORKER_CPU_MILLIS": "1000",
-        "PPT_WORKER_PID_LIMIT": "64",
-        "PPT_WORKER_OPEN_FILE_LIMIT": "256",
-        "PPT_WORKER_OUTPUT_LIMIT_BYTES": "268435456",
-        "PPT_WORKER_WALL_CLOCK_SECONDS": "180",
-        "PPT_WORKER_REPLICAS": "1",
-    }
-    validate_public_worker_environment(profile, isolated_environment)
+    contract_observations = [
+        _isolation_contract_probe(get_public_worker_profile(role))
+        for role in ("render", "export")
+    ]
     return {
         "sessionlessEnvironmentAllowlistVerified": sessionless,
         "missingIsolationAttestationRejected": missing_attestation_rejected,
         "renderProfileNetworkModeNone": profile.network_mode == "none",
         "renderProfileNoCanonicalDatabase": not profile.canonical_database_access,
-        "renderProfileResourceContractVerified": True,
+        "renderProfileResourceContractVerified": all(
+            observation["pass"] for observation in contract_observations
+        ),
+        "isolationContractObservations": contract_observations,
+    }
+
+
+def _isolation_contract_probe(profile: PublicWorkerProfile) -> dict[str, Any]:
+    """Probe the launch-time validator against its own isolation contract.
+
+    The declaration is built from the contract the validator enforces, so the
+    probe cannot drift from it. It checks validator behaviour only: a complete
+    declaration is admitted, and dropping or disabling any single control is
+    refused with that control's code. It does not observe that an OS sandbox
+    enforces the declared values; the network-none observation does that.
+    """
+
+    declared_seccomp_profile = "isolation-contract-probe"
+    complete = {
+        **PUBLIC_WORKER_ISOLATION_REQUIREMENTS,
+        PUBLIC_WORKER_SECCOMP_PROFILE_KEY: declared_seccomp_profile,
+        **{key: "1" for key in PUBLIC_WORKER_POSITIVE_LIMITS},
+    }
+
+    def refusal(environment: dict[str, str]) -> str | None:
+        try:
+            validate_public_worker_environment(profile, environment)
+        except RuntimeError as error:
+            return str(error)
+        return None
+
+    complete_refusal = refusal(complete)
+    expected_refusals: list[tuple[str, dict[str, str], str]] = []
+    for key in PUBLIC_WORKER_ISOLATION_REQUIREMENTS:
+        expected_refusals.append(
+            (
+                f"missing:{key}",
+                {name: value for name, value in complete.items() if name != key},
+                f"public_worker.isolation_requirement_missing:{key}",
+            )
+        )
+    for disabled in sorted(PUBLIC_WORKER_DISABLED_SECCOMP_PROFILES):
+        expected_refusals.append(
+            (
+                f"seccomp:{disabled or '<empty>'}",
+                {**complete, PUBLIC_WORKER_SECCOMP_PROFILE_KEY: disabled},
+                "public_worker.isolation_requirement_missing:"
+                f"{PUBLIC_WORKER_SECCOMP_PROFILE_KEY}",
+            )
+        )
+    for key in PUBLIC_WORKER_POSITIVE_LIMITS:
+        expected_refusals.append(
+            (
+                f"limit-zero:{key}",
+                {**complete, key: "0"},
+                f"public_worker.resource_limit_invalid:{key}",
+            )
+        )
+    cases = []
+    for case_id, environment, expected in expected_refusals:
+        observed = refusal(environment)
+        cases.append(
+            {
+                "caseId": case_id,
+                "expectedErrorCode": expected,
+                "observedErrorCode": observed,
+                "pass": observed == expected,
+            }
+        )
+    return {
+        "role": profile.role,
+        "requiredIsolationControls": list(profile.required_isolation_controls),
+        "completeDeclarationAdmitted": complete_refusal is None,
+        "completeDeclarationRefusal": complete_refusal,
+        "refusalCases": cases,
+        "pass": complete_refusal is None and all(case["pass"] for case in cases),
     }
 
 
