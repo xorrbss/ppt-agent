@@ -23,8 +23,8 @@ are stale and must be re-located. Decision record:
 |---|---|
 | P0 decision record | Done (this document and the spec-memory record) |
 | P1 stop new authored generation | Done (merged 2026-11-10) |
-| P2 existing decks (option A) | In progress |
-| P3 authored-only code | Not started |
+| P2 existing decks (option A) | Done (merged 2026-11-10): authored rows resolve to `unsupported_presentation_driver` |
+| P3 authored-only code | In progress |
 | P4 database | Not started |
 | P5 docs and guards | Not started (CLAUDE.md records the decision only) |
 
