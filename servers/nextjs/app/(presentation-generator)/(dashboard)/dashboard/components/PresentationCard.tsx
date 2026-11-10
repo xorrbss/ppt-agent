@@ -28,6 +28,7 @@ import { ReviewRequiredCardBadge } from "./ReviewRequiredCardBadge";
 import { getPresentationDisplayTitle } from "@/lib/presentation-display";
 import { tryResolveServerIssuedPresentationProfile } from "@/lib/presentation-profile";
 import { formatViewerDate } from "@/i18n/viewer-time";
+import { isUnsupportedPresentationListItem } from "@/lib/unsupported-presentation";
 
 export const PresentationCard = ({
   id,
@@ -51,6 +52,12 @@ export const PresentationCard = ({
   const [isDeleting, setIsDeleting] = React.useState(false);
   const presentationRuntime = tryResolveServerIssuedPresentationProfile(presentation);
   const presentationDriverId = presentationRuntime?.profile.driver_id ?? null;
+  // A deck made with a removed generation mode (Template V2, authored) is
+  // listed as an unsupported row: no preview, no open, no share; delete stays.
+  const isUnsupported = isUnsupportedPresentationListItem(
+    presentation,
+    presentationRuntime !== null,
+  );
 
   const deleteDialogCancelRef = useRef<HTMLButtonElement>(null);
   const deleteDialogRef = useRef<HTMLDivElement>(null);
@@ -60,7 +67,7 @@ export const PresentationCard = ({
 
   const handlePreview = () => {
     if (showDeleteDialog || showShareDialog) return;
-    if (!presentationDriverId) {
+    if (isUnsupported || !presentationDriverId) {
       notify.error(t("unsupportedProfile"));
       return;
     }
@@ -162,14 +169,23 @@ export const PresentationCard = ({
         
         <div className="scale-[0.85] my-3 border border-zinc-200 rounded-md overflow-hidden shadow-sm">
 
-          <DeferredSlideThumbnail
-            slide={firstSlide}
-            theme={presentation?.theme}
-            presentationId={id}
-            thumbnailUrl={presentation?.thumbnail_url}
-            coverVersion={presentation?.updated_at}
-            loadCover={!Array.isArray(presentation?.slides)}
-          />
+          {isUnsupported ? (
+            <div
+              className="flex aspect-video w-full items-center justify-center bg-zinc-100 text-xs text-zinc-500"
+              data-testid="unsupported-presentation-thumbnail"
+            >
+              {t("unsupportedPresentationThumbnail")}
+            </div>
+          ) : (
+            <DeferredSlideThumbnail
+              slide={firstSlide}
+              theme={presentation?.theme}
+              presentationId={id}
+              thumbnailUrl={presentation?.thumbnail_url}
+              coverVersion={presentation?.updated_at}
+              loadCover={!Array.isArray(presentation?.slides)}
+            />
+          )}
         </div>
 
         <div className="w-full px-4 py-4 mt-auto z-40 relative bg-white border-t border-zinc-200/70">
@@ -181,7 +197,16 @@ export const PresentationCard = ({
               <p className="text-zinc-400 text-xs font-syne">
                 {formatViewerDate(presentation?.created_at, locale)}
               </p>
-              <ReviewRequiredCardBadge theme={presentation?.theme} />
+              {isUnsupported ? (
+                <p
+                  className="text-xs font-medium text-amber-700"
+                  data-testid="unsupported-presentation-badge"
+                >
+                  {t("unsupportedPresentationBadge")}
+                </p>
+              ) : (
+                <ReviewRequiredCardBadge theme={presentation?.theme} />
+              )}
 
             </div>
             <Popover>
@@ -200,18 +225,20 @@ export const PresentationCard = ({
                 <EllipsisVertical className="h-5 w-5 text-gray-500" />
               </PopoverTrigger>
               <PopoverContent align="end" className="w-[200px] rounded-xl border-zinc-200 bg-white p-1.5 shadow-lg">
-                <button
-                  type="button"
-                  className="flex w-full items-center justify-between px-2 py-1 hover:bg-gray-100"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    setShowShareDialog(true);
-                  }}
-                >
-                  <p>공유</p>
-                  <Share2 className="h-4 w-4 text-brand" />
-                </button>
+                {!isUnsupported && (
+                  <button
+                    type="button"
+                    className="flex w-full items-center justify-between px-2 py-1 hover:bg-gray-100"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      setShowShareDialog(true);
+                    }}
+                  >
+                    <p>공유</p>
+                    <Share2 className="h-4 w-4 text-brand" />
+                  </button>
+                )}
                 <button
                   type="button"
                   className="flex items-center justify-between w-full px-2 py-1 hover:bg-gray-100"
@@ -294,12 +321,14 @@ export const PresentationCard = ({
           </div>
         </div>
       )}
-      <SharePopover
-        presentationId={id}
-        title={title}
-        open={showShareDialog}
-        onOpenChange={setShowShareDialog}
-      />
+      {!isUnsupported && (
+        <SharePopover
+          presentationId={id}
+          title={title}
+          open={showShareDialog}
+          onOpenChange={setShowShareDialog}
+        />
+      )}
     </Card>
   );
 };

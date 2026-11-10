@@ -1367,9 +1367,14 @@
     "codexSessionExpiredDescription": "세션을 자동으로 갱신하지 못했습니다. 설정에서 ChatGPT 연결을 갱신한 뒤 다시 시도해 주세요."
   },
   "community": {
-    "unsupportedProfile": "Unsupported presentation profile",
+    "unsupportedPresentationThumbnail": "미리보기 없음",
+    "unsupportedPresentationDashboard": "대시보드로 이동",
+    "unsupportedPresentationDescription": "제거된 생성 방식으로 만든 발표자료입니다. 대시보드에서 삭제할 수 있습니다.",
+    "unsupportedPresentationTitle": "이 발표자료는 더 이상 열 수 없습니다",
+    "unsupportedPresentationBadge": "더 이상 열 수 없음",
+    "unsupportedProfile": "제거된 생성 방식으로 만든 발표자료라 더 이상 열 수 없습니다. 삭제할 수 있습니다.",
     "presentationEditor": "Presentation editor",
-    "unsupportedTemplateFormat": "지원이 종료된 템플릿 형식입니다",
+    "unsupportedTemplateFormat": "제거된 생성 방식으로 만든 발표자료라 더 이상 열 수 없습니다. 대시보드에서 삭제할 수 있습니다.",
     "loadFailureTitle": "Something went wrong",
     "loadFailureDescription": "The presentation could not be loaded. Try again.",
     "refreshPage": "Refresh page",
