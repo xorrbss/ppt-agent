@@ -14,34 +14,49 @@ test("public export admission creates one durable operation identity", () => {
     id: PRESENTATION_ID,
     format: "pptx",
     expectedPresentationRevision: 7,
-    pptxMode: "hybrid",
-    fontEmbedding: true,
   });
   const duplicate = parsePublicExportAdmission({
     id: PRESENTATION_ID,
     format: "pptx",
     expectedPresentationRevision: 7,
-    pptxMode: "hybrid",
-    fontEmbedding: true,
+    pptxMode: "fidelity",
   });
 
   assert.equal(first.commandType, "export.pptx");
   assert.equal(first.idempotencyKey, duplicate.idempotencyKey);
-  assert.deepEqual(first.context, {
-    pptx_mode: "hybrid",
-    font_embedding: true,
-  });
+  // Only the format selects the export; an omitted font option is left to the
+  // backend's language-aware default.
+  assert.deepEqual(first.context, {});
 });
 
-test("public export admission preserves an omitted font option for backend defaults", () => {
+test("public export admission forwards an explicit font embedding opt-out", () => {
   const admission = parsePublicExportAdmission({
     id: PRESENTATION_ID,
     format: "pptx",
     expectedPresentationRevision: 7,
-    pptxMode: "hybrid",
+    fontEmbedding: false,
   });
 
-  assert.deepEqual(admission.context, { pptx_mode: "hybrid" });
+  assert.deepEqual(admission.context, { font_embedding: false });
+});
+
+test("public export admission rejects the removed Hybrid mode and its font embedding", () => {
+  for (const removed of [
+    { pptxMode: "hybrid" },
+    { pptxMode: "editable" },
+    { fontEmbedding: true },
+  ]) {
+    assert.throws(
+      () =>
+        parsePublicExportAdmission({
+          id: PRESENTATION_ID,
+          format: "pptx",
+          expectedPresentationRevision: 7,
+          ...removed,
+        }),
+      PublicExportAdmissionError,
+    );
+  }
 });
 
 test("public export admission rejects client-owned identity, paths, and sessions", () => {

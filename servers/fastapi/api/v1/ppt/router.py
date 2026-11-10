@@ -2,7 +2,7 @@ from api.feature_module_registry import FeatureModule, compose_static_feature_mo
 
 from api.v1.ppt.endpoints.presentation_crud import PRESENTATION_CRUD_ROUTER
 from api.v1.ppt.endpoints.presentation_generate import PRESENTATION_GENERATE_ROUTER
-from api.v1.ppt.endpoints.authored_operations import AUTHORED_OPERATIONS_ROUTER
+from api.v1.ppt.endpoints.presentation_page_operations import PRESENTATION_PAGE_OPERATIONS_ROUTER
 from api.v1.ppt.endpoints.presentation_blank import PRESENTATION_BLANK_ROUTER
 from api.v1.ppt.endpoints.presentation_versions import PRESENTATION_VERSION_ROUTER
 from api.v1.ppt.endpoints.presentation_share import PRESENTATION_SHARE_ROUTER
@@ -31,18 +31,6 @@ from api.v1.ppt.endpoints.authored import AUTHORED_ROUTER
 from api.v1.ppt.endpoints.authored_vnext.master import (
     AUTHORED_VNEXT_MASTER_ROUTER,
 )
-from api.v1.ppt.endpoints.authored_vnext.export import (
-    AUTHORED_VNEXT_EXPORT_ROUTER,
-)
-from api.v1.ppt.endpoints.authored_vnext.generation import (
-    AUTHORED_VNEXT_GENERATION_ROUTER,
-)
-from api.v1.ppt.endpoints.authored_vnext.package import (
-    AUTHORED_VNEXT_PACKAGE_ROUTER,
-)
-from api.v1.ppt.endpoints.authored_vnext.semantic import (
-    AUTHORED_SEMANTIC_ROUTER,
-)
 from api.v1.ppt.endpoints.workspace import WORKSPACE_ROUTER
 from api.v1.ppt.endpoints.conversations import CONVERSATION_ROUTER
 from api.v1.ppt.endpoints.compatibility_migration import (
@@ -66,7 +54,7 @@ PPT_FEATURE_MODULES = (
     FeatureModule("outlines", OUTLINES_ROUTER, frozenset({"ppt-api"})),
     FeatureModule("presentation-crud", PRESENTATION_CRUD_ROUTER, frozenset({"ppt-api", "presentation"})),
     FeatureModule("presentation-generate", PRESENTATION_GENERATE_ROUTER, frozenset({"ppt-api", "presentation"})),
-    FeatureModule("authored-operations", AUTHORED_OPERATIONS_ROUTER, frozenset({"ppt-api", "presentation"})),
+    FeatureModule("presentation-page-operations", PRESENTATION_PAGE_OPERATIONS_ROUTER, frozenset({"ppt-api", "presentation"})),
     FeatureModule("presentation-blank", PRESENTATION_BLANK_ROUTER, frozenset({"ppt-api", "presentation"})),
     FeatureModule("presentation-versions", PRESENTATION_VERSION_ROUTER, frozenset({"ppt-api", "presentation"})),
     FeatureModule(
@@ -95,26 +83,6 @@ PPT_FEATURE_MODULES = (
         "authored-vnext-master",
         AUTHORED_VNEXT_MASTER_ROUTER,
         frozenset({"ppt-api", "presentation"}),
-    ),
-    FeatureModule(
-        "authored-vnext-export",
-        AUTHORED_VNEXT_EXPORT_ROUTER,
-        frozenset({"ppt-api", "presentation", "export"}),
-    ),
-    FeatureModule(
-        "authored-vnext-generation",
-        AUTHORED_VNEXT_GENERATION_ROUTER,
-        frozenset({"ppt-api", "presentation", "export"}),
-    ),
-    FeatureModule(
-        "authored-vnext-package",
-        AUTHORED_VNEXT_PACKAGE_ROUTER,
-        frozenset({"ppt-api", "presentation", "export"}),
-    ),
-    FeatureModule(
-        "authored-semantic-emission",
-        AUTHORED_SEMANTIC_ROUTER,
-        frozenset({"ppt-api", "presentation", "export"}),
     ),
     FeatureModule("workspace", WORKSPACE_ROUTER, frozenset({"ppt-api", "workspace"})),
     FeatureModule("conversations", CONVERSATION_ROUTER, frozenset({"ppt-api", "workspace"})),

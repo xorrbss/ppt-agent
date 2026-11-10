@@ -127,12 +127,6 @@ def chat_turn_result_payload(turn: ChatTurnResult | AgentRunResult, replacements
             }
             for summary in turn.tool_summaries
         ]
-    # The turn answered but could not act: the page is model-authored HTML the
-    # chat tools cannot rebuild.  Naming the page turns a reply that merely
-    # describes the remake flow into one the client can offer.  The key is
-    # absent when nothing was refused, so existing readers see no change.
-    if turn.page_remake_slide_index is not None:
-        payload["page_remake_slide_index"] = turn.page_remake_slide_index
     return payload
 
 

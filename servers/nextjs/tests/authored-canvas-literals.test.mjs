@@ -19,8 +19,6 @@ const EXEMPT = new Map([
   ["app/(presentation-generator)/upload/utils/autoCanvas.ts", "picker row geometry table"],
   // Static fixtures for the OOXML vNext contract tests.
   ["lib/ooxml-vnext/fixtures/demo-contract.ts", "test fixture"],
-  // Upper bounds on point-valued paragraph metrics, unrelated to the canvas.
-  ["lib/authored-hybrid/native-table.ts", "pt metric upper bound"],
 ]);
 
 const SOURCE_ROOTS = ["app", "components", "lib", "store", "utils"];

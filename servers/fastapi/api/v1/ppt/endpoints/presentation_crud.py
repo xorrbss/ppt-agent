@@ -7,7 +7,7 @@ operations on a PresentationModel (no generation or export pipeline).
 import uuid
 from typing import Annotated, List, Literal, Optional
 
-from fastapi import APIRouter, Body, Depends, Header, HTTPException, Query, Request, Response
+from fastapi import APIRouter, Body, Depends, Header, HTTPException, Query, Request
 from sqlalchemy import func, or_
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -64,11 +64,6 @@ from services.presentation_access_service import (
     require_supported_live_presentation,
 )
 from models.presentation_profiles import PresentationProfileError, resolve_presentation_driver
-from services.presentation_export_projection import (
-    PRESENTATION_EXPORT_PROJECTION,
-    PRESENTATION_EXPORT_PROJECTION_HEADER,
-    project_presentation_for_export,
-)
 from services.references import (
     ReferenceProviderError,
     admit_reference_snapshots,
@@ -270,28 +265,6 @@ async def get_presentation(
     presentation = await _get_presentation_with_slides(id, sql_session)
     require_canvas_capability(presentation.theme, canvas_contracts)
     return presentation
-
-
-@PRESENTATION_CRUD_ROUTER.get(
-    "/{id}/export-projection",
-    response_model=PresentationWithSlides,
-)
-async def get_presentation_export_projection(
-    id: uuid.UUID,
-    response: Response,
-    sql_session: AsyncSession = Depends(get_async_session),
-    canvas_contracts: Annotated[Optional[str], Header(alias=DOCUMENT_CANVAS_CONTRACTS_HEADER)] = None,
-):
-    from services.document_canvas import require_canvas_capability
-
-    presentation = await _get_presentation_with_slides(id, sql_session)
-    require_canvas_capability(presentation.theme, canvas_contracts)
-    response.headers[PRESENTATION_EXPORT_PROJECTION_HEADER] = (
-        PRESENTATION_EXPORT_PROJECTION
-    )
-    return project_presentation_for_export(
-        presentation.model_dump(mode="json")
-    )
 
 
 @PRESENTATION_CRUD_ROUTER.get(

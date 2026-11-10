@@ -14,7 +14,6 @@ const auditedFiles = [
   "app/global-error.tsx",
   "app/error.tsx",
   "app/ConfigurationInitializer.tsx",
-  "app/(export)/pdf-maker/page.tsx",
   "app/(presentation-generator)/(dashboard)/admin/AdminPanel.tsx",
   "app/(presentation-generator)/(dashboard)/settings/UserAccountSettings.tsx",
   "app/(presentation-generator)/(dashboard)/dashboard/components/SharePopover.tsx",

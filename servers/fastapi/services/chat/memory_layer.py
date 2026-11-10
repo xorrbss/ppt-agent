@@ -11,8 +11,6 @@ from sqlmodel import select
 
 from utils.owner_context import get_current_owner_id, get_current_owner_is_admin
 from constants.presentation import (
-    AUTHORED_SLIDE_CHAT_EDIT_REFUSAL,
-    AUTHORED_SLIDE_CHAT_EDIT_REFUSAL_CODE,
     MAX_NUMBER_OF_SLIDES,
 )
 from models.image_prompt import ImagePrompt
@@ -501,20 +499,6 @@ class PresentationChatMemoryLayer:
                 "validation_errors": [],
             }
 
-        # Check the target before layout resolution.  An authored deck has no
-        # layout catalogue, so the lookup below would reject the call as an
-        # unknown layout - a reason that sends the model looking for a different
-        # layout instead of telling it this page needs the remake flow.
-        if replace_old_slide_at_index:
-            target = slide_at_index(await self._owned_slides(), max(0, index))
-            if target is not None and target.is_authored():
-                return {
-                    "saved": False,
-                    "message": AUTHORED_SLIDE_CHAT_EDIT_REFUSAL,
-                    "validation_errors": [AUTHORED_SLIDE_CHAT_EDIT_REFUSAL_CODE],
-                    "index": max(0, index),
-                }
-
         layout = await self._get_layout_by_id(layout_id, presentation=presentation)
         if not layout:
             return {
@@ -706,14 +690,6 @@ class PresentationChatMemoryLayer:
                 "message": f"No slide found at index {target_index}.",
                 "index": target_index,
             }
-        if slide.is_authored():
-            return {
-                "deleted": False,
-                "message": AUTHORED_SLIDE_CHAT_EDIT_REFUSAL,
-                "validation_errors": [AUTHORED_SLIDE_CHAT_EDIT_REFUSAL_CODE],
-                "index": target_index,
-            }
-
         slides = await self._owned_slides()
         shifted_count = 0
         try:

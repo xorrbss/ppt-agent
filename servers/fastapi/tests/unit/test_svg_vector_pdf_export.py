@@ -157,7 +157,7 @@ def _draw(payload, index, canvas):
 def _raster_baseline(tmp_path, canvas, svgs):
     """The pre-change path: screenshot every wrapper, composite PNGs to PDF."""
     from utils.slide_capture import _render_admitted_htmls_over_pipe
-    from workers.public_export_worker import _build_pdf
+    from tests.support.raster_pdf_baseline import build_raster_pdf
 
     wrappers = _slide_wrappers(svgs, [None] * len(svgs), canvas)
     rendered = _render_admitted_htmls_over_pipe(
@@ -167,7 +167,7 @@ def _raster_baseline(tmp_path, canvas, svgs):
     refs = [store.put(png, operation_id=operation_id, kind="slide-png", media_type="image/png")
             for png, _ in rendered]
     target = tmp_path / "raster.pdf"
-    _build_pdf(refs, store, target, canvas)
+    build_raster_pdf(refs, store, target, canvas)
     return target.read_bytes()
 
 

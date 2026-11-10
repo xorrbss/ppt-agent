@@ -68,7 +68,6 @@ class PresentationAgentRuntime:
             conversation_id=turn.conversation_id,
             assistant_output=turn.response_text,
             tool_calls=tuple(turn.tool_calls),
-            page_remake_slide_index=turn.page_remake_slide_index,
             artifacts=(
                 context.artifact_scope.discover()
                 if context.artifact_scope is not None

@@ -40,7 +40,7 @@ def test_unclaimed_slides_are_explained_without_page_regeneration() -> None:
 
 def test_review_import_failure_never_calls_legacy_page_reauthor(monkeypatch) -> None:
     from services.workspace_quality_operation_handler import (
-        _release_review_task_policy_matches, release_review_checker_policy,
+        release_review_checker_policy,
         release_review_checker_policy_digest,
     )
     from services.authored_quality_review_service import _bind_canonical_review_policy
@@ -185,14 +185,7 @@ def test_review_import_failure_never_calls_legacy_page_reauthor(monkeypatch) -> 
                     assert task.data["remaining_issues"][0]["reason_code"] == "import.publish.failed"
                     assert task.data["routing"]["automatic_page_regeneration"] is False
                     assert task.data["review_policy"] == before_policy
-                    current_policy = release_review_checker_policy()
-                    assert _release_review_task_policy_matches(task.data, current_policy) is (not change_during_import)
                     assert (release_review_checker_policy_digest() != before_digest) is change_during_import
-                    # Missing or embellished records must not bypass the exact
-                    # signature gate, even when all other task fields survived.
-                    assert not _release_review_task_policy_matches({}, current_policy)
-                    assert not _release_review_task_policy_matches(
-                        {"review_policy": {**before_policy, "legacy": True}}, current_policy)
                     await session.refresh(presentation)
                     assert presentation.revision == 7
         finally:

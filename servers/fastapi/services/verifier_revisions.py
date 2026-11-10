@@ -348,6 +348,11 @@ COMMON_HEADER_VERIFIER_LEDGER = VerifierRevisionLedger(
         # instead of the authored DOM quality, fragmentation gate, image-rule, prompt
         # profile and design-system modules. No behaviour or output changed.
         "sha256:ae323c21b6fdb7af02752f447468298e562fe3c492238ab8dae3d341c87bfdba": "svg-common-header-verifier/1",
+        # 2026-11-10 B3: authored removal P3 B3 deleted utils/slide_capture.capture_slides,
+        # the legacy stacked /pdf-maker batch capture that only the removed authored
+        # renderer called, and reworded the module docstring and two comments that
+        # pointed at it. svg capture code is unchanged; no behaviour or output changed.
+        "sha256:25dca28c41cf01f7d8180697ccf7e4b89c2e912ee1721a08221357816b466462": "svg-common-header-verifier/1",
     }),
 )
 
@@ -834,6 +839,11 @@ PARTIAL_RECOVERY_CODE_LEDGER = VerifierRevisionLedger(
         # instead of the authored DOM quality, fragmentation gate, image-rule, prompt
         # profile and design-system modules. No behaviour or output changed.
         "aadbeea426be5ccc39fac090fb9921413c2d582c4392fa5cded7dd97cccd64dc": "svg-partial-recovery-code/1",
+        # 2026-11-10 B3: authored removal P3 B3 deleted utils/slide_capture.capture_slides,
+        # the legacy stacked /pdf-maker batch capture that only the removed authored
+        # renderer called, and reworded the module docstring and two comments that
+        # pointed at it. svg capture code is unchanged; no behaviour or output changed.
+        "9984d1d1df34225eaf8a0e25e9322e9adcb0a4ae5925874b3c85bd4c5e629bed": "svg-partial-recovery-code/1",
     }),
 )
 
@@ -1027,6 +1037,11 @@ PAGE_RENDER_CODE_LEDGER = VerifierRevisionLedger(
         # instead of the authored DOM quality, fragmentation gate, image-rule, prompt
         # profile and design-system modules. No behaviour or output changed.
         "4421da7d9c3a15153a3334a8314072d563398e23e0fc8cd8159611defb715fb5": "svg-page-render-code/1",
+        # 2026-11-10 B3: authored removal P3 B3 deleted utils/slide_capture.capture_slides,
+        # the legacy stacked /pdf-maker batch capture that only the removed authored
+        # renderer called, and reworded the module docstring and two comments that
+        # pointed at it. svg capture code is unchanged; no behaviour or output changed.
+        "e4b027f672267be865cf00b84eb98711bd2f703365f8dbbacf78c3b76d3a4850": "svg-page-render-code/1",
     }),
 )
 

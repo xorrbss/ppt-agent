@@ -148,7 +148,6 @@ tests/unit/test_authored_reasoning_effort_capability.py
 tests/unit/test_authored_release_authority_v3.py
 tests/unit/test_authored_release_ci_evidence_v3.py
 tests/unit/test_authored_release_readiness_v2.py
-tests/unit/test_authored_release_readiness_v3_router.py
 tests/unit/test_authored_remake_schedule.py
 tests/unit/test_authored_removal_imports.py
 tests/unit/test_authored_render_cache_byte_budget.py
@@ -161,7 +160,6 @@ tests/unit/test_authored_repair_loop.py
 tests/unit/test_authored_repair_receipts.py
 tests/unit/test_authored_resume.py
 tests/unit/test_authored_retain_checkpoint_html.py
-tests/unit/test_authored_retemplate.py
 tests/unit/test_authored_review_asset_store.py
 tests/unit/test_authored_review_routing.py
 tests/unit/test_authored_review_scope_contract.py
@@ -172,7 +170,6 @@ tests/unit/test_authored_scene_envelope_reseal.py
 tests/unit/test_authored_semantic_bundle_contract.py
 tests/unit/test_authored_semantic_lifecycle.py
 tests/unit/test_authored_semantic_role_repair.py
-tests/unit/test_authored_slide_chat_edit_gate.py
 tests/unit/test_authored_slide_checkpoint_bundle.py
 tests/unit/test_authored_slide_checkpoint_migration.py
 tests/unit/test_authored_slide_editor_events.py
@@ -501,7 +498,6 @@ tests/unit/test_svg_vector_pdf_export.py
 tests/unit/test_svg_verifier_revisions.py
 tests/unit/test_svg_writing_substitution.py
 tests/unit/test_vector_illustrations.py
-tests/unit/test_workspace_authored_template_confirmation.py
 tests/unit/test_workspace_authored_template_operation_handler.py
 tests/unit/test_workspace_export_artifact_authority.py
 tests/unit/test_workspace_quality_export_operations.py

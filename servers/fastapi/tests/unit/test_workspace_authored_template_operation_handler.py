@@ -1,11 +1,12 @@
 import asyncio
-from dataclasses import replace
 import uuid
 
 import pytest
 
+import services.workspace_svg_header_design_operation_handler as header_handler
 from services.workspace_authored_template_operation_handler import (
     DESIGN_APPLY_OPERATION_KIND,
+    TEMPLATE_APPLY_OPERATION_KIND,
     WorkspaceAuthoredTemplateOperationHandler,
 )
 from services.workspace_operation_handler_registry import (
@@ -16,13 +17,7 @@ from services.workspace_operation_handler_registry import (
 
 
 class _Context:
-    def __init__(
-        self,
-        *,
-        expected_revision: int | None,
-        settings: dict | None = None,
-        kind: str = "template.apply",
-    ):
+    def __init__(self, *, kind: str, payload: dict):
         self.claim = WorkspaceOperationClaim(
             operation_id=uuid.uuid4(),
             owner_id=None,
@@ -30,141 +25,45 @@ class _Context:
             conversation_id=uuid.uuid4(),
             presentation_id=uuid.uuid4(),
             kind=kind,
-            request_payload={"generation_settings": settings or {}},
-            expected_revision=expected_revision,
+            request_payload=payload,
+            expected_revision=3,
             attempt_number=1,
             attempt_token="attempt-token",
             fencing_token=1,
         )
 
-    async def progress(self, **_kwargs):
-        return True
-
-    async def cancellation_requested(self):
-        return False
-
-    async def raise_if_cancelled(self):
-        return None
-
-
-class _GenerationHandler:
-    def __init__(self):
-        self.context = None
-
-    async def execute(self, context):
-        self.context = context
-        return WorkspaceOperationResult(
-            payload={"status": "completed"},
-            result_revision=1,
-        )
-
-
-def _settings(source_id: uuid.UUID | None = None) -> dict:
-    return {
-        "source_presentation_id": str(source_id or uuid.uuid4()),
-        "source_revision": 7,
-        "authored_style": "signal",
-        "vision_qa": False,
-    }
-
-
-def _design_settings(source_id: uuid.UUID | None = None) -> dict:
-    return _settings(source_id) | {
-        "authored_style_intent": {"intent": "keep"},
-        "master_intent": {"intent": "clear"},
-        "resolved_master_pin": None,
-        "resolved_composition_pin": None,
-        "resolved_style_digest": "sha256:" + "b" * 64,
-        "design_signature": "sha256:" + "a" * 64,
-    }
-
 
 @pytest.mark.parametrize(
-    "settings",
+    ("kind", "payload"),
     [
-        {},
-        _settings() | {"authored_style": ""},
-        _settings() | {"vision_qa": "yes"},
-        _settings() | {"source_revision": -1},
+        (TEMPLATE_APPLY_OPERATION_KIND, {"generation_settings": {"authored_style": "signal"}}),
+        (DESIGN_APPLY_OPERATION_KIND, {"generation_settings": {"authored_style": "signal"}}),
+        (DESIGN_APPLY_OPERATION_KIND, {"context": {"target": "body"}}),
     ],
 )
-def test_template_apply_rejects_invalid_target_owned_metadata(settings):
-    handler = WorkspaceAuthoredTemplateOperationHandler(
-        generation_handler=_GenerationHandler()
-    )
-
-    with pytest.raises(NonRetryableWorkspaceOperationError) as captured:
-        asyncio.run(handler.execute(_Context(expected_revision=0, settings=settings)))
-
-    assert captured.value.code == "authored_template_request_invalid"
-
-
-def test_template_apply_requires_a_revision_fence():
-    handler = WorkspaceAuthoredTemplateOperationHandler(
-        generation_handler=_GenerationHandler()
-    )
-
-    with pytest.raises(NonRetryableWorkspaceOperationError) as captured:
+def test_authored_redesign_is_refused_as_removed(kind, payload):
+    with pytest.raises(NonRetryableWorkspaceOperationError) as refused:
         asyncio.run(
-            handler.execute(
-                _Context(expected_revision=None, settings=_settings())
+            WorkspaceAuthoredTemplateOperationHandler().execute(
+                _Context(kind=kind, payload=payload)
             )
         )
 
-    assert captured.value.code == "workspace_expected_revision_required"
+    assert refused.value.code == "authored_strategy_removed"
 
 
-def test_template_apply_delegates_linked_generation_and_reports_target():
-    generation_handler = _GenerationHandler()
-    handler = WorkspaceAuthoredTemplateOperationHandler(
-        generation_handler=generation_handler
-    )
-    source_id = uuid.uuid4()
-    context = _Context(expected_revision=0, settings=_settings(source_id))
+def test_common_header_design_goes_to_the_svg_header_handler(monkeypatch):
+    seen = []
 
-    result = asyncio.run(handler.execute(context))
+    class _HeaderHandler:
+        async def execute(self, context):
+            seen.append(context)
+            return WorkspaceOperationResult(payload={"kind": "design.apply"}, result_revision=4)
 
-    assert generation_handler.context is context
-    assert result.result_revision == 1
-    assert result.payload == {
-        "status": "completed",
-        "kind": "template.apply",
-        "source_presentation_id": str(source_id),
-        "source_revision": 7,
-        "target_presentation_id": str(context.claim.presentation_id),
-        "presentation_id": str(context.claim.presentation_id),
-        "authored_style": "signal",
-    }
+    monkeypatch.setattr(header_handler, "WorkspaceSvgHeaderDesignOperationHandler", _HeaderHandler)
+    context = _Context(kind=DESIGN_APPLY_OPERATION_KIND, payload={"context": {"target": "common_header"}})
 
+    result = asyncio.run(WorkspaceAuthoredTemplateOperationHandler().execute(context))
 
-def test_design_apply_preserves_canonical_kind_and_resolved_snapshot():
-    generation_handler = _GenerationHandler()
-    handler = WorkspaceAuthoredTemplateOperationHandler(
-        generation_handler=generation_handler
-    )
-    context = _Context(
-        expected_revision=0,
-        settings=_design_settings(),
-        kind=DESIGN_APPLY_OPERATION_KIND,
-    )
-
-    result = asyncio.run(handler.execute(context))
-
-    assert result.payload["kind"] == DESIGN_APPLY_OPERATION_KIND
-    assert result.payload["resolved_style_digest"].startswith("sha256:")
-    assert result.payload["resolved_master_pin"] is None
-    assert result.payload["resolved_composition_pin"] is None
-
-
-def test_template_apply_rejects_source_owned_operation():
-    shared_id = uuid.uuid4()
-    context = _Context(expected_revision=7, settings=_settings(shared_id))
-    context.claim = replace(context.claim, presentation_id=shared_id)
-    handler = WorkspaceAuthoredTemplateOperationHandler(
-        generation_handler=_GenerationHandler()
-    )
-
-    with pytest.raises(NonRetryableWorkspaceOperationError) as captured:
-        asyncio.run(handler.execute(context))
-
-    assert captured.value.code == "authored_template_request_invalid"
+    assert seen == [context]
+    assert result.result_revision == 4

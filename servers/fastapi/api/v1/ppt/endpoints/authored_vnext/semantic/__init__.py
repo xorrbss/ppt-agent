@@ -1,3 +1,0 @@
-from .router import AUTHORED_SEMANTIC_ROUTER
-
-__all__ = ["AUTHORED_SEMANTIC_ROUTER"]

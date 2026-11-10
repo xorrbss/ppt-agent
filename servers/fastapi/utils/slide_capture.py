@@ -1,7 +1,6 @@
-"""Headless per-slide capture for the vision-QA pass. Pure subprocess chrome
-screenshot (no browser dependency — consistent with export spawning an external
-binary) + a deterministic PIL crop: the /pdf-maker page stacks slides at the deck's canvas with gap 0/margin 0, so
-slide i is (0, i*height_px, width_px, (i+1)*height_px); see capture_slides_impl in slide_capture_batch.py."""
+"""Headless per-slide capture for the vision-QA pass: pure subprocess chrome
+screenshots (no browser dependency, consistent with export spawning an external
+binary) of each slide's HTML at the deck's canvas."""
 
 import asyncio
 import atexit
@@ -1671,26 +1670,6 @@ def _close_reusable_chrome() -> None:
 atexit.register(_close_reusable_chrome)
 
 
-async def capture_slides(
-    presentation_id: str,
-    n_slides: int,
-    base_url: str = "http://127.0.0.1:5000",
-    timeout: int = 90, *, width_px: int = SLIDE_W, height_px: int = SLIDE_H,
-) -> List[bytes]:  # noqa: ASYNC109
-    from utils.slide_capture_batch import capture_slides_impl
-
-    return await capture_slides_impl(
-        presentation_id,
-        n_slides,
-        base_url=base_url,
-        timeout=timeout,
-        env_enabled=env_enabled,
-        find_chrome=find_chrome,
-        run_chrome_screenshot=_run_chrome_screenshot,
-        wait_for_output=_wait_for_output, width_px=width_px, height_px=height_px,
-    )
-
-
 async def _cdp_command(
     websocket: aiohttp.ClientWebSocketResponse,
     command_id: int,
@@ -1784,7 +1763,7 @@ async def _render_html_to_png_subprocess(
             "No chrome/chromium found for slide capture (set CHROME_PATH)."
         )
     async with _get_render_sem():
-        # ignore_cleanup_errors: see capture_slides — the detached chrome child can
+        # ignore_cleanup_errors: the detached chrome child can
         # hold the profile lock past screenshot capture, which would otherwise fail
         # temp-dir teardown on Windows after the PNG is already read.
         with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as td:
@@ -1810,7 +1789,7 @@ async def _render_html_to_png_subprocess(
             "--disable-sync",
             "--metrics-recording-only",
             "--no-pings",
-                # Isolated profile — see capture_slides: without it chrome.exe hands
+                # Isolated profile: without it chrome.exe hands
                 # off to a user's already-running Chrome and writes no screenshot,
                 # silently blanking every authored slide.
                 f"--user-data-dir={os.path.join(td, 'profile')}",

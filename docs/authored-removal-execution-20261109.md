@@ -321,6 +321,75 @@ The full pytest suite and `npm run test:next-ci` run before each PR merges.
   any error. Redefining it changes the export identity digest: **needs the
   owner's approval before B3 starts.** Also `lib/ooxml-vnext`,
   `/api/internal/ooxml-vnext`, `authored_vnext/integration`.
+  **B3 done 2026-11-10.** Backend: deleted `authored_operations.py` (its svg
+  routes, the svg quality review, the review readiness and the three page-remake
+  preview/history/publish routes, moved unchanged in path, payload and function
+  name to `endpoints/presentation_page_operations.py`, feature module
+  `presentation-page-operations`), the retemplate route, request model and
+  service, the unused `workspace_authored_template_confirmation_service`, the
+  vNext `generation`, `package` and `semantic` routers, `/export-projection`
+  with `presentation_export_projection`, `workers/public_export_hybrid*.py` and
+  `workers/public_export_bundle.py`, the chat-edit refusal (with
+  `page_remake_slide_index` in chat turns, agent results and workspace chat
+  results; stored results keep the key and `WorkspaceOperationCard.tsx` still
+  reads it), the analyze-and-fix branch of `WorkspaceQualityReviewOperationHandler`
+  (it now refuses every mode but `analyze_only`, which runs the svg review) and
+  `utils/slide_capture_batch.py` with `slide_capture.capture_slides`.
+  `workers/public_export_worker.py` runs svg export bundles only and refuses any
+  other schema with `public_export_bundle_schema_unsupported`;
+  `workspace_authored_template_operation_handler` routes `design.apply` for the
+  common header to the svg header handler and refuses the rest with
+  `authored_strategy_removed`. `public_export_worker_bundle.py` is
+  `public-export-worker-bundle/v2`: the export worker entrypoint, the svg worker,
+  converter and readback, `svg_contract`, `raster_redesign_pptx`, the svg export
+  scene, projection and native wire, the native-object package and
+  `vendor/slide_master`, all required; the Node assembler, `scripts/lib` and
+  `lib/authored-hybrid` left it. Correction to [V] above: svg exports do not
+  read this bundle. Their exporter identity is the converter digest
+  (`svg_evidence`, `svg_export_identity`); only the authored controller path
+  (`render_and_export_authored_htmls`, now unreachable) used the bundle, so the
+  digest change moves no svg identity. Frontend: deleted
+  `scripts/public-hybrid-export-worker.mjs`, all of `scripts/lib`, the `(export)`
+  route group with `/pdf-maker`, `lib/export-presentation-route.ts`,
+  `lib/presentation-export-quality.ts`, `/api/rasterize-icon` (only `/pdf-maker`
+  used it), the files they alone imported (`useHtmlChartInjection`,
+  `chart-browser`, `tailwind-browser`, `presentation-snapshot-integrity`,
+  `presentation-export-strategy`, `presentation-export-font-quality`,
+  `app-data-directory`) and 46 `lib/authored-hybrid` modules with their tests and
+  fixtures. `public-export-admission` sends only `format` (plus an explicit
+  `font_embedding: false`): `pptxMode` other than `fidelity` and
+  `fontEmbedding: true` are 400, and its derived idempotency keys no longer
+  carry the mode, so a retry that spans this deploy admits a new operation.
+  Kept, with the reason (each needs its own structural change, not a
+  workaround): `lib/authored-hybrid`'s Chrome renderer files
+  (`browser-source`, `chrome-*`, `renderer-isolation`, `security*` and their
+  imports, plus `html-instrumentation`, `font-policy` and `observation` for the
+  renderer-isolation tests) because `contracts/authored-renderer/attestation.py`
+  digests them into the renderer image's source-tree digest and
+  `verify_contract.py` pins their isolation tokens, and svg rendering runs in
+  that image (rewrite the renderer contract in B5); `services/authored_vnext/integration`,
+  hence `lib/ooxml-vnext` and `/api/internal/ooxml-vnext`, because its SQL
+  repository is the master-pin repository the kept master router and
+  `generation/legacy_pin` (read by svg) use and its export half backs
+  `legacy_bridge`, which the master apply route, the page-remake handler and the
+  export handler call (split the repository from the export half first); the
+  vNext `export` router, unmounted, because
+  `scripts/public_service_malicious_corpus_evidence.py` drives it for the
+  public-service release gate's cross-owner evidence (retarget or retire that
+  evidence with the scripts in B5). The authored controller branches that are
+  now unreachable stay for B4: `render_and_export_authored_htmls`, the authored
+  branch of the export handler, `public_v2_orchestrator`'s release-review
+  enqueue and the raster schema in the trusted wire. Checks on Windows: `ruff`,
+  `import server`; import checker `check` over the 27 deleted Python files: 0
+  hits, 0 new unresolved; closure top 393/46 (unchanged), all 1,171/338 (was
+  1,243/408); structural layering passes; reviewed keys for the common-header,
+  partial-recovery and page-render identities (only `slide_capture.py` changed);
+  svg unit subset 219 failed against the B0 list of 257, no new failure after
+  `verify_contract.py` dropped `slide_capture_batch.py`; the fake-LLM harness
+  (isolated port and app data) generated a 5-page svg deck and the export worker
+  produced its PPTX and PDF. Next: tsc, webpack build and `eslint` on the
+  touched files pass; the Node suite fails only the CRLF `requestVerbosity`
+  test.
 - **B4 services, in sub-batches.** Clearly authored-only trees (`slidespec_*`,
   vNext emission/package/ooxml) can go as soon as they pass the static check,
   without waiting for B1 [I: P2 made authored unreachable]. Then HTML

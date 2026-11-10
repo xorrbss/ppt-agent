@@ -33,27 +33,31 @@ from services.public_export_worker_bundle import (
 PROTOCOL = "public-worker-protocol/v2"
 
 
+_SOURCES = (
+    ("workers", "public_export_worker.py"),
+    ("workers", "public_svg_export_worker.py"),
+    ("workers", "public_svg_pptx_convert.py"),
+    ("workers", "public_svg_pptx_readback.py"),
+    ("services", "svg_contract.py"),
+    ("services", "source_content", "raster_redesign_pptx.py"),
+    ("services", "generation_core", "drivers", "svg", "export_scene.py"),
+    ("services", "generation_core", "drivers", "svg", "export_projection.py"),
+    ("services", "generation_core", "drivers", "svg", "export_native_wire.py"),
+    ("services", "generation_core", "native_objects", "model.py"),
+    ("vendor", "slide_master", "MANIFEST.json"),
+    ("vendor", "slide_master", "pptx_to_svg", "convert.py"),
+)
+
+
 def _worker_tree(root: Path) -> Path:
     """Build the minimum on-disk shape the bundle inventory accepts."""
 
-    nextjs = root / "servers" / "nextjs"
-    (nextjs / "scripts" / "lib").mkdir(parents=True)
-    (nextjs / "lib" / "authored-hybrid" / "fixtures").mkdir(parents=True)
-    (nextjs / "scripts" / "public-hybrid-export-worker.mjs").write_text(
-        "export const entry = 1;\n", encoding="utf-8"
-    )
-    (nextjs / "scripts" / "lib" / "hybrid-slide-fallback-code.mjs").write_text(
-        "export const fallback = 1;\n", encoding="utf-8"
-    )
-    (nextjs / "lib" / "presentation-export-quality.ts").write_text(
-        "export const quality = 1;\n", encoding="utf-8"
-    )
-    for name in ("authored-canvas.ts", "document-canvas.ts"):
-        (nextjs / "lib" / name).write_text("export const canvas = 1;\n", encoding="utf-8")
-    (nextjs / "lib" / "authored-hybrid" / "pptx-assembler.ts").write_text(
-        "export const assemble = 1;\n", encoding="utf-8"
-    )
-    return nextjs
+    fastapi = root / "servers" / "fastapi"
+    for relative in _SOURCES:
+        path = fastapi.joinpath(*relative)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(f"# {path.name}\n", encoding="utf-8")
+    return fastapi
 
 
 def test_identical_worker_sources_keep_one_identity(tmp_path: Path) -> None:
@@ -65,29 +69,20 @@ def test_identical_worker_sources_keep_one_identity(tmp_path: Path) -> None:
     second = compute_public_export_worker_bundle(PROTOCOL, repository_root=b)
 
     assert first.source == BUNDLE_SOURCE_FILES
-    assert first.file_count == 6
+    assert first.file_count == len(_SOURCES)
+    assert first.evidence()["schemaVersion"] == "public-export-worker-bundle/v2"
     # Two checkouts of the same code must reuse: the digest is content, not path.
     assert first.digest == second.digest
 
 
-@pytest.mark.parametrize(
-    "relative",
-    [
-        ("scripts", "public-hybrid-export-worker.mjs"),
-        ("scripts", "lib", "hybrid-slide-fallback-code.mjs"),
-        ("lib", "presentation-export-quality.ts"),
-        ("lib", "authored-canvas.ts"),
-        ("lib", "document-canvas.ts"),
-        ("lib", "authored-hybrid", "pptx-assembler.ts"),
-    ],
-)
+@pytest.mark.parametrize("relative", _SOURCES)
 def test_any_executed_source_change_splits_the_identity(
     tmp_path: Path, relative: tuple[str, ...]
 ) -> None:
-    nextjs = _worker_tree(tmp_path)
+    fastapi = _worker_tree(tmp_path)
     before = compute_public_export_worker_bundle(PROTOCOL, repository_root=tmp_path)
 
-    nextjs.joinpath(*relative).write_text("export const patched = 2;\n", encoding="utf-8")
+    fastapi.joinpath(*relative).write_text("# patched\n", encoding="utf-8")
     after = compute_public_export_worker_bundle(PROTOCOL, repository_root=tmp_path)
 
     assert after.source == BUNDLE_SOURCE_FILES
@@ -95,23 +90,31 @@ def test_any_executed_source_change_splits_the_identity(
 
 
 def test_renaming_an_executed_source_splits_the_identity(tmp_path: Path) -> None:
-    nextjs = _worker_tree(tmp_path)
+    fastapi = _worker_tree(tmp_path)
     before = compute_public_export_worker_bundle(PROTOCOL, repository_root=tmp_path)
 
-    source = nextjs / "lib" / "authored-hybrid" / "pptx-assembler.ts"
-    source.rename(source.with_name("pptx-assembler-v2.ts"))
+    source = fastapi / "vendor" / "slide_master" / "pptx_to_svg" / "convert.py"
+    source.rename(source.with_name("convert_v2.py"))
     after = compute_public_export_worker_bundle(PROTOCOL, repository_root=tmp_path)
 
     assert after.digest != before.digest
 
 
-def test_tests_and_fixtures_never_invalidate_published_exports(tmp_path: Path) -> None:
-    nextjs = _worker_tree(tmp_path)
+def test_bytecode_caches_never_invalidate_published_exports(tmp_path: Path) -> None:
+    fastapi = _worker_tree(tmp_path)
     before = compute_public_export_worker_bundle(PROTOCOL, repository_root=tmp_path)
 
-    (nextjs / "scripts" / "lib" / "helper.test.mjs").write_text("t\n", encoding="utf-8")
-    (nextjs / "lib" / "authored-hybrid" / "chrome.test.mjs").write_text("t\n", encoding="utf-8")
-    (nextjs / "lib" / "authored-hybrid" / "fixtures" / "deck.ts").write_text("f\n", encoding="utf-8")
+    cache = fastapi / "vendor" / "slide_master" / "__pycache__"
+    cache.mkdir()
+    (cache / "convert.cpython-311.pyc").write_bytes(b"\x00")
+    (fastapi / "vendor" / "slide_master" / "stray.pyc").write_bytes(b"\x00")
+    native_cache = fastapi / "services" / "generation_core" / "native_objects" / "__pycache__"
+    native_cache.mkdir()
+    (native_cache / "model.cpython-311.pyc").write_bytes(b"\x00")
+    # The native-object directory contributes only Python sources.
+    (fastapi / "services" / "generation_core" / "native_objects" / "notes.md").write_text(
+        "n\n", encoding="utf-8"
+    )
     after = compute_public_export_worker_bundle(PROTOCOL, repository_root=tmp_path)
 
     assert after.file_count == before.file_count
@@ -132,17 +135,20 @@ def test_a_new_protocol_version_splits_the_identity(tmp_path: Path) -> None:
 @pytest.mark.parametrize(
     ("relative", "reason"),
     [
-        (("scripts", "public-hybrid-export-worker.mjs"), "worker_entrypoint_missing"),
-        (("lib", "presentation-export-quality.ts"), "worker_source_missing"),
-        (("lib", "authored-canvas.ts"), "worker_source_missing"),
-        (("lib", "document-canvas.ts"), "worker_source_missing"),
+        (("workers", "public_export_worker.py"), "worker_entrypoint_missing"),
+        (("workers", "public_svg_export_worker.py"), "worker_source_missing"),
+        (("services", "svg_contract.py"), "worker_source_missing"),
+        (
+            ("services", "generation_core", "drivers", "svg", "export_scene.py"),
+            "worker_source_missing",
+        ),
     ],
 )
 def test_missing_sources_fall_back_deterministically(
     tmp_path: Path, relative: tuple[str, ...], reason: str
 ) -> None:
-    nextjs = _worker_tree(tmp_path)
-    nextjs.joinpath(*relative).unlink()
+    fastapi = _worker_tree(tmp_path)
+    fastapi.joinpath(*relative).unlink()
 
     first = compute_public_export_worker_bundle(PROTOCOL, repository_root=tmp_path)
     second = compute_public_export_worker_bundle(PROTOCOL, repository_root=tmp_path)
@@ -154,12 +160,9 @@ def test_missing_sources_fall_back_deterministically(
     assert first.evidence()["unavailableReason"] == reason
 
 
-def test_an_absent_worker_directory_falls_back(tmp_path: Path) -> None:
-    _worker_tree(tmp_path)
-    for path in sorted(
-        (tmp_path / "servers" / "nextjs" / "scripts" / "lib").iterdir(), reverse=True
-    ):
-        path.unlink()
+def test_an_empty_worker_directory_falls_back(tmp_path: Path) -> None:
+    fastapi = _worker_tree(tmp_path)
+    (fastapi / "services" / "generation_core" / "native_objects" / "model.py").unlink()
 
     bundle = compute_public_export_worker_bundle(PROTOCOL, repository_root=tmp_path)
 
@@ -182,7 +185,7 @@ def test_the_repository_bundle_is_readable() -> None:
 
     # A checked-out tree must never export under the unattested marker.
     assert bundle.source == BUNDLE_SOURCE_FILES
-    assert bundle.file_count > 0
+    assert bundle.file_count > len(_SOURCES)
     assert len(bundle.digest) == 64
     assert public_export_worker_bundle(PROTOCOL).digest == bundle.digest
     assert bundle.evidence()["digest"] == bundle.digest
@@ -193,12 +196,12 @@ def test_live_worker_source_change_invalidates_process_identity(
 ) -> None:
     """A long-running local controller must not reuse an older source digest."""
 
-    nextjs = _worker_tree(tmp_path)
+    fastapi = _worker_tree(tmp_path)
     monkeypatch.setattr(worker_bundle_module, "_REPOSITORY_ROOT", tmp_path)
 
     before = public_export_worker_bundle(PROTOCOL)
-    nextjs.joinpath("lib", "authored-hybrid", "pptx-assembler.ts").write_text(
-        "export const assemble = 2;\n", encoding="utf-8"
+    fastapi.joinpath("workers", "public_svg_pptx_convert.py").write_text(
+        "# converter 2\n", encoding="utf-8"
     )
     after = public_export_worker_bundle(PROTOCOL)
 
@@ -252,12 +255,12 @@ def _identity(exporter_digest: str) -> CanonicalExportIdentity:
 def test_a_worker_code_change_yields_a_re_exportable_identity(tmp_path: Path) -> None:
     """A fixed worker must not be locked out by a cached successful identity."""
 
-    nextjs = _worker_tree(tmp_path)
+    fastapi = _worker_tree(tmp_path)
     before = _identity(
         compute_public_export_worker_bundle(PROTOCOL, repository_root=tmp_path).digest
     )
-    nextjs.joinpath("lib", "authored-hybrid", "pptx-assembler.ts").write_text(
-        "export const assemble = 2;\n", encoding="utf-8"
+    fastapi.joinpath("workers", "public_svg_export_worker.py").write_text(
+        "# worker 2\n", encoding="utf-8"
     )
     after = _identity(
         compute_public_export_worker_bundle(PROTOCOL, repository_root=tmp_path).digest

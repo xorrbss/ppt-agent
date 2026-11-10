@@ -111,21 +111,13 @@ export const appPageContentSecurityPolicyReportOnly =
 //  - FastAPI share assets and workspace artifacts (served under app_data/)
 //    already set their own strict per-response CSP (see
 //    presentation_share.py / workspace.py: "default-src 'none'; sandbox").
-//  - pdf-maker (exactly that path, not e.g. pdf-maker-anything — hence the
-//    `(?:/|$)` boundary) is the headless-Chrome export renderer: it injects
-//    arbitrary AI-authored slide HTML directly into the top-level document
-//    via dangerouslySetInnerHTML for pixel-accurate screenshotting, unlike
-//    the editor and /p/ share view which isolate that same HTML inside a
-//    sandboxed srcdoc iframe carrying its own <meta> CSP
-//    (AuthoredSlidePreview) — the app policy does not
-//    fit content rendered that way, and is not itself emitted there either.
 //  - p/ (public share pages) are excluded because their content is
 //    end-user-authored and rendered the same way the authenticated editor
 //    renders it, and a share visitor is anonymous, so a stricter or
 //    differently-scoped policy for that surface is a separate decision from
 //    the authenticated app chrome governed here.
 export const appPageCspSource =
-  "/((?!pdf-maker(?:/|$)|p/|api/|_next/|static/|app_data/|favicon\\.ico|.*\\.(?:png|svg|ico|txt|xml|webmanifest)$).*)";
+  "/((?!p/|api/|_next/|static/|app_data/|favicon\\.ico|.*\\.(?:png|svg|ico|txt|xml|webmanifest)$).*)";
 
 const nextConfig = {
   reactStrictMode: false,

@@ -18,7 +18,6 @@ from llmai.shared import (  # type: ignore[import-not-found]
 )
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from constants.presentation import AUTHORED_SLIDE_CHAT_EDIT_REFUSAL_CODE
 from models.chat import ChatAttachment
 from models.sql.presentation import PresentationModel
 from services.agent_runtime.contracts import (
@@ -58,11 +57,6 @@ class ChatTurnResult:
     conversation_id: uuid.UUID
     response_text: str
     tool_calls: list[str]
-    # Index of the page whose edit was refused because it is model-authored, if
-    # a tool refused one this turn.  The chat tools cannot serve such a request
-    # at all, so the turn ends in prose naming a flow the user then has to go
-    # find.  Carrying the page here lets the caller offer that flow instead.
-    page_remake_slide_index: int | None = None
 
 
 def _tool_call_payload(tool_result: object) -> Mapping[str, Any] | None:
@@ -79,29 +73,6 @@ def _tool_call_payload(tool_result: object) -> Mapping[str, Any] | None:
         return None
     payload = tool_result.get("result")
     return payload if isinstance(payload, Mapping) else None
-
-
-def _refused_authored_page_index(tool_payload: object) -> int | None:
-    """Return the page a tool refused to edit because it is authored.
-
-    Takes the tool's own payload, not the registry envelope around it - see
-    ``_tool_call_payload``.
-
-    ``None`` covers both "not that refusal" and "that refusal, but about no
-    particular page" - the insert case, which names no target to remake.
-    """
-    if not isinstance(tool_payload, Mapping):
-        return None
-    validation_errors = tool_payload.get("validation_errors")
-    if not isinstance(validation_errors, list):
-        return None
-    if AUTHORED_SLIDE_CHAT_EDIT_REFUSAL_CODE not in validation_errors:
-        return None
-    index = tool_payload.get("index")
-    # `bool` is an `int`; a stray flag here must not become a page number.
-    if not isinstance(index, int) or isinstance(index, bool) or index < 0:
-        return None
-    return index
 
 
 class PresentationChatService:
@@ -146,7 +117,6 @@ class PresentationChatService:
         (
             response_text,
             tool_calls,
-            page_remake_slide_index,
             tool_summaries,
             mutations,
         ) = await self._run_agent_with_tools(
@@ -168,7 +138,6 @@ class PresentationChatService:
                 else ()
             ),
             tool_summaries=tuple(tool_summaries),
-            page_remake_slide_index=page_remake_slide_index,
         )
 
     async def generate_reply(
@@ -179,16 +148,13 @@ class PresentationChatService:
         conversation_id, messages = await self._prepare_turn_context(
             user_message, attachments
         )
-        response_text, tool_calls, page_remake_slide_index = (
-            await self._run_llm_with_tools(messages)
-        )
+        response_text, tool_calls = await self._run_llm_with_tools(messages)
         # Compatibility facade only. Canonical conversation publication owns
         # persistence, so provider execution cannot dual-write a transcript.
         return ChatTurnResult(
             conversation_id=conversation_id,
             response_text=response_text,
             tool_calls=tool_calls,
-            page_remake_slide_index=page_remake_slide_index,
         )
 
 
@@ -278,7 +244,7 @@ class PresentationChatService:
 
     async def _run_llm_with_tools(
         self, messages: list[Message]
-    ) -> tuple[str, list[str], int | None]:
+    ) -> tuple[str, list[str]]:
         if self._tools is None:
             raise RuntimeError("chat_runtime_not_prepared")
         client = get_client(config=get_llm_config())
@@ -287,10 +253,6 @@ class PresentationChatService:
 
         called_tools: list[str] = []
         last_tool_results: list[dict[str, Any]] = []
-        # First refusal wins.  A later round may well retry the same page and be
-        # refused again, and the model may also move on to an unrelated page it
-        # can edit; neither should change which page the user is offered.
-        page_remake_slide_index: int | None = None
 
         for _ in range(MAX_TOOL_ROUNDS):
             try:
@@ -309,7 +271,7 @@ class PresentationChatService:
                 response_text = extract_text(response.content) or (
                     "해당 요청에 대한 응답을 생성하지 못했습니다."
                 )
-                return response_text, called_tools, page_remake_slide_index
+                return response_text, called_tools
 
             called_tools.extend([tool_call.name for tool_call in response.tool_calls])
             messages = list(response.messages) if response.messages else list(messages)
@@ -318,10 +280,6 @@ class PresentationChatService:
             for tool_call in response.tool_calls:
                 tool_result = await self._tools.execute_tool_call(tool_call)
                 last_tool_results.append(tool_result)
-                if page_remake_slide_index is None:
-                    page_remake_slide_index = _refused_authored_page_index(
-                        _tool_call_payload(tool_result)
-                    )
                 tool_response_content = json.dumps(tool_result, ensure_ascii=False)
                 messages.append(
                     ToolResponseMessage(
@@ -337,12 +295,11 @@ class PresentationChatService:
             messages=messages,
         )
         if final_response:
-            return final_response, called_tools, page_remake_slide_index
+            return final_response, called_tools
 
         return (
             self._build_tool_limit_fallback(last_tool_results),
             called_tools,
-            page_remake_slide_index,
         )
 
     async def _run_agent_with_tools(
@@ -354,7 +311,6 @@ class PresentationChatService:
     ) -> tuple[
         str,
         list[str],
-        int | None,
         list[ToolSummary],
         list[TypedMutation],
     ]:
@@ -369,7 +325,6 @@ class PresentationChatService:
         tool_summaries: list[ToolSummary] = []
         mutations: list[TypedMutation] = []
         last_tool_results: list[dict[str, Any]] = []
-        page_remake_slide_index: int | None = None
 
         for round_index in range(MAX_TOOL_ROUNDS):
             await context.raise_if_cancelled()
@@ -441,7 +396,6 @@ class PresentationChatService:
                 return (
                     response_text,
                     called_tools,
-                    page_remake_slide_index,
                     tool_summaries,
                     mutations,
                 )
@@ -481,10 +435,6 @@ class PresentationChatService:
                     mutation = self._typed_mutation(tool_call.name, tool_result)
                     if mutation is not None:
                         mutations.append(mutation)
-                if page_remake_slide_index is None:
-                    page_remake_slide_index = _refused_authored_page_index(
-                        _tool_call_payload(tool_result)
-                    )
                 messages.append(
                     ToolResponseMessage(
                         id=tool_call.id,
@@ -510,7 +460,6 @@ class PresentationChatService:
         return (
             response_text,
             called_tools,
-            page_remake_slide_index,
             tool_summaries,
             mutations,
         )

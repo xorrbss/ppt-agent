@@ -919,31 +919,6 @@ export class PresentationGenerationApi {
     }
   }
 
-  static async retemplateAuthoredPresentation(
-    presentationId: string,
-    presentationData: { authored_style: string; vision_qa?: boolean },
-  ) {
-    try {
-      const response = await fetch(
-        getApiUrl(`/api/v1/ppt/presentation/${presentationId}/retemplate`),
-        {
-          method: "POST",
-          headers: getHeader(),
-          body: JSON.stringify(presentationData),
-          cache: "no-cache",
-        },
-      );
-
-      return await ApiResponseHandler.handleResponse(
-        response,
-        "Failed to change presentation template",
-      );
-    } catch (error) {
-      console.error("error changing authored presentation template", error);
-      throw error;
-    }
-  }
-
   static async previewAuthoredPageRemake(
     presentationId: string,
     slideIndex: number,

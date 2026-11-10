@@ -128,7 +128,6 @@ test("the report-only CSP skips surfaces that emit their own CSP, via Next's own
   // understanding of the pattern, not Next's.
   const matcher = getPathMatch(appPageCspSource);
   for (const excluded of [
-    "/pdf-maker",
     "/p/share-token",
     "/api/v1/ppt/presentation/all",
     "/api/user-config",
@@ -148,9 +147,8 @@ test("the report-only CSP skips surfaces that emit their own CSP, via Next's own
     "/presentation",
     "/presentation/workspace",
     "/settings",
-    // Segment-boundary regression: a prefix match on "pdf-maker" must not
-    // also swallow an unrelated route that merely starts with that string.
-    "/pdf-maker-anything",
+    // The removed headless export renderer route is no longer exempt.
+    "/pdf-maker",
   ]) {
     assert.equal(!!matcher(included), true, `${included} must be governed`);
   }

@@ -18,9 +18,6 @@ from models.sql.presentation import PRESENTATION_LIFECYCLE_PUBLISHED, Presentati
 from models.sql.public_admission import PublicOperationAdmission
 from models.sql.slide import SlideModel
 from models.sql.workspace import WorkspaceOperation
-from services.authored_quality_review_service import (
-    run_authored_quality_review as run_authored_quality_review,
-)
 from services.authored_evidence_ledger import digest_deck_htmls
 from services.authored_vnext.generation.legacy_bridge import (
     export_persisted_legacy_master_deck,
@@ -90,7 +87,6 @@ QUALITY_REVIEW_OPERATION_KIND = "quality.review"
 EXPORT_OPERATION_KINDS = ("export.pptx", "export.pdf")
 InternalHeaderProvider = Callable[[], Awaitable[dict[str, str]]]
 LOGGER = logging.getLogger(__name__)
-QUALITY_REVIEW_PROGRESS_INTERVAL_SECONDS = 30.0
 
 _public_export_error_code = public_export_error_code
 _public_export_failure_is_non_retryable = public_export_failure_is_non_retryable

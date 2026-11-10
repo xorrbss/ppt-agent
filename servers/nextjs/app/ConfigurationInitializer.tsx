@@ -55,9 +55,7 @@ export function ConfigurationInitializer({ children }: { children: React.ReactNo
   const t = useTranslations();
 
   const route = usePathname();
-  const [isLoading, setIsLoading] = useState(
-    () => !route?.startsWith("/pdf-maker")
-  );
+  const [isLoading, setIsLoading] = useState(true);
   const router = useRouter();
 
   useEffect(() => {
@@ -84,10 +82,6 @@ export function ConfigurationInitializer({ children }: { children: React.ReactNo
   }, []);
 
   const fetchUserConfigState = useCallback(async () => {
-    if (route.startsWith("/pdf-maker")) {
-      setIsLoading(false);
-      return;
-    }
 
     setIsLoading(true);
 
@@ -118,10 +112,6 @@ export function ConfigurationInitializer({ children }: { children: React.ReactNo
 
       dispatch(setLLMConfig(llmConfig));
       const isValid = hasValidLLMConfig(llmConfig);
-      if (route.startsWith('/pdf-maker')) {
-        setIsLoading(false);
-        return;
-      }
       if (isValid) {
         // Check if the selected Ollama model is pulled
         if (llmConfig.LLM === 'ollama' && llmConfig.OLLAMA_MODEL) {
