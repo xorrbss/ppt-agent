@@ -23,7 +23,6 @@ import { createServer } from "node:net";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { authoredLiveEnvironment, runAuthoredLiveE2e } from "./run-authored-live-e2e.mjs";
 const LOOPBACK = "127.0.0.1";
 const STARTUP_TIMEOUT_MS = 120_000;
 // The first request to the presentation route causes Next dev/Turbopack to
@@ -3152,7 +3151,7 @@ async function main() {
     // Next dev rewrites these generated TypeScript entry points for a custom
     // distDir. Restore their exact pre-run bytes after the disposable app stops.
     const childEnvironment = {
-      ...process.env, ...authoredLiveEnvironment(),
+      ...process.env,
       NEXT_TELEMETRY_DISABLED: "1",
       DISABLE_AUTH: "true",
       CAN_CHANGE_KEYS: "false",
@@ -3282,8 +3281,6 @@ async function main() {
       error.exitCode = liveResult.code || 1;
       throw error;
     }
-
-    throwIfInterrupted(); await runAuthoredLiveE2e({ artifactArguments: cypressArtifactArguments, artifactDirectory, baseUrl, childEnvironment, cypressCli, liveBackendUrl, onProcess: (process) => { cypressProcess = process; }, runDirectory, spawnNode, waitForExit: waitForExitWithTimeout });
   } catch (error) {
     await writeFailureDiagnostics(error).catch((diagnosticError) => {
       console.error(

@@ -12,8 +12,7 @@
     "test:ci-node": "node scripts/run-ci-node-tests.mjs",
     "test:chat-cypress": "cypress run --component --spec \"app/**/conversation/ChatSurface.cy.tsx,app/**/workspace/CanonicalWorkspaceChatPanel.cy.tsx\"",
     "test:workspace-cypress": "cypress run --component --spec \"app/**/workspace/WorkspaceChatPanel.cy.tsx\"",
-    "test:workspace-e2e": "node scripts/run-workspace-e2e.mjs",
-    "test:authored-vnext-local-e2e": "node scripts/run-authored-vnext-local-happy-path-e2e.mjs"
+    "test:workspace-e2e": "node scripts/run-workspace-e2e.mjs"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

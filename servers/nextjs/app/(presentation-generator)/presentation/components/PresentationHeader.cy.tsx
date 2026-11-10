@@ -21,7 +21,7 @@ import type {
 } from "../workspace";
 
 const mountHeader = (
-  isAuthoredDeck: boolean,
+  isSvgDeck: boolean,
   mutationsEnabled = true,
   workspace?: {
     enabled: boolean;
@@ -29,8 +29,7 @@ const mountHeader = (
     qualityReview?: WorkspaceQualityReviewRequester;
     pageRemake?: WorkspacePageRemakeRequester;
   },
-  editableHybridProjection?: Record<string, unknown>,
-  authoredQualityGate?: Record<string, unknown>,
+  svgTheme?: Record<string, unknown>,
   activeExportOperation?: "export.pptx" | "export.pdf" | null,
   sourcePreservingSvg = false,
 ) => {
@@ -38,22 +37,23 @@ const mountHeader = (
     setPresentationData({
       id: "deck-1",
       language: "en",
-      layout: isAuthoredDeck ? null : { name: "template-v2", ordered: false, slides: [] },
+      layout: isSvgDeck ? null : { name: "template-v2", ordered: false, slides: [] },
       n_slides: 1,
       title: "deck",
-      slides: [{ id: "slide-1", layout: "template-v2" }],
-      theme:
-        sourcePreservingSvg ? { svg: { sourcePreservation: { version: 1 } } } : editableHybridProjection || authoredQualityGate
-          ? {
-              ...(editableHybridProjection
-                ? { authored_vnext: editableHybridProjection }
-                : {}),
-              ...(authoredQualityGate
-                ? { authoredQualityGate }
-                : {}),
-            }
+      slides: [
+        isSvgDeck
+          ? { id: "slide-1", source_format: "svg" }
+          : { id: "slide-1", layout: "template-v2" },
+      ],
+      theme: sourcePreservingSvg
+        ? { svg: { sourcePreservation: { version: 1 } } }
+        : svgTheme
+          ? { svg: svgTheme }
           : null,
-      mode: sourcePreservingSvg ? "svg" : isAuthoredDeck ? "authored" : "template",
+      mode: isSvgDeck || sourcePreservingSvg ? "svg" : "template",
+      ...(isSvgDeck
+        ? { capabilities: { editor: { slide_image_regenerate: true } } }
+        : {}),
       version: "v2-standard",
     } as any)
   );
@@ -78,7 +78,6 @@ const mountHeader = (
               presentation_id="deck-1"
               isPresentationSaving={false}
               currentSlide={workspace?.pageRemake ? 0 : undefined}
-              isAuthoredDeck={isAuthoredDeck}
               mutationsEnabled={mutationsEnabled}
               workspaceCommandsEnabled={workspace?.enabled ?? false}
               onWorkspaceCommand={workspace?.command}
@@ -118,163 +117,6 @@ const expectNoLegacyDirectExport = () => {
   cy.get("@notifyError").should("not.have.been.called");
 };
 
-const CAPABILITY_IDS = [
-  "shape.gradient",
-  "shape.shadow",
-  "layout.transform",
-  "layout.flex",
-  "layout.grid",
-  "shape.borderRadius",
-  "shape.opacity",
-  "shape.clip",
-];
-const RECEIPT_IDS = ["cjk", "chart", "zBand", "degradation"];
-const FIXTURE_DIGEST = `sha256:${"a".repeat(64)}`;
-
-/**
- * A hybrid-ready capability projection on the retained v1 compatibility route.
- * The header only renders the Hybrid options when the server publishes a
- * hybrid-ready projection. Pinning the projection keeps this spec about the
- * export labels instead of about which readiness endpoint happens to answer;
- * the bounded v3 route production actually serves has its own case below.
- */
-const hybridReadyCapabilityProjection = {
-  schemaVersion: "workbench-capability-projection/v1",
-  presentationId: "deck-1",
-  presentationRevision: 3,
-  canonicalMode: "bundleGraph",
-  canonicalDigest: FIXTURE_DIGEST,
-  manifestDigest: FIXTURE_DIGEST,
-  degradedFidelityOnly: false,
-  fidelity: { state: "ready", receiptDigest: FIXTURE_DIGEST },
-  hybrid: {
-    text: { state: "ready", receiptDigest: FIXTURE_DIGEST },
-    image: { state: "ready", receiptDigest: FIXTURE_DIGEST },
-    shape: { state: "ready", receiptDigest: FIXTURE_DIGEST },
-  },
-  capabilityMatrix: CAPABILITY_IDS.map((capabilityId) => ({
-    capabilityId,
-    state: "ready",
-    decision: "native",
-    reasonCode: "capability.ready",
-    receiptDigest: FIXTURE_DIGEST,
-  })),
-  receipts: RECEIPT_IDS.map((receiptId) => ({
-    receiptId,
-    state: "ready",
-    decision: "native",
-    reasonCode: "receipt.ready",
-    receiptDigest: FIXTURE_DIGEST,
-  })),
-  readiness: {
-    authoredCreationReady: true,
-    fidelityExportReady: true,
-    fullNativeParityReady: false,
-    independentVnextGenerationReady: false,
-    promotionReady: false,
-  },
-  killSwitches: [],
-  elements: [],
-  projectionDigest: FIXTURE_DIGEST,
-};
-
-const stubHybridReadyCapabilityProjection = () => {
-  // 501 is the "explicitly unsupported" answer that lets the client fall back
-  // one route at a time; anything else fails closed instead.
-  cy.intercept("GET", "**/authored-emission/capability-projection-v3", {
-    statusCode: 501,
-    body: {},
-  }).as("capabilityProjectionV3");
-  cy.intercept("GET", "**/authored-emission/capability-projection-v2", {
-    statusCode: 501,
-    body: {},
-  }).as("capabilityProjectionV2");
-  cy.intercept("GET", "**/authored-emission/capability-projection", {
-    statusCode: 200,
-    body: hybridReadyCapabilityProjection,
-  }).as("capabilityProjection");
-};
-
-/**
- * The bounded release readiness the server actually publishes today: every
- * receipt still missing, the renderer unattested, and `nativeSubsetStatus`
- * pinned to "notApplicable" because this profile never claims the native
- * subset. None of that withholds the diagnostic Hybrid export, so the header
- * must still offer it. Freshness is checked against the wall clock, so the
- * timestamps are relative rather than pinned.
- */
-const boundedReleaseV3Projection = () => {
-  const capabilityIds = [
-    "ci.requiredChecks",
-    "evidence.visual",
-    "receipt.degradation",
-    "renderer.attestation",
-  ];
-  return {
-    schemaVersion: "workbench-capability-projection/v3",
-    presentationId: "deck-1",
-    presentationRevision: 7,
-    canonicalMode: "bundleGraph",
-    canonicalDigest: FIXTURE_DIGEST,
-    manifestDigest: FIXTURE_DIGEST,
-    degradedFidelityOnly: false,
-    releaseProfile: {
-      schemaVersion: "authored-bounded-hybrid-release-readiness/v3",
-      profileId: "profile:bounded-hybrid",
-      platformScope: { platform: "windows", renderer: "external-worker", archetypes: ["title"] },
-      evaluatedAt: new Date(Date.now() - 60 * 60_000).toISOString(),
-      expiresAt: new Date(Date.now() + 24 * 60 * 60_000).toISOString(),
-      deckEvidenceReady: false,
-      serializerProfileReady: false,
-      nativeSubsetReady: false,
-      releaseCommitReady: false,
-      promotionReady: false,
-      deploymentAuthorized: false,
-      fullNativeParityStatus: "notApplicable",
-      independentVnextGenerationStatus: "notApplicable",
-      deckEvidenceCapabilityIds: ["evidence.visual"],
-      serializerProfileCapabilityIds: ["receipt.degradation", "renderer.attestation"],
-      nativeSubsetStatus: "notApplicable",
-      nativeSubsetCapabilityIds: [],
-      unsupportedNativeCapabilityIds: [
-        "receipt.chart",
-        "receipt.cjk",
-        "receipt.imageCrop",
-        "receipt.table",
-        "receipt.zBand",
-      ],
-      releaseCommitCapabilityIds: ["ci.requiredChecks"],
-      allRequiredCapabilityIds: [...capabilityIds].sort(),
-      profileDefinitionDigest: FIXTURE_DIGEST,
-      deckEvidenceReceiptDigests: [],
-      serializerProfileReceiptDigests: [],
-      nativeSubsetReceiptDigests: [],
-      releaseCommitReceiptDigests: [],
-      promotionReceiptDigests: [],
-      reasonCode: "release_evidence_incomplete",
-    },
-    capabilities: capabilityIds.map((capabilityId, index) => ({
-      capabilityId,
-      state: "ready",
-      reasonCode: "receipt_verified",
-      receiptDigest: `sha256:${String(index + 1).repeat(64)}`,
-      scope: { platform: "windows", renderer: "external-worker", archetypes: ["title"] },
-      serializerId: "presenton-authored-hybrid",
-      serializerVersion: "v3",
-      expiresAt: new Date(Date.now() + 24 * 60 * 60_000).toISOString(),
-    })),
-    rendererAttestation: {
-      state: "unattested",
-      reasonCode: "renderer_attestation_missing",
-      attestationDigest: null,
-      environment: { os: "windows", boundary: "external-worker" },
-      expiresAt: null,
-    },
-    killSwitches: [],
-    releaseAuthorityReceiptDigests: [],
-  };
-};
-
 describe("PresentationHeader workspace controls", () => {
   beforeEach(() => {
     cy.stub(notify, "loading").returns("direct-export").as("notifyLoading");
@@ -283,21 +125,6 @@ describe("PresentationHeader workspace controls", () => {
     cy.stub(PresentationGenerationApi, "updatePresentationContent")
       .as("updatePresentationContent")
       .resolves({});
-  });
-
-  it("links only an exact non-blocked editable-Hybrid Scene bridge", () => {
-    mountHeader(true, true, undefined, {
-      schemaVersion: "authored-editable-hybrid-scene-projection/v1",
-      profileId: "authored-editable-hybrid-ko-en-basic-v1",
-      deckId: "deck:normal-ai-publication",
-      status: "shadow",
-    });
-    openMoreOptions();
-    cy.get('[data-testid="editable-hybrid-workbench-bridge"]').should(
-      "contain.text",
-      koMessages.presentationHeader.editableHybridTitle,
-    );
-    cy.get('[data-testid="editable-hybrid-workbench-link"]').should("have.attr", "href", "/authored-vnext/workbench?authoredDeckId=deck%3Anormal-ai-publication");
   });
 
   it("routes page remake and quality into chat-first UI without a legacy dialog", () => {
@@ -334,18 +161,9 @@ describe("PresentationHeader workspace controls", () => {
         "PDF로 내보내기",
         { commandType: "export.pdf", context: { format: "pdf" } },
       ]);
-      // Fidelity carries its mode and an explicit font-embedding decision into
-      // the durable operation rather than into a direct browser download.
       expect(workspaceCommand.getCall(1).args).to.deep.equal([
         "PPTX로 내보내기",
-        {
-          commandType: "export.pptx",
-          context: {
-            format: "pptx",
-            pptx_mode: "fidelity",
-            font_embedding: false,
-          },
-        },
+        { commandType: "export.pptx", context: { format: "pptx" } },
       ]);
       expect(workspaceCommand).to.have.been.calledTwice;
     });
@@ -360,7 +178,6 @@ describe("PresentationHeader workspace controls", () => {
       true,
       false,
       { enabled: true, command: workspaceCommand },
-      undefined,
       {
         flaggedSlides: [
           { index: 0, slideId: "slide-1", reason: "author:placeholder", classification: "review_required" },
@@ -381,11 +198,11 @@ describe("PresentationHeader workspace controls", () => {
     });
   });
 
-  it("leaves a failed Authored export to the durable workspace operation", () => {
+  it("leaves a failed export to the durable workspace operation", () => {
     const workspaceCommand = cy
       .stub()
       .as("workspaceCommand")
-      .rejects(new Error("Hybrid export quality evidence is incomplete"));
+      .rejects(new Error("export admission failed"));
     stubLegacyDirectExportRoute();
     mountHeader(true, false, { enabled: true, command: workspaceCommand });
 
@@ -395,14 +212,7 @@ describe("PresentationHeader workspace controls", () => {
     cy.wrap(null).then(() => {
       expect(workspaceCommand.getCall(0).args).to.deep.equal([
         "PPTX로 내보내기",
-        {
-          commandType: "export.pptx",
-          context: {
-            format: "pptx",
-            pptx_mode: "fidelity",
-            font_embedding: false,
-          },
-        },
+        { commandType: "export.pptx", context: { format: "pptx" } },
       ]);
       expect(workspaceCommand).to.have.been.calledOnce;
     });
@@ -412,118 +222,13 @@ describe("PresentationHeader workspace controls", () => {
     cy.get("@updatePresentationContent").should("not.have.been.called");
   });
 
-  it("labels Hybrid fallback and font-free compatibility explicitly", () => {
-    const workspaceCommand = cy.stub().as("workspaceCommand").resolves();
-    stubHybridReadyCapabilityProjection();
-    mountHeader(true, false, { enabled: true, command: workspaceCommand });
-    cy.wait("@capabilityProjection");
-
-    openExportOptions();
-    cy.get('[data-testid="export-pptx"]')
-      .should("contain.text", "Fidelity PPTX")
-      .and("contain.text", "1280×720 raster")
-      .and("contain.text", "접근 가능한 텍스트·개체 편집은 제공하지 않으며");
-    // The visible headline and the aria-label are the durable contract here.
-    // The explanatory note under each option is marketing prose that has been
-    // reworded three times (5218198f3, 2800b3cf1, 8e597e2a9), and asserting on
-    // it made this test fail on wording rather than on behaviour.
-    cy.get('[data-testid="authored-export-hybrid"]')
-      .should("contain.text", "raster fallback (기본)")
-      .and("have.attr", "aria-label")
-      .and("contain", "글꼴 포함 기본값");
-    cy.get('[data-testid="authored-export-hybrid-compatibility"]')
-      .should("contain.text", "raster fallback 호환 모드")
-      .and("have.attr", "aria-label")
-      .and("contain", "글꼴 미포함");
-  });
-
-  it("offers Hybrid on the bounded v3 readiness route the server publishes", () => {
-    const workspaceCommand = cy.stub().as("workspaceCommand").resolves();
-    cy.intercept("GET", "**/authored-emission/capability-projection-v3", {
-      statusCode: 200,
-      body: boundedReleaseV3Projection(),
-    }).as("capabilityProjectionV3");
-    mountHeader(true, false, { enabled: true, command: workspaceCommand });
-    cy.wait("@capabilityProjectionV3");
-
-    openExportOptions();
-    cy.get('[data-testid="authored-export-hybrid"]').should("be.visible");
-    cy.get('[data-testid="authored-export-hybrid-compatibility"]').should("be.visible");
-    cy.get('[data-testid="authored-export-hybrid-unavailable"]').should("not.exist");
-    // The uncertified scope is disclosed in the status line, not by withholding
-    // the export.
-    openMoreOptions();
-    cy.get('[data-testid="authored-capability-status"]').should(
-      "contain.text",
-      "native subset은 지원하지 않으며",
-    );
-  });
-
-  it("keeps quality advisory while preserving Hybrid capability admission", () => {
-    const workspaceCommand = cy.stub().as("workspaceCommand").resolves();
-    cy.intercept("GET", "**/authored-emission/capability-projection-v3", {
-      statusCode: 200,
-      body: boundedReleaseV3Projection(),
-    }).as("capabilityProjectionV3");
-    // Quality is advisory for source export; immutable capability admission still applies.
-    mountHeader(true, false, { enabled: true, command: workspaceCommand }, undefined, {
-      qualityReceiptV3: {
-        gatePassed: false,
-        blockers: ["visualReview.required_failed"],
-      },
-    });
-    cy.wait("@capabilityProjectionV3");
-
-    openExportOptions();
-    cy.get('[data-testid="export-pptx"]').should("contain.text", "Fidelity PPTX");
-    cy.get('[data-testid="authored-export-hybrid"]').should("be.visible");
-    cy.get('[data-testid="authored-export-hybrid-unavailable"]').should("not.exist");
-  });
-
   it("blocks unsupported source-preserving SVG PDF but keeps PPTX available", () => {
     const command = cy.stub().as("svgCommand").resolves();
-    mountHeader(false, true, { enabled: true, command }, undefined, undefined, null, true);
+    mountHeader(false, true, { enabled: true, command }, undefined, null, true);
     openExportOptions();
     cy.get('[data-testid="export-pdf"]').should("be.disabled");
     cy.get('[data-testid="export-pptx"]').should("be.enabled");
     cy.get("@svgCommand").should("not.have.been.called");
-  });
-
-  it("offers Hybrid once the deck's receipt has passed", () => {
-    const workspaceCommand = cy.stub().as("workspaceCommand").resolves();
-    cy.intercept("GET", "**/authored-emission/capability-projection-v3", {
-      statusCode: 200,
-      body: boundedReleaseV3Projection(),
-    }).as("capabilityProjectionV3");
-    mountHeader(true, false, { enabled: true, command: workspaceCommand }, undefined, {
-      qualityReceiptV3: { gatePassed: true, blockers: [] },
-    });
-    cy.wait("@capabilityProjectionV3");
-
-    openExportOptions();
-    cy.get('[data-testid="authored-export-hybrid"]').should("be.visible");
-    cy.get('[data-testid="authored-export-hybrid-unavailable"]').should("not.exist");
-  });
-
-  it("withholds Hybrid and keeps Fidelity when the capability projection is unavailable", () => {
-    const workspaceCommand = cy.stub().as("workspaceCommand").resolves();
-    cy.intercept("GET", "**/authored-emission/capability-projection*", {
-      statusCode: 503,
-      body: { code: "capability_projection_unavailable" },
-    }).as("capabilityProjectionUnavailable");
-    mountHeader(true, false, { enabled: true, command: workspaceCommand });
-    cy.wait("@capabilityProjectionUnavailable");
-
-    openExportOptions();
-    cy.get('[data-testid="export-pptx"]').should("contain.text", "Fidelity PPTX");
-    cy.get('[data-testid="authored-export-hybrid-unavailable"]').should(
-      "contain.text",
-      "Hybrid 비활성",
-    );
-    cy.get('[data-testid="authored-export-hybrid"]').should("not.exist");
-    cy.get('[data-testid="authored-export-hybrid-compatibility"]').should(
-      "not.exist",
-    );
   });
 
   it("dispatches durable version restore commands for chat-first undo and redo", () => {
@@ -590,7 +295,6 @@ describe("PresentationHeader workspace controls", () => {
       true,
       { enabled: true, command: workspaceCommand },
       undefined,
-      undefined,
       "export.pptx",
     );
 
@@ -607,7 +311,6 @@ describe("PresentationHeader workspace controls", () => {
       false,
       true,
       { enabled: true, command: workspaceCommand },
-      undefined,
       undefined,
       null,
     );
