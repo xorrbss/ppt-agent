@@ -754,6 +754,66 @@ The full pytest suite and `npm run test:next-ci` run before each PR merges.
   first two were closed later the same day, see "Release gate done
   2026-11-11" under B5).
 
+**Follow-ups done 2026-11-11** (owner: "tables may be deleted, data need not
+be kept"; one agent per worktree, svg unit subset run serially by the
+orchestrator):
+
+- #182: the server-filled `SlideOutlineModel.chapter` (added in `878e036cc`) is
+  dropped from the outline response schema; Codex strict structured output had
+  rejected every outline call with `invalid_json_schema`. A real Codex 5-page
+  svg deck then generated, exported PPTX and PDF, and remade a page.
+- #184: `next.config.mjs` keeps `proxyClientMaxBodySize: "16mb"`; its comment
+  no longer cites the deleted `/api/internal/ooxml-vnext` route.
+- #185: `WorkspacePartialRecovery.tsx` mirrors its attempt ref into state for
+  render; `npm run lint` has 0 errors.
+- #186: `servers/fastapi/assets/icon_families/** -text` (indexed bytes, 3 of
+  them CRLF, are checked out exactly), CRLF-agnostic reads in
+  `required-ci-contract.test.mjs` and `requestVerbosity.test.mjs`, and the
+  unused `/api/upload-image` route removed. The Windows svg unit subset went
+  from 214 to 21 failures, none outside the B0 list.
+- #187: Alembic revision `e7b2d4f6a8c1` drops eight tables no code read any
+  more: `authored_vnext_export_jobs`, `_export_artifact_receipts`,
+  `_render_receipts`, `_quality_decisions`, `_generation_operations`,
+  `authored_deck_emission_manifests`, `authored_deck_emission_active`,
+  `authored_slide_editor_events`. Its `downgrade()` recreates them empty (the
+  downgrades of `a6b2c4d8e0f3` and `b5a0d3e7c9f1` need them). Removed with them:
+  the models, the account-deletion fences, `generation/account_lifecycle.py`,
+  `generation/sql_publication.py`, most of `generation/sql_repository.py` and
+  `AUTHORED_VNEXT_OOXML_PACKAGE_ENABLED`; the workspace-maintenance storage
+  error is now `authored_vnext_master_storage_unavailable`. Kept:
+  `authored_slide_checkpoints`, `authored_deck_plan_checkpoints` and the six
+  master-pin tables. The master pin is a live feature, not a leftover: the
+  upload page's company-standard picker (`NEXT_PUBLIC_AUTHORED_VNEXT_MASTER_ENABLED`
+  defaults on) sends `masterPin`, and svg admission resolves it through
+  `legacy_pin` into the style (`generation_core/style/build.py:163-188`), so a
+  pin changes palette, fonts and template rules. Removing it is a product
+  decision. Round trips verified on SQLite and a throwaway PostgreSQL 15.
+
+**Release-gate runners, not yet PASS** (branches pushed, not merged, pending
+an owner decision on where this evidence should run):
+
+- `fix/malicious-corpus-runtime-20261111` (`7f67c9024`): `_worker_boundary_checks`
+  had never passed (its hard-coded environment lacked three values the validator
+  required since both were written in `c52e2a7ce`); it now derives the
+  isolation contract from `services/public_worker_profiles.py` and observes 18
+  accept/reject cases per role. The end-to-end run then stops in the HTML corpus:
+  `_run_render_job` predates the trusted-executor dispatcher (`d78d5a307`) and
+  calls `execute_isolated_worker_job` without `presentation_id`. Its
+  network-none and safe-HTML gate checks also need the Docker-based renderer
+  harness (`docs/experiments/authored-vnext/04-renderer-security`), which is
+  authored-renderer evidence; Docker is not available on the Windows host.
+- `fix/crash-recovery-live-20261111` (`81d6864a1`): lease expiry now follows
+  the operation lease (a workspace-linked job's lease columns stay NULL), and
+  the token-leak scan skips files shorter than the token (Windows `.lock`
+  files) and no longer overwrites `failureDetail`; the second fix is not yet
+  re-run. In three real Codex runs the crash, lease expiry, reclaim, outbox
+  events and the successor's `run.status` with `checkpoint_reuse_count` all
+  happened, but the successor failed with `public_provider_result_unknown`:
+  the runner kills the worker at the first rendered checkpoint while other
+  pages' provider calls are `reserved`, and svg recovery refuses to resume
+  over a paid call with an unknown result
+  (`services/svg_presentation_checkpoint.py:447,496`).
+
 One PR per batch (or sub-batch) to GitHub `main`, mirrored to Bitbucket after
 merge.
 
