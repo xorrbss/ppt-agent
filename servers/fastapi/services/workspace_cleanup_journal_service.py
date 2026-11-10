@@ -40,7 +40,7 @@ from models.sql.workspace import (
     WorkspaceConversation,
     WorkspaceOperation,
 )
-from services.authored_checkpoint_service import checkpoint_root
+from services.authored_checkpoint_artifacts import checkpoint_root
 from services.database import async_session_maker
 from services.workspace_artifact_publication_service import (
     _app_data_root,

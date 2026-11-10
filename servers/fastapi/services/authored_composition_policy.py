@@ -40,10 +40,10 @@ from utils.authored_dom_quality import (
 from utils.authored_fragmentation_gate import fragmentation_repair_instruction
 from services.authored_canvas import DEFAULT_CANVAS_HEIGHT_PX, DEFAULT_CANVAS_WIDTH_PX, LANDSCAPE_ASPECT_RATIO, PORTRAIT_ASPECT_RATIO, canvas_size_for_aspect_ratio
 from utils.hashing import sha256_prefixed
+from services.workspace_recovery_revision import AUTHORED_CAPACITY_BOUNDED_REPAIR_REVISION
 
 CompositionProfileId = Literal["ordinary", "source-verbatim", "source-outline"]
 QualityProfileId = Literal["development", "release"]
-AUTHORED_CAPACITY_BOUNDED_REPAIR_REVISION = "authored-capacity-bounded-repair/v1"
 _CAPACITY_REDUCER_MARKER = "authored-closing-capacity-reducer-v1"
 _TITLE_PUNCTUATION_REDUCER_MARKER = "authored-closing-title-punctuation-reducer-v1"
 _LAYOUT_ALIGNMENT_MARKER = "authored-layout-alignment-repair-v1"

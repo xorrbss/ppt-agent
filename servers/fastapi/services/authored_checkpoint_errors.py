@@ -151,7 +151,7 @@ class AuthoredStageError(RuntimeError):
                 nested = nested.__cause__
             if chain:
                 value["capture_cause_types"] = chain
-        from services.authored_author_capacity_recovery import safe_owner_capacity_diagnostic
+        from services.stage_error_diagnostics import safe_owner_capacity_diagnostic
 
         diagnostic = safe_owner_capacity_diagnostic(
             getattr(cause, "owner_capacity_diagnostic", None)

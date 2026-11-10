@@ -57,6 +57,12 @@ from services.authored_remake_schedule import (
     settled_flag_entry,
     terminal_reason as _terminal_reason,
 )
+# The deck and per-slide remake budgets live in ``services.remake_caps`` so
+# admission and the timing receipt can read them without this module.
+from services.remake_caps import (
+    MAX_REMAKES_PER_SLIDE as MAX_REMAKES_PER_SLIDE,
+    MAX_TERMINAL_REMAKES_PER_DECK as MAX_TERMINAL_REMAKES_PER_DECK,
+)
 from services.authored_terminal_slide_flag_only import verbatim_flagged_slides
 from services.authored_terminal_slide_policy import terminal_fallback_active
 from services.authored_vnext.generation.scene_envelope import replace_deck_scene_slide
@@ -73,18 +79,6 @@ from utils.slide_capture import (
 )
 
 LOGGER = logging.getLogger(__name__)
-
-#: Remake attempts one deck may spend, shared by the remake-first round and
-#: this terminal round. Each one is a full authoring call, so a deck whose
-#: gate flagged a dozen slides must not turn into a dozen sequential provider
-#: calls. Slides past the budget are flagged with ``remake_budget_exhausted``
-#: rather than dropped.
-MAX_TERMINAL_REMAKES_PER_DECK = 8
-
-#: Remake attempts one slide may spend across those two rounds. Bench run 10
-#: measured the single remake as the binding limit: 4 of 8 terminal slides
-#: were published flagged with the budget already spent.
-MAX_REMAKES_PER_SLIDE = 2
 
 #: The D7 lower-density hint. ``CritiqueIssue.detail`` is truncated to 200
 #: characters by the remake service and by the reviser's prompt budget.

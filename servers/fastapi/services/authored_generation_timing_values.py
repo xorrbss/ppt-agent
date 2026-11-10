@@ -12,7 +12,7 @@ non-negative number clamped to a sane ceiling, and an identity digest is a
 
 from __future__ import annotations
 
-from services.authored_quality_receipt_v2 import _optional_prefixed_sha256
+from services.generation_receipt_storage import _optional_prefixed_sha256
 
 
 MAX_GENERATION_STAGE_TIMING_MS = 30 * 24 * 60 * 60 * 1000

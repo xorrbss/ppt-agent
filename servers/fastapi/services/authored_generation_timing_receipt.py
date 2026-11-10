@@ -11,6 +11,7 @@ from contextlib import contextmanager
 from dataclasses import dataclass, field, replace
 from pathlib import Path
 from time import monotonic
+from typing import Any
 
 from services.authored_generation_timing_receipt_e4 import (
     deck_instruments_field,
@@ -40,11 +41,9 @@ from services.authored_generation_timing_values import (
 )
 from services.provider_call_timing import provider_call_timing_field
 from services.provider_operation_usage import STAGE_COUNTER_KEYS
-from services.authored_quality_receipt_v2 import (
-    QualityReceiptV2,
+from services.generation_receipt_storage import (
     _manifest_digest,
     _manifest_lock,
-    _receipt_digest as _quality_receipt_digest,
     public_attempt_id,
     quality_receipt_manifest_path,
 )
@@ -481,7 +480,9 @@ def _persist_records(
 def create_generation_timing_receipt(
     *,
     job_id: object,
-    quality_receipt: QualityReceiptV2,
+    # A sealed ``authored_quality_receipt_v2.QualityReceiptV2``; untyped here
+    # so the attempt timing receipts every driver writes do not import it.
+    quality_receipt: Any,
     attempt_number: int,
     stage_timings_ms: Mapping[str, object],
     total_ms: object,
@@ -495,6 +496,12 @@ def create_generation_timing_receipt(
         or attempt_number < 0
     ):
         raise ValueError("generation_timing_attempt_number_invalid")
+    # Only the authored publication path seals a QualityReceipt v2; import its
+    # digest here so the attempt timing receipts every driver writes do not.
+    from services.authored_quality_receipt_v2 import (
+        _receipt_digest as _quality_receipt_digest,
+    )
+
     if quality_receipt.receipt_digest != _quality_receipt_digest(quality_receipt):
         raise ValueError("generation_timing_quality_receipt_digest_mismatch")
     receipt = GenerationTimingReceipt(

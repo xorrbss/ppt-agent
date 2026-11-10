@@ -105,7 +105,7 @@ async def test_source_generation_verifies_before_publish_and_bounds_repair(
         return_value=(SimpleNamespace(slots=[], offered_pages=[], digest="sha256:assets"), {"ref": "test"})))
     monkeypatch.setattr("services.svg_generation_assets.author_images", AsyncMock(return_value={}))
     monkeypatch.setattr("services.svg_generation_assets.screen_placement", AsyncMock(return_value=({}, None)))
-    monkeypatch.setattr("services.authored_checkpoint_service.fail_stage", AsyncMock())
+    monkeypatch.setattr("services.generation_checkpoint_rows.fail_stage_committed", AsyncMock())
     # This fixture isolates storage; operation-bound recovery is covered by
     # its own tests and must not query a real session here.
     async def runtime_profile(_session, _job, profile):
@@ -994,7 +994,7 @@ async def test_terminal_page_failure_global_cancels_waiters_page_local_freezes_d
             events.append(("fail_stage_committed", failed_index))
 
     fail_stage_mock = AsyncMock(side_effect=fail_stage)
-    monkeypatch.setattr("services.authored_checkpoint_service.fail_stage", fail_stage_mock)
+    monkeypatch.setattr("services.generation_checkpoint_rows.fail_stage_committed", fail_stage_mock)
     from services import svg_presentation_checkpoint as checkpoint_store
     real_record_svg_provider_event = checkpoint_store.record_svg_provider_event
 

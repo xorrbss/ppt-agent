@@ -566,7 +566,7 @@ async def initialize_svg_checkpoints(*, job_id, attempt_token, roles, fencing_to
     a request to recreate progress. Attempt ordinals alone do not prove that
     provider work started: an outline-only failure may be safely re-claimed.
     """
-    from services import authored_checkpoint_state, svg_presentation_service as facade
+    from services import generation_checkpoint_rows, svg_presentation_service as facade
     from services.generation_core.drivers.svg.collect import _stage_error, _unknown_provider_checkpoint
 
     async with facade.async_session_maker() as session:
@@ -584,7 +584,7 @@ async def initialize_svg_checkpoints(*, job_id, attempt_token, roles, fencing_to
         await verify_svg_checkpoint_bootstrap(session, job, len(roles), fencing_token=fencing_token)
         # Reuse the canonical initializer in this same fenced transaction. It
         # inserts only absent rows and does not clear old checkpoint outcomes.
-        await authored_checkpoint_state.initialize_checkpoints(
+        await generation_checkpoint_rows.initialize_checkpoints(
             job_id=job_id, attempt_token=attempt_token, roles=roles,
             fencing_token=fencing_token, session=session,
         )

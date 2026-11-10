@@ -2,15 +2,13 @@ from __future__ import annotations
 
 import json
 import os
-from typing import Any, Mapping
+from typing import Mapping
 import uuid
 
-from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from models.sql.authored_slide_checkpoint import AuthoredSlideCheckpoint
 from models.sql.presentation_generation_job import PresentationGenerationJob
-from models.sql.workspace import WorkspaceOperation
 from services.authored_checkpoint_artifacts import (
     atomic_write,
     checkpoint_root,
@@ -21,7 +19,6 @@ from services.authored_checkpoint_artifacts import (
     write_valid_evidence,
 )
 from services.artifact_store import configured_public_artifact_service
-from services.authored_checkpoint_errors import AuthoredStageError
 from services.authored_admission_checkpoint import (
     admit_checkpoint_write, checkpoint_receipt_metadata, enforce_receipts,
 )
@@ -52,55 +49,21 @@ from services.authored_slide_checkpoint_bundle import (
     SlideCheckpointBundle,
     SlideCheckpointConflict,
 )
-from services.authored_generation_observability import log_authored_slide_failure_observation
 from services.database import async_session_maker
-from services.workspace_public_generation_lifecycle import monotonic_svg_job_stage
 from utils.datetime_utils import get_current_utc_datetime
 from utils.get_env_programme import is_authored_checkpoint_batching_enabled
 from utils.get_env import get_environment_name
 from utils.hashing import sha256_hex
-
-
-STAGES = ("author", "illustrate", "render", "persist")
-_STATUS_FIELD = {stage: f"{stage}_status" for stage in STAGES}
-
-
-async def initialize_checkpoints(
-    *,
-    job_id: uuid.UUID,
-    attempt_token: str,
-    roles: list[str],
-    fencing_token: int | None = None,
-    session: AsyncSession | None = None,
-) -> None:
-    now = get_current_utc_datetime()
-    async with _checkpoint_mutation_session(session) as (mutation_session, owns_session):
-        job = await _owned_job(
-            mutation_session, job_id, attempt_token, fencing_token=fencing_token
-        )
-        existing = set(
-            await mutation_session.scalars(
-                select(AuthoredSlideCheckpoint.slide_index).where(
-                    AuthoredSlideCheckpoint.job_id == job_id
-                )
-            )
-        )
-        for index, role in enumerate(roles):
-            if index not in existing:
-                mutation_session.add(
-                    AuthoredSlideCheckpoint(
-                        job_id=job_id,
-                        slide_index=index,
-                        role=role,
-                    )
-                )
-        job.total_slides = len(roles)
-        job.completed_slides = await _completed_count(mutation_session, job_id)
-        job.current_stage = "author"
-        job.updated_at = now
-        mutation_session.add(job)
-        if owns_session:
-            await mutation_session.commit()
+# The row writes every generation driver shares live in
+# ``generation_checkpoint_rows``; re-exported for the historical callers.
+from services.generation_checkpoint_rows import (
+    STAGES as STAGES,
+    _STATUS_FIELD as _STATUS_FIELD,
+    _require_stage as _require_stage,
+    fail_stage as fail_stage,
+    initialize_checkpoints as initialize_checkpoints,
+    progress_for_task as progress_for_task,
+)
 
 
 async def get_checkpoint(
@@ -177,8 +140,6 @@ async def start_stage(
         if owns_session:
             await mutation_session.commit()
         return checkpoint
-
-
 
 
 async def complete_stage(
@@ -366,157 +327,6 @@ async def complete_stage(
         return checkpoint
 
 
-async def fail_stage(
-    *,
-    job_id: uuid.UUID,
-    slide_index: int,
-    stage: str,
-    attempt_token: str,
-    error: AuthoredStageError,
-    request_id: str | None,
-    fencing_token: int | None = None,
-    session: AsyncSession | None = None,
-) -> dict[str, Any]:
-    _require_stage(stage)
-    async with _checkpoint_mutation_session(session) as (mutation_session, owns_session):
-        job = await _owned_job(
-            mutation_session, job_id, attempt_token, fencing_token=fencing_token
-        )
-        safe = error.as_safe_dict(
-            request_id=request_id, attempt_number=job.attempt_number
-        )
-        checkpoint = await _checkpoint(mutation_session, job_id, slide_index)
-        setattr(checkpoint, _STATUS_FIELD[stage], "failed")
-        checkpoint.failed_stage = stage
-        checkpoint.error = safe
-        checkpoint.failed_at = get_current_utc_datetime()
-        checkpoint.attempt_token = attempt_token
-        checkpoint.updated_at = get_current_utc_datetime()
-        if (job.request_payload or {}).get("strategy") == "svg":
-            # Siblings may still render after this page fails. Read the latest
-            # deck stage under the owned_job lock before projecting the failure.
-            await mutation_session.refresh(job, attribute_names=["current_stage"])
-            job.current_stage = monotonic_svg_job_stage(job.current_stage, stage)
-        else:
-            job.current_stage = stage
-        job.resume_allowed = error.retryable
-        job.last_error = safe
-        job.completed_slides = await _completed_count(mutation_session, job_id)
-        job.updated_at = checkpoint.updated_at
-        mutation_session.add_all((checkpoint, job))
-        if owns_session:
-            await mutation_session.commit()
-    log_authored_slide_failure_observation(
-        stage=stage,
-        code=error.code,
-        slide_number=slide_index + 1,
-        retryable=error.retryable,
-        provider_attempt_count=error.provider_attempt_count,
-    )
-    return safe
-
-
-async def progress_for_task(
-    task_id: str,
-    session: AsyncSession | None = None,
-) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
-    """Return authored progress, using the caller's read transaction when given."""
-
-    if session is None:
-        async with async_session_maker() as owned_session:
-            return await progress_for_task(task_id, owned_session)
-
-    job = (
-        await session.execute(
-            select(PresentationGenerationJob).where(
-                PresentationGenerationJob.task_id == task_id
-            )
-        )
-    ).scalar_one_or_none()
-    if job is None:
-        return None, None
-    if job.request_payload.get("template") != "authored":
-        if job.workspace_operation_id is None:
-            return None, job.last_error
-        operation = await session.get(WorkspaceOperation, job.workspace_operation_id)
-        raw = operation.progress if operation is not None else None
-        if not isinstance(raw, dict) or not raw:
-            return None, job.last_error
-
-        def safe_count(value: Any) -> int:
-            try:
-                return max(0, int(value or 0))
-            except (TypeError, ValueError):
-                return 0
-
-        total = safe_count(raw.get("total"))
-        completed = min(total, safe_count(raw.get("current"))) if total else 0
-        stage = str(raw.get("stage") or "generation_started")
-        try:
-            percent = max(0, min(100, int(raw.get("percent") or 0)))
-        except (TypeError, ValueError):
-            percent = 0
-        published = job.state == "published"
-        if published:
-            completed = total
-            percent = 100
-            stage = "completed"
-        return (
-            {
-                "completed_slides": completed,
-                "total_slides": total,
-                "percent": percent,
-                "current_slide": (
-                    completed + 1
-                    if total and completed < total and stage.endswith("slide_generation")
-                    else None
-                ),
-                "current_stage": stage,
-                "stage_counts": {},
-                "finalizing": bool(total and completed == total and not published),
-            },
-            job.last_error,
-        )
-    if not job.total_slides:
-        return None, job.last_error
-    total = max(0, job.total_slides or 0)
-    completed = min(total, max(0, job.completed_slides or 0))
-    percent = 0 if total == 0 else int(completed * 100 / total)
-    finalizing = completed == total and job.state != "published"
-    if job.state != "published":
-        percent = min(percent, 99)
-    counts: dict[str, int] = {}
-    for stage in STAGES:
-        field = getattr(AuthoredSlideCheckpoint, _STATUS_FIELD[stage])
-        counts[stage] = int(
-            await session.scalar(
-                select(func.count()).select_from(AuthoredSlideCheckpoint).where(
-                    AuthoredSlideCheckpoint.job_id == job.id,
-                    field.in_(("completed", "skipped")),
-                )
-            )
-            or 0
-        )
-    current = (
-        await session.execute(
-            select(AuthoredSlideCheckpoint).where(
-                AuthoredSlideCheckpoint.job_id == job.id,
-                AuthoredSlideCheckpoint.failed_stage.is_not(None),
-            ).order_by(AuthoredSlideCheckpoint.slide_index)
-        )
-    ).scalars().first()
-    progress = {
-        "completed_slides": completed,
-        "total_slides": total,
-        "percent": 100 if job.state == "published" else percent,
-        "current_slide": current.slide_index + 1 if current else None,
-        "current_stage": job.current_stage,
-        "stage_counts": counts,
-        "finalizing": finalizing,
-    }
-    return progress, job.last_error
-
-
 def should_inject_failure(
     checkpoint: AuthoredSlideCheckpoint, *, slide_index: int, stage: str
 ) -> bool:
@@ -536,9 +346,3 @@ def should_inject_failure(
         checkpoint.error and checkpoint.error.get("code") == "authored_injected_failure"
     )
     return target_slide == slide_index + 1 and target_stage == stage and not already_injected
-
-
-def _require_stage(stage: str) -> None:
-    if stage not in STAGES:
-        raise ValueError("invalid_authored_stage")
-

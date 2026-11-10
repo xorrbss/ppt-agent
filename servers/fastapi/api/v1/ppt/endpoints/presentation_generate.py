@@ -35,7 +35,7 @@ from models.sql.async_presentation_generation_status import (
     AsyncPresentationGenerationTaskModel,
 )
 from models.sql.presentation_generation_job import PresentationGenerationJob
-from services.authored_checkpoint_service import progress_for_task
+from services.generation_checkpoint_rows import progress_for_task
 from services.database import get_async_session, sql_engine
 from services.database_owner_scope import ownerless_rows_predicate
 from services.presentation_generation_job_service import cancel_generation_job

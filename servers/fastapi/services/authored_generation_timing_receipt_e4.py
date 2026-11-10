@@ -68,7 +68,7 @@ from __future__ import annotations
 from collections.abc import Callable, Mapping, Sequence
 
 from services.authored_provider_rate_profile import PROFILE_NAMES
-from services.authored_terminal_slide_fallback import MAX_REMAKES_PER_SLIDE
+from services.remake_caps import MAX_REMAKES_PER_SLIDE
 
 #: The optional key added to one stage's ``"observed"`` dict.
 STAGE_WALL_KEY = "wallMillis"

@@ -20,7 +20,7 @@ from copy import deepcopy
 from models.sql.presentation import PresentationModel, PRESENTATION_LIFECYCLE_PUBLISHED
 from models.sql.slide import SlideModel
 from services.authored_canvas import merge_presentation_canvas, request_canvas_metadata
-from services.authored_checkpoint_service import begin_publish, complete_publish
+from services.authored_checkpoint_publish_fence import begin_publish, complete_publish
 from services.generation_core.style.build import authored_title
 from services.slide_image_sets import _save_slide_pngs
 from services.generation_core.drivers.svg.native_declarations import PAYLOAD_KEY as NATIVE_DECLARATIONS_KEY

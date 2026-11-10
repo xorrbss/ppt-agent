@@ -75,9 +75,7 @@ from models.sql.presentation import (
 from models.sql.presentation_generation_job import PresentationGenerationJob
 from models.sql.workspace import WorkspaceOperation, get_workspace_owner_scope
 from models.workspace import WorkspaceBootstrapRequest
-from services.authored_checkpoint_service import (
-    AuthoredStageError,
-)
+from services.authored_checkpoint_errors import AuthoredStageError
 from services.authored_generation_observability import (
     log_authored_generation_observation,
 )
