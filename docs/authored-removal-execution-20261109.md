@@ -832,6 +832,15 @@ orchestrator):
   `public-service-product-evidence.mjs` still require render and export worker
   samples per export from the `authored-vnext-controlled-load` report, which no
   product run can produce any more.
+  2026-11-11: `services/public_render_batching.py` is deleted (no product
+  caller; `public_export_operation` no longer re-exports
+  `MAX_PUBLIC_RENDER_BATCH_SLIDES`, and the workstation profile test no longer
+  checks its pool clamp). The release evidence scripts are still open: their
+  only producer, `scripts/authored-vnext-controlled-load.mjs`, sends
+  `strategy: "authored"` and reads `/metrics/authored-render-runtime`, and its
+  reports alone feed the release gate's `architecture` gate and the controlled
+  half of `performance` and `observability`; removing it empties those gates and
+  replacing it means designing an svg load producer, so it waits for a decision.
 - `fix/crash-recovery-live-20261111` (`81d6864a1`): lease expiry now follows
   the operation lease (a workspace-linked job's lease columns stay NULL), and
   the token-leak scan skips files shorter than the token (Windows `.lock`

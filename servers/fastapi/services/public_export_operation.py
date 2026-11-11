@@ -17,9 +17,6 @@ from models.sql.public_artifact import (
 from services.artifact_store import (
     configured_public_artifact_service,
 )
-from services.public_render_batching import (
-    MAX_PUBLIC_RENDER_BATCH_SLIDES,
-)
 from services.public_export_deadline import (
     worker_deadline_bounds,
 )
@@ -228,7 +225,6 @@ async def prepare_canonical_export_execution(
 __all__ = [
     "PublicExportOperationError",
     "PublicWorkerArtifactResult",
-    "MAX_PUBLIC_RENDER_BATCH_SLIDES",
     "MAX_PUBLIC_RENDER_OPERATION_SLIDES",
     "PUBLIC_RENDER_WORKER_PROTOCOL_VERSION",
     "PUBLIC_RENDER_WORKER_FONT_DIGEST_ENV",
