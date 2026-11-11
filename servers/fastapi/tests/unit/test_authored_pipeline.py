@@ -216,11 +216,11 @@ def test_find_chrome_prefers_playwright_headless_shell(monkeypatch, tmp_path):
             operation_id=uuid.uuid4(), tenant_id="discovery-test",
             owner_id=uuid.uuid4(), presentation_id=uuid.uuid4(),
         ),
-        role="render", executable=Path(sys.executable), arguments=("-c", "discovery"),
+        role="export", executable=Path(sys.executable), arguments=("-c", "discovery"),
         limits=ResourceLimits(memory_bytes=536870912, process_limit=32, deadline_seconds=30),
         policy=SandboxPolicy(),
     )
-    environment = spec.environment(worker_environment("render", source, trusted_dispatch=True))
+    environment = spec.environment(worker_environment("export", source, trusted_dispatch=True))
     assert all(key not in environment for key in ("HOME", "USERPROFILE", "HOMEDRIVE", "HOMEPATH"))
     completed = subprocess.run(
         [sys.executable, "-c", "import json; from utils.slide_capture_chrome_discovery import find_chrome; print(json.dumps(find_chrome()))"],

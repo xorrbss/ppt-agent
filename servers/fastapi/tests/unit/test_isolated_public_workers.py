@@ -13,7 +13,6 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
-from PIL import Image
 
 from services.isolated_worker_contracts import (
     ARTIFACT_REF_SCHEMA,
@@ -86,7 +85,7 @@ def test_capability_is_attempt_digest_scoped_and_one_shot() -> None:
         media_type="text/html",
     )
     job = IsolatedWorkerJob(
-        role="render",
+        role="export",
         operation_id=operation_id,
         attempt_token="attempt-token-1234567890",
         fencing_token=3,
@@ -196,9 +195,7 @@ ConvertTo-Json -InputObject $results -Depth 5 -Compress
     assert "DATABASE_URL" not in environment
     assert "COOKIE" not in environment
 
-    render_environment = worker_environment("render", source)
-    assert render_environment["AUTHORED_RENDERER_WORKER"] == "1"
-    assert "OPENAI_API_KEY" not in render_environment
+    assert "AUTHORED_RENDERER_WORKER" not in environment
 
     operation_id = uuid.uuid4()
     payload = b"bounded worker input"
@@ -235,9 +232,9 @@ ConvertTo-Json -InputObject $results -Depth 5 -Compress
             owner_id=reference.owner_id,
             presentation_id=uuid.uuid4(),
         ),
-        role="render",
+        role="export",
         executable=Path(sys.executable),
-        arguments=("-m", "workers.public_render_worker"),
+        arguments=("-m", "workers.public_export_worker"),
         limits=ResourceLimits(
             memory_bytes=536870912, process_limit=64, deadline_seconds=600,
         ),
@@ -258,7 +255,7 @@ ConvertTo-Json -InputObject $results -Depth 5 -Compress
 
     def invoke(environment):
         job = IsolatedWorkerJob(
-            role="render", operation_id=operation_id,
+            role="export", operation_id=operation_id,
             attempt_token="attempt-token-1234567890", fencing_token=3,
             input_digest=reference.sha256, input_artifact=reference,
             capability="pending", deadline_epoch_seconds=int(time.time()) + 300,
@@ -275,7 +272,7 @@ ConvertTo-Json -InputObject $results -Depth 5 -Compress
                 stdout=SimpleNamespace(buffer=stdout),
             ))
             patch.setattr(public_worker_runtime, "_REPLAY_GUARD", CapabilityReplayGuard())
-            exit_code = asyncio.run(public_worker_runtime.run_worker("render", execute))
+            exit_code = asyncio.run(public_worker_runtime.run_worker("export", execute))
         return exit_code, stdin.tell(), stdout.getvalue()
 
     for local_development in (True, False):
@@ -292,7 +289,7 @@ ConvertTo-Json -InputObject $results -Depth 5 -Compress
         if local_development:
             incoming["PUBLIC_TRUSTED_WORKER_LOCAL_POLICY"] = "development"
         child_environment = spec.environment(worker_environment(
-            "render", incoming, trusted_dispatch=local_development,
+            "export", incoming, trusted_dispatch=local_development,
         ))
         assert child_environment["TRUSTED_EXECUTOR_SESSIONLESS"] == "1"
         assert all(child_environment[key] == incoming[key] for key in policy_environment)
@@ -450,83 +447,6 @@ def worker_cache_limits(monkeypatch: pytest.MonkeyPatch) -> None:
 
     monkeypatch.setenv("PUBLIC_WORKER_ARTIFACT_CACHE_MAX_BYTES", str(64 * 1024 * 1024))
     monkeypatch.setenv("PUBLIC_WORKER_ARTIFACT_CACHE_TTL_SECONDS", "900")
-
-
-def test_render_worker_forwards_portrait_canvas_and_checks_png_size(
-    tmp_path: Path,
-    worker_cache_limits: None,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    from workers import public_render_worker
-    from utils import slide_capture
-
-    operation_id = uuid.uuid4()
-    html = b"<html><body>portrait</body></html>"
-    source = _artifact(
-        operation_id=operation_id,
-        payload=html,
-        storage_key="tenant/owner/portrait.html",
-        kind="slide-html",
-        media_type="text/html",
-    )
-    _store_payload(tmp_path, source, html)
-    canvas = {
-        "contractVersion": "authored-canvas/v1",
-        "aspectRatio": "9:16",
-        "widthPx": 720,
-        "heightPx": 1280,
-        "locale": "ko-KR",
-        "safeArea": {"x": 64, "y": 64, "width": 592, "height": 1152},
-    }
-    bundle_payload = json.dumps(
-        {
-            "schemaVersion": "public-render-bundle/v2",
-            "canvas": canvas,
-            "slides": [{"slideIndex": 0, "artifactRef": source.to_wire()}],
-        },
-        sort_keys=True,
-        separators=(",", ":"),
-    ).encode("utf-8")
-    bundle = _artifact(
-        operation_id=operation_id,
-        payload=bundle_payload,
-        storage_key="tenant/owner/portrait-render-bundle.json",
-        kind="export-bundle",
-        media_type="application/vnd.presenton.export-bundle+json",
-    )
-    _store_payload(tmp_path, bundle, bundle_payload)
-    job = IsolatedWorkerJob(
-        role="render",
-        operation_id=operation_id,
-        attempt_token="attempt-token-1234567890",
-        fencing_token=1,
-        input_digest=bundle.sha256,
-        input_artifact=bundle,
-        capability="validated-by-runtime",
-        deadline_epoch_seconds=int(time.time()) + 300,
-    )
-    captured: dict[str, int] = {}
-
-    def render(admitted, timeout, *, width_px=1280, height_px=720):
-        assert len(admitted) == 1 and timeout == 120
-        captured.update(width=width_px, height=height_px)
-        image = Image.new("RGB", (width_px, height_px), "#1265E3")
-        stream = io.BytesIO()
-        image.save(stream, format="PNG")
-        image.close()
-        return [(stream.getvalue(), {})]
-
-    monkeypatch.setattr(public_render_worker, "_admit_html", lambda value: value)
-    monkeypatch.setattr(slide_capture, "_render_admitted_htmls_over_pipe", render)
-    store = LocalContentAddressedStore(tmp_path)
-
-    result = asyncio.run(public_render_worker.execute_render(job, store))
-
-    assert captured == {"width": 720, "height": 1280}
-    manifest = json.loads(store.read(result))
-    output = ArtifactRef.from_wire(manifest["slides"][0]["artifactRef"])
-    with Image.open(store.verified_path(output)) as image:
-        assert image.size == (720, 1280)
 
 
 class _StagedArtifactAuthority:

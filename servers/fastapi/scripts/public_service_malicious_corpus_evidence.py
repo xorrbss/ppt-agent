@@ -769,10 +769,7 @@ def _worker_boundary_checks(source_environment: dict[str, str]) -> dict[str, Any
     except IsolatedWorkerProcessError:
         missing_attestation_rejected = True
     profile = get_public_worker_profile("export")
-    contract_observations = [
-        _isolation_contract_probe(get_public_worker_profile(role))
-        for role in ("render", "export")
-    ]
+    contract_observations = [_isolation_contract_probe(profile)]
     return {
         "sessionlessEnvironmentAllowlistVerified": sessionless,
         "missingIsolationAttestationRejected": missing_attestation_rejected,

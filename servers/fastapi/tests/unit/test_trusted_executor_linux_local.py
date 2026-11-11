@@ -63,7 +63,7 @@ def _identity() -> ExecutionIdentity:
 
 def _spec(identity, limits, code: str) -> SandboxLaunchSpec:
     return SandboxLaunchSpec(
-        identity=identity, role="render", executable=Path(sys.executable),
+        identity=identity, role="export", executable=Path(sys.executable),
         arguments=("-c", code), limits=limits, policy=SandboxPolicy(),
     )
 
@@ -201,10 +201,10 @@ def test_linux_local_composition_fails_closed_outside_development(tmp_path, envi
 
 
 def test_worker_attestation_and_render_binding_follow_the_linux_backend() -> None:
-    local = worker_environment("render", dict(_LOCAL), trusted_dispatch=True)
+    local = worker_environment("export", dict(_LOCAL), trusted_dispatch=True)
     assert local["PUBLIC_WORKER_OS_ISOLATION"] == LINUX_LOCAL_DEVELOPMENT_ATTESTATION
     windows = worker_environment(
-        "render", {**_LOCAL, "PUBLIC_TRUSTED_WORKER_SANDBOX_BACKEND": "windows-local"},
+        "export", {**_LOCAL, "PUBLIC_TRUSTED_WORKER_SANDBOX_BACKEND": "windows-local"},
         trusted_dispatch=True,
     )
     assert windows["PUBLIC_WORKER_OS_ISOLATION"] == WINDOWS_LOCAL_DEVELOPMENT_ATTESTATION
@@ -228,14 +228,16 @@ def test_linux_local_transport_runs_a_worker_and_publishes_its_output(tmp_path: 
             created_by_operation_id=operation_id, retention_class="ephemeral",
         )
 
-    input_payload, output_payload = b"<html>linux local input</html>", b"linux-local-output"
-    input_path = tmp_path / "input.html"
+    # An export bundle whose schema stages no further inputs.
+    input_payload = b'{"schemaVersion":"linux-local-wire-test/v1","slides":[]}'
+    output_payload = b"linux-local-output"
+    input_path = tmp_path / "input.json"
     input_path.write_bytes(input_payload)
-    input_ref = ref("slide-html", "text/html", input_payload)
+    input_ref = ref("export-bundle", "application/vnd.presenton.export-bundle+json", input_payload)
     output_ref = ref("slide-png", "image/png", output_payload)
     attempt = "linux-local-attempt"
     job = IsolatedWorkerJob(
-        role="render", operation_id=operation_id, attempt_token=attempt, fencing_token=3,
+        role="export", operation_id=operation_id, attempt_token=attempt, fencing_token=3,
         input_digest=input_ref.sha256, input_artifact=input_ref, capability="test.capability",
         deadline_epoch_seconds=int(time.time()) + 30,
     )

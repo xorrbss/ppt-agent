@@ -19,9 +19,36 @@ EMU_PER_POINT = 12_700
 _PAGE_SIZE_TOLERANCE_PT = 1.0
 
 
+def admit_slide_wrapper_html(html: str):
+    """Admit one slide wrapper page through the renderer policy.
+
+    The wrapper is tried as authored HTML first and as static output HTML
+    second; trusted SVG fonts are then materialized into the admitted page.
+    """
+    from utils.renderer_isolation import (
+        RendererPolicyError,
+        admit_authored_html,
+        admit_static_output_html,
+    )
+
+    try:
+        admitted = admit_authored_html(html)
+    except RendererPolicyError:
+        try:
+            admitted = admit_static_output_html(html)
+        except RendererPolicyError as static_error:
+            raise PublicWorkerExecutionError(
+                "public_render_policy_rejected"
+            ) from static_error
+    try:
+        from services.svg_renderer import materialize_trusted_svg_fonts
+        return materialize_trusted_svg_fonts(html, admitted)
+    except ValueError as error:
+        raise PublicWorkerExecutionError("public_render_trusted_font_invalid") from error
+
+
 def _slide_wrappers(sources, admitted_assets, canvas, *, font_manifest=None, canonical_sources=None):
     from services.svg_renderer import svg_preview_html
-    from workers.public_render_worker import _admit_html
 
     # Asset SVGs already passed canonical admission and an authenticated
     # manifest/decoder check. Never feed expanded base64 through the
@@ -31,7 +58,7 @@ def _slide_wrappers(sources, admitted_assets, canvas, *, font_manifest=None, can
         if admitted is None:
             wrapper = svg_preview_html(source, width=canvas.width_px, height=canvas.height_px,
                                        font_manifest=font_manifest)
-            admitted = _admit_html(wrapper)
+            admitted = admit_slide_wrapper_html(wrapper)
         if font_manifest is not None:
             from services.svg_renderer import materialize_template_manifest_admitted
             canonical = canonical_sources[index] if canonical_sources is not None else source

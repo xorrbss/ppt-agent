@@ -42,7 +42,7 @@ def _filesystem() -> SandboxFilesystemSpec:
 def test_launch_contract_is_operation_bound_and_strips_secrets() -> None:
     spec = SandboxLaunchSpec(
         identity=_identity(),
-        role="render",
+        role="export",
         executable=pathlib.Path("C:/Windows/System32/cmd.exe"),
         arguments=("/c", "exit", "0"),
         limits=ResourceLimits(

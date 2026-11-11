@@ -421,7 +421,7 @@ def test_transport_cancel_releases_staging_reservation_and_removes_attempt_tree(
         created_by_operation_id=operation_id, retention_class="ephemeral",
     )
     job = IsolatedWorkerJob(
-        role="render", operation_id=operation_id, attempt_token="capacity-attempt",
+        role="export", operation_id=operation_id, attempt_token="capacity-attempt",
         fencing_token=1, input_digest=digest, input_artifact=reference,
         capability="test.capability", deadline_epoch_seconds=int(time.time()) + 30,
     )
@@ -498,18 +498,19 @@ def test_docker_transport_stages_runs_drains_publishes_and_removes_container(
     operation_id = uuid.uuid4()
     presentation_id = uuid.uuid4()
     tenant_id = "tenant-wire-test"
-    input_payload = b"<html>staged input</html>"
+    # An export bundle whose schema stages no further inputs.
+    input_payload = b'{"schemaVersion":"docker-wire-test/v1","slides":[]}'
     input_digest = hashlib.sha256(input_payload).hexdigest()
-    input_path = tmp_path / "authority-input.html"
+    input_path = tmp_path / "authority-input.json"
     input_path.write_bytes(input_payload)
     input_reference = ArtifactRef(
         artifact_id=uuid.uuid4(),
         owner_id=owner_id,
         tenant_id=tenant_id,
-        kind="slide-html",
+        kind="export-bundle",
         sha256=input_digest,
         size_bytes=len(input_payload),
-        media_type="text/html",
+        media_type="application/vnd.presenton.export-bundle+json",
         storage_key=_storage_key(owner_id, tenant_id, input_digest),
         created_by_operation_id=operation_id,
         retention_class="ephemeral",
@@ -530,7 +531,7 @@ def test_docker_transport_stages_runs_drains_publishes_and_removes_container(
     )
     attempt_token = "attempt-wire-test"
     job = IsolatedWorkerJob(
-        role="render",
+        role="export",
         operation_id=operation_id,
         attempt_token=attempt_token,
         fencing_token=7,
@@ -591,7 +592,7 @@ def test_docker_transport_stages_runs_drains_publishes_and_removes_container(
                     "PATH": os.environ.get("PATH", ""),
                     "SYSTEMROOT": os.environ.get("SYSTEMROOT", ""),
                     "PUBLIC_WORKER_CAPABILITY_KEY_FILE": str(capability_key),
-                    "PUBLIC_WORKER_ROLE": "render",
+                    "PUBLIC_WORKER_ROLE": "export",
                     "PUBLIC_WORKER_OS_ISOLATION": "nonroot-readonly-tmpfs-network-none",
                     "PUBLIC_WORKER_SESSIONLESS": "1",
                 },
@@ -616,24 +617,24 @@ def test_docker_transport_termination_removes_container(
     owner_id = uuid.uuid4()
     operation_id = uuid.uuid4()
     tenant_id = "tenant-docker-termination"
-    payload = b"termination-input"
+    payload = b'{"schemaVersion":"docker-termination-test/v1","slides":[]}'
     digest = hashlib.sha256(payload).hexdigest()
-    source = tmp_path / "input.bin"
+    source = tmp_path / "input.json"
     source.write_bytes(payload)
     reference = ArtifactRef(
         artifact_id=uuid.uuid4(),
         owner_id=owner_id,
         tenant_id=tenant_id,
-        kind="slide-html",
+        kind="export-bundle",
         sha256=digest,
         size_bytes=len(payload),
-        media_type="text/html",
+        media_type="application/vnd.presenton.export-bundle+json",
         storage_key=_storage_key(owner_id, tenant_id, digest),
         created_by_operation_id=operation_id,
         retention_class="ephemeral",
     )
     job = IsolatedWorkerJob(
-        role="render",
+        role="export",
         operation_id=operation_id,
         attempt_token="termination-attempt",
         fencing_token=3,
@@ -665,7 +666,7 @@ def test_docker_transport_termination_removes_container(
                 command=("/bin/sh", "-c", "cat >/tmp/job.json; sleep 60"),
                 environment={
                     "PUBLIC_WORKER_CAPABILITY_KEY_FILE": str(key),
-                    "PUBLIC_WORKER_ROLE": "render",
+                    "PUBLIC_WORKER_ROLE": "export",
                     "PUBLIC_WORKER_OS_ISOLATION": "nonroot-readonly-tmpfs-network-none",
                     "PUBLIC_WORKER_SESSIONLESS": "1",
                 },

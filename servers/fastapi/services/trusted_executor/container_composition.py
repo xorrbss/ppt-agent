@@ -142,7 +142,7 @@ def probe_container_isolation(
             owner_id=uuid.uuid4(),
             presentation_id=uuid.uuid4(),
         ),
-        role="render",
+        role="export",
         # Never started: the command only has to be a syntactically absolute path.
         executable=Path(Path(staging_root).anchor) / "bin" / "true",
         arguments=(),

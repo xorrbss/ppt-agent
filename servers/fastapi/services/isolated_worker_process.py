@@ -1,4 +1,4 @@
-"""Fail-closed subprocess boundary for sessionless render/export profiles."""
+"""Fail-closed subprocess boundary for the sessionless export profile."""
 
 from __future__ import annotations
 
@@ -218,11 +218,6 @@ def worker_environment(
     )
     if local_development:
         result["PUBLIC_WORKER_LOCAL_DEVELOPMENT"] = "1"
-    if role == "render":
-        # The public render process is already the one-shot isolation boundary;
-        # this marker permits the low-level CDP entry without recursively
-        # spawning the legacy renderer worker.
-        result["AUTHORED_RENDERER_WORKER"] = "1"
     return result
 
 

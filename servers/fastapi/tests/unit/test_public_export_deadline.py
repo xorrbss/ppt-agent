@@ -31,7 +31,6 @@ from models.sql.user import User
 from models.sql.workspace import WorkspaceConversation, WorkspaceOperation
 import migration_revision_contract as revision_contract
 from services.public_export_deadline import (
-    PUBLIC_RENDER_BATCH_DEADLINE_SECONDS,
     PublicExportDeadlineGrant,
     load_public_export_deadline_grant,
     worker_deadline_bounds,
@@ -322,8 +321,7 @@ def test_worker_grants_are_what_is_left_of_the_admission() -> None:
     now = datetime(2026, 9, 12, 12, 0, tzinfo=timezone.utc)
     grant = PublicExportDeadlineGrant(deadline_at=now + timedelta(seconds=1030))
     assert grant.export_worker_seconds(now=now) == 1030
-    assert grant.render_batch_seconds(now=now) == PUBLIC_RENDER_BATCH_DEADLINE_SECONDS
-    # Time spent rendering comes out of the export worker's grant.
+    # Time already spent comes out of the export worker's grant.
     later = now + timedelta(seconds=400)
     assert grant.export_worker_seconds(now=later) == 630
     # A naive (SQLite) deadline compares like an aware one.
@@ -331,7 +329,6 @@ def test_worker_grants_are_what_is_left_of_the_admission() -> None:
         deadline_at=(now + timedelta(seconds=90)).replace(tzinfo=None)
     )
     assert naive.export_worker_seconds(now=now) == 90
-    assert naive.render_batch_seconds(now=now) == 90
     # Never above the executor's role budget, never below one second.
     generous = PublicExportDeadlineGrant(deadline_at=now + timedelta(seconds=9999))
     assert generous.export_worker_seconds(now=now) == PUBLIC_EXPORT_DEADLINE_MAX_SECONDS
@@ -341,7 +338,8 @@ def test_worker_grants_are_what_is_left_of_the_admission() -> None:
     ):
         exhausted.export_worker_seconds(now=now)
     assert worker_deadline_bounds("export") == (600, PUBLIC_EXPORT_DEADLINE_MAX_SECONDS)
-    assert worker_deadline_bounds("render") == (120, 120)
+    with pytest.raises(PublicExportOperationError, match="public_worker_role_invalid"):
+        worker_deadline_bounds("render")
 
 
 def test_hybrid_grant_comes_from_the_admitted_thirty_five_slide_row(

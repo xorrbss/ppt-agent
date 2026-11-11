@@ -305,14 +305,13 @@ $capabilityBytes = New-Object byte[] 32; [System.Security.Cryptography.RandomNum
 $capabilityFile = Join-Path $runtimeRoot "worker-capability.key"; [System.IO.File]::WriteAllBytes($capabilityFile, $capabilityBytes)
 $localDownloadSigningKeyBytes = New-Object byte[] 32; [System.Security.Cryptography.RandomNumberGenerator]::Fill($localDownloadSigningKeyBytes)
 $localDownloadSigningKey = [Convert]::ToHexString($localDownloadSigningKeyBytes).ToLowerInvariant()
-$renderWorkerCommand = @($python, "-m", "workers.public_render_worker") | ConvertTo-Json -Compress
 $exportWorkerCommand = @($python, "-m", "workers.public_export_worker") | ConvertTo-Json -Compress
 
 $sharedEnvironment = @{
     "DATABASE_URL" = $databaseUrl; "APP_DATA_DIRECTORY" = $appData; "USER_CONFIG_PATH" = (Join-Path $appData "userConfig.json")
     "MIGRATE_DATABASE_ON_STARTUP" = "true"; "PUBLIC_V2_INTEGRATION_PROFILE" = "postgresql-strict"; "PUBLIC_ARTIFACT_STORE_BACKEND" = $artifactBackend
     "PUBLIC_TRUSTED_WORKER_SANDBOX_BACKEND" = "windows-local"; "PUBLIC_TRUSTED_WORKER_LOCAL_POLICY" = "development"; "PUBLIC_TRUSTED_WORKER_STAGING_ROOT" = $staging; "PUBLIC_WORKER_NODE_ID" = "$runId-export"
-    "PUBLIC_WORKER_CAPABILITY_KEY_FILE" = $capabilityFile; "PUBLIC_RENDER_WORKER_COMMAND_JSON" = $renderWorkerCommand; "PUBLIC_EXPORT_WORKER_COMMAND_JSON" = $exportWorkerCommand
+    "PUBLIC_WORKER_CAPABILITY_KEY_FILE" = $capabilityFile; "PUBLIC_EXPORT_WORKER_COMMAND_JSON" = $exportWorkerCommand
     "PUBLIC_WORKER_ARTIFACT_CACHE_MAX_BYTES" = $workerRuntimeLimits["PUBLIC_WORKER_ARTIFACT_CACHE_MAX_BYTES"]
     "PUBLIC_WORKER_ARTIFACT_CACHE_TTL_SECONDS" = $workerRuntimeLimits["PUBLIC_WORKER_ARTIFACT_CACHE_TTL_SECONDS"]
     "PPT_WORKER_OUTPUT_LIMIT_BYTES" = $workerRuntimeLimits["PPT_WORKER_OUTPUT_LIMIT_BYTES"]

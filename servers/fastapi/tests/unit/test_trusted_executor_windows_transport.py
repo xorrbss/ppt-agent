@@ -61,13 +61,13 @@ def _storage_key(owner_id: uuid.UUID, tenant_id: str, digest: str) -> str:
 
 def test_worker_environment_separates_production_and_local_development_attestation() -> None:
     production = worker_environment(
-        "render", {"PUBLIC_WORKER_OS_ISOLATION": NETWORK_NONE_ATTESTATION}
+        "export", {"PUBLIC_WORKER_OS_ISOLATION": NETWORK_NONE_ATTESTATION}
     )
     assert production["PUBLIC_WORKER_OS_ISOLATION"] == NETWORK_NONE_ATTESTATION
     assert "PUBLIC_WORKER_LOCAL_DEVELOPMENT" not in production
 
     local = worker_environment(
-        "render",
+        "export",
         {"PUBLIC_TRUSTED_WORKER_LOCAL_POLICY": "development"},
         trusted_dispatch=True,
     )
@@ -78,7 +78,7 @@ def test_worker_environment_separates_production_and_local_development_attestati
     assert local["PUBLIC_WORKER_LOCAL_DEVELOPMENT"] == "1"
 
     with pytest.raises(IsolatedWorkerProcessError, match="network-none"):
-        worker_environment("render", {}, trusted_dispatch=True)
+        worker_environment("export", {}, trusted_dispatch=True)
 
 
 def test_windows_local_composition_requires_explicit_development_policy(
@@ -111,7 +111,7 @@ def test_windows_local_composition_rejects_production_even_with_local_policy(
         )
 
 
-@pytest.mark.parametrize("output_case", ["exact", "over", "bundle_over", "invalid"])
+@pytest.mark.parametrize("output_case", ["exact", "over", "invalid"])
 def test_windows_local_transport_runs_bounded_stdio_and_publishes_exact_output(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -121,18 +121,19 @@ def test_windows_local_transport_runs_bounded_stdio_and_publishes_exact_output(
     operation_id = uuid.uuid4()
     presentation_id = uuid.uuid4()
     tenant_id = "tenant-windows-local-wire"
-    input_payload = b"<html>trusted local input</html>"
+    # An export bundle whose schema stages no further inputs.
+    input_payload = b'{"schemaVersion":"trusted-local-wire-test/v1","slides":[]}'
     input_digest = hashlib.sha256(input_payload).hexdigest()
-    input_path = tmp_path / "authority-input.html"
+    input_path = tmp_path / "authority-input.json"
     input_path.write_bytes(input_payload)
     input_reference = ArtifactRef(
         artifact_id=uuid.uuid4(),
         owner_id=owner_id,
         tenant_id=tenant_id,
-        kind="slide-html",
+        kind="export-bundle",
         sha256=input_digest,
         size_bytes=len(input_payload),
-        media_type="text/html",
+        media_type="application/vnd.presenton.export-bundle+json",
         storage_key=_storage_key(owner_id, tenant_id, input_digest),
         created_by_operation_id=operation_id,
         retention_class="ephemeral",
@@ -152,35 +153,13 @@ def test_windows_local_transport_runs_bounded_stdio_and_publishes_exact_output(
         retention_class="ephemeral",
     )
     output_limit = len(output_payload)
-    extra_outputs = {}
     if output_case == "over":
         output_limit -= 1
     elif output_case == "invalid":
         output_limit = 0
-    elif output_case == "bundle_over":
-        from dataclasses import replace
-
-        output_limit = 4096
-        png = b"x" * (output_limit + 1)
-        png_digest = hashlib.sha256(png).hexdigest()
-        png_ref = replace(output_reference, sha256=png_digest, size_bytes=len(png),
-                          storage_key=_storage_key(owner_id, tenant_id, png_digest))
-        output_payload = json.dumps({
-            "schemaVersion": "public-render-result-bundle/v1",
-            "slides": [{"slideIndex": 0, "artifactRef": png_ref.to_wire()}],
-            "runtime": {"chromiumProcessLaunchCount": 1, "browserReuseCount": 0, "pageSessionCount": 1},
-        }).encode()
-        output_digest = hashlib.sha256(output_payload).hexdigest()
-        output_reference = replace(
-            output_reference, kind="export-bundle",
-            media_type="application/vnd.presenton.export-bundle+json",
-            sha256=output_digest, size_bytes=len(output_payload),
-            storage_key=_storage_key(owner_id, tenant_id, output_digest),
-        )
-        extra_outputs[png_ref.storage_key] = png.hex()
     attempt_token = "windows-local-wire-attempt"
     job = IsolatedWorkerJob(
-        role="render",
+        role="export",
         operation_id=operation_id,
         attempt_token=attempt_token,
         fencing_token=11,
@@ -214,10 +193,6 @@ output = bytes.fromhex(sys.argv[2])
 output_path = pathlib.Path(os.environ["PUBLIC_WORKER_OUTPUT_STORE_ROOT"], *sys.argv[3].split("/"))
 output_path.parent.mkdir(parents=True, exist_ok=True)
 output_path.write_bytes(output)
-for key, value in json.loads(sys.argv[5]).items():
-    extra_path = pathlib.Path(os.environ["PUBLIC_WORKER_OUTPUT_STORE_ROOT"], *key.split("/"))
-    extra_path.parent.mkdir(parents=True, exist_ok=True)
-    extra_path.write_bytes(bytes.fromhex(value))
 sys.stderr.buffer.write(b"x" * (1024 * 1024 + 4096))
 sys.stdout.write(sys.argv[4])
 """
@@ -256,7 +231,6 @@ sys.stdout.write(sys.argv[4])
                     output_payload.hex(),
                     output_reference.storage_key,
                     json.dumps(result, separators=(",", ":")),
-                    json.dumps(extra_outputs),
                 ),
                 source_environment={
                     "PATH": os.environ.get("PATH", ""),
@@ -322,7 +296,7 @@ sys.stdout.write(sys.argv[4])
                 def unavailable_executable(*_args, **_kwargs):
                     raise PermissionError("private path must not escape")
                 scoped_patch.setattr(Path, "open", unavailable_executable)
-                unavailable = begin_supervised_invocation((sys.executable, "-m", "workers.public_render_worker"))
+                unavailable = begin_supervised_invocation((sys.executable, "-m", "workers.public_export_worker"))
             assert unavailable.runtime_identity["executableSha256"] is None
             assert unavailable.runtime_identity["unavailable"] == ["executableSha256"]
         finally:

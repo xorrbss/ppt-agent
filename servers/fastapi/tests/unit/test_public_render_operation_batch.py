@@ -1,22 +1,12 @@
 from __future__ import annotations
 
-import asyncio
-import base64
 from hashlib import sha256
-import io
-import json
 from pathlib import Path
-import time
-import uuid
 
-from PIL import Image
 import pytest
 
 from services.public_export_operation import (PublicExportOperationError, public_render_runtime_binding, public_render_runtime_binding_digest, public_slide_renderer_version)
-from services.isolated_worker_contracts import ArtifactRef, IsolatedWorkerJob
 from utils import slide_capture
-from workers.public_render_worker import execute_render
-from workers.public_worker_runtime import LocalContentAddressedStore
 
 
 def test_shared_slide_checkpoint_identity_tracks_chrome_and_local_asset_drift(
@@ -96,146 +86,3 @@ def test_shared_slide_checkpoint_identity_tracks_chrome_and_local_asset_drift(
     assert public_slide_renderer_version(
         html, runtime_binding=changed_font_binding
     ) != externally_pinned
-
-
-def test_five_slide_public_render_batch_reuses_one_chromium_pipe(
-    tmp_path: Path, monkeypatch
-) -> None:
-    operation_id = uuid.uuid4()
-    owner_id = uuid.uuid4()
-    input_root = tmp_path / "input"
-    output_root = tmp_path / "output"
-    input_root.mkdir()
-    output_root.mkdir()
-    monkeypatch.setenv("PUBLIC_WORKER_ARTIFACT_CACHE_MAX_BYTES", str(64 * 1024 * 1024))
-    monkeypatch.setenv("PUBLIC_WORKER_ARTIFACT_CACHE_TTL_SECONDS", "600")
-    monkeypatch.setenv("PPT_WORKER_OUTPUT_LIMIT_BYTES", str(64 * 1024 * 1024))
-
-    def reference(*, storage_key: str, payload: bytes, kind: str, media_type: str) -> ArtifactRef:
-        path = input_root / storage_key
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_bytes(payload)
-        return ArtifactRef(
-            artifact_id=uuid.uuid4(),
-            owner_id=owner_id,
-            tenant_id="tenant-a",
-            kind=kind,
-            sha256=sha256(payload).hexdigest(),
-            size_bytes=len(payload),
-            media_type=media_type,
-            storage_key=storage_key,
-            created_by_operation_id=operation_id,
-            retention_class="ephemeral",
-        )
-
-    html_refs = [
-        reference(
-            storage_key=f"slides/{index}.html",
-            payload=(
-                "<!doctype html><html><head><meta charset='utf-8'></head>"
-                f"<body><div data-qid='title-{index}'>Slide {index}</div></body></html>"
-            ).encode("utf-8"),
-            kind="slide-html",
-            media_type="text/html",
-        )
-        for index in range(5)
-    ]
-    bundle_payload = json.dumps(
-        {
-            "schemaVersion": "public-render-bundle/v1",
-            "slides": [
-                {"slideIndex": index, "artifactRef": item.to_wire()}
-                for index, item in enumerate(html_refs)
-            ],
-        },
-        sort_keys=True,
-        separators=(",", ":"),
-    ).encode("utf-8")
-    bundle_ref = reference(
-        storage_key="bundles/render.json",
-        payload=bundle_payload,
-        kind="export-bundle",
-        media_type="application/vnd.presenton.export-bundle+json",
-    )
-    job = IsolatedWorkerJob(
-        role="render",
-        operation_id=operation_id,
-        attempt_token="attempt-token",
-        fencing_token=7,
-        input_digest=bundle_ref.sha256,
-        input_artifact=bundle_ref,
-        capability="test-capability",
-        deadline_epoch_seconds=int(time.time()) + 120,
-    )
-
-    png_buffer = io.BytesIO()
-    Image.new("RGB", (1280, 720), "white").save(png_buffer, format="PNG")
-    png_base64 = base64.b64encode(png_buffer.getvalue()).decode("ascii")
-
-    class FakeChromePipe:
-        launches = 0
-        closes = 0
-        created_contexts = 0
-        disposed_contexts = 0
-        download_denials = 0
-        created_targets = 0
-        closed_targets = 0
-
-        def __init__(self, _chrome: str, _profile: Path) -> None:
-            type(self).launches += 1
-
-        def command(self, _command_id, method, _params=None, *, session_id=None):
-            if method == "Target.createBrowserContext":
-                type(self).created_contexts += 1
-                return {"browserContextId": f"context-{self.created_contexts}"}
-            if method == "Browser.setDownloadBehavior":
-                assert _params == {
-                    "behavior": "deny",
-                    "browserContextId": f"context-{self.created_contexts}",
-                }
-                type(self).download_denials += 1
-            if method == "Target.createTarget":
-                type(self).created_targets += 1
-                assert _params == {
-                    "url": "data:,",
-                    "browserContextId": f"context-{self.created_contexts}",
-                }
-                return {"targetId": f"target-{self.created_targets}"}
-            if method == "Target.attachToTarget":
-                return {"sessionId": f"session-{self.created_targets}"}
-            if method == "Page.getFrameTree":
-                return {"frameTree": {"frame": {"id": "frame-1"}}}
-            if method == "Runtime.evaluate":
-                return {"result": {"value": None}}
-            if method == "Page.captureScreenshot":
-                return {"data": png_base64}
-            if method == "Target.closeTarget":
-                type(self).closed_targets += 1
-            if method == "Target.disposeBrowserContext":
-                type(self).disposed_contexts += 1
-            return {}
-
-        def close(self) -> None:
-            type(self).closes += 1
-
-    monkeypatch.setattr(slide_capture, "_ChromePipe", FakeChromePipe)
-    monkeypatch.setattr(slide_capture, "find_chrome", lambda: "synthetic-chrome")
-    monkeypatch.setattr(slide_capture, "_runtime_value", lambda _payload: None)
-
-    store = LocalContentAddressedStore(input_root, output_root)
-    result_ref = asyncio.run(execute_render(job, store))
-    manifest = json.loads(store.read(result_ref))
-
-    assert manifest["runtime"] == {
-        "chromiumProcessLaunchCount": 1,
-        "browserReuseCount": 4,
-        "pageSessionCount": 5,
-    }
-    assert len(manifest["slides"]) == 5
-    assert FakeChromePipe.launches == 1
-    assert FakeChromePipe.closes == 1
-    assert FakeChromePipe.created_contexts == 5
-    assert FakeChromePipe.disposed_contexts == 5
-    assert FakeChromePipe.download_denials == 5
-    assert FakeChromePipe.created_targets == 5
-    assert FakeChromePipe.closed_targets == 5

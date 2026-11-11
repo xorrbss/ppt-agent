@@ -1,4 +1,4 @@
-"""Scheduler-facing product work items for trusted render/export execution.
+"""Scheduler-facing product work items for trusted export execution.
 
 This module deliberately owns only the in-process handoff from an already
 admitted product work item to a trusted-executor launcher.  It does not claim
@@ -38,7 +38,7 @@ ProductExecutionStatus = Literal[
 
 @dataclass(frozen=True, slots=True)
 class TrustedExecutorWorkItem:
-    """One render/export launch bound to the admission identity and scheduler."""
+    """One export launch bound to the admission identity and scheduler."""
 
     scheduling: ScheduledOperation
     launch_spec: SandboxLaunchSpec
@@ -53,7 +53,7 @@ class TrustedExecutorWorkItem:
             raise ProductAdapterError("scheduled owner does not match launch identity")
         if self.scheduling.presentation_id != str(identity.presentation_id):
             raise ProductAdapterError("scheduled presentation does not match launch identity")
-        if self.launch_spec.role not in {"render", "export"}:
+        if self.launch_spec.role != "export":
             raise ProductAdapterError("trusted executor role is invalid")
 
 
