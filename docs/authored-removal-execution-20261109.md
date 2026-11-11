@@ -789,19 +789,33 @@ orchestrator):
   pin changes palette, fonts and template rules. Removing it is a product
   decision. Round trips verified on SQLite and a throwaway PostgreSQL 15.
 
-**Release-gate runners, not yet PASS** (branches pushed, not merged, pending
-an owner decision on where this evidence should run):
+**Release-gate runners**:
 
-- `fix/malicious-corpus-runtime-20261111` (`7f67c9024`): `_worker_boundary_checks`
-  had never passed (its hard-coded environment lacked three values the validator
-  required since both were written in `c52e2a7ce`); it now derives the
-  isolation contract from `services/public_worker_profiles.py` and observes 18
-  accept/reject cases per role. The end-to-end run then stops in the HTML corpus:
-  `_run_render_job` predates the trusted-executor dispatcher (`d78d5a307`) and
-  calls `execute_isolated_worker_job` without `presentation_id`. Its
-  network-none and safe-HTML gate checks also need the Docker-based renderer
-  harness (`docs/experiments/authored-vnext/04-renderer-security`), which is
-  authored-renderer evidence; Docker is not available on the Windows host.
+- Malicious corpus, PASS (owner decision 2026-11-11: the HTML corpus tested only
+  the authored path, delete it and its tests). The runner's HTML corpus, safe-HTML
+  control and Docker network-none input went through the render-role worker,
+  which no product code dispatches any more (the only isolated job builder is
+  `execute_isolated_export_operation`, role `export`); they and their gate
+  checks are deleted. `workers/public_render_worker.py::_admit_html` stays (svg
+  PDF export uses it), and the harness
+  `docs/experiments/authored-vnext/04-renderer-security` stays because
+  `contracts/authored-renderer` (`contract.json`, `verify_contract.py`,
+  `run_dynamic_gate.py`) and `test_renderer_isolation.py` reference it.
+  `_worker_boundary_checks` had never passed (its hard-coded environment lacked
+  three values the validator has required since both were written in
+  `c52e2a7ce`); it now derives the isolation contract from
+  `services/public_worker_profiles.py` and observes 18 accept/reject cases per
+  role, and the runner status and the gate now require that probe, the rejected
+  missing attestation and the export profile's network mode `none` without
+  canonical database access, the only worker-isolation evidence left (the gate
+  no longer observes an OS-level network namespace). The runner takes
+  `--release-candidate`, `--source-manifest`, `--output` and needs neither Chrome
+  nor Docker. End to end on Windows: runner PASS, `gates.security` 31/31.
+  Not yet removed, with no product caller: the render-role worker path
+  (`public_render_worker.py` `execute_render`/`__main__`, the `render` profile and
+  role literals, `PUBLIC_RENDER_WORKER_COMMAND_JSON`, the render branches in
+  `isolated_worker_process.py`, `wire_bundle_references.py` and
+  `public_export_operation.py`).
 - `fix/crash-recovery-live-20261111` (`81d6864a1`): lease expiry now follows
   the operation lease (a workspace-linked job's lease columns stay NULL), and
   the token-leak scan skips files shorter than the token (Windows `.lock`

@@ -124,13 +124,18 @@ _PROVIDER_SECRET_MARKERS = (
     "OPENAI_API_KEY",
     "PERPLEXITY_API_KEY",
 )
-_ISOLATION_REQUIREMENTS = {
-    "PPT_WORKER_NETWORK_MODE": "none",
-    "PPT_WORKER_ROOT_FILESYSTEM": "read-only",
-    "PPT_WORKER_SCRATCH": "tmpfs",
-    "PPT_WORKER_RUN_AS_NON_ROOT": "true",
-}
-_POSITIVE_LIMITS = (
+# The launch-time isolation contract of the render and export roles. Public so
+# evidence runners probe the validator against this one definition instead of
+# keeping a copy that drifts.
+PUBLIC_WORKER_ISOLATION_REQUIREMENTS = MappingProxyType(
+    {
+        "PPT_WORKER_NETWORK_MODE": "none",
+        "PPT_WORKER_ROOT_FILESYSTEM": "read-only",
+        "PPT_WORKER_SCRATCH": "tmpfs",
+        "PPT_WORKER_RUN_AS_NON_ROOT": "true",
+    }
+)
+PUBLIC_WORKER_POSITIVE_LIMITS = (
     "PPT_WORKER_MEMORY_LIMIT_BYTES",
     "PPT_WORKER_CPU_MILLIS",
     "PPT_WORKER_PID_LIMIT",
@@ -140,8 +145,8 @@ _POSITIVE_LIMITS = (
     "PUBLIC_WORKER_ARTIFACT_CACHE_MAX_BYTES",
     "PUBLIC_WORKER_ARTIFACT_CACHE_TTL_SECONDS",
 )
-_SECCOMP_PROFILE_KEY = "PPT_WORKER_SECCOMP_PROFILE"
-_DISABLED_SECCOMP_PROFILES = frozenset(
+PUBLIC_WORKER_SECCOMP_PROFILE_KEY = "PPT_WORKER_SECCOMP_PROFILE"
+PUBLIC_WORKER_DISABLED_SECCOMP_PROFILES = frozenset(
     {"", "0", "disabled", "false", "none", "unconfined"}
 )
 
@@ -169,15 +174,15 @@ def validate_public_worker_environment(
             raise RuntimeError("public_worker.canonical_database_credential_forbidden")
         if present.intersection(_PROVIDER_SECRET_MARKERS):
             raise RuntimeError("public_worker.provider_credential_forbidden")
-        for key, expected in _ISOLATION_REQUIREMENTS.items():
+        for key, expected in PUBLIC_WORKER_ISOLATION_REQUIREMENTS.items():
             if environ.get(key, "").strip().lower() != expected:
                 raise RuntimeError(f"public_worker.isolation_requirement_missing:{key}")
-        seccomp_profile = environ.get(_SECCOMP_PROFILE_KEY, "").strip().lower()
-        if seccomp_profile in _DISABLED_SECCOMP_PROFILES:
+        seccomp_profile = environ.get(PUBLIC_WORKER_SECCOMP_PROFILE_KEY, "").strip().lower()
+        if seccomp_profile in PUBLIC_WORKER_DISABLED_SECCOMP_PROFILES:
             raise RuntimeError(
-                f"public_worker.isolation_requirement_missing:{_SECCOMP_PROFILE_KEY}"
+                f"public_worker.isolation_requirement_missing:{PUBLIC_WORKER_SECCOMP_PROFILE_KEY}"
             )
-        for key in _POSITIVE_LIMITS:
+        for key in PUBLIC_WORKER_POSITIVE_LIMITS:
             try:
                 value = int(environ.get(key, ""))
             except ValueError as exc:
