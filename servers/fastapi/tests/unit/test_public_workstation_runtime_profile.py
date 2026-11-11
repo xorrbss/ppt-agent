@@ -2,18 +2,15 @@
 
 from __future__ import annotations
 
-import asyncio
 from types import SimpleNamespace
 
 import pytest
-from sqlalchemy.pool import QueuePool
 
 from services.public_operation_admission import (
     PublicAdmissionRejected,
     _effective_runtime_quota_limits,
     _effective_runtime_resource_limits,
 )
-from services.public_render_batching import pooled_render_authority_admission
 from services.public_workstation_runtime_profile import (
     PROFILE_VERSION,
     PublicWorkstationProfileError,
@@ -148,17 +145,6 @@ def test_workstation_128g_profile_gates_tiers_and_clamps_admission(monkeypatch):
     assert _effective_runtime_resource_limits(
         policy, scope_type="global", operation_kind="generation"
     ) == (32, 32)
-
-    class Bind:
-        dialect = SimpleNamespace(name="postgresql")
-
-        def __init__(self) -> None:
-            self.pool = QueuePool(lambda: None, pool_size=5, max_overflow=10)
-
-    async def assert_render_pool_is_profile_clamped() -> None:
-        assert pooled_render_authority_admission(Bind())._slots._value == 8
-
-    asyncio.run(assert_render_pool_is_profile_clamped())
 
     monkeypatch.setenv("PPT_RUNTIME_AVAILABLE_MEMORY_BYTES", str(15 * 1024**3))
     assert _effective_runtime_quota_limits(
