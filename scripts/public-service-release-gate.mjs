@@ -293,7 +293,6 @@ function performanceChecks(controlled, soak) {
 }
 
 function securityChecks(report, sourceManifest) {
-  const htmlCases = report?.observations?.htmlCorpus;
   const pptxCases = report?.observations?.pptxCorpus;
   const crossOwner = report?.observations?.crossOwner;
   const capability = report?.observations?.capabilityBinding;
@@ -306,12 +305,6 @@ function securityChecks(report, sourceManifest) {
     : null;
   const expectedObservationDigest = valueDigest(report?.observations ?? null);
   const expectedProvenanceDigest = valueDigest(withoutDigest);
-  const htmlConsistent = Array.isArray(htmlCases)
-    && htmlCases.length === report?.maliciousHtmlCaseCount
-    && htmlCases.every((item) => item?.pass === true
-      && typeof item?.expectedErrorCode === "string"
-      && item.observedErrorCode === item.expectedErrorCode
-      && item.accessSucceeded === false);
   const pptxConsistent = Array.isArray(pptxCases)
     && pptxCases.length === report?.maliciousPptxCaseCount
     && pptxCases.every((item) => item?.pass === true
@@ -328,8 +321,6 @@ function securityChecks(report, sourceManifest) {
     ? crossOwner.filter((item) => item?.operation === "read" && item?.accessSucceeded === true).length : null;
   const actualCrossOwnerWrites = Array.isArray(crossOwner)
     ? crossOwner.filter((item) => item?.operation === "write" && item?.accessSucceeded === true).length : null;
-  const accessCount = (category) => Array.isArray(htmlCases)
-    ? htmlCases.filter((item) => item?.category === category && item?.accessSucceeded === true).length : null;
   const runnerManifestMatches = typeof provenance?.runnerPath === "string"
     && isSha256(provenance?.runnerSha256)
     && manifestFiles.get(provenance.runnerPath) === provenance.runnerSha256;
@@ -342,41 +333,13 @@ function securityChecks(report, sourceManifest) {
     );
   return [
     check("security.reportStatus", report, "status", (value) => value === "PASS", "PASS"),
-    check("security.maliciousHtmlCorpus", report, "maliciousHtmlCaseCount", (value) => Number.isInteger(value) && value > 0, "integer > 0"),
     check("security.maliciousPptxCorpus", report, "maliciousPptxCaseCount", (value) => Number.isInteger(value) && value > 0, "integer > 0"),
-    check("security.networkAccess", report, "successfulNetworkAccessCount", (value) => value === 0, "0"),
-    check("security.fileAccess", report, "successfulFileAccessCount", (value) => value === 0, "0"),
-    check("security.metadataAccess", report, "successfulMetadataAccessCount", (value) => value === 0, "0"),
     check("security.crossOwnerAttempts", report, "crossOwnerAttemptCount", (value) => Number.isInteger(value) && value > 0, "integer > 0"),
     check("security.crossOwnerReads", report, "successfulCrossOwnerReadCount", (value) => value === 0, "0"),
     check("security.crossOwnerWrites", report, "successfulCrossOwnerWriteCount", (value) => value === 0, "0"),
     check("security.sessionlessWorker", report, "sessionlessWorkerVerified", (value) => value === true, "true"),
-    check("security.networkNoneRender", report, "networkNoneRenderVerified", (value) => value === true, "true"),
     check("security.capabilityBinding", report, "operationDigestCapabilityBindingVerified", (value) => value === true, "true"),
     check("security.ownerBinding", report, "artifactOwnerBindingVerified", (value) => value === true, "true"),
-    check("security.safeHtmlControl", report, "observations.safeHtmlControl.pass", (value) => value === true, "true"),
-    check("security.osNetworkNamespace", report, "observations.networkIsolation.osNetworkNamespaceObserved", (value) => value === true, "true"),
-    check("security.containerNetworkMode", report, "observations.networkIsolation.containerNetworkMode", (value) => value === "none", "none"),
-    check("security.egressSink", report, "observations.networkIsolation.egressSinkConnectionCount", (value) => value === 0, "0"),
-    check("security.cdpBlock", report, "observations.networkIsolation.cdpBlockedRequestCount", (value) => Number.isInteger(value) && value > 0, "integer > 0"),
-    check("security.networkProducerBinding", report,
-      "observations.networkIsolation.producerSourceBindingObserved", (value) => value === true, "true"),
-    check("security.networkEvidenceByteChain", report,
-      "observations.networkIsolation.evidenceExactByteChainObserved", (value) => value === true, "true"),
-    check("security.immutableImageIdentity", report,
-      "observations.networkIsolation.immutableImageIdentityObserved", (value) => value === true, "true"),
-    check("security.imageId", report, "observations.networkIsolation.imageId", isSha256,
-      "sha256:<64 lowercase hex>"),
-    check("security.rendererSourceTreeDigest", report,
-      "observations.networkIsolation.sourceTreeDigestMatches", (value) => value === true, "true"),
-    check("security.rendererContractDigest", report,
-      "observations.networkIsolation.contractDigestMatches", (value) => value === true, "true"),
-    check("security.networkSourceManifestDigest", report,
-      "observations.networkIsolation.sourceManifestDigest",
-      (value) => value === sourceManifest?.exactByteSha256,
-      "equals exact source manifest byte SHA-256"),
-    customCheck("security.htmlObservationConsistency", htmlConsistent,
-      "every HTML case has an exact expected error and failed access", htmlCases),
     customCheck("security.pptxObservationConsistency", pptxConsistent,
       "every PPTX case has an exact expected error", pptxCases),
     customCheck("security.crossOwnerObservationConsistency", crossOwnerConsistent,
@@ -389,18 +352,6 @@ function securityChecks(report, sourceManifest) {
     customCheck("security.crossOwnerWriteCountConsistency",
       actualCrossOwnerWrites === report?.successfulCrossOwnerWriteCount,
       "reported successful writes equal observations", actualCrossOwnerWrites),
-    customCheck("security.networkCountConsistency",
-      accessCount("network") === report?.successfulNetworkAccessCount,
-      "reported successful network access equals observations", accessCount("network")),
-    customCheck("security.fileCountConsistency",
-      accessCount("file") === report?.successfulFileAccessCount,
-      "reported successful file access equals observations", accessCount("file")),
-    customCheck("security.metadataCountConsistency",
-      accessCount("metadata") === report?.successfulMetadataAccessCount,
-      "reported successful metadata access equals observations", accessCount("metadata")),
-    customCheck("security.networkNoneFlagConsistency",
-      report?.networkNoneRenderVerified === report?.observations?.networkIsolation?.pass,
-      "networkNoneRenderVerified equals networkIsolation.pass", report?.networkNoneRenderVerified),
     customCheck("security.sessionlessFlagConsistency",
       report?.sessionlessWorkerVerified
         === report?.observations?.workerBoundary?.sessionlessEnvironmentAllowlistVerified,

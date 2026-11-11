@@ -59,25 +59,6 @@ function passingEvidence() {
       generationToPptxP95Ms: 359_999, starvationCount: 0, resourceLimitsEnforced: true });
   }
   const securityObservations = {
-    safeHtmlControl: { pass: true, outputMediaType: "image/png" },
-    networkIsolation: {
-      osNetworkNamespaceObserved: true,
-      containerNetworkMode: "none",
-      egressSinkConnectionCount: 0,
-      cdpBlockedRequestCount: 3,
-      producerSourceBindingObserved: true,
-      evidenceExactByteChainObserved: true,
-      immutableImageIdentityObserved: true,
-      imageId: `sha256:${"d".repeat(64)}`,
-      sourceTreeDigestMatches: true,
-      contractDigestMatches: true,
-      sourceManifestDigest: RELEASE_CANDIDATE,
-      pass: true,
-    },
-    htmlCorpus: [
-      { caseId: "network", category: "network", expectedErrorCode: "public_render_policy_rejected",
-        observedErrorCode: "public_render_policy_rejected", accessSucceeded: false, pass: true },
-    ],
     pptxCorpus: [
       { caseId: "xxe", expectedErrorCode: "unsafe_xml_declaration",
         observedErrorCode: "unsafe_xml_declaration", pass: true },
@@ -95,7 +76,7 @@ function passingEvidence() {
     observationDigest: valueDigest(securityObservations),
     ...runnerProvenance(RUNNERS.security),
     runnerIncludedInSourceManifest: true,
-    sourceDigests: { "workers/public_render_worker.py": `sha256:${"b".repeat(64)}` },
+    sourceDigests: { "servers/fastapi/services/public_worker_profiles.py": `sha256:${"b".repeat(64)}` },
     sourcesMatchSourceManifest: true,
   };
   securityProvenance.provenanceDigest = valueDigest(securityProvenance);
@@ -105,7 +86,7 @@ function passingEvidence() {
       sourceTreeCommit: SOURCE_TREE_COMMIT,
       files: [
         ...Object.values(RUNNERS).map((runner) => ({ path: runner.path, sha256: runner.sha256 })),
-        { path: "workers/public_render_worker.py", sha256: `sha256:${"b".repeat(64)}` },
+        { path: "servers/fastapi/services/public_worker_profiles.py", sha256: `sha256:${"b".repeat(64)}` },
       ],
       exactByteSha256: RELEASE_CANDIDATE,
       _verified: { fileSetValid: true, currentDigestsMatch: true },
@@ -142,11 +123,9 @@ function passingEvidence() {
     maliciousCorpus: {
       ...common("public-service-malicious-corpus-evidence/v1"),
       status: "PASS",
-      maliciousHtmlCaseCount: 1, maliciousPptxCaseCount: 1,
-      successfulNetworkAccessCount: 0, successfulFileAccessCount: 0,
-      successfulMetadataAccessCount: 0, crossOwnerAttemptCount: 2,
+      maliciousPptxCaseCount: 1, crossOwnerAttemptCount: 2,
       successfulCrossOwnerReadCount: 0, successfulCrossOwnerWriteCount: 0,
-      sessionlessWorkerVerified: true, networkNoneRenderVerified: true,
+      sessionlessWorkerVerified: true,
       operationDigestCapabilityBindingVerified: true, artifactOwnerBindingVerified: true,
       observations: securityObservations,
       provenance: securityProvenance,
@@ -210,8 +189,8 @@ test("base evidence cannot promote without immutable functional and release-qual
   assert.equal(evaluateReleaseEvidence(failedReport).gates.security.status, "FAIL");
 
   const inconsistentObservation = passingEvidence();
-  inconsistentObservation.maliciousCorpus.observations.htmlCorpus[0].observedErrorCode =
-    "public_render_failed";
+  inconsistentObservation.maliciousCorpus.observations.pptxCorpus[0].observedErrorCode =
+    "unsupported_zip_compression";
   assert.equal(evaluateReleaseEvidence(inconsistentObservation).gates.security.status, "FAIL");
 
   const uncommittedRunner = passingEvidence();
@@ -219,12 +198,6 @@ test("base evidence cannot promote without immutable functional and release-qual
     (item) => item.path !== uncommittedRunner.maliciousCorpus.provenance.runnerPath,
   );
   assert.equal(evaluateReleaseEvidence(uncommittedRunner).gates.security.status, "FAIL");
-
-  const selfAssertedNetworkNone = passingEvidence();
-  selfAssertedNetworkNone.maliciousCorpus.observations.networkIsolation.producerSourceBindingObserved = false;
-  selfAssertedNetworkNone.maliciousCorpus.observations.networkIsolation.evidenceExactByteChainObserved = false;
-  selfAssertedNetworkNone.maliciousCorpus.observations.networkIsolation.immutableImageIdentityObserved = false;
-  assert.equal(evaluateReleaseEvidence(selfAssertedNetworkNone).gates.security.status, "FAIL");
 });
 
 test("missing, null, threshold, duplicate, cost, and 24h evidence fail closed in their gates", () => {

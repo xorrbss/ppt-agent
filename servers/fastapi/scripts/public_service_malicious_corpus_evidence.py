@@ -1,8 +1,9 @@
 """Produce same-RC product-path security evidence for the public PPT service.
 
-The runner intentionally exercises production modules and one-shot worker
-subprocesses.  It does not import pytest fixtures and it never opens a public
-listener.  The resulting JSON is consumed by ``public-service-release-gate``.
+The runner intentionally exercises production modules: the PPTX package
+reader, the workspace HTTP routes, the worker capability contract and the
+worker launch-time environment and isolation validators.  It does not import
+pytest fixtures and it never opens a public listener.  The resulting JSON is consumed by ``public-service-release-gate``.
 """
 
 from __future__ import annotations
@@ -14,7 +15,6 @@ import hashlib
 import json
 import os
 from pathlib import Path
-import re
 import stat
 import subprocess
 import sys
@@ -58,7 +58,6 @@ from services.isolated_worker_contracts import (
 from services.isolated_worker_process import (
     NETWORK_NONE_ATTESTATION,
     IsolatedWorkerProcessError,
-    execute_isolated_worker_job,
     worker_environment,
 )
 from services.public_worker_profiles import (
@@ -93,29 +92,14 @@ EVIDENCE_CLASS = "product-path"
 TENANT_ID = "public-security-tenant"
 OWNER_A = uuid.uuid5(uuid.NAMESPACE_URL, "presenton:public-security:owner-a")
 OWNER_B = uuid.uuid5(uuid.NAMESPACE_URL, "presenton:public-security:owner-b")
-SAFE_HTML = """<!doctype html><html><head><meta charset="utf-8"><style>
-html,body{margin:0;width:1280px;height:720px;background:#fff}.card{position:absolute;left:20px;top:20px;width:420px;height:120px;background:#2563eb;color:white;padding:12px}
-</style></head><body><main class="card"><h1>Public worker security probe</h1></main></body></html>"""
 PRESENTATION_XML = b"""<p:presentation xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><p:sldIdLst/></p:presentation>"""
 PRESENTATION_RELS = b'<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"/>'
 RUNNER_PATH = "servers/fastapi/scripts/public_service_malicious_corpus_evidence.py"
-RENDERER_SECURITY_PRODUCER_FILES = (
-    "docs/experiments/authored-vnext/04-renderer-security/harness/run-harness.ps1",
-    "docs/experiments/authored-vnext/04-renderer-security/harness/verify_container_inspect.py",
-    "docs/experiments/authored-vnext/04-renderer-security/harness/verify_product_resilience.py",
-    "docs/experiments/authored-vnext/04-renderer-security/ci/security_gate.py",
-    "contracts/authored-renderer/attestation.py",
-    "contracts/authored-renderer/invoke.py",
-    "contracts/authored-renderer/compose.authored-renderer.json",
-    "Dockerfile",
-)
 SECURITY_SOURCE_FILES = (
     "servers/fastapi/services/isolated_worker_contracts.py",
     "servers/fastapi/services/isolated_worker_process.py",
     "servers/fastapi/services/public_worker_profiles.py",
     "servers/fastapi/services/artifact_store.py",
-    "servers/fastapi/workers/public_worker_runtime.py",
-    "servers/fastapi/workers/public_render_worker.py",
     "servers/fastapi/templates/pptx_safety/package_reader.py",
     "servers/fastapi/api/v1/ppt/endpoints/workspace.py",
     "servers/fastapi/services/workspace_artifact_publication_service.py",
@@ -123,7 +107,6 @@ SECURITY_SOURCE_FILES = (
     "servers/fastapi/services/workspace_service.py",
     "servers/fastapi/services/database_owner_scope.py",
     "scripts/public-service-release-gate.mjs",
-    *RENDERER_SECURITY_PRODUCER_FILES,
 )
 
 
@@ -243,12 +226,6 @@ def _artifact(
     )
 
 
-def _store(root: Path, reference: ArtifactRef, payload: bytes) -> None:
-    target = root / reference.storage_key
-    target.parent.mkdir(parents=True, exist_ok=True)
-    target.write_bytes(payload)
-
-
 def _job(
     *,
     label: str,
@@ -280,7 +257,7 @@ def _job(
 
 
 def _worker_source_environment(
-    *, root: Path, key_file: Path, fastapi_root: Path, chrome_path: str
+    *, root: Path, key_file: Path, fastapi_root: Path
 ) -> dict[str, str]:
     allowed = {
         name: value
@@ -305,7 +282,6 @@ def _worker_source_environment(
     }
     allowed.update(
         {
-            "CHROME_PATH": chrome_path,
             "PYTHONPATH": str(fastapi_root),
             "PUBLIC_WORKER_CAPABILITY_KEY_FILE": str(key_file),
             "PUBLIC_WORKER_OBJECT_STORE_ROOT": str(root),
@@ -317,96 +293,6 @@ def _worker_source_environment(
         }
     )
     return allowed
-
-
-async def _run_render_job(
-    *,
-    label: str,
-    html: str,
-    root: Path,
-    signing_key: bytes,
-    source_environment: dict[str, str],
-) -> tuple[bool, str | None, ArtifactRef | None]:
-    payload = html.encode("utf-8")
-    operation_id = _uuid(f"operation:html:{label}")
-    reference = _artifact(
-        label=f"html:{label}",
-        operation_id=operation_id,
-        owner_id=OWNER_A,
-        payload=payload,
-        kind="slide-html",
-        media_type="text/html",
-    )
-    _store(root, reference, payload)
-    job = _job(label=f"render:{label}", role="render", artifact=reference, signing_key=signing_key)
-    try:
-        result = await execute_isolated_worker_job(
-            job,
-            source_environment=source_environment,
-            command=[str(Path(sys.executable).resolve()), "-m", "workers.public_render_worker"],
-        )
-    except (IsolatedWorkerProcessError, IsolatedWorkerContractError) as error:
-        return False, str(error), None
-    output = ArtifactRef.from_wire(dict(result.output_artifact or {}))
-    return True, None, output
-
-
-async def _html_corpus(
-    *, root: Path, signing_key: bytes, source_environment: dict[str, str]
-) -> tuple[list[dict[str, Any]], dict[str, Any]]:
-    cases = (
-        ("network-script-fetch", "network", '<script>fetch("https://egress.invalid/x")</script>'),
-        ("network-img-https", "network", '<img src="https://egress.invalid/pixel.png">'),
-        ("network-loopback-iframe", "network", '<iframe src="http://127.0.0.1:9/private"></iframe>'),
-        ("network-css-url", "network", '<div style="background:url(https://egress.invalid/x)">x</div>'),
-        ("network-obfuscated-css", "network", r'<style>.x{background-image:u\72l(http://127.0.0.1:9/x)}</style>'),
-        ("network-svg-paint", "network", '<svg><rect fill="url(https://egress.invalid/x)"></rect></svg>'),
-        ("file-img", "file", '<img src="file:///etc/passwd">'),
-        ("file-css-mask", "file", '<div style="mask-image:url(file:///etc/passwd)">x</div>'),
-        ("file-object-relative", "file", '<object data="../../secret"></object>'),
-        ("metadata-aws", "metadata", '<img src="http://169.254.169.254/latest/meta-data/iam/security-credentials/">'),
-        ("metadata-gcp", "metadata", '<script>fetch("http://metadata.google.internal/computeMetadata/v1/")</script>'),
-        ("metadata-azure", "metadata", '<iframe src="http://169.254.169.254/metadata/instance"></iframe>'),
-    )
-    observations: list[dict[str, Any]] = []
-    for case_id, category, html in cases:
-        succeeded, error_code, _ = await _run_render_job(
-            label=case_id,
-            html=html,
-            root=root,
-            signing_key=signing_key,
-            source_environment=source_environment,
-        )
-        observations.append(
-            {
-                "caseId": case_id,
-                "category": category,
-                "attemptedProductPath": "public-render-worker-subprocess",
-                "expectedErrorCode": "public_render_policy_rejected",
-                "accessSucceeded": succeeded,
-                "observedErrorCode": error_code,
-                "pass": not succeeded and error_code == "public_render_policy_rejected",
-            }
-        )
-    safe_succeeded, safe_error, safe_output = await _run_render_job(
-        label="safe-html-control",
-        html=SAFE_HTML,
-        root=root,
-        signing_key=signing_key,
-        source_environment=source_environment,
-    )
-    safe_control = {
-        "attemptedProductPath": "public-render-worker-subprocess",
-        "expectedOutcome": "image/png",
-        "observedErrorCode": safe_error,
-        "outputMediaType": safe_output.media_type if safe_output else None,
-        "pass": bool(
-            safe_succeeded
-            and safe_output is not None
-            and safe_output.media_type == "image/png"
-        ),
-    }
-    return observations, safe_control
 
 
 def _write_zip(
@@ -829,10 +715,10 @@ def _capability_checks(signing_key: bytes) -> list[dict[str, Any]]:
         operation_id=_uuid("operation:capability-control"),
         owner_id=OWNER_A,
         payload=payload,
-        kind="slide-html",
-        media_type="text/html",
+        kind="checkpoint",
+        media_type="application/json",
     )
-    valid = _job(label="capability-control", role="render", artifact=artifact, signing_key=signing_key)
+    valid = _job(label="capability-control", role="export", artifact=artifact, signing_key=signing_key)
     cases = (
         ("operation", replace(valid, operation_id=_uuid("operation:tampered"))),
         ("digest", replace(valid, input_digest="f" * 64)),
@@ -863,7 +749,7 @@ def _capability_checks(signing_key: bytes) -> list[dict[str, Any]]:
 
 
 def _worker_boundary_checks(source_environment: dict[str, str]) -> dict[str, Any]:
-    filtered = worker_environment("render", source_environment)
+    filtered = worker_environment("export", source_environment)
     forbidden_markers = (
         "API_KEY",
         "COOKIE",
@@ -879,10 +765,10 @@ def _worker_boundary_checks(source_environment: dict[str, str]) -> dict[str, Any
     )
     missing_attestation_rejected = False
     try:
-        worker_environment("render", {})
+        worker_environment("export", {})
     except IsolatedWorkerProcessError:
         missing_attestation_rejected = True
-    profile = get_public_worker_profile("render")
+    profile = get_public_worker_profile("export")
     contract_observations = [
         _isolation_contract_probe(get_public_worker_profile(role))
         for role in ("render", "export")
@@ -890,9 +776,9 @@ def _worker_boundary_checks(source_environment: dict[str, str]) -> dict[str, Any
     return {
         "sessionlessEnvironmentAllowlistVerified": sessionless,
         "missingIsolationAttestationRejected": missing_attestation_rejected,
-        "renderProfileNetworkModeNone": profile.network_mode == "none",
-        "renderProfileNoCanonicalDatabase": not profile.canonical_database_access,
-        "renderProfileResourceContractVerified": all(
+        "exportProfileNetworkModeNone": profile.network_mode == "none",
+        "exportProfileNoCanonicalDatabase": not profile.canonical_database_access,
+        "isolationContractVerified": all(
             observation["pass"] for observation in contract_observations
         ),
         "isolationContractObservations": contract_observations,
@@ -906,7 +792,7 @@ def _isolation_contract_probe(profile: PublicWorkerProfile) -> dict[str, Any]:
     probe cannot drift from it. It checks validator behaviour only: a complete
     declaration is admitted, and dropping or disabling any single control is
     refused with that control's code. It does not observe that an OS sandbox
-    enforces the declared values; the network-none observation does that.
+    enforces the declared values; this runner records that as a residual risk.
     """
 
     declared_seccomp_profile = "isolation-contract-probe"
@@ -971,177 +857,6 @@ def _isolation_contract_probe(profile: PublicWorkerProfile) -> dict[str, Any]:
     }
 
 
-def _renderer_attestation(repo_root: Path) -> dict[str, str]:
-    completed = subprocess.run(
-        [sys.executable, str(repo_root / "contracts/authored-renderer/attestation.py")],
-        cwd=repo_root,
-        capture_output=True,
-        text=True,
-        timeout=30,
-        check=True,
-    )
-    value = json.loads(completed.stdout)
-    source_tree = value.get("AUTHORED_RENDERER_SOURCE_TREE_DIGEST")
-    contract = value.get("AUTHORED_RENDERER_CONTRACT_DIGEST")
-    for label, digest in (("source tree", source_tree), ("contract", contract)):
-        if not isinstance(digest, str) or not re.fullmatch(r"sha256:[0-9a-f]{64}", digest):
-            raise ValueError(f"renderer_{label.replace(' ', '_')}_digest_invalid")
-    return {"sourceTreeDigest": source_tree, "contractDigest": contract}
-
-
-def _network_isolation_observation(
-    evidence_dir: Path | None,
-    *,
-    release_candidate: str,
-    source_tree_commit: str,
-    manifest_file_digests: dict[str, str],
-    repo_root: Path,
-) -> tuple[dict[str, Any], dict[str, Any]]:
-    unavailable = {
-        "osNetworkNamespaceObserved": False,
-        "containerNetworkMode": None,
-        "egressSinkConnectionCount": None,
-        "cdpBlockedRequestCount": None,
-        "sourceRevisionMatches": False,
-        "producerSourceBindingObserved": False,
-        "evidenceExactByteChainObserved": False,
-        "immutableImageIdentityObserved": False,
-        "observationDigests": {},
-        "pass": False,
-        "reason": "same_rc_renderer_security_evidence_required",
-    }
-    safe_control = {
-        "attemptedProductPath": "network-none-authored-renderer-product-worker",
-        "expectedOutcome": "normal HTML rendered successfully",
-        "pass": False,
-        "reason": "same_rc_renderer_security_evidence_required",
-    }
-    if evidence_dir is None:
-        return unavailable, safe_control
-    root = evidence_dir.resolve()
-    security_path = root / "security-observation.json"
-    inspect_path = root / "container-inspect.json"
-    gate_path = root / "gate-result.json"
-    try:
-        security = json.loads(security_path.read_text(encoding="utf-8"))
-        inspected = json.loads(inspect_path.read_text(encoding="utf-8"))
-        gate_result = json.loads(gate_path.read_text(encoding="utf-8"))
-        container = inspected[0]
-    except (OSError, IndexError, KeyError, TypeError, json.JSONDecodeError):
-        unavailable["reason"] = "renderer_security_evidence_invalid"
-        safe_control["reason"] = unavailable["reason"]
-        return unavailable, safe_control
-    labels = ((container.get("Config") or {}).get("Labels") or {})
-    source_revision_matches = labels.get("org.opencontainers.image.revision") == source_tree_commit
-    producer_source_binding = all(
-        manifest_file_digests.get(source_path) == _source_digest(repo_root / source_path)
-        for source_path in RENDERER_SECURITY_PRODUCER_FILES
-    )
-    security_digest = _source_digest(security_path)
-    inspect_digest = _source_digest(inspect_path)
-    gate_digest = _source_digest(gate_path)
-    gate_source_digest = str(gate_result.get("source_sha256") or "")
-    evidence_exact_byte_chain = gate_source_digest in {
-        security_digest,
-        security_digest.removeprefix("sha256:"),
-    }
-    image_id = str(container.get("Image") or "")
-    configured_image = str((container.get("Config") or {}).get("Image") or "")
-    compose_image = str(labels.get("com.docker.compose.image") or "")
-    immutable_image_identity = bool(
-        re.fullmatch(r"sha256:[0-9a-f]{64}", image_id)
-        and configured_image == image_id
-        and compose_image == image_id
-    )
-    try:
-        expected_attestation = _renderer_attestation(repo_root)
-    except (OSError, ValueError, subprocess.SubprocessError, json.JSONDecodeError):
-        expected_attestation = {"sourceTreeDigest": "", "contractDigest": ""}
-    source_tree_digest_matches = (
-        labels.get("io.presenton.authored-renderer.source-tree-digest")
-        == expected_attestation["sourceTreeDigest"]
-    )
-    contract_digest_matches = (
-        labels.get("io.presenton.authored-renderer.contract-digest")
-        == expected_attestation["contractDigest"]
-    )
-    network_mode = (container.get("HostConfig") or {}).get("NetworkMode")
-    boundaries = security.get("boundaries") or {}
-    observed_boundaries = [
-        boundaries.get("external_egress") or {},
-        boundaries.get("loopback_egress") or {},
-        boundaries.get("metadata_egress") or {},
-    ]
-    boundary_pass = all(
-        isinstance(item.get("attempts"), int)
-        and item["attempts"] > 0
-        and item.get("blocked") == item["attempts"]
-        and item.get("violations") == 0
-        and item.get("observed") is True
-        for item in observed_boundaries
-    )
-    cdp_blocked = sum(
-        item.get("blocked", 0)
-        for item in observed_boundaries
-        if isinstance(item.get("blocked"), int)
-    )
-    deployment = security.get("deployment") or {}
-    containment = security.get("containment") or {}
-    gate_pass = gate_result.get("status") == "PASS"
-    normal_success = deployment.get("product_worker_smoke") is True
-    passed = bool(
-        security.get("schema_version") == "authored-security-observation/v1"
-        and source_revision_matches
-        and producer_source_binding
-        and evidence_exact_byte_chain
-        and immutable_image_identity
-        and source_tree_digest_matches
-        and contract_digest_matches
-        and network_mode == "none"
-        and deployment.get("network_none") is True
-        and containment.get("os_egress_deny") is True
-        and containment.get("csp_enforced") is True
-        and boundary_pass
-        and normal_success
-        and gate_pass
-    )
-    observation = {
-        "osNetworkNamespaceObserved": network_mode == "none",
-        "containerNetworkMode": network_mode,
-        "egressSinkConnectionCount": sum(
-            item.get("violations", 0)
-            for item in observed_boundaries
-            if isinstance(item.get("violations"), int)
-        ),
-        "cdpBlockedRequestCount": cdp_blocked,
-        "sourceRevisionMatches": source_revision_matches,
-        "producerSourceBindingObserved": producer_source_binding,
-        "evidenceExactByteChainObserved": evidence_exact_byte_chain,
-        "immutableImageIdentityObserved": immutable_image_identity,
-        "imageId": image_id if immutable_image_identity else None,
-        "sourceTreeDigest": expected_attestation["sourceTreeDigest"] or None,
-        "sourceTreeDigestMatches": source_tree_digest_matches,
-        "contractDigest": expected_attestation["contractDigest"] or None,
-        "contractDigestMatches": contract_digest_matches,
-        "sourceManifestDigest": release_candidate,
-        "observationDigests": {
-            "securityObservation": security_digest,
-            "containerInspect": inspect_digest,
-            "gateResult": gate_digest,
-        },
-        "pass": passed,
-        "reason": None if passed else "renderer_security_observation_not_promotable",
-    }
-    safe_control = {
-        "attemptedProductPath": "network-none-authored-renderer-product-worker",
-        "expectedOutcome": "normal HTML rendered successfully",
-        "productWorkerSmoke": normal_success,
-        "pass": normal_success and passed,
-        "reason": None if normal_success and passed else observation["reason"],
-    }
-    return observation, safe_control
-
-
 async def _run(args: argparse.Namespace) -> dict[str, Any]:
     fastapi_root = Path(__file__).resolve().parents[1]
     repo_root = fastapi_root.parents[1]
@@ -1152,21 +867,6 @@ async def _run(args: argparse.Namespace) -> dict[str, Any]:
         release_candidate=args.release_candidate,
         source_tree_commit=git_head,
     )
-    chrome_path = args.chrome_path or next(
-        (
-            path
-            for path in (
-                r"C:\Program Files\Google\Chrome\Application\chrome.exe",
-                r"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe",
-                "/usr/bin/google-chrome",
-                "/usr/bin/chromium",
-            )
-            if Path(path).is_file()
-        ),
-        "",
-    )
-    if not chrome_path:
-        raise RuntimeError("chrome_executable_unavailable")
 
     with tempfile.TemporaryDirectory(prefix="presenton-public-security-") as temporary:
         root = Path(temporary).resolve()
@@ -1181,21 +881,14 @@ async def _run(args: argparse.Namespace) -> dict[str, Any]:
             root=object_root,
             key_file=key_file,
             fastapi_root=fastapi_root,
-            chrome_path=chrome_path,
         )
         worker_checks = _worker_boundary_checks(source_environment)
-        html_cases, local_safe_control = await _html_corpus(
-            root=object_root,
-            signing_key=signing_key,
-            source_environment=source_environment,
-        )
         pptx_root = root / "pptx-corpus"
         pptx_root.mkdir()
         pptx_cases = _pptx_corpus(pptx_root)
         cross_owner, same_owner_control, owner_bound_ref = await _cross_owner_artifact_checks(root)
         capability = _capability_checks(signing_key)
 
-    html_pass = all(case["pass"] for case in html_cases)
     pptx_pass = all(case["pass"] for case in pptx_cases)
     cross_owner_pass = all(case["pass"] for case in cross_owner)
     capability_pass = all(case["pass"] for case in capability)
@@ -1204,31 +897,16 @@ async def _run(args: argparse.Namespace) -> dict[str, Any]:
         and owner_bound_ref.get("ownerBound") is True
     )
     sessionless = worker_checks["sessionlessEnvironmentAllowlistVerified"]
-    network_isolation, safe_html_control = _network_isolation_observation(
-        args.renderer_security_evidence_dir,
-        release_candidate=args.release_candidate,
-        source_tree_commit=git_head,
-        manifest_file_digests=manifest_file_digests,
-        repo_root=repo_root,
-    )
-    safe_html_control["localSubprocessDiagnostic"] = local_safe_control
-    network_none = network_isolation["pass"] is True
     status = "PASS" if all(
         (
-            html_pass,
             pptx_pass,
             cross_owner_pass,
             capability_pass,
             output_binding,
             sessionless,
-            network_none,
-            safe_html_control["pass"],
         )
     ) else "FAIL"
     observations = {
-        "safeHtmlControl": safe_html_control,
-        "networkIsolation": network_isolation,
-        "htmlCorpus": html_cases,
         "pptxCorpus": pptx_cases,
         "crossOwner": cross_owner,
         "capabilityBinding": capability,
@@ -1263,17 +941,7 @@ async def _run(args: argparse.Namespace) -> dict[str, Any]:
         "releaseCandidate": args.release_candidate,
         "evidenceClass": EVIDENCE_CLASS,
         "status": status,
-        "maliciousHtmlCaseCount": len(html_cases),
         "maliciousPptxCaseCount": len(pptx_cases),
-        "successfulNetworkAccessCount": sum(
-            1 for case in html_cases if case["category"] == "network" and case["accessSucceeded"]
-        ),
-        "successfulFileAccessCount": sum(
-            1 for case in html_cases if case["category"] == "file" and case["accessSucceeded"]
-        ),
-        "successfulMetadataAccessCount": sum(
-            1 for case in html_cases if case["category"] == "metadata" and case["accessSucceeded"]
-        ),
         "crossOwnerAttemptCount": len(cross_owner),
         "successfulCrossOwnerReadCount": sum(
             1 for case in cross_owner if case["operation"] == "read" and case["accessSucceeded"]
@@ -1282,19 +950,12 @@ async def _run(args: argparse.Namespace) -> dict[str, Any]:
             1 for case in cross_owner if case["operation"] == "write" and case["accessSucceeded"]
         ),
         "sessionlessWorkerVerified": sessionless,
-        "networkNoneRenderVerified": network_none,
         "operationDigestCapabilityBindingVerified": capability_pass,
         "artifactOwnerBindingVerified": output_binding and cross_owner_pass,
         "observations": observations,
         "provenance": provenance,
         "residualRisks": [
-            *(
-                []
-                if network_none
-                else [
-                    "No same-RC OS network-none renderer observation was available; network-none and normal render controls remain failed closed."
-                ]
-            ),
+            "The worker isolation probe checks the launch-time validator only; this runner does not observe that an OS sandbox enforces network-none or the other declared controls.",
             "The PPTX corpus covers OOXML ZIP/XML structural attacks; a production malware scanner signature corpus was outside this runner.",
         ],
     }
@@ -1314,8 +975,6 @@ def main() -> int:
     parser.add_argument("--release-candidate", required=True)
     parser.add_argument("--source-manifest", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
-    parser.add_argument("--chrome-path", default="")
-    parser.add_argument("--renderer-security-evidence-dir", type=Path)
     args = parser.parse_args()
     try:
         report = asyncio.run(_run(args))
@@ -1326,16 +985,11 @@ def main() -> int:
             "evidenceClass": EVIDENCE_CLASS,
             "status": "FAIL",
             "reason": f"{type(error).__name__}:{error}",
-            "maliciousHtmlCaseCount": 0,
             "maliciousPptxCaseCount": 0,
-            "successfulNetworkAccessCount": 0,
-            "successfulFileAccessCount": 0,
-            "successfulMetadataAccessCount": 0,
             "crossOwnerAttemptCount": 0,
             "successfulCrossOwnerReadCount": 0,
             "successfulCrossOwnerWriteCount": 0,
             "sessionlessWorkerVerified": False,
-            "networkNoneRenderVerified": False,
             "operationDigestCapabilityBindingVerified": False,
             "artifactOwnerBindingVerified": False,
         }
