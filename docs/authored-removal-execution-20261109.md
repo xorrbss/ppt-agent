@@ -815,7 +815,23 @@ orchestrator):
   (`public_render_worker.py` `execute_render`/`__main__`, the `render` profile and
   role literals, `PUBLIC_RENDER_WORKER_COMMAND_JSON`, the render branches in
   `isolated_worker_process.py`, `wire_bundle_references.py` and
-  `public_export_operation.py`).
+  `public_export_operation.py`). Removed later the same day (owner decision):
+  the isolated workers now have one role, `export`. `public_render_worker.py`
+  is deleted; its HTML admission moved to
+  `workers/public_svg_pdf_export.py::admit_slide_wrapper_html` (svg PDF export,
+  same error codes); the `render` profile, role literals, render bundle
+  validation, render-batch deadline and metrics and
+  `PUBLIC_RENDER_WORKER_COMMAND_JSON` are gone; the container isolation probe
+  uses `export`. Kept: `public_render_runtime_identity.py` and its
+  `PUBLIC_RENDER_WORKER_IMAGE_DIGEST`/`_FONT_INVENTORY_DIGEST` (svg generation
+  runtime pins), `PUBLIC_RENDER_MAX_CONCURRENCY` (slide capture), the legacy
+  renderer worker (`utils/authored_renderer_worker.py`, the Dockerfile
+  ENTRYPOINT, `contracts/authored-renderer`). Left for a decision:
+  `services/public_render_batching.py` has no product caller, and
+  `scripts/public-service-resource-attestation.mjs` and
+  `public-service-product-evidence.mjs` still require render and export worker
+  samples per export from the `authored-vnext-controlled-load` report, which no
+  product run can produce any more.
 - `fix/crash-recovery-live-20261111` (`81d6864a1`): lease expiry now follows
   the operation lease (a workspace-linked job's lease columns stay NULL), and
   the token-leak scan skips files shorter than the token (Windows `.lock`
