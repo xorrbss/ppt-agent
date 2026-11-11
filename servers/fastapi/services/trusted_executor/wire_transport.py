@@ -44,7 +44,6 @@ from services.trusted_executor.wire_bundle_references import (
     MAX_EXPORT_BUNDLE_BYTES as MAX_EXPORT_BUNDLE_BYTES,
     _input_bundle_references as _input_bundle_references,
     _staged_bundle_slides as _staged_bundle_slides,
-    _render_output_bundle_references as _render_output_bundle_references,
     _final_pptx_render_references,
     _validated_success_output as _validated_success_output,
 )
@@ -466,14 +465,9 @@ class SupervisedStdioWireTransport:
                 raise TrustedWorkerWireError("trusted_worker_success_exit_mismatch")
             output_path = output_root.joinpath(*output_reference.storage_key.split("/"))
             _verify_artifact_file(output_reference, output_path, max_bytes=output_limit)
-            render_outputs, render_runtime = _render_output_bundle_references(
-                job,
-                output_reference=output_reference,
-                path=output_path,
-            )
-            render_outputs = (*render_outputs, *_final_pptx_render_references(job,
-                output_reference=output_reference, stdout=captured.stdout))
-            # Validate every child before publishing any part of a render bundle.
+            render_outputs = _final_pptx_render_references(job,
+                output_reference=output_reference, stdout=captured.stdout)
+            # Validate every child before publishing any part of the result.
             # The child is untrusted and may bypass its own store/runtime checks.
             for render_output in render_outputs:
                 render_output_path = output_root.joinpath(*render_output.storage_key.split("/"))
@@ -488,8 +482,6 @@ class SupervisedStdioWireTransport:
                 reference=output_reference,
                 source=output_path,
             )
-            if render_runtime:
-                resource_metrics = {**resource_metrics, **render_runtime}
             resource_metrics = {
                 **resource_metrics,
                 DISPATCH_EVIDENCE_KEY: seal_supervised_dispatch_evidence(

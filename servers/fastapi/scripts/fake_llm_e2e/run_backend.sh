@@ -33,7 +33,6 @@ export PUBLIC_ARTIFACT_STORE_BACKEND=local-development
 export PUBLIC_WORKER_OBJECT_STORE_ROOT="$APP/public-artifacts"
 export PUBLIC_WORKER_CAPABILITY_KEY_FILE="$APP/public-worker-capability.key"
 export PUBLIC_LOCAL_ARTIFACT_DOWNLOAD_SIGNING_KEY="${PUBLIC_LOCAL_ARTIFACT_DOWNLOAD_SIGNING_KEY:-$("$PY" -c 'import secrets;print(secrets.token_urlsafe(48))')}"
-export PUBLIC_RENDER_WORKER_COMMAND_JSON="[\"$PY\",\"-m\",\"workers.public_render_worker\"]"
 export PUBLIC_EXPORT_WORKER_COMMAND_JSON="[\"$PY\",\"-m\",\"workers.public_export_worker\"]"
 # Development-only owned local worker: linux-local on Linux, windows-local on Windows.
 case "$(uname -s)" in

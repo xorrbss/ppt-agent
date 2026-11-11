@@ -36,9 +36,7 @@ def _furniture_metadata_valid(value: object) -> bool:
 
 
 def _input_bundle_references(job: IsolatedWorkerJob, path: Path) -> tuple[ArtifactRef, ...]:
-    if job.role == "render" and job.input_artifact.kind != "export-bundle":
-        return ()
-    if job.role not in {"render", "export"}:
+    if job.role != "export":
         return ()
     if job.input_artifact.size_bytes > MAX_EXPORT_BUNDLE_BYTES:
         raise TrustedWorkerWireError("trusted_worker_bundle_too_large")
@@ -49,28 +47,21 @@ def _input_bundle_references(job: IsolatedWorkerJob, path: Path) -> tuple[Artifa
         raise TrustedWorkerWireError("trusted_worker_bundle_invalid") from error
     if not isinstance(value, Mapping) or not isinstance(value.get("slides"), list):
         raise TrustedWorkerWireError("trusted_worker_bundle_invalid")
-    if job.role == "render" and value.get("schemaVersion") not in {
-        "public-render-bundle/v1",
-        "public-render-bundle/v2",
-    }:
-        raise TrustedWorkerWireError("trusted_worker_render_bundle_invalid")
-    svg_export = job.role == "export" and value.get("schemaVersion") in {
+    svg_export = value.get("schemaVersion") in {
         "public-svg-export-bundle/v1",
         "public-svg-export-bundle/v2",
         "public-svg-export-bundle/v3",
         "public-svg-export-bundle/v4",
     }
-    if job.role == "export" and not svg_export:
+    if not svg_export:
         # The raster PNG and editable-hybrid export bundles left with the
         # authored strategy; the export worker refuses any other schema with
         # public_export_bundle_schema_unsupported, so nothing is staged for it.
         return ()
-    expected_kind = "slide-svg" if svg_export else "slide-html"
-    expected_media_type = "image/svg+xml" if svg_export else "text/html"
-    result = _staged_bundle_slides(job, value["slides"], kind=expected_kind, media_type=expected_media_type)
+    result = _staged_bundle_slides(job, value["slides"], kind="slide-svg", media_type="image/svg+xml")
     if not 1 <= len(result) <= 100:
         raise TrustedWorkerWireError("trusted_worker_bundle_slide_count_invalid")
-    if svg_export and value.get("schemaVersion") in {
+    if value.get("schemaVersion") in {
         "public-svg-export-bundle/v2",
         "public-svg-export-bundle/v3",
         "public-svg-export-bundle/v4",
@@ -151,7 +142,6 @@ def _staged_bundle_slides(
             or reference.tenant_id != job.input_artifact.tenant_id
             or reference.kind != kind
             or reference.media_type != media_type
-            or (job.role == "render" and reference.created_by_operation_id != job.operation_id)
         ):
             raise TrustedWorkerWireError("trusted_worker_bundle_slide_binding_mismatch")
         result.append(reference)
@@ -167,66 +157,6 @@ def _final_pptx_render_references(job, *, output_reference, stdout):
     if "finalPptxRender" in structural:
         raise TrustedWorkerWireError("trusted_worker_final_pptx_render_not_allowed")
     return ()
-
-
-def _render_output_bundle_references(
-    job: IsolatedWorkerJob,
-    *,
-    output_reference: ArtifactRef,
-    path: Path,
-) -> tuple[tuple[ArtifactRef, ...], dict[str, object]]:
-    if job.role != "render" or output_reference.kind != "export-bundle":
-        return (), {}
-    if output_reference.media_type != "application/vnd.presenton.export-bundle+json":
-        raise TrustedWorkerWireError("trusted_worker_render_output_bundle_invalid")
-    try:
-        with path.open("rb") as stream:
-            value = json.load(stream)
-    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as error:
-        raise TrustedWorkerWireError("trusted_worker_render_output_bundle_invalid") from error
-    if (
-        not isinstance(value, Mapping)
-        or set(value) != {"schemaVersion", "slides", "runtime"}
-        or value.get("schemaVersion") != "public-render-result-bundle/v1"
-        or not isinstance(value.get("slides"), list)
-        or not 1 <= len(value["slides"]) <= 100
-        or not isinstance(value.get("runtime"), Mapping)
-    ):
-        raise TrustedWorkerWireError("trusted_worker_render_output_bundle_invalid")
-    outputs: list[ArtifactRef] = []
-    for index, item in enumerate(value["slides"]):
-        if (
-            not isinstance(item, Mapping)
-            or set(item) != {"slideIndex", "artifactRef"}
-            or item.get("slideIndex") != index
-            or not isinstance(item.get("artifactRef"), Mapping)
-        ):
-            raise TrustedWorkerWireError("trusted_worker_render_output_slide_invalid")
-        try:
-            reference = ArtifactRef.from_wire(item["artifactRef"])
-        except ValueError as error:
-            raise TrustedWorkerWireError("trusted_worker_render_output_slide_invalid") from error
-        if (
-            reference.owner_id != job.input_artifact.owner_id
-            or reference.tenant_id != job.input_artifact.tenant_id
-            or reference.created_by_operation_id != job.operation_id
-            or reference.kind != "slide-png"
-            or reference.media_type != "image/png"
-        ):
-            raise TrustedWorkerWireError("trusted_worker_render_output_slide_binding_mismatch")
-        outputs.append(reference)
-    runtime = value["runtime"]
-    expected_runtime = {
-        "chromiumProcessLaunchCount": 1,
-        "browserReuseCount": len(outputs) - 1,
-        "pageSessionCount": len(outputs),
-    }
-    if dict(runtime) != expected_runtime:
-        raise TrustedWorkerWireError("trusted_worker_render_runtime_invalid")
-    return tuple(outputs), {
-        "renderBatchSlideCount": len(outputs),
-        **expected_runtime,
-    }
 
 
 def _validated_success_output(payload: bytes, job: IsolatedWorkerJob) -> ArtifactRef | None:

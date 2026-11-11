@@ -181,10 +181,9 @@ test("the multi-export controller runs every job in the pinned container sandbox
   const staging = environmentValue(exportBlock, "PUBLIC_TRUSTED_WORKER_STAGING_ROOT");
   assert.ok(exportBlock.includes(`      - ${staging}:${staging}\n`), "staging root must be mounted at the same path");
   assert.match(exportBlock, /^      - \/var\/run\/docker\.sock:\/var\/run\/docker\.sock$/mu);
-  for (const role of ["RENDER", "EXPORT"]) {
-    const argv = JSON.parse(environmentValue(exportBlock, `PUBLIC_${role}_WORKER_COMMAND_JSON`).slice(1, -1));
-    assert.equal(argv[0], "/opt/venv/bin/python", "worker executables are paths inside the worker image");
-  }
+  const exportArgv = JSON.parse(environmentValue(exportBlock, "PUBLIC_EXPORT_WORKER_COMMAND_JSON").slice(1, -1));
+  assert.equal(exportArgv[0], "/opt/venv/bin/python", "worker executables are paths inside the worker image");
+  assert.ok(!exportBlock.includes("PUBLIC_RENDER_WORKER_COMMAND_JSON"), "the render worker role was removed");
   assert.deepEqual(dependsOn(exportBlock), { postgres: "service_healthy", api: "service_healthy" });
   const controllerTarget = databaseTarget(environmentValue(exportBlock, "PUBLIC_CONTROLLER_DATABASE_URL"));
   assert.equal(controllerTarget.login, "presenton_public_controller_login");

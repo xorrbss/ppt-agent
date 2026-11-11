@@ -426,7 +426,7 @@ services:
 
   # ---------------------------------------------------------------------------
   # `multi-export` profile (opt-in, together with `multi`): the export
-  # controller that claims export.pptx/export.pdf and runs every render/export
+  # controller that claims export.pptx/export.pdf and runs every export
   # job in a fresh sandbox container from the digest-pinned public worker image
   # (PUBLIC_TRUSTED_WORKER_SANDBOX_BACKEND=container: non-root, read-only root,
   # network none, cap-drop ALL, no-new-privileges, tmpfs, memory/pid limits,
@@ -499,7 +499,6 @@ services:
       PUBLIC_WORKER_NODE_ID: ${PRESENTON_PUBLIC_WORKER_NODE_ID:-export-1}
       PUBLIC_WORKER_CAPABILITY_KEY_FILE: /app_data/public-worker-capability.key
       # Executables at their paths inside the worker image.
-      PUBLIC_RENDER_WORKER_COMMAND_JSON: '["/opt/venv/bin/python","-m","workers.public_render_worker"]'
       PUBLIC_EXPORT_WORKER_COMMAND_JSON: '["/opt/venv/bin/python","-m","workers.public_export_worker"]'
       PUBLIC_RENDER_WORKER_IMAGE_DIGEST: ${PRESENTON_PUBLIC_WORKER_IMAGE_DIGEST:-}
       PUBLIC_RENDER_WORKER_FONT_INVENTORY_DIGEST: ${PRESENTON_PUBLIC_WORKER_FONT_INVENTORY_DIGEST:-}

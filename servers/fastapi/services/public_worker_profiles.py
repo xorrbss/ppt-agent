@@ -10,7 +10,7 @@ from typing import Literal, Mapping
 from services.workspace_operation_catalog import operation_kinds_for_controller
 
 
-WorkerRole = Literal["ppt-core", "generation", "render", "export"]
+WorkerRole = Literal["ppt-core", "generation", "export"]
 
 
 @dataclass(frozen=True, slots=True)
@@ -51,24 +51,6 @@ PUBLIC_WORKER_PROFILES = MappingProxyType(
             browser_allowed=False,
             converter_allowed=False,
             max_jobs_per_process=1,
-        ),
-        "render": PublicWorkerProfile(
-            role="render",
-            operation_kinds=("presentation.render",),
-            canonical_database_access=False,
-            provider_network_access=False,
-            artifact_access="scoped-read-write",
-            network_mode="none",
-            browser_allowed=True,
-            converter_allowed=False,
-            max_jobs_per_process=1,
-            required_isolation_controls=(
-                "network-none",
-                "root-filesystem-read-only",
-                "scratch-tmpfs",
-                "run-as-non-root",
-                "seccomp-enforced",
-            ),
         ),
         "export": PublicWorkerProfile(
             role="export",
@@ -124,7 +106,7 @@ _PROVIDER_SECRET_MARKERS = (
     "OPENAI_API_KEY",
     "PERPLEXITY_API_KEY",
 )
-# The launch-time isolation contract of the render and export roles. Public so
+# The launch-time isolation contract of the export role. Public so
 # evidence runners probe the validator against this one definition instead of
 # keeping a copy that drifts.
 PUBLIC_WORKER_ISOLATION_REQUIREMENTS = MappingProxyType(
@@ -169,7 +151,7 @@ def validate_public_worker_environment(
     if present & _USER_SESSION_ENV_KEYS:
         raise RuntimeError("public_worker.user_session_environment_forbidden")
 
-    if profile.role in {"render", "export"}:
+    if profile.role == "export":
         if present & _CANONICAL_DB_ENV_KEYS:
             raise RuntimeError("public_worker.canonical_database_credential_forbidden")
         if present.intersection(_PROVIDER_SECRET_MARKERS):

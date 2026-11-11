@@ -133,12 +133,12 @@ def _measurement_identity(root):
 def test_template_symbols_materialize_only_after_worker_admission():
     from services.svg_renderer import svg_preview_html
     from utils.svg_template_fonts import template_font_faces, trusted_font_marker
-    from workers.public_render_worker import _admit_html
+    from workers.public_svg_pdf_export import admit_slide_wrapper_html
 
     canonical = _symbol_svg()
     wrapper = svg_preview_html(canonical, width=400, height=120, source_font_profile=trusted_font_marker())
     before = _html_svg(wrapper)
-    admitted = _admit_html(wrapper)
+    admitted = admit_slide_wrapper_html(wrapper)
     after = _html_svg(admitted.html)
     assert _symbol_svg() == canonical
     assert "Segoe UI Symbol" not in wrapper
@@ -161,12 +161,12 @@ def test_template_symbols_materialize_only_after_worker_admission():
 def test_template_fallback_binding_and_author_family_fail_closed():
     from services.svg_renderer import svg_preview_html
     from utils.svg_template_fonts import trusted_font_marker
-    from workers.public_render_worker import _admit_html
+    from workers.public_svg_pdf_export import admit_slide_wrapper_html
 
     wrapper = svg_preview_html(_symbol_svg(), width=400, height=120, source_font_profile=trusted_font_marker())
     forged = re.sub(r"presenton-template-fallback:[a-f0-9]{64}", "presenton-template-fallback:" + "0" * 64, wrapper)
     with pytest.raises(Exception, match="public_render_trusted_font_invalid"):
-        _admit_html(forged)
+        admit_slide_wrapper_html(forged)
     for unsafe in (_symbol_svg().replace('font-weight="800"', 'font-weight="800" font-family="Segoe UI Symbol"'),
                    _symbol_svg().replace("\u21bb", "\U0010ffff")):
         with pytest.raises(ValueError):
@@ -177,12 +177,12 @@ def test_template_fallback_binding_and_author_family_fail_closed():
 def test_template_no_fallback_keeps_one_face_and_raster_symbols_keep_measurement_owners():
     from services.svg_renderer import svg_preview_html
     from utils.svg_template_fonts import trusted_font_marker
-    from workers.public_render_worker import _admit_html
+    from workers.public_svg_pdf_export import admit_slide_wrapper_html
 
     plain = _symbol_svg().replace("\u21bb", "A").replace("\u25b8", "B").replace("\u25be", "C").replace("\u2610", "D")
     wrapper = svg_preview_html(plain, width=400, height=120, source_font_profile=trusted_font_marker())
     assert "presenton-template-fallback:" not in wrapper
-    assert _admit_html(wrapper).html.count("@font-face") == 1
+    assert admit_slide_wrapper_html(wrapper).html.count("@font-face") == 1
     slot = "source-slot-raster-p1-ffffffffffffffff"
     canonical = _symbol_svg().replace('</svg>', f'<image x="200" y="60" width="40" height="40" href="{slot}" preserveAspectRatio="xMidYMid meet"/></svg>')
     resolved = canonical.replace(slot, _tiny_png_data_url())
@@ -197,10 +197,10 @@ def test_template_quality_proves_canonical_and_measured_fallback_through_metric_
     from utils.hashing import sha256_prefixed
     from utils.slide_capture_result import RenderCapture
     from utils.svg_template_fonts import trusted_font_marker
-    from workers.public_render_worker import _admit_html
+    from workers.public_svg_pdf_export import admit_slide_wrapper_html
 
     async def capture(html, **kwargs):
-        admitted = _admit_html(html)
+        admitted = admit_slide_wrapper_html(html)
         assert "Segoe UI Symbol" in admitted.html
         return RenderCapture.from_payload(html_digest=sha256_prefixed(html.encode()),
             png=base64.b64decode(_tiny_png_data_url().split(',')[1]), runtime_counters={},

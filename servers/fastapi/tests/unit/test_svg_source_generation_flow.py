@@ -15,7 +15,7 @@ from services.authored_checkpoint_errors import AuthoredStageError
 from services.svg_source_layout import assemble_source_svg
 from services.generation_core.authoring.author_slide_svg import SvgAuthorResult
 from services.generation_core.quality.flag_classification import FAILURE_PLACEHOLDER_OUTCOME
-from workers.public_render_worker import _admit_html
+from workers.public_svg_pdf_export import admit_slide_wrapper_html
 from workers.public_worker_runtime import PublicWorkerExecutionError
 
 
@@ -1298,7 +1298,7 @@ def test_source_svg_worker_materializes_only_fixed_bundled_fonts():
     manifest = manifest_for([("text", {"text": "신뢰된 글꼴"})])
     assembled = assemble_source_svg(manifest, 0, plan_for(manifest), source_images={}, image_slots={},
         min_font_size_px=9.5, style_digest="sha256:style")
-    admitted = _admit_html(svg_preview_html(assembled.svg_content))
+    admitted = admit_slide_wrapper_html(svg_preview_html(assembled.svg_content))
 
     assert f'data-presenton-trusted-font-profile="{TRUSTED_FONT_PROFILE}"' in admitted.html
     assert admitted.html.count("@font-face") == 2
@@ -1308,7 +1308,7 @@ def test_source_svg_worker_materializes_only_fixed_bundled_fonts():
         "@font-face{font-family:Untrusted;src:url(data:font/ttf;base64,AA==)}"
         "</style></head><body><p>blocked</p></body></html>")
     with pytest.raises(PublicWorkerExecutionError, match="public_render_policy_rejected"):
-        _admit_html(arbitrary)
+        admit_slide_wrapper_html(arbitrary)
 
 
 def test_free_source_composition_preserves_text_outside_historical_slots():

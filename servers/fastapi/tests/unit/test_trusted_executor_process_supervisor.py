@@ -71,7 +71,7 @@ def test_windows_job_object_leaves_zero_process_tree_after_cancel_timeout_or_oom
     )
     spec = SandboxLaunchSpec(
         identity=identity,
-        role="render",
+        role="export",
         executable=pathlib.Path(sys.executable),
         arguments=("-c", child_code, str(pid_file), str(oom_trigger)),
         limits=limits,

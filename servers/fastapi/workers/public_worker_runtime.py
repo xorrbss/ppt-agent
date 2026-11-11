@@ -225,7 +225,7 @@ async def run_worker(role: WorkerRole, executor: WorkerExecutor) -> int:
             signing_key=_read_signing_key(),
             replay_guard=_REPLAY_GUARD,
         )
-        component = "render" if role == "render" else "worker"
+        component = "worker"
         log_public_operation_correlation(
             operation_id=job.operation_id,
             component=component,
@@ -302,7 +302,7 @@ async def run_worker(role: WorkerRole, executor: WorkerExecutor) -> int:
             else "public_worker_unexpected_failure"
         )
         if job is not None:
-            component = "render" if role == "render" else "worker"
+            component = "worker"
             log_public_operation_correlation(
                 operation_id=job.operation_id,
                 component=component,

@@ -1,11 +1,11 @@
 # Product work-item seam handoff
 
-The existing public render/export path is:
+The existing public export path is:
 
 ```text
-public_export_operation.execute_isolated_{render,export}_operation
+public_export_operation.execute_isolated_export_operation
   -> isolated_worker_process.execute_isolated_worker_job(job)
-  -> workers.public_{render,export}_worker
+  -> workers.public_export_worker
 ```
 
 `utils.authored_renderer_worker` is not on that path and must not be used as a

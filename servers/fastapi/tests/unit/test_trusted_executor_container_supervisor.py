@@ -225,7 +225,7 @@ def _limits(deadline: float = 30.0) -> ResourceLimits:
 
 
 def _spec(staging_root: Path, *, deadline: float = 30.0) -> SandboxLaunchSpec:
-    sandbox_root = staging_root / "op-1" / "render" / "fence-1"
+    sandbox_root = staging_root / "op-1" / "export" / "fence-1"
     input_root = sandbox_root / "input"
     for directory in (input_root, sandbox_root / "tmp", sandbox_root / "output"):
         directory.mkdir(parents=True, exist_ok=True)
@@ -237,7 +237,7 @@ def _spec(staging_root: Path, *, deadline: float = 30.0) -> SandboxLaunchSpec:
             owner_id=uuid.uuid4(),
             presentation_id=uuid.uuid4(),
         ),
-        role="render",
+        role="export",
         executable=Path(staging_root.anchor) / "usr" / "local" / "bin" / "python",
         arguments=("-m", "workers.public_worker_runtime"),
         limits=_limits(deadline),
@@ -255,7 +255,7 @@ def _environment(key_path: Path) -> dict[str, str]:
     return {
         "PATH": "C:/host/bin",
         "PUBLIC_WORKER_CAPABILITY_KEY_FILE": str(key_path),
-        "PUBLIC_WORKER_ROLE": "render",
+        "PUBLIC_WORKER_ROLE": "export",
         "PUBLIC_WORKER_OS_ISOLATION": "nonroot-readonly-tmpfs-network-none",
         "PROVIDER_API_KEY": "secret",
     }
@@ -286,7 +286,7 @@ def test_create_request_builds_the_contract_host_config(tmp_path: Path) -> None:
         capability_key_parent_path=key_copy,
         environment=_environment(tmp_path / "node.key"),
     )
-    sandbox = f"{MOUNT_ROOT}/op-1/render/fence-1"
+    sandbox = f"{MOUNT_ROOT}/op-1/export/fence-1"
     parent = spec.filesystem.sandbox_root.as_posix()
     assert request.host_config == {
         "NetworkMode": "none",
@@ -609,13 +609,17 @@ def _reference(
 
 def _run_transport(tmp_path: Path, *, worker_output: bytes, declared_output: bytes) -> tuple[_FakeClient, object]:
     owner_id, operation_id = uuid.uuid4(), uuid.uuid4()
-    input_payload = b"<html>container input</html>"
-    input_path = tmp_path / "authority-input.html"
+    # An export bundle whose schema stages no further inputs.
+    input_payload = b'{"schemaVersion":"container-wire-test/v1","slides":[]}'
+    input_path = tmp_path / "authority-input.json"
     input_path.write_bytes(input_payload)
-    input_reference = _reference(owner_id, operation_id, input_payload, kind="slide-html", media_type="text/html")
+    input_reference = _reference(
+        owner_id, operation_id, input_payload,
+        kind="export-bundle", media_type="application/vnd.presenton.export-bundle+json",
+    )
     output_reference = _reference(owner_id, operation_id, declared_output, kind="slide-png", media_type="image/png")
     job = IsolatedWorkerJob(
-        role="render",
+        role="export",
         operation_id=operation_id,
         attempt_token="container-attempt",
         fencing_token=5,
@@ -709,7 +713,7 @@ def test_container_transport_publishes_only_digest_verified_output(tmp_path: Pat
     probe, job_container = client.created
     assert not probe.started and probe.removed
     assert job_container.started and job_container.removed
-    assert job_container.request.labels["presenton.role"] == "render"
+    assert job_container.request.labels["presenton.role"] == "export"
     metrics = result.resource_metrics
     assert metrics["enforcementLayer"] == "linux-container-cgroup"
     assert metrics["isolationAttestation"]["productionEligible"] is True

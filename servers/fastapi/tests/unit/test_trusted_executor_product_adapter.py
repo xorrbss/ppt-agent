@@ -52,7 +52,7 @@ def _work_item(tmp_path, *, operation_id: uuid.UUID, owner_id: uuid.UUID, presen
         ),
         launch_spec=SandboxLaunchSpec(
             identity=identity,
-            role="render",
+            role="export",
             executable=Path(sys.executable).resolve(),
             arguments=(),
             limits=ResourceLimits(
@@ -66,7 +66,7 @@ def _work_item(tmp_path, *, operation_id: uuid.UUID, owner_id: uuid.UUID, presen
     )
 
 
-def test_product_adapter_dispatches_product_render_work_through_weighted_scheduler(tmp_path) -> None:
+def test_product_adapter_dispatches_product_export_work_through_weighted_scheduler(tmp_path) -> None:
     adapter = TrustedExecutorProductAdapter(
         WeightedScheduler(
             SchedulerPolicy(

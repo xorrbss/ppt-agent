@@ -175,7 +175,7 @@ def validate_supervised_dispatch_evidence(value: object) -> dict[str, object]:
     _require(isinstance(value, Mapping) and set(value) == _KEYS)
     _require(value["schemaVersion"] == _SCHEMA)
     _require(value["evidenceScope"] == "local-supervisor-invocation-to-tree-zero")
-    _require(value["role"] in {"render", "export"} and value["outcome"] == "succeeded")
+    _require(value["role"] == "export" and value["outcome"] == "succeeded")
     _require(value["externalAttestationStatus"] == "not-collected" and value["productionEligible"] is False)
     for key in ("dispatchId", "operationId"):
         try:

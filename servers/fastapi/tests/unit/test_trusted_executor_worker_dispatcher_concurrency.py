@@ -47,7 +47,7 @@ def _job(
         retention_class="ephemeral",
     )
     return IsolatedWorkerJob(
-        role="render",
+        role="export",
         operation_id=operation_id,
         attempt_token=f"attempt-{operation_id}",
         fencing_token=fencing_token,

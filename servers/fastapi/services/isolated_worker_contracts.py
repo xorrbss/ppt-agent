@@ -1,4 +1,4 @@
-"""Sessionless capability contract for isolated render and export workers.
+"""Sessionless capability contract for isolated export workers.
 
 The wire contract intentionally carries no filesystem path, URL, cookie, bearer
 credential, provider secret, or canonical database lookup key.  An operation
@@ -26,7 +26,7 @@ ARTIFACT_REF_SCHEMA = "artifact-ref/v1"
 ISOLATED_JOB_SCHEMA = "ppt-isolated-worker-job/v1"
 ISOLATED_RESULT_SCHEMA = "ppt-isolated-worker-result/v1"
 CAPABILITY_SCHEMA = "ppt-worker-capability/v1"
-WorkerRole = Literal["render", "export"]
+WorkerRole = Literal["export"]
 
 _SHA256 = re.compile(r"^[0-9a-f]{64}$")
 _SENSITIVE_KEYS = frozenset(
@@ -253,7 +253,7 @@ class IsolatedWorkerJob:
         if value.get("schemaVersion") != ISOLATED_JOB_SCHEMA:
             raise IsolatedWorkerContractError("isolated worker job schema is unsupported")
         role = value.get("role")
-        if role not in {"render", "export"}:
+        if role != "export":
             raise IsolatedWorkerContractError("isolated worker role is invalid")
         attempt_token = value.get("attemptToken")
         capability = value.get("capability")

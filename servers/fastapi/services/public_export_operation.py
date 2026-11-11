@@ -107,14 +107,10 @@ def build_isolated_operation_job(
 ) -> IsolatedWorkerJob:
     """Bind immutable input to the claim; no session argument exists by design."""
 
-    if role == "export" and claim.kind not in {"export.pptx", "export.pdf"}:
+    if role != "export":
+        raise PublicExportOperationError("public_worker_role_invalid")
+    if claim.kind not in {"export.pptx", "export.pdf"}:
         raise PublicExportOperationError("public_export_operation_kind_invalid")
-    if role == "render" and claim.kind not in {
-        "presentation.generate",
-        "export.pptx",
-        "export.pdf",
-    }:
-        raise PublicExportOperationError("public_render_operation_kind_invalid")
     if claim.owner_id is None or input_artifact.owner_id != claim.owner_id:
         raise PublicExportOperationError("public_worker_artifact_owner_mismatch")
     if not claim.attempt_token or claim.fencing_token < 0:

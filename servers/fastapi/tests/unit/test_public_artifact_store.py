@@ -1328,12 +1328,14 @@ def test_durable_artifacts_are_owner_bound_and_export_is_cluster_single_flight(
 
 
 def test_isolated_worker_profiles_fail_closed_without_resource_contract() -> None:
-    render = get_public_worker_profile("render")
-    assert render.independently_scalable is True
-    assert render.canonical_database_access is False
-    assert render.network_mode == "none"
+    with pytest.raises(RuntimeError, match="profile_invalid"):
+        get_public_worker_profile("render")
+    export = get_public_worker_profile("export")
+    assert export.independently_scalable is True
+    assert export.canonical_database_access is False
+    assert export.network_mode == "none"
     with pytest.raises(RuntimeError, match="isolation_requirement_missing"):
-        validate_public_worker_environment(render, {})
+        validate_public_worker_environment(export, {})
 
     isolated_environment = {
         "PPT_WORKER_NETWORK_MODE": "none",
@@ -1351,9 +1353,9 @@ def test_isolated_worker_profiles_fail_closed_without_resource_contract() -> Non
         "PUBLIC_WORKER_ARTIFACT_CACHE_MAX_BYTES": "536870912",
         "PUBLIC_WORKER_ARTIFACT_CACHE_TTL_SECONDS": "3600",
     }
-    validate_public_worker_environment(render, isolated_environment)
+    validate_public_worker_environment(export, isolated_environment)
     with pytest.raises(RuntimeError, match="canonical_database_credential_forbidden"):
         validate_public_worker_environment(
-            render,
+            export,
             {**isolated_environment, "DATABASE_URL": "postgresql://not-used"},
         )

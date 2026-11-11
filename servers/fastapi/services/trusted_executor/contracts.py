@@ -20,7 +20,7 @@ from services.trusted_executor.isolation_policy import (
 
 
 NetworkMode = Literal["none"]
-SandboxRole = Literal["render", "export"]
+SandboxRole = Literal["export"]
 
 
 class TrustedExecutorContractError(ValueError):
@@ -138,7 +138,7 @@ class SandboxLaunchSpec:
     filesystem: SandboxFilesystemSpec | None = None
 
     def __post_init__(self) -> None:
-        if self.role not in {"render", "export"}:
+        if self.role != "export":
             raise TrustedExecutorContractError("sandbox role is invalid")
         executable = pathlib.Path(self.executable)
         if not executable.is_absolute():
@@ -159,7 +159,6 @@ class SandboxLaunchSpec:
 
         source = os.environ if base is None else base
         allowed = {
-            "AUTHORED_RENDERER_WORKER",
             "CHROME_PATH",
             "CHROMIUM_PATH",
             "COMSPEC",
