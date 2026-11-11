@@ -68,7 +68,14 @@ function passingEvidence() {
       { caseId: "api-write", operation: "write", accessSucceeded: false, pass: true },
     ],
     capabilityBinding: [{ caseId: "capability-digest", pass: true }],
-    workerBoundary: { sessionlessEnvironmentAllowlistVerified: true },
+    workerBoundary: {
+      sessionlessEnvironmentAllowlistVerified: true,
+      missingIsolationAttestationRejected: true,
+      exportProfileNetworkModeNone: true,
+      exportProfileNoCanonicalDatabase: true,
+      isolationContractVerified: true,
+      isolationContractObservations: [{ role: "export", pass: true }],
+    },
     ownerBoundArtifactControl: { ownerBound: true },
   };
   const securityProvenance = {

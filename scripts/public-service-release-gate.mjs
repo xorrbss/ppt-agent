@@ -338,6 +338,16 @@ function securityChecks(report, sourceManifest) {
     check("security.crossOwnerReads", report, "successfulCrossOwnerReadCount", (value) => value === 0, "0"),
     check("security.crossOwnerWrites", report, "successfulCrossOwnerWriteCount", (value) => value === 0, "0"),
     check("security.sessionlessWorker", report, "sessionlessWorkerVerified", (value) => value === true, "true"),
+    check("security.missingIsolationAttestationRejected", report, "observations.workerBoundary.missingIsolationAttestationRejected", (value) => value === true, "true"),
+    check("security.exportProfileNetworkModeNone", report, "observations.workerBoundary.exportProfileNetworkModeNone", (value) => value === true, "true"),
+    check("security.exportProfileNoCanonicalDatabase", report, "observations.workerBoundary.exportProfileNoCanonicalDatabase", (value) => value === true, "true"),
+    check("security.isolationContract", report, "observations.workerBoundary.isolationContractVerified", (value) => value === true, "true"),
+    customCheck("security.isolationContractObservationConsistency",
+      Array.isArray(report?.observations?.workerBoundary?.isolationContractObservations)
+        && report.observations.workerBoundary.isolationContractObservations.length > 0
+        && report.observations.workerBoundary.isolationContractObservations.every((item) => item?.pass === true)
+        && report.observations.workerBoundary.isolationContractVerified === true,
+      "every isolation contract probe passes", report?.observations?.workerBoundary?.isolationContractObservations),
     check("security.capabilityBinding", report, "operationDigestCapabilityBindingVerified", (value) => value === true, "true"),
     check("security.ownerBinding", report, "artifactOwnerBindingVerified", (value) => value === true, "true"),
     customCheck("security.pptxObservationConsistency", pptxConsistent,

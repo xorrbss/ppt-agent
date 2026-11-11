@@ -897,6 +897,17 @@ async def _run(args: argparse.Namespace) -> dict[str, Any]:
         and owner_bound_ref.get("ownerBound") is True
     )
     sessionless = worker_checks["sessionlessEnvironmentAllowlistVerified"]
+    # With the network-none renderer evidence gone, the isolation contract
+    # probe and the export profile are the remaining worker-isolation evidence.
+    isolation = all(
+        worker_checks[key] is True
+        for key in (
+            "missingIsolationAttestationRejected",
+            "exportProfileNetworkModeNone",
+            "exportProfileNoCanonicalDatabase",
+            "isolationContractVerified",
+        )
+    )
     status = "PASS" if all(
         (
             pptx_pass,
@@ -904,6 +915,7 @@ async def _run(args: argparse.Namespace) -> dict[str, Any]:
             capability_pass,
             output_binding,
             sessionless,
+            isolation,
         )
     ) else "FAIL"
     observations = {
